@@ -8,17 +8,17 @@ start:
    mov sp, 0x9c00 ; stack pointer starts (0x9c00-0x07c0)=2000h past code
    cld ; clear direction flag
 
-   mov si, bootmsg
+   mov si, boot0msg
    call print
 
    mov si, prompt
    call print
 
-   cli      ;no interruptions
-   mov bx, 0x09   ;hardware interrupt #
-   shl bx, 2   ;multiply by 4
+   cli ; no interruptions
+   mov bx, 0x09 ; hardware interrupt #
+   shl bx, 2 ; multiply by 4
    mov ax, 0
-   mov gs, ax   ;start of memory
+   mov gs, ax ; start of memory
    mov [gs:bx], word interrupt_key
    mov [gs:bx+2], ds ; segment
    sti
@@ -37,7 +37,7 @@ print:
    .ch_loop: ; loop for each char
       lodsb ; load str into al
       cmp al, 0 ; zero=end of str
-      jz .done   ; get out
+      jz .done ; get out
       call print_ch
       jmp .ch_loop
    .done:
@@ -51,17 +51,46 @@ interrupt_key:
    out 0x20, al ;
 
    movzx ebx, bl
-   mov al, [keymap + ebx]
-   and bl, 0x80   ; if key released
+   mov al, [keymap + ebx] ; convert to ascii
+
+   and bl, 0x80 ; if key released
    jnz .done ; don't repeat
 
    call print_ch
 
+   cmp al, 0x0d ; if key is return
+   jz .return
+
+   jmp .done
+
+   .return:
+      mov al, 0x0a ; print newline char
+      call print_ch
+      jmp read_kernel
+
    .done:
       iret
 
-   bootmsg db 'Booting OS...', 13, 10, 0 ; label pointing to address of message + CR + LF
+   boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
+   boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
    prompt db '>', 0
+
+read_kernel:
+   mov si, boot1loadmsg
+   call print
+
+   mov dl, 0x80 ; read from hard drive
+   mov ah, 0x02 ; 'read sectors from drive'
+   mov al, 16 ; number of sectors to read
+   mov ch, 0 ; cyclinder no
+   mov cl, 2 ; sector no [starts at 1]
+   mov dh, 0 ; head no
+   mov bx, 0
+   mov es, bx ; first part of memory pointer (should be 0)
+   mov bx, 0x7e00 ; 512 after our bootloader start 
+   int 0x13
+   jmp 7e00h
+
 
 keymap:
 ;        0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19
