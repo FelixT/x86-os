@@ -3,6 +3,11 @@
 kmain:
     mov si, boot1msg
     call print
+
+    call graphics
+
+    call setpixel
+
     jmp hang
 
 print_ch:
@@ -21,6 +26,21 @@ print:
       jmp .ch_loop
    .done:
       ret
+
+graphics:
+    mov ah, 0x00 ; set video mode
+    mov al, 0x13 ; video mode = standard vga
+    int 0x10
+    ret
+
+setpixel:
+    mov ebx, 0xA0000
+    mov ah, 4 ; colour
+    mov bh, 200 ; offset
+    mov ax, 0xA000
+    mov gs, ax
+    mov [gs:200], ah
+    ret
 
 hang:
    jmp hang
