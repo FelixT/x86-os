@@ -17,23 +17,50 @@ print:
 
 terminal_keypress:
    ; takes key as ascii character 
+
+   cmp al, 0x0d ; if key is return
+   jz .return
+
    cmp al, 0x08 ; if key is backspace
    jz .backspace
 
    call print_ch
 
-   cmp al, 0x0d ; if key is return
-   jz .return
-
-   ret
+   jmp .done
 
    .return:
+      call print_ch ; print carriage return char
+
       mov al, 0x0a ; print newline char
       call print_ch
+      
       jmp read_kernel
 
    .backspace:
-      mov al, 'b' ; print newline char
+      ; get current cursor position: AX = 0, CH = Start scan line, CL = End scan line, DH = Row, DL = Column
+      mov ah, 0x03
+      int 0x10
+
+      ; if x == 1 dont allow backspace
+      cmp dl, 1
+      jz .done
+
+      call print_ch ; print backspace
+
+      mov al, 0x20 ; print delete char
       call print_ch
 
+      ; get current cursor position: AX = 0, CH = Start scan line, CL = End scan line, DH = Row, DL = Column
+      mov ah, 0x03
+      int 0x10
+
+      sub dl, 1 ; reduce x coordinate
+
+      ; set new cursor position
+      mov ah, 0x02
+      int 0x10
+
+      jmp .done
+
+   .done:
       ret
