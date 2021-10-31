@@ -1,11 +1,14 @@
 [ORG 0x7c00]
    jmp start
 
+   %include "terminal.asm"
+   %include "interrupts.asm"
+
 start:
    mov ax, 0
    mov ds, ax ; data segment=0
    mov ss, ax ; stack starts at 0
-   mov sp, 0x9c00 ; stack pointer starts (0x9c00-0x07c0)=2000h past code
+   mov sp, 0x9c00 ; stack pointer starts (0x9c00-0x07c0)=0x2000h past code
    cld ; clear direction flag
 
    mov si, boot0msg
@@ -14,62 +17,9 @@ start:
    mov si, prompt
    call print
 
-   cli ; no interruptions
-   mov bx, 0x09 ; hardware interrupt #
-   shl bx, 2 ; multiply by 4
-   mov ax, 0
-   mov gs, ax ; start of memory
-   mov [gs:bx], word interrupt_key
-   mov [gs:bx+2], ds ; segment
-   sti
+   call setup_interrupts
 
-hang:
-   jmp hang
-
-print_ch:
-   ; print char at al
-   mov ah, 0x0E ; teletype output mode for int 10h
-   mov bh, 0 ; page number
-   int 0x10
-   ret
-
-print:
-   .ch_loop: ; loop for each char
-      lodsb ; load str into al
-      cmp al, 0 ; zero=end of str
-      jz .done ; get out
-      call print_ch
-      jmp .ch_loop
-   .done:
-      ret
-
-interrupt_key:
-   in al, 0x60 ; get scancode
-   mov bl, al ; save to bl
-
-   mov al, 0x20 ; End of Interrupt
-   out 0x20, al ;
-
-   movzx ebx, bl
-   mov al, [keymap + ebx] ; convert to ascii
-
-   and bl, 0x80 ; if key released
-   jnz .done ; don't repeat
-
-   call print_ch
-
-   cmp al, 0x0d ; if key is return
-   jz .return
-
-   jmp .done
-
-   .return:
-      mov al, 0x0a ; print newline char
-      call print_ch
-      jmp read_kernel
-
-   .done:
-      iret
+   jmp $ ; infinite loop
 
    boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
    boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
