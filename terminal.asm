@@ -14,3 +14,26 @@ print:
       jmp .ch_loop
    .done:
       ret
+
+terminal_keypress:
+   ; takes key as ascii character 
+   cmp al, 0x08 ; if key is backspace
+   jz .backspace
+
+   call print_ch
+
+   cmp al, 0x0d ; if key is return
+   jz .return
+
+   ret
+
+   .return:
+      mov al, 0x0a ; print newline char
+      call print_ch
+      jmp read_kernel
+
+   .backspace:
+      mov al, 'b' ; print newline char
+      call print_ch
+
+      ret

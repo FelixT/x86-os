@@ -41,14 +41,5 @@ read_kernel:
    int 0x13
    jmp 7e00h
 
-
-keymap:
-;        0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19
-        db       0 , 27,'1','2','3','4','5','6','7','8','9','0','-','=', 8,  9, 'q','w','e','r'
-        db      't','y','u','i','o','p','[',']',13 , 0 ,'a','s','d','f','g','h','j','k','l',';'
-        db  "'",'`', 0 ,'\','z','x','c','v','b','n','m',',','.','/', 0 , 0 , 0 ,' ', 0 , 0
-        db   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0
-        db   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 
-
    times 510-($-$$) db 0 ; fill rest of 512 bytes with 0s (-2 due to signature below)
    dw 0xAA55 ; marker to show we're a bootloader to some BIOSes
