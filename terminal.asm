@@ -36,7 +36,7 @@ terminal_readline:
       mov ah, 0x08
       int 0x10 ; returns character as al
 
-      cmp al, 0x20
+      cmp al, 0x20 ; blank character
       jz .done
 
       ; write to memory
@@ -97,9 +97,14 @@ terminal_keypress:
 
       call terminal_newline
 
-      jmp .done
-      ;jmp read_kernel
+      mov si, 0x6000
+      mov di, cmd_load
+      call compare_strings
+      cmp ax, 1
+      jz read_kernel
 
+      jmp .done
+      
    .backspace:
       ; get current cursor position: AX = 0, CH = Start scan line, CL = End scan line, DH = Row, DL = Column
       mov ah, 0x03
@@ -129,4 +134,46 @@ terminal_keypress:
    .done:
       ret
 
+compare_strings:
+   ; si, di, return ax
+   mov bx, 0 ; index
+   .loop:
+      mov al, byte [si+bx]
+      mov ah, byte [di+bx]
+
+      cmp byte al, byte ah
+      jnz .false
+
+      add bx, 1
+
+      ; one is null but not the other
+      cmp al, 0
+      jz .nullcond1
+
+      cmp ah, 0
+      jz .nullcond2
+
+      jmp .loop
+
+      .nullcond1:
+         cmp ah, 0
+         jz .true
+         jmp .false
+
+      .nullcond2:
+         cmp al, 0
+         jz .true
+         jmp .false
+
+      .false:
+         mov ax, 0
+         ret
+      
+      .true:
+         mov ax, 1
+         ret
+
 prompt db '>', 0
+cmd_load db 'load', 0
+true db 'true', 0
+false db 'false', 0
