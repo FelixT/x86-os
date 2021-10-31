@@ -14,16 +14,14 @@ start:
    mov si, boot0msg
    call print
 
-   mov si, prompt
-   call print
-
    call setup_interrupts
 
+   call terminal_newline
+   
    jmp $ ; infinite loop
 
    boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
    boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
-   prompt db '>', 0
 
 read_kernel:
    mov si, boot1loadmsg

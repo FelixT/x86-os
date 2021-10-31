@@ -15,6 +15,49 @@ print:
    .done:
       ret
 
+terminal_newline:
+   mov si, prompt
+   call print
+   ret
+; 
+terminal_readline:
+   ; get cursor position
+   mov ah, 0x03
+   int 0x10
+
+   ; set x to 1
+   mov dl, 1
+   mov ah, 0x02
+   int 0x10
+
+   ; read characters until recieving a null
+   mov bx, 0 ; index
+   .read:
+      mov ah, 0x08
+      int 0x10 ; returns character as al
+
+      cmp al, 0x20
+      jz .done
+
+      ; write to memory
+      mov byte [0x6000+bx], al
+
+      add bx, 1
+
+      ; move cursor to right
+      mov ah, 0x03
+      int 0x10
+      add dl, 1
+      mov ah, 0x02
+      int 0x10
+
+      jmp .read
+
+   .done:
+      mov al, 0
+      mov byte [0x6000+bx], al
+      ret
+
 terminal_keypress:
    ; takes key as ascii character 
 
@@ -29,12 +72,33 @@ terminal_keypress:
    jmp .done
 
    .return:
+      ; get current cursor position: AX = 0, CH = Start scan line, CL = End scan line, DH = Row, DL = Column
+      mov ah, 0x03
+      int 0x10
+
+      ; read line
+      call terminal_readline
+
+      mov al, 0x0d ; print newline char
       call print_ch ; print carriage return char
 
       mov al, 0x0a ; print newline char
       call print_ch
+
+      ; print line inputted
+      mov si, 0x6000
+      call print
       
-      jmp read_kernel
+      mov al, 0x0d ; print newline char
+      call print_ch ; print carriage return char
+
+      mov al, 0x0a ; print newline char
+      call print_ch
+
+      call terminal_newline
+
+      jmp .done
+      ;jmp read_kernel
 
    .backspace:
       ; get current cursor position: AX = 0, CH = Start scan line, CL = End scan line, DH = Row, DL = Column
@@ -64,3 +128,5 @@ terminal_keypress:
 
    .done:
       ret
+
+prompt db '>', 0
