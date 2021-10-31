@@ -98,10 +98,7 @@ terminal_keypress:
       call terminal_newline
 
       mov si, 0x6000
-      mov di, cmd_load
-      call compare_strings
-      cmp ax, 1
-      jz read_kernel
+      call check_cmd
 
       jmp .done
       
@@ -174,6 +171,5 @@ compare_strings:
          ret
 
 prompt db '>', 0
-cmd_load db 'load', 0
 true db 'true', 0
 false db 'false', 0

@@ -20,8 +20,13 @@ start:
    
    jmp $ ; infinite loop
 
-   boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
-   boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
+check_cmd:
+   mov di, cmd_load
+   call compare_strings
+   cmp ax, 1
+   jz read_kernel
+
+   ret
 
 read_kernel:
    mov si, boot1loadmsg
@@ -38,6 +43,12 @@ read_kernel:
    mov bx, 0x7e00 ; 512 after our bootloader start 
    int 0x13
    jmp 7e00h
+
+   ; strings
+   boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
+   boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
+   cmd_load db 'load', 0
+
 
    times 510-($-$$) db 0 ; fill rest of 512 bytes with 0s (-2 due to signature below)
    dw 0xAA55 ; marker to show we're a bootloader to some BIOSes
