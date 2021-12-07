@@ -2,7 +2,6 @@
    jmp start
 
    %include "terminal.asm"
-   %include "interrupts.asm"
 
 start:
    mov ax, 0
@@ -14,19 +13,13 @@ start:
    mov si, boot0msg
    call print
 
-   call setup_interrupts
-
-   call terminal_newline
+   ; load straight into bootloader1 as this is limited to just 512 bytes
+   call read_kernel
    
+   mov si, errormsg
+   call print
+
    jmp $ ; infinite loop
-
-check_cmd:
-   mov di, cmd_load
-   call compare_strings
-   cmp ax, 1
-   jz read_kernel
-
-   ret
 
 read_kernel:
    mov si, boot1loadmsg
@@ -47,6 +40,7 @@ read_kernel:
    ; strings
    boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
    boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
+   errormsg db 'Unable to load bootloader1', 13, 10, 0 
    cmd_load db 'load', 0
 
 

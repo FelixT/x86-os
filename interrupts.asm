@@ -17,20 +17,36 @@ interrupt_key:
    out 0x20, al ;
 
    movzx ebx, bl
-   mov al, [keymap + ebx] ; convert to ascii
+   mov cl, [keymap + ebx] ; convert to ascii
 
    and bl, 0x80 ; if key released
    jnz .done ; don't repeat
 
-   call terminal_keypress
+   ; if cli
+   mov ah, 0x0f
+   int 0x10
+   mov ah, 0
+   cmp ax, 0x03 ; mode = 3
+   jz .cli
+   jmp .gui ; else if gui
+
+   .cli:
+      mov al, cl ; ascii key
+      call terminal_keypress
+      jmp .done
+
+   .gui:
+      mov ah, 0x00 ; set video mode
+      mov al, 0x03 ; video mode = 80x25 16 color text vga
+      int 0x10
+      jmp .done
 
    .done:
       iret
 
 keymap:
-;        0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19
-        db       0 , 27,'1','2','3','4','5','6','7','8','9','0','-','=', 8,  9, 'q','w','e','r'
-        db      't','y','u','i','o','p','[',']',13 , 0 ,'a','s','d','f','g','h','j','k','l',';'
-        db  "'",'`', 0 ,'\','z','x','c','v','b','n','m',',','.','/', 0 , 0 , 0 ,' ', 0 , 0
-        db   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0
-        db   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 
+   db       0 , 27,'1','2','3','4','5','6','7','8','9','0','-','=', 8,  9, 'q','w','e','r'
+   db      't','y','u','i','o','p','[',']',13 , 0 ,'a','s','d','f','g','h','j','k','l',';'
+   db  "'",'`', 0 ,'\','z','x','c','v','b','n','m',',','.','/', 0 , 0 , 0 ,' ', 0 , 0
+   db   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0
+   db   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 
