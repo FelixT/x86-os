@@ -117,43 +117,43 @@ terminal_keypress:
       ret
 
 compare_strings:
-   ; si, di, return ax
-   mov bx, 0 ; index
-   .loop:
-      mov al, byte [si+bx]
-      mov ah, byte [di+bx]
+    ; si, di, return ax
+    mov bx, 0 ; index
+    .loop:
+        mov al, byte [si+bx]
+        mov ah, byte [di+bx]
 
-      cmp byte al, byte ah
-      jnz .false
+        cmp byte al, byte ah
+        jnz .false
 
-      add bx, 1
+        add bx, 1
 
-      ; one is null but not the other
-      cmp al, 0
-      jz .nullcond1
+        ; one is null but not the other
+        cmp al, 0
+        jz .nullcond1
 
-      cmp ah, 0
-      jz .nullcond2
+        cmp ah, 0
+        jz .nullcond2
 
-      jmp .loop
+        jmp .loop
 
-      .nullcond1:
-         cmp ah, 0
-         jz .true
-         jmp .false
+    .nullcond1:
+        cmp ah, 0
+        jz .true
+        jmp .false
 
-      .nullcond2:
-         cmp al, 0
-         jz .true
-         jmp .false
+    .nullcond2:
+        cmp al, 0
+        jz .true
+        jmp .false
 
-      .false:
-         mov ax, 0
-         ret
-      
-      .true:
-         mov ax, 1
-         ret
+    .false:
+        mov ax, 0
+        ret
+    
+    .true:
+        mov ax, 1
+        ret
 
 prompt db '>', 0
 true db 'true', 0

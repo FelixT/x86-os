@@ -36,9 +36,10 @@ interrupt_key:
       jmp .done
 
    .gui:
-      mov ah, 0x00 ; set video mode
-      mov al, 0x03 ; video mode = 80x25 16 color text vga
-      int 0x10
+      ;mov ah, 0x00 ; set video mode
+      ;mov al, 0x03 ; video mode = 80x25 16 color text vga
+      ;int 0x10
+      call clearscreen
       jmp .done
 
    .done:

@@ -16,36 +16,36 @@ print:
       ret
 
 print_digit:
-    ; al
-    add al, 48 ; convert digit to ascii
+   ; al
+   add al, 48 ; convert digit to ascii
 
-    call print_ch
+   call print_ch
 
-    ret
+   ret
 
 ; number printed in reverse order. breaks with numbers >~250
 print_num:
-    ; IN: unsigned int, ax
-    ; call print_digit
+   ; IN: unsigned int, ax
+   ; call print_digit
 
-    .loop:
-        mov dx, 0
-        mov cx, 10
-        div cx ; ax/cx 
-        mov bx, ax
-        ; remainder = dx, result = bx
+   .loop:
+      mov dx, 0
+      mov cx, 10
+      div cx ; ax/cx 
+      mov bx, ax
+      ; remainder = dx, result = bx
 
-        mov al, dl
-        call print_digit
+      mov al, dl
+      call print_digit
 
-        ; if bx > 0
-        mov ax, bx
-        cmp bx, 0
-        jg .loop
+      ; if bx > 0
+      mov ax, bx
+      cmp bx, 0
+      jg .loop
 
-        jmp .done
+      jmp .done
 
-    ; end while
+      ; end while
 
-    .done:
-        ret
+      .done:
+         ret
