@@ -1,9 +1,15 @@
-[ORG 0x7e00]
-   jmp kmain
-   %include "terminal.asm"
-   %include "terminal_plus.asm"
-   %include "interrupts.asm"
-   %include "gui.asm"
+[bits 16]
+
+global kmain
+
+;extern cmain
+
+jmp kmain
+
+%include "terminal.asm"
+%include "terminal_plus.asm"
+%include "interrupts.asm"
+%include "gui.asm"
 
 kmain:
    mov si, boot1msg
@@ -31,7 +37,6 @@ kmain:
          call drawmouse
          
          jmp .loop
-
 
 videoinfo:
    ; get videoinfo as al
@@ -90,6 +95,10 @@ check_cmd:
       jmp .done
 
    .cmd_mouseinfo:
+      call mouse_info
+      jmp .done
+
+   .cmd_callc:
       call mouse_info
       jmp .done
 
@@ -200,4 +209,4 @@ cmd_videoinfo db 'videoinfo', 0
 cmd_mouse db 'mouse', 0
 cmd_mouseinfo db 'mouseinfo', 0
 
-times 8192-($-$$) db 0 ; fill rest of 8192 bytes with 0s
+;times 8192-($-$$) db 0 ; fill rest of 8192 bytes with 0s
