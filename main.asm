@@ -1,8 +1,14 @@
 [bits 16]
 
-global kmain
+; allocate new 16 byte aligned, 8 KiB stack
+section .bss
 
-;extern cmain
+align 16
+stack_bottom:
+resb 8192
+stack_top:
+
+section .text
 
 jmp kmain
 
@@ -11,7 +17,13 @@ jmp kmain
 %include "interrupts.asm"
 %include "gui.asm"
 
+global kmain
 kmain:
+   mov sp, stack_top
+
+   extern cmain
+   call cmain
+
    mov si, boot1msg
    call print
 
@@ -74,7 +86,7 @@ check_cmd:
    cmp ax, 1
    jz .cmd_mouse
 
-   ; 'mouse'
+   ; 'mouseinfo'
    mov di, cmd_mouseinfo
    call compare_strings
    cmp ax, 1
@@ -117,45 +129,45 @@ ARG_OFFSETS      equ 6          ; Offset of args from BP
 
 mouse_handler:
 
-    push bp                     ; Function prologue
-    mov bp, sp
-    push ds                     ; Save registers we modify
-    push ax
-    push bx
-    push cx
-    push dx
+   push bp                     ; Function prologue
+   mov bp, sp
+   push ds                     ; Save registers we modify
+   push ax
+   push bx
+   push cx
+   push dx
 
-    push cs
-    pop ds                      ; DS = CS, CS = where our variables are stored
+   push cs
+   pop ds                      ; DS = CS, CS = where our variables are stored
 
-    mov al,[bp+ARG_OFFSETS+6]
-    mov bl, al                  ; BX = copy of status byte
-    mov cl, 3                   ; Shift signY (bit 5) left 3 bits
-    shl al, cl                  ; CF = signY
-                                ; Sign bit of AL = SignX
-    sbb dh, dh                  ; CH = SignY value set in all bits
-    cbw                         ; AH = SignX value set in all bits
-    mov dl, [bp+ARG_OFFSETS+2]  ; CX = movementY
-    mov al, [bp+ARG_OFFSETS+4]  ; AX = movementX
+   mov al,[bp+ARG_OFFSETS+6]
+   mov bl, al                  ; BX = copy of status byte
+   mov cl, 3                   ; Shift signY (bit 5) left 3 bits
+   shl al, cl                  ; CF = signY
+                              ; Sign bit of AL = SignX
+   sbb dh, dh                  ; CH = SignY value set in all bits
+   cbw                         ; AH = SignX value set in all bits
+   mov dl, [bp+ARG_OFFSETS+2]  ; CX = movementY
+   mov al, [bp+ARG_OFFSETS+4]  ; AX = movementX
 
-    ; new mouse X_coord = X_Coord + movementX
-    ; new mouse Y_coord = Y_Coord + (-movementY)
-    neg dx
-    mov cx, [mouseY]
-    add dx, cx                  ; DX = new mouse Y_coord
-    mov cx, [mouseX]
-    add ax, cx                  ; AX = new mouse X_coord
+   ; new mouse X_coord = X_Coord + movementX
+   ; new mouse Y_coord = Y_Coord + (-movementY)
+   neg dx
+   mov cx, [mouseY]
+   add dx, cx                  ; DX = new mouse Y_coord
+   mov cx, [mouseX]
+   add ax, cx                  ; AX = new mouse X_coord
 
-    ; Status
-    mov [mouseX], ax            ; Update current virtual mouseX coord
-    mov [mouseY], dx            ; Update current virtual mouseY coord
+   ; Status
+   mov [mouseX], ax            ; Update current virtual mouseX coord
+   mov [mouseY], dx            ; Update current virtual mouseY coord
 
-    pop dx                      ; Restore all modified registers
-    pop cx
-    pop bx
-    pop ax
-    pop ds
-    pop bp                      ; Function epilogue
+   pop dx                      ; Restore all modified registers
+   pop cx
+   pop bx
+   pop ax
+   pop ds
+   pop bp                      ; Function epilogue
 
    retf
 
@@ -182,8 +194,8 @@ mouse_enable:
    call print_num
 
    mov ax, 0xC203              ; Set resolution
-    mov bh, 3    ; 8 counts / mm
-    int 0x15                    ; Call BIOS to set resolution
+   mov bh, 3    ; 8 counts / mm
+   int 0x15                    ; Call BIOS to set resolution
 
    ; setup callback
    push cs
@@ -202,6 +214,7 @@ mouse_enable:
 
    ret
 
+section .data
 ; strings
 boot1msg db 'Loaded into bootloader1', 13, 10, 0 ; label pointing to address of message + CR + LF
 cmd_gui db 'gui', 0
@@ -209,4 +222,4 @@ cmd_videoinfo db 'videoinfo', 0
 cmd_mouse db 'mouse', 0
 cmd_mouseinfo db 'mouseinfo', 0
 
-;times 8192-($-$$) db 0 ; fill rest of 8192 bytes with 0s
+times 16384-($-$$) db 0 ; fill rest of 16384 bytes with 0s

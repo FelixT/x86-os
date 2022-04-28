@@ -1,3 +1,2 @@
-boot.bin
-main.bin
-hd.bin
+*.bin
+*.o
