@@ -1,5 +1,5 @@
-# https://wiki.osdev.org/Interrupts_tutorial
-# https://wiki.osdev.org/Interrupt_Service_Routines
+; https://wiki.osdev.org/Interrupts_tutorial
+; https://wiki.osdev.org/Interrupt_Service_Routines
 
 [bits 32]
 
@@ -7,7 +7,9 @@
 isr_stub_%+%1:
     pusha
 
+    push dword %1
     call exception_handler
+    add esp, 4
 
     popa
     iret
@@ -17,7 +19,9 @@ isr_stub_%+%1:
 isr_stub_%+%1:
     pusha
 
+    push dword %1
     call exception_handler
+    add esp, 4
 
     popa
     iret

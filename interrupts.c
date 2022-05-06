@@ -58,26 +58,30 @@ void idt_init() {
    __asm__ volatile("lidt %0" : : "m"(idtr)); // load idt
 
    // mask all interrupts except keyboard
-   // outb(0x21,0xfd);
-   // outb(0xa1,0xff);
+   // outb(0x21,0xfd); // master data
+   // outb(0xa1,0xff); // slave data
 
    __asm__ volatile("sti"); // set the interrupt flag (enable interrupts)
 }
 
 extern void terminal_clear(void);
 extern void terminal_write(char* str);
+extern void terminal_writenumat(int num, int at);
 
-void exception_handler() {
+void exception_handler(int irq) {
 
    terminal_clear();
 
-   terminal_write("Interrupt");
+   terminal_write("INT");
 
    unsigned char scan_code = inb(0x60);
    char* c = "x\0";
    c[0] = scan_code;
-   terminal_write(c);
+   terminal_writenumat(irq, 0);
 
-   outb(0xA0, 0x20);
-   outb(0x20, 0x20);
+   // send end of command code 0x20 to pic
+   if(irq >= 8)
+      outb(0xA0, 0x20); // slave command
+
+   outb(0x20, 0x20); // master command
 }

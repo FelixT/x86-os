@@ -31,6 +31,45 @@ extern "C" {
       }
    }
 
+   void terminal_writeat(char* str, int at) {
+      uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
+      int i = 0;
+      while(str[i] != '\0') {
+         terminal_buffer[at++] = entry(str[i++], colour(15, 0));
+      }
+   }
+
+   void terminal_writenumat(int num, int at) {
+      if(num == 0) {
+         char out[2] = "0";
+         terminal_writeat(out, at);
+         return;
+      }
+
+      bool negative = num < 0;
+      if(negative)
+         num = -num;
+
+      // get number length in digits
+      int tmp = num;
+      int length = 0;
+      while(tmp > 0) {
+         length++;
+         tmp/=10;
+      }
+
+      char out[20]; // allocate more memory than required for int's maxvalue
+      
+      out[length] = '\0';
+
+      for(int i = 0; i < length; i++) {
+         out[length-i-1] = '0' + num%10;
+         num/=10;
+      }
+
+      terminal_writeat(out, at);
+   }
+
    void gui_drawrect(int colour, int x, int y, int width, int height) {
       uint8_t *terminal_buffer = (uint8_t*) 0xA8000;
       for(int yi = 0; yi < y+height; yi++) {
