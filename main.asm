@@ -124,47 +124,13 @@ check_cmd:
       mov eax, cr0
       or eax, 0x1
       mov cr0, eax
-      jmp CODE_SEG:.b32
+      jmp CODE_SEG:.main_32
 
       [bits 32]
-      ; 32 bit code yesaii
 
-      VIDEO_MEMORY equ 0xb8000
-      WHITE_ON_BLACK equ 0x0f
-
-      .b32:
-         extern terminal_clear
-         call terminal_clear
-
-         mov ax, DATA_SEG
-         mov ds, ax
-         mov es, ax
-         mov fs, ax
-         mov gs, ax
-         mov ss, ax
-         mov ebp, stack_top
-         mov esp, ebp
-
-         mov ebx, cmd_protected
-         pusha
-         mov edx, VIDEO_MEMORY
-         .print_loop:
-            mov al, [ebx]
-            mov ah, WHITE_ON_BLACK
-            cmp al, 0
-            je .print_done
-            mov [edx], ax
-            add ebx, 1
-            add edx, 2
-            jmp .print_loop
-         .print_done:
-            popa
-
-         jmp $ ; hang
+      %include "main_32.asm"
 
       [bits 16]
-
-      jmp .done
 
    .done:
       ret
