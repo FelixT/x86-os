@@ -1,6 +1,9 @@
 #include <stdint.h>
+#include <stddef.h>
 
 extern "C" {
+   size_t terminal_index = 0;
+
    uint16_t colour(uint8_t fg, uint8_t bg) {
       return fg | bg << 4;
    }
@@ -17,7 +20,17 @@ extern "C" {
       return;
    }
 
-   // this is breaks things in real mode but sort of works...
+   void terminal_write(char* str) {
+      uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
+      int i = 0;
+      while(str[i] != '\0') {
+         terminal_buffer[terminal_index++] = entry(str[i++], colour(15, 0));
+
+         if(terminal_index > 100)
+            terminal_index = 0;
+      }
+   }
+
    void gui_drawrect(int colour, int x, int y, int width, int height) {
       uint8_t *terminal_buffer = (uint8_t*) 0xA8000;
       for(int yi = 0; yi < y+height; yi++) {
@@ -30,6 +43,5 @@ extern "C" {
 
    void gui_draw(void) {
       gui_drawrect(13, 5, 5, 10, 10);
-      //gui_drawrect(6, 155, 5, 10, 10);
    }
 }
