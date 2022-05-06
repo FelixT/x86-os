@@ -2,7 +2,7 @@
 #include <stddef.h>
 
 extern "C" {
-   size_t terminal_index = 0;
+   size_t terminal_index;
 
    uint16_t colour(uint8_t fg, uint8_t bg) {
       return fg | bg << 4;
@@ -11,12 +11,27 @@ extern "C" {
    uint16_t entry(char c, uint8_t colour) {
       return (uint16_t) c | (uint16_t) colour << 8;
    }
+   
+   static inline void outb(uint16_t port, uint8_t val) {
+      asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+   }
+
+   void terminal_setcursor(int offset) {
+      terminal_index = offset%(80*25);
+      outb(0x3D4, 0x0F);
+	   outb(0x3D5, (uint8_t) (terminal_index & 0xFF));
+	   outb(0x3D4, 0x0E);
+	   outb(0x3D5, (uint8_t) ((terminal_index >> 8) & 0xFF));
+      
+   }
 
    void terminal_clear(void) {
       uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
       for(unsigned i = 0; i < 80*25; i++) {
          terminal_buffer[i] = entry(' ', colour(15, 0));
       }
+
+      terminal_setcursor(80);
       return;
    }
 
@@ -24,10 +39,11 @@ extern "C" {
       uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
       int i = 0;
       while(str[i] != '\0') {
-         terminal_buffer[terminal_index++] = entry(str[i++], colour(15, 0));
+         terminal_buffer[terminal_index] = entry(str[i++], colour(15, 0));
 
-         if(terminal_index > 100)
-            terminal_index = 0;
+         terminal_setcursor(terminal_index+1);
+         //if(terminal_index > 80*25)
+         //   terminal_index = 0;
       }
    }
 
