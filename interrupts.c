@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef struct {
    uint16_t    isr_low;      // lower 16 bits of isr address/offset
@@ -97,6 +98,7 @@ extern void terminal_clear(void);
 extern void terminal_write(char* str);
 extern void terminal_writeat(char* str, int at);
 extern void terminal_writenumat(int num, int at);
+extern void terminal_backspace(void);
 
 char scan_to_char(int scan_code) {
    // https://www.millisecond.com/support/docs/current/html/language/scancodes.htm
@@ -125,6 +127,33 @@ char scan_to_char(int scan_code) {
 }
 
 int timer_i = 0;
+char command_buffer[20];
+int command_index = 0;
+
+int strlen(char* str) {
+   int len = 0;
+   while(str[len] != '\0')
+      len++;
+   return len;
+}
+
+bool strcmp(char* str1, char* str2) {
+   int len = strlen(str1);
+   if(len != strlen(str2))
+      return false;
+
+   for(int i = 0; i < len; i++)
+      if(str1[i] != str2[i])
+         return false;
+
+   return true;
+}
+
+void check_cmd(char* command) {
+   if(strcmp(command, "WICKED")) {
+      terminal_write("\nyep, wicked\n");
+   }
+}
 
 void exception_handler(int int_no) {
 
@@ -146,9 +175,32 @@ void exception_handler(int int_no) {
          // keyboard
 
          unsigned char scan_code = inb(0x60);
-         char letter[2] = "x";
-         letter[0] = scan_to_char(scan_code);
-         terminal_write(letter);
+
+         if(scan_code == 28)  { // return
+            terminal_write("\n");
+
+            command_buffer[command_index] = '\0';
+            terminal_write(command_buffer);
+            check_cmd(command_buffer);
+
+            command_index = 0;
+
+            terminal_write("\n");
+
+         } else if(scan_code == 14) { // backspace
+            
+            terminal_backspace();
+            command_index--;
+
+         } else {
+            char letter[2] = "x";
+            letter[0] = scan_to_char(scan_code);
+            terminal_write(letter);
+
+            if(letter[0] != '\0') {
+               command_buffer[command_index++] = letter[0];
+            }
+         }
       }
 
    }

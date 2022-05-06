@@ -39,11 +39,14 @@ extern "C" {
       uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
       int i = 0;
       while(str[i] != '\0') {
-         terminal_buffer[terminal_index] = entry(str[i++], colour(15, 0));
+         if(str[i] == '\n') {
+            terminal_setcursor(terminal_index + (80-(terminal_index%80)));
+            i++;
+         } else {
+            terminal_buffer[terminal_index] = entry(str[i++], colour(15, 0));
 
-         terminal_setcursor(terminal_index+1);
-         //if(terminal_index > 80*25)
-         //   terminal_index = 0;
+            terminal_setcursor(terminal_index+1);
+         }
       }
    }
 
@@ -53,6 +56,13 @@ extern "C" {
       while(str[i] != '\0') {
          terminal_buffer[at++] = entry(str[i++], colour(15, 0));
       }
+   }
+
+   void terminal_backspace(void) {
+      uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
+      terminal_index-=1;
+      terminal_buffer[terminal_index] = entry(' ', colour(15, 0));
+      terminal_setcursor(terminal_index);
    }
 
    void terminal_writenumat(int num, int at) {
