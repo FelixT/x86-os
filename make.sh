@@ -6,7 +6,7 @@ export LD="$CROSS/i686-elf-ld"
 nasm boot.asm -f bin -o boot.bin
 
 nasm main.asm -f elf32 -o main.o
-$GCC -c cmain.cpp -o cmain.o -m16 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+$GCC -c cmain.cpp -o cmain.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-common
 $LD -o main.bin -T linker.ld main.o cmain.o
 
 

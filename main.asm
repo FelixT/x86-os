@@ -16,13 +16,14 @@ jmp kmain
 %include "terminal_plus.asm"
 %include "interrupts.asm"
 %include "gui.asm"
+%include "gdt.asm"
 
 global kmain
 kmain:
    mov sp, stack_top
 
-   extern cmain
-   call cmain
+   ;extern terminal_clear
+   ;call terminal_clear
 
    mov si, boot1msg
    call print
@@ -92,6 +93,12 @@ check_cmd:
    cmp ax, 1
    jz .cmd_mouseinfo
 
+   ; 'protected'
+   mov di, cmd_protected
+   call compare_strings
+   cmp ax, 1
+   jz .cmd_protected
+
    jmp .done
 
    .cmd_gui:
@@ -110,8 +117,53 @@ check_cmd:
       call mouse_info
       jmp .done
 
-   .cmd_callc:
-      call mouse_info
+   .cmd_protected:
+      ; enter protected mode
+      cli ; disable interrupts
+      lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
+      mov eax, cr0
+      or eax, 0x1
+      mov cr0, eax
+      jmp CODE_SEG:.b32
+
+      [bits 32]
+      ; 32 bit code yesaii
+
+      VIDEO_MEMORY equ 0xb8000
+      WHITE_ON_BLACK equ 0x0f
+
+      .b32:
+         extern terminal_clear
+         call terminal_clear
+
+         mov ax, DATA_SEG
+         mov ds, ax
+         mov es, ax
+         mov fs, ax
+         mov gs, ax
+         mov ss, ax
+         mov ebp, stack_top
+         mov esp, ebp
+
+         mov ebx, cmd_protected
+         pusha
+         mov edx, VIDEO_MEMORY
+         .print_loop:
+            mov al, [ebx]
+            mov ah, WHITE_ON_BLACK
+            cmp al, 0
+            je .print_done
+            mov [edx], ax
+            add ebx, 1
+            add edx, 2
+            jmp .print_loop
+         .print_done:
+            popa
+
+         jmp $ ; hang
+
+      [bits 16]
+
       jmp .done
 
    .done:
@@ -120,7 +172,12 @@ check_cmd:
 load_gui:
    call gui_enable
 
+  ; extern gui_draw
+   ;call gui_draw
+
    call drawrect
+
+   
 
    ret
 
@@ -221,5 +278,6 @@ cmd_gui db 'gui', 0
 cmd_videoinfo db 'videoinfo', 0
 cmd_mouse db 'mouse', 0
 cmd_mouseinfo db 'mouseinfo', 0
+cmd_protected db 'protected', 0
 
 times 16384-($-$$) db 0 ; fill rest of 16384 bytes with 0s
