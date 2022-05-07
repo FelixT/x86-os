@@ -23,4 +23,7 @@ WHITE_ON_BLACK equ 0x0f
    extern terminal_clear
    call terminal_clear
 
+   extern terminal_prompt
+   call terminal_prompt
+
    jmp $ ; infinite loop

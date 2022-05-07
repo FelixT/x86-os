@@ -25,14 +25,14 @@ extern "C" {
       
    }
 
-   void terminal_clear(void) {
+   void terminal_scroll(void) {
       uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
-      for(unsigned i = 0; i < 80*25; i++) {
-         terminal_buffer[i] = entry(' ', colour(15, 0));
-      }
 
-      terminal_setcursor(80);
-      return;
+      for(int i = 80; i < 80*25; i++)
+         terminal_buffer[i-80] = terminal_buffer[i];
+
+      for(int i = 80*24; i < 80*25; i++)
+         terminal_buffer[i] = entry(' ', colour(15, 0));
    }
 
    void terminal_write(char* str) {
@@ -40,7 +40,12 @@ extern "C" {
       int i = 0;
       while(str[i] != '\0') {
          if(str[i] == '\n') {
-            terminal_setcursor(terminal_index + (80-(terminal_index%80)));
+            if(terminal_index >= 80*24) {
+               terminal_scroll();
+               terminal_setcursor(80*24);
+            } else {
+               terminal_setcursor(terminal_index + (80-(terminal_index%80)));
+            }
             i++;
          } else {
             terminal_buffer[terminal_index] = entry(str[i++], colour(15, 0));
@@ -48,6 +53,20 @@ extern "C" {
             terminal_setcursor(terminal_index+1);
          }
       }
+   }
+
+   void terminal_clear(void) {
+      uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
+      for(unsigned i = 0; i < 80*25; i++) {
+         terminal_buffer[i] = entry(' ', colour(15, 0));
+      }
+
+      terminal_setcursor(0);
+      return;
+   }
+
+   void terminal_prompt(void) {
+      terminal_write("\n>");
    }
 
    void terminal_writeat(char* str, int at) {

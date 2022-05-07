@@ -99,6 +99,7 @@ extern void terminal_write(char* str);
 extern void terminal_writeat(char* str, int at);
 extern void terminal_writenumat(int num, int at);
 extern void terminal_backspace(void);
+extern void terminal_prompt(void);
 
 char scan_to_char(int scan_code) {
    // https://www.millisecond.com/support/docs/current/html/language/scancodes.htm
@@ -127,8 +128,10 @@ char scan_to_char(int scan_code) {
 }
 
 int timer_i = 0;
-char command_buffer[20];
+#define command_maxlen 40
+char command_buffer[command_maxlen+1];
 int command_index = 0;
+
 
 int strlen(char* str) {
    int len = 0;
@@ -152,6 +155,10 @@ bool strcmp(char* str1, char* str2) {
 void check_cmd(char* command) {
    if(strcmp(command, "WICKED")) {
       terminal_write("\nyep, wicked\n");
+   }
+
+   if(strcmp(command, "CLEAR")) {
+      terminal_clear();
    }
 }
 
@@ -185,21 +192,26 @@ void exception_handler(int int_no) {
 
             command_index = 0;
 
-            terminal_write("\n");
+            terminal_prompt();
 
          } else if(scan_code == 14) { // backspace
             
-            terminal_backspace();
-            command_index--;
+            if(command_index > 0) {
+               command_index--;
+               terminal_backspace();
+            }
 
          } else {
-            char letter[2] = "x";
-            letter[0] = scan_to_char(scan_code);
-            terminal_write(letter);
 
-            if(letter[0] != '\0') {
-               command_buffer[command_index++] = letter[0];
-            }
+            if(command_index < command_maxlen) {
+               char letter[2] = "x";
+               letter[0] = scan_to_char(scan_code);
+               terminal_write(letter);
+
+               if(letter[0] != '\0') {
+                  command_buffer[command_index++] = letter[0];
+               }
+            } else {} // no more space in buffer
          }
       }
 
