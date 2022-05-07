@@ -1,3 +1,5 @@
+; real mode interrupt handler
+
 setup_interrupts:
    cli ; no interruptions
    mov bx, 0x09 ; hardware interrupt #
