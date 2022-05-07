@@ -27,3 +27,28 @@ WHITE_ON_BLACK equ 0x0f
    call terminal_prompt
 
    jmp $ ; infinite loop
+
+.maingui_32:
+   ; setup registers
+   mov ax, DATA_SEG
+   mov ds, ax
+   mov es, ax
+   mov fs, ax
+   mov gs, ax
+   mov ss, ax
+   mov ebp, stack_top
+   mov esp, ebp
+
+   ; setup idt
+   extern idt_init
+   call idt_init
+
+   ; main code
+
+   extern gui_draw
+   call gui_draw
+
+   ;extern terminal_prompt
+   ;call terminal_prompt
+
+   jmp $ ; infinite loop

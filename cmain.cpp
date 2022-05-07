@@ -3,6 +3,13 @@
 
 extern "C" {
    size_t terminal_index;
+   int gui_index = 0;
+
+   // video mode = 320x200 256 color graphics 
+   const size_t gui_width = 320;
+   const size_t gui_height = 200;
+
+   int videomode; // 0 = cli, 1 = gui
 
    uint16_t colour(uint8_t fg, uint8_t bg) {
       return fg | bg << 4;
@@ -22,7 +29,6 @@ extern "C" {
 	   outb(0x3D5, (uint8_t) (terminal_index & 0xFF));
 	   outb(0x3D4, 0x0E);
 	   outb(0x3D5, (uint8_t) ((terminal_index >> 8) & 0xFF));
-      
    }
 
    void terminal_scroll(void) {
@@ -56,6 +62,7 @@ extern "C" {
    }
 
    void terminal_clear(void) {
+      videomode = 0;
       uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
       for(unsigned i = 0; i < 80*25; i++) {
          terminal_buffer[i] = entry(' ', colour(15, 0));
@@ -116,16 +123,29 @@ extern "C" {
    }
 
    void gui_drawrect(int colour, int x, int y, int width, int height) {
-      uint8_t *terminal_buffer = (uint8_t*) 0xA8000;
-      for(int yi = 0; yi < y+height; yi++) {
-         for(int xi = 0; xi < x+width; xi++) {
-            terminal_buffer[yi*320+xi] = colour;
+      uint8_t *terminal_buffer = (uint8_t*) 0xA0000;
+      for(int yi = y; yi < y+height; yi++) {
+         for(int xi = x; xi < x+width; xi++) {
+            terminal_buffer[yi*gui_width+xi] = colour;
+         }
+      }
+      return;
+   }
+
+   void gui_clear(int colour) {
+      uint8_t *terminal_buffer = (uint8_t*) 0xA0000;
+      for(int y = 0; y < (int)gui_height; y++) {
+         for(int x = 0; x < (int)gui_width; x++) {
+            terminal_buffer[y*gui_width+x] = colour;
          }
       }
       return;
    }
 
    void gui_draw(void) {
-      gui_drawrect(13, 5, 5, 10, 10);
+      gui_clear(3);
+      videomode = 1;
+      gui_drawrect(13, gui_index%(gui_width*gui_height/2), 5, 10, 10);
+      gui_index++;
    }
 }

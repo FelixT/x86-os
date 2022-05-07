@@ -99,6 +99,12 @@ check_cmd:
    cmp ax, 1
    jz .cmd_protected
 
+   ; 'protectedgui'
+   mov di, cmd_protectedgui
+   call compare_strings
+   cmp ax, 1
+   jz .cmd_protectedgui
+
    jmp .done
 
    .cmd_gui:
@@ -131,6 +137,19 @@ check_cmd:
       %include "main_32.asm"
 
       [bits 16]
+
+   .cmd_protectedgui:
+      mov ah, 0x00 ; set video mode
+      mov al, 0x13 ; video mode = 320x200 256 color graphics 
+      int 0x10
+
+      ; enter protected mode
+      cli ; disable interrupts
+      lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
+      mov eax, cr0
+      or eax, 0x1
+      mov cr0, eax
+      jmp CODE_SEG:.maingui_32
 
    .done:
       ret
@@ -245,5 +264,6 @@ cmd_videoinfo db 'videoinfo', 0
 cmd_mouse db 'mouse', 0
 cmd_mouseinfo db 'mouseinfo', 0
 cmd_protected db 'protected', 0
+cmd_protectedgui db 'protectedgui', 0
 
 times 16384-($-$$) db 0 ; fill rest of 16384 bytes with 0s

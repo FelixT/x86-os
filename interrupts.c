@@ -101,6 +101,9 @@ extern void terminal_writenumat(int num, int at);
 extern void terminal_backspace(void);
 extern void terminal_prompt(void);
 
+extern void gui_draw(void);
+extern int videomode;
+
 char scan_to_char(int scan_code) {
    // https://www.millisecond.com/support/docs/current/html/language/scancodes.htm
 
@@ -109,8 +112,8 @@ char scan_to_char(int scan_code) {
    char upperThird[13] = "ASDFGHJKL;'#";
    char upperFourth[12] = "\\ZXCVBNM,./";
 
-   if(scan_code >= 1 && scan_code <= 13)
-      return upperFirst[scan_code-1];
+   if(scan_code >= 2 && scan_code <= 13)
+      return upperFirst[scan_code-2];
 
    if(scan_code >= 16 && scan_code <= 27)
       return upperSecond[scan_code-16];
@@ -172,10 +175,14 @@ void exception_handler(int int_no) {
       int irq_no = int_no - 32;
 
       if(irq_no == 0) {
-         // system timer, do nothing
+         // system timer
 
-         terminal_writenumat(timer_i++, 79);
-         timer_i%=10;
+         if(videomode == 0) {
+            terminal_writenumat(timer_i++, 79);
+            timer_i%=10;
+         } else {
+            gui_draw();
+         }
       }
 
       if(irq_no == 1) {
