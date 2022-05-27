@@ -1,8 +1,9 @@
+; real mode gui
 ; https://stanislavs.org/helppc/int_10-0.html
 
 gui_enable:
    mov ah, 0x00 ; set video mode
-   mov al, 0x13 ; video mode = 320x200 256 color graphics 
+   mov al, 0x13 ; video mode = 320x200 16 color graphics 
    int 0x10
    ret
 

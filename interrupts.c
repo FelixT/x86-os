@@ -46,6 +46,7 @@ void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
 }
 
 extern void* isr_stub_table[];
+extern void* irq_stub_table[];
 
 void pic_remap() {
 
@@ -78,8 +79,8 @@ void idt_init() {
       idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
    }
 
-   for (uint8_t vector = 32; vector < 47; vector++) {
-      idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
+   for (uint8_t vector = 32; vector < 48; vector++) {
+      idt_set_descriptor(vector, irq_stub_table[vector-32], 0x8E);
    }
  
    __asm__ volatile("lidt %0" : : "m"(idtr)); // load idt
@@ -165,10 +166,31 @@ void check_cmd(char* command) {
    }
 }
 
+extern void gui_clear(int colour);
+extern void gui_drawchar(char c, int colour);
+//extern void gui_writenum(int num, int colour);
+extern void gui_writenumat(int num, int colour, int x, int y);
+extern void gui_writenum(int num, int colour);
+extern void gui_writestr(char *c, int colour);
+extern void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
+extern void gui_keypress(char key);
+
 void exception_handler(int int_no) {
+
+   if(videomode == 0) {
+      terminal_writeat("  ", 0);
+      terminal_writenumat(int_no, 0);
+   } else {
+      gui_drawrect(3, 0, 0, 7*2, 7);
+      gui_writenumat(int_no, 0, 0, 0);
+   }
 
    if(int_no < 32) {
       
+      //while(true) {
+         gui_drawrect(4, 60, 0, 7*2, 7);
+         gui_writenumat(int_no, 14, 60, 0);
+      //}
    } else {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
 
@@ -176,13 +198,18 @@ void exception_handler(int int_no) {
 
       if(irq_no == 0) {
          // system timer
-
          if(videomode == 0) {
-            terminal_writenumat(timer_i++, 79);
-            timer_i%=10;
+            terminal_writenumat(timer_i, 79);
          } else {
-            gui_draw();
+
+            //gui_draw();
+
+            gui_drawrect(3, 314, 0, 5, 7);
+            gui_writenumat(timer_i, 7, 314, 0);
          }
+
+         timer_i++;
+         timer_i%=10;
       }
 
       if(irq_no == 1) {
@@ -210,28 +237,44 @@ void exception_handler(int int_no) {
 
          } else {
 
-            if(command_index < command_maxlen) {
-               char letter[2] = "x";
-               letter[0] = scan_to_char(scan_code);
-               terminal_write(letter);
+            if(videomode == 1) {
+               gui_draw();
+               char c = scan_to_char(scan_code);
+               if(((c >= 'A') && (c <= 'Z')) || ((c >= '0') && (c <= '9')))
+                  gui_keypress(c);
+            } else {
 
-               if(letter[0] != '\0') {
-                  command_buffer[command_index++] = letter[0];
-               }
-            } else {} // no more space in buffer
+               if(command_index < command_maxlen) {
+                  char letter[2] = "x";
+                  letter[0] = scan_to_char(scan_code);
+                  terminal_write(letter);
+
+                  if(letter[0] != '\0') {
+                     command_buffer[command_index++] = letter[0];
+                  }
+               } else {} // no more space in buffer
+
+            }
          }
       }
 
-   }
-
-   ///terminal_clear();
-
-   terminal_writeat("  ", 0);
-   terminal_writenumat(int_no, 0);
-
    // send end of command code 0x20 to pic
-   if(int_no >= 8)
+   if(irq_no >= 8)
       outb(0xA0, 0x20); // slave command
 
    outb(0x20, 0x20); // master command
+
+   }
+}
+
+void err_exception_handler(int int_no, int error_code) {
+   uint32_t *zer = (uint32_t*) 0x00;
+
+   zer[0] = int_no;
+   zer[1] = error_code;
+   //gui_writenumat(int_no, 0, 30, 100);
+
+   //gui_writenumat(error_code, 0, 60, 100);
+   for(;;);
+   //exception_handler(int_no);
 }

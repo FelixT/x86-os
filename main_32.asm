@@ -44,6 +44,8 @@ WHITE_ON_BLACK equ 0x0f
    call idt_init
 
    ; main code
+   extern gui_init
+   call gui_init
 
    extern gui_draw
    call gui_draw

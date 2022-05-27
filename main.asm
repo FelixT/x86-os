@@ -124,6 +124,36 @@ check_cmd:
       jmp .done
 
    .cmd_protected:
+
+      ;mov ax, 0x4F00
+      ;mov cx, 0x0100 ; mode no
+      ;mov di, [vbe_info]
+      ;int 0x10
+      ;cmp ax, 0x004F	; test for error
+      ;j;ne .gui_error
+
+      ; https://mirror.cs.msu.ru/oldlinux.org/Linux.old/docs/interrupts/int-html/rb-0069.htm
+      ; =test==
+      ;mov ax, 0x4F02	; set VBE mode
+      ;mov bx, 0x4100	; mode no = 0x100: 640x400, 256 colour (https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial)
+      ;int 0x10
+      ;cmp ax, 0x004F	; test for error
+      ;jne .gui_error
+      ; get vesa bios info
+      ;extern vbe_mode_info
+      ;mov ax, 0x4F01
+      ;mov cx, 0x0100 ; mode no
+      ;mov es, [DATA_SEG]
+      ;mov di, [vbe_mode_info]
+      ;int 0x10
+      ;cmp ax, 0x004F	; test for error
+      ;jne .gui_error
+      ; revert to text mode 
+      ;mov ah, 0x00 ; set video mode
+      ;mov al, 0x03 ; video mode = 80x25 16 color text vga
+      ;int 0x10
+      ; ==endtest==
+
       ; enter protected mode
       cli ; disable interrupts
       lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
@@ -140,8 +170,12 @@ check_cmd:
 
    .cmd_protectedgui:
       mov ah, 0x00 ; set video mode
-      mov al, 0x13 ; video mode = 320x200 256 color graphics 
+      mov al, 0x13 ; video mode = 80x25 16 color text vga
       int 0x10
+
+      ;mov ax, 0x4F02	; set VBE mode
+      ;mov bx, 0x4101	; mode no = 0x100: 640x400, 256 colour (https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial)
+      ;int 0x10
 
       ; enter protected mode
       cli ; disable interrupts
@@ -150,6 +184,17 @@ check_cmd:
       or eax, 0x1
       mov cr0, eax
       jmp CODE_SEG:.maingui_32
+
+      .gui_error:
+         ; revert to text mode 
+         mov ah, 0x00 ; set video mode
+         mov al, 0x03 ; video mode = 80x25 16 color text vga
+         int 0x10
+
+         mov si, error
+         call print
+
+         jmp .done
 
    .done:
       ret
@@ -259,6 +304,7 @@ mouse_enable:
 section .data
 ; strings
 boot1msg db 'Loaded into bootloader1', 13, 10, 0 ; label pointing to address of message + CR + LF
+error db 'Error!', 13, 10, 0
 cmd_gui db 'gui', 0
 cmd_videoinfo db 'videoinfo', 0
 cmd_mouse db 'mouse', 0
@@ -266,4 +312,6 @@ cmd_mouseinfo db 'mouseinfo', 0
 cmd_protected db 'protected', 0
 cmd_protectedgui db 'protectedgui', 0
 
-times 16384-($-$$) db 0 ; fill rest of 16384 bytes with 0s
+%include "font.asm"
+
+;times 32768-($-$$) db 0 ; fill rest of 32768 bytes with 0s

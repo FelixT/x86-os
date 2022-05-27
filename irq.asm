@@ -8,8 +8,9 @@ isr_stub_%+%1:
     pusha
 
     push dword %1
-    call exception_handler
-    add esp, 4
+    cld 
+    call err_exception_handler
+    add esp, 8
 
     popa
     iret
@@ -20,6 +21,7 @@ isr_stub_%+%1:
     pusha
 
     push dword %1
+    cld 
     call exception_handler
     add esp, 4
 
@@ -32,6 +34,7 @@ irq_stub_%+%1:
     pusha
 
     push dword %1
+    cld 
     call exception_handler
     add esp, 4
 
@@ -39,6 +42,7 @@ irq_stub_%+%1:
     iret
 %endmacro
 
+extern err_exception_handler
 extern exception_handler
 isr_no_err_stub 0
 isr_no_err_stub 1
@@ -101,7 +105,7 @@ isr_stub_table:
 global irq_stub_table
 irq_stub_table:
 %assign i 32
-%rep 15 
+%rep 16 
     dd irq_stub_%+i
 %assign i i+1 
 %endrep

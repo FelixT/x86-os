@@ -86,10 +86,10 @@ void terminal_backspace(void) {
    terminal_setcursor(terminal_index);
 }
 
-void terminal_writenumat(int num, int at) {
+void terminal_numtostr(int num, char* out) {
    if(num == 0) {
-      char out[2] = "0";
-      terminal_writeat(out, at);
+      out[0] = '0';
+      out[1] = '\0';
       return;
    }
 
@@ -104,8 +104,6 @@ void terminal_writenumat(int num, int at) {
       length++;
       tmp/=10;
    }
-
-   char out[20]; // allocate more memory than required for int's maxvalue
    
    out[length] = '\0';
 
@@ -113,6 +111,25 @@ void terminal_writenumat(int num, int at) {
       out[length-i-1] = '0' + num%10;
       num/=10;
    }
+}
+
+void terminal_writenumat(int num, int at) {
+   char out[20]; // allocate more memory than required for int's maxvalue
+   
+   terminal_numtostr(num, out);
 
    terminal_writeat(out, at);
+}
+
+void terminal_writenum(int num) {
+   // get number length in digits
+   int tmp = num;
+   int length = 0;
+   while(tmp > 0) {
+      length++;
+      tmp/=10;
+   }
+
+   terminal_writenumat(num, terminal_index);
+   terminal_setcursor(terminal_index+length);
 }
