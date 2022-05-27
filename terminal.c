@@ -6,6 +6,10 @@ size_t terminal_index;
 
 extern int videomode;
 
+#define command_maxlen 40
+char command_buffer[command_maxlen+1];
+int command_index = 0;
+
 uint16_t colour(uint8_t fg, uint8_t bg) {
    return fg | bg << 4;
 }
@@ -16,6 +20,25 @@ uint16_t entry(char c, uint8_t colour) {
 
 static inline void outb(uint16_t port, uint8_t val) {
    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+int strlen(char* str) {
+   int len = 0;
+   while(str[len] != '\0')
+      len++;
+   return len;
+}
+
+bool strcmp(char* str1, char* str2) {
+   int len = strlen(str1);
+   if(len != strlen(str2))
+      return false;
+
+   for(int i = 0; i < len; i++)
+      if(str1[i] != str2[i])
+         return false;
+
+   return true;
 }
 
 void terminal_setcursor(int offset) {
@@ -80,10 +103,13 @@ void terminal_writeat(char* str, int at) {
 }
 
 void terminal_backspace(void) {
-   uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
-   terminal_index-=1;
-   terminal_buffer[terminal_index] = entry(' ', colour(15, 0));
-   terminal_setcursor(terminal_index);
+   if(command_index > 0) {
+      command_index--;
+      uint16_t *terminal_buffer = (uint16_t*) 0xB8000;
+      terminal_index-=1;
+      terminal_buffer[terminal_index] = entry(' ', colour(15, 0));
+      terminal_setcursor(terminal_index);
+   }
 }
 
 void terminal_numtostr(int num, char* out) {
@@ -132,4 +158,38 @@ void terminal_writenum(int num) {
 
    terminal_writenumat(num, terminal_index);
    terminal_setcursor(terminal_index+length);
+}
+
+void terminal_keypress(char key) {
+   if(command_index < command_maxlen) {
+      char letter[2] = "x";
+      letter[0] = key;
+      terminal_write(letter);
+
+      if(letter[0] != '\0') {
+         command_buffer[command_index++] = letter[0];
+      }
+   } else {} // no more space in buffer
+}
+
+void terminal_checkcmd(char* command) {
+   if(strcmp(command, "WICKED")) {
+      terminal_write("\nyep, wicked\n");
+   }
+
+   if(strcmp(command, "CLEAR")) {
+      terminal_clear();
+   }
+}
+
+void terminal_return() {
+   terminal_write("\n");
+
+   command_buffer[command_index] = '\0';
+   terminal_write(command_buffer);
+   terminal_checkcmd(command_buffer);
+
+   command_index = 0;
+
+   terminal_prompt();
 }

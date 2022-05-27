@@ -1,6 +1,13 @@
 #include <stdint.h>
 
+// defines 5*7 gui font
+
 extern uint8_t font_null[7];
+
+extern uint8_t font_space[7];
+extern uint8_t font_minus[7];
+extern uint8_t font_cursor_outline[7];
+extern uint8_t font_cursor_fill[7];
 
 extern uint8_t font_0[7];
 extern uint8_t font_1[7];
@@ -53,7 +60,15 @@ void copyFont(uint8_t* letter, int* dest) {
 }
 
 void getFontLetter(char c, int* dest) {
-   if(c == 'A')
+   if(c == ' ')
+      copyFont(font_space, dest);
+   else if(c == '-')
+      copyFont(font_minus, dest);
+   else if(c == 27) // unused control characters used for cursor
+      copyFont(font_cursor_outline, dest);
+   else if(c == 28) // unused control characters used for cursor
+      copyFont(font_cursor_fill, dest);
+   else if(c == 'A')
       copyFont(font_A, dest);
    else if(c == 'B')
       copyFont(font_B, dest);

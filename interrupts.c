@@ -132,39 +132,6 @@ char scan_to_char(int scan_code) {
 }
 
 int timer_i = 0;
-#define command_maxlen 40
-char command_buffer[command_maxlen+1];
-int command_index = 0;
-
-
-int strlen(char* str) {
-   int len = 0;
-   while(str[len] != '\0')
-      len++;
-   return len;
-}
-
-bool strcmp(char* str1, char* str2) {
-   int len = strlen(str1);
-   if(len != strlen(str2))
-      return false;
-
-   for(int i = 0; i < len; i++)
-      if(str1[i] != str2[i])
-         return false;
-
-   return true;
-}
-
-void check_cmd(char* command) {
-   if(strcmp(command, "WICKED")) {
-      terminal_write("\nyep, wicked\n");
-   }
-
-   if(strcmp(command, "CLEAR")) {
-      terminal_clear();
-   }
-}
 
 extern void gui_clear(int colour);
 extern void gui_drawchar(char c, int colour);
@@ -174,23 +141,26 @@ extern void gui_writenum(int num, int colour);
 extern void gui_writestr(char *c, int colour);
 extern void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
 extern void gui_keypress(char key);
+extern void gui_return();
+extern void gui_backspace();
+
+extern void terminal_keypress(char key);
+extern void terminal_return();
+
+extern void mouse_update(uint32_t relX, uint32_t relY);
+
+int mouse_cycle = 0;
+uint8_t mouse_data[3];
 
 void exception_handler(int int_no) {
 
-   if(videomode == 0) {
-      terminal_writeat("  ", 0);
-      terminal_writenumat(int_no, 0);
-   } else {
-      gui_drawrect(3, 0, 0, 7*2, 7);
-      gui_writenumat(int_no, 0, 0, 0);
-   }
-
    if(int_no < 32) {
-      
-      //while(true) {
+
+      if(videomode == 1) {
          gui_drawrect(4, 60, 0, 7*2, 7);
          gui_writenumat(int_no, 14, 60, 0);
-      //}
+      }
+         
    } else {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
 
@@ -198,64 +168,76 @@ void exception_handler(int int_no) {
 
       if(irq_no == 0) {
          // system timer
+         
          if(videomode == 0) {
             terminal_writenumat(timer_i, 79);
          } else {
-
-            //gui_draw();
-
             gui_drawrect(3, 314, 0, 5, 7);
             gui_writenumat(timer_i, 7, 314, 0);
          }
 
          timer_i++;
          timer_i%=10;
-      }
-
-      if(irq_no == 1) {
+      } else if(irq_no == 1) {
          // keyboard
 
          unsigned char scan_code = inb(0x60);
 
          if(scan_code == 28)  { // return
-            terminal_write("\n");
 
-            command_buffer[command_index] = '\0';
-            terminal_write(command_buffer);
-            check_cmd(command_buffer);
-
-            command_index = 0;
-
-            terminal_prompt();
+            if(videomode == 0)
+               terminal_return();
+            else
+               gui_return();
 
          } else if(scan_code == 14) { // backspace
             
-            if(command_index > 0) {
-               command_index--;
+            if(videomode == 0)
                terminal_backspace();
-            }
+            else
+               gui_backspace();
 
          } else {
+            // other key pressed
 
-            if(videomode == 1) {
-               gui_draw();
-               char c = scan_to_char(scan_code);
-               if(((c >= 'A') && (c <= 'Z')) || ((c >= '0') && (c <= '9')))
-                  gui_keypress(c);
-            } else {
+            char c = scan_to_char(scan_code);
 
-               if(command_index < command_maxlen) {
-                  char letter[2] = "x";
-                  letter[0] = scan_to_char(scan_code);
-                  terminal_write(letter);
-
-                  if(letter[0] != '\0') {
-                     command_buffer[command_index++] = letter[0];
-                  }
-               } else {} // no more space in buffer
-
-            }
+            if(videomode == 1)
+               gui_keypress(c);
+            else
+               terminal_keypress(c);
          }
+      } else if(irq_no == 12) {
+
+         // mouse!
+         mouse_data[mouse_cycle] = inb(0x60);
+         
+         mouse_cycle++;
+
+         if(mouse_cycle == 3) {
+            int8_t xm = mouse_data[2];
+            int8_t ym = mouse_data[0];
+
+            // handle case of negative relative values
+            //int relX = xm - ((mouse_data[1] << 4) & 0x100);
+            //int relY = ym - ((mouse_data[1] << 3) & 0x100);
+
+            mouse_update(xm, ym);
+
+            mouse_cycle = 0;
+         }
+
+      } else {
+
+         // other interrupt no
+         if(videomode == 0) {
+            terminal_writeat("  ", 0);
+            terminal_writenumat(int_no, 0);
+         } else {
+            gui_drawrect(3, 0, 0, 7*2, 7);
+            gui_writenumat(int_no, 0, 0, 0);
+         }
+
       }
 
    // send end of command code 0x20 to pic
@@ -274,7 +256,7 @@ void err_exception_handler(int int_no, int error_code) {
    zer[1] = error_code;
    //gui_writenumat(int_no, 0, 30, 100);
 
-   //gui_writenumat(error_code, 0, 60, 100);
-   for(;;);
-   //exception_handler(int_no);
+   gui_writenumat(error_code, 0, 60, 100);
+
+   exception_handler(int_no);
 }

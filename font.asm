@@ -8,6 +8,46 @@ font_null:
    db 00000b
    db 00000b
 
+global font_space
+font_space:
+   db 00000b
+   db 00000b
+   db 00000b
+   db 00000b
+   db 00000b
+   db 00000b
+   db 00000b
+
+global font_minus
+font_minus:
+   db 00000b
+   db 00000b
+   db 00000b
+   db 01110b
+   db 00000b
+   db 00000b
+   db 00000b
+
+global font_cursor_outline
+font_cursor_outline:
+   db 00001b
+   db 00011b
+   db 00101b
+   db 01001b
+   db 00101b
+   db 01011b
+   db 10000b
+
+global font_cursor_fill
+font_cursor_fill:
+   db 00000b
+   db 00000b
+   db 00010b
+   db 00110b
+   db 00010b
+   db 00000b
+   db 00000b
+
 global font_0
 font_0:
    db 10100b
