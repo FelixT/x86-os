@@ -47,6 +47,7 @@ void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
+extern void* software_interrupt_routine;
 
 void pic_remap() {
 
@@ -79,9 +80,11 @@ void idt_init() {
       idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
    }
 
-   for (uint8_t vector = 32; vector < 48; vector++) {
+   for (uint8_t vector = 32; vector < 49; vector++) {
       idt_set_descriptor(vector, irq_stub_table[vector-32], 0x8E);
    }
+
+   //idt_set_descriptor(0x80, irq_stub_table[32], 0x8E);
  
    __asm__ volatile("lidt %0" : : "m"(idtr)); // load idt
 
@@ -135,7 +138,6 @@ int timer_i = 0;
 
 extern void gui_clear(int colour);
 extern void gui_drawchar(char c, int colour);
-//extern void gui_writenum(int num, int colour);
 extern void gui_writenumat(int num, int colour, int x, int y);
 extern void gui_writenum(int num, int colour);
 extern void gui_writestr(char *c, int colour);
@@ -143,11 +145,14 @@ extern void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
 extern void gui_keypress(char key);
 extern void gui_return();
 extern void gui_backspace();
+extern void gui_writestrat(char *c, int colour, int x, int y);
 
 extern void terminal_keypress(char key);
 extern void terminal_return();
 
 extern void mouse_update(uint32_t relX, uint32_t relY);
+extern void mouse_leftclick(int relX, int relY);
+extern void mouse_leftrelease();
 
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
@@ -157,7 +162,7 @@ void exception_handler(int int_no) {
    if(int_no < 32) {
 
       if(videomode == 1) {
-         gui_drawrect(4, 60, 0, 7*2, 7);
+         gui_drawrect(4, 60, 0, 6*2, 7);
          gui_writenumat(int_no, 14, 60, 0);
       }
          
@@ -224,8 +229,45 @@ void exception_handler(int int_no) {
 
             mouse_update(xm, ym);
 
+            if(mouse_data[1] & 0x1) {
+               mouse_leftclick(xm, ym);
+            } else {
+               mouse_leftrelease();
+            }
+
             mouse_cycle = 0;
          }
+
+      } else if(irq_no == 16) {
+
+         // 0x30: software interrupt
+
+         int eax, ebx;
+
+         //asm("movl 32(%%esp), %0" : "=r"(eax)); // first value off stack, here the interrupt number
+
+         asm("movl 64(%%esp), %0" : "=r"(eax)); // get eax off stack
+         asm("movl 52(%%esp), %0" : "=r"(ebx)); // get ebx off stack
+
+         //gui_writenumat(eax, 14, 60, 0);
+         //gui_writenumat(ebx, 14, 60, 20);
+         //gui_writenumat(((char*)ebx)[0], 14, 60, 60);
+         //gui_writestrat((char*)ebx, 0, 50, 100);
+         //gui_drawchar(73, 0);
+
+         if(eax == 1) {
+            // WRITE STRING...
+            // ebx contains string address
+            gui_writestr((char*)ebx, 0);
+         }
+
+         if(eax == 2) {
+            // WRITE NUMBER...
+            // ebx contains string address
+            gui_writenum(ebx, 0);
+            gui_writenumat(ebx, 14, 60, 20);
+         }
+         
 
       } else {
 
@@ -240,23 +282,24 @@ void exception_handler(int int_no) {
 
       }
 
-   // send end of command code 0x20 to pic
-   if(irq_no >= 8)
-      outb(0xA0, 0x20); // slave command
+      // send end of command code 0x20 to pic
+      if(irq_no >= 8)
+         outb(0xA0, 0x20); // slave command
 
-   outb(0x20, 0x20); // master command
+      outb(0x20, 0x20); // master command
 
    }
 }
 
 void err_exception_handler(int int_no, int error_code) {
-   uint32_t *zer = (uint32_t*) 0x00;
+   //uint32_t *zer = (uint32_t*) 0x00;
 
-   zer[0] = int_no;
-   zer[1] = error_code;
+   //zer[0] = int_no;
+   //zer[1] = error_code;
    //gui_writenumat(int_no, 0, 30, 100);
 
-   gui_writenumat(error_code, 0, 60, 100);
+   gui_writenum(error_code, 0);
+   gui_writestr(" ", 0);
 
    exception_handler(int_no);
 }

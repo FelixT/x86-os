@@ -30,21 +30,21 @@ font_minus:
 
 global font_cursor_outline
 font_cursor_outline:
-   db 00001b
-   db 00011b
-   db 00101b
-   db 01001b
-   db 00101b
-   db 01011b
    db 10000b
+   db 11000b
+   db 10100b
+   db 10010b
+   db 10100b
+   db 11010b
+   db 00001b
 
 global font_cursor_fill
 font_cursor_fill:
    db 00000b
    db 00000b
-   db 00010b
-   db 00110b
-   db 00010b
+   db 01000b
+   db 01100b
+   db 01000b
    db 00000b
    db 00000b
 

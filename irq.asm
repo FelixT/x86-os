@@ -5,41 +5,42 @@
 
 %macro isr_err_stub 1
 isr_stub_%+%1:
-    pusha
+   pusha
 
-    push dword %1
-    cld 
-    call err_exception_handler
-    add esp, 8
+   push dword %1
+   cld 
+   call err_exception_handler
+   add esp, 4
 
-    popa
-    iret
+   popa
+   add esp, 4
+   iret
 %endmacro
 
 %macro isr_no_err_stub 1
 isr_stub_%+%1:
-    pusha
+   pusha
 
-    push dword %1
-    cld 
-    call exception_handler
-    add esp, 4
+   push dword %1
+   cld 
+   call exception_handler
+   add esp, 4
 
-    popa
-    iret
+   popa
+   iret
 %endmacro
 
 %macro irq_stub 1
 irq_stub_%+%1:
-    pusha
+   pusha
 
-    push dword %1
-    cld 
-    call exception_handler
-    add esp, 4
+   push dword %1
+   cld 
+   call exception_handler
+   add esp, 4
 
-    popa
-    iret
+   popa
+   iret
 %endmacro
 
 extern err_exception_handler
@@ -93,19 +94,21 @@ irq_stub 44
 irq_stub 45
 irq_stub 46
 irq_stub 47
+irq_stub 48 ; 0x30 used for software interrupts
 
 global isr_stub_table
 isr_stub_table:
 %assign i 0 
 %rep 32 
-    dd isr_stub_%+i
+   dd isr_stub_%+i
 %assign i i+1 
 %endrep
 
 global irq_stub_table
 irq_stub_table:
 %assign i 32
-%rep 16 
-    dd irq_stub_%+i
+%rep 17 
+   dd irq_stub_%+i
 %assign i i+1 
 %endrep
+

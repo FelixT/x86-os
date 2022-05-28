@@ -34,3 +34,5 @@ dd if=./hd.bin of=c.img bs=65536 count=1 conv=notrunc
 
 
 sfdisk c.img
+
+92d0 82cd
