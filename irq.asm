@@ -7,13 +7,15 @@
 isr_stub_%+%1:
    pusha
 
-   push dword %1
+   push dword esp ; push stackpointer (points to register saved by pusha)
+   push dword %1 ; push int no
    cld 
    call err_exception_handler
-   add esp, 4
+   add esp, 4 ; pop int no
+   add esp, 4 ; pop stack pointer
 
    popa
-   add esp, 4
+   add esp, 4 ; extra pop for err code
    iret
 %endmacro
 
@@ -21,10 +23,12 @@ isr_stub_%+%1:
 isr_stub_%+%1:
    pusha
 
-   push dword %1
+   push dword esp ; push stackpointer
+   push dword %1 ; push int no
    cld 
    call exception_handler
-   add esp, 4
+   add esp, 4 ; pop int no
+   add esp, 4 ; pop stack pointer
 
    popa
    iret
@@ -34,10 +38,12 @@ isr_stub_%+%1:
 irq_stub_%+%1:
    pusha
 
-   push dword %1
+   push dword esp ; push stackpointer
+   push dword %1 ; push int no
    cld 
    call exception_handler
-   add esp, 4
+   add esp, 4 ; pop int no
+   add esp, 4 ; pop stack pointer
 
    popa
    iret

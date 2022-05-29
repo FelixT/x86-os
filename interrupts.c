@@ -157,7 +157,7 @@ extern void mouse_leftrelease();
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
 
-void exception_handler(int int_no, registers_t regs) {
+void exception_handler(int int_no, registers_t *regs) {
 
    if(int_no < 32) {
 
@@ -241,29 +241,74 @@ void exception_handler(int int_no, registers_t regs) {
       } else if(irq_no == 16) {
 
          // 0x30: software interrupt
+         // uses eax, ebx, ecx as potential arguments
+         // note: edx is used in our handler to store the pre-interrupt esp
 
-         gui_writenum(regs.eax, 0);
+         gui_writenum(regs->eax, 0);
 
-         if(regs.eax == 1) {
+         if(regs->eax == 1) {
             // WRITE STRING...
             // ebx contains string address
-            gui_writestr((char*)regs.ebx, 0);
+            gui_writestr((char*)regs->ebx, 0);
          }
 
-         if(regs.eax == 2) {
+         if(regs->eax == 2) {
             // WRITE NUMBER...
             // ebx contains int
-            gui_writenum(regs.ebx, 0);
-            gui_writenumat(regs.ebx, 14, 60, 20);
+            gui_writenum(regs->ebx, 0);
+            gui_writenumat(regs->ebx, 14, 60, 20);
          }
 
-         if(regs.eax == 3) {
-             gui_writenum(regs.eip, 4);
-            
+         if(regs->eax == 3) {
+            // yield
 
-            //asm("movl 68(%%esp), %0" : "=r"(addr));
+            // save registers
+            tasks[current_task].registers = *regs;
+            tasks[current_task].active = false;
 
-            //gui_writenum(addr, 4);*/
+            current_task++;
+            current_task%=TOTAL_TASKS;
+            // restore registers
+            *regs = tasks[current_task].registers;
+            tasks[current_task].active = true;
+         }
+
+         if(regs->eax == 4) {
+            // show program stack contents
+            for(int i = 0; i < 64; i++) {
+               gui_writenum(((int*)regs->esp)[i], 0);
+               gui_writestr(" ", 0);
+            }
+         }
+
+         if(regs->eax == 5) {
+            // show current stack contents
+            int esp;
+            asm("movl %%esp, %0" : "=r"(esp));
+
+            for(int i = 0; i < 64; i++) {
+               gui_writenum(((int*)esp)[i], 0);
+               gui_writestr(" ", 0);
+            }
+         }
+
+         if(regs->eax == 6) {
+            // launch task ebx
+            current_task = regs->ebx;
+            tasks[current_task].registers.esp = regs->esp;//temporary
+            tasks[current_task].registers.cs = regs->cs;
+            tasks[current_task].registers.eflags = regs->eflags;
+            tasks[current_task].registers.useresp = regs->useresp;
+            tasks[current_task].registers.ss = regs->ss;
+
+            tasks[1].registers.esp = regs->esp;//temporary
+            tasks[1].registers.cs = regs->cs;
+            tasks[1].registers.eflags = regs->eflags;
+            tasks[1].registers.useresp = regs->useresp;
+            tasks[1].registers.ss = regs->ss;
+
+            *regs = tasks[current_task].registers;
+            tasks[current_task].active = true;
          }
          
 
@@ -289,7 +334,7 @@ void exception_handler(int int_no, registers_t regs) {
    }
 }
 
-void err_exception_handler(int int_no, int error_code, registers_t regs) {
+void err_exception_handler(int int_no, int error_code, registers_t *regs) {
    //uint32_t *zer = (uint32_t*) 0x00;
 
    //zer[0] = int_no;

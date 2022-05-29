@@ -1,10 +1,25 @@
 [bits 32]
 
-loop:
-mov eax, 2
+infloop:
+
+mov ecx, 0 ; counter
+
+.loop:
+
+mov eax, 2 ; print 69
 mov ebx, 69
 int 0x30
-jmp loop
+
+inc ecx
+cmp ecx, 10
+jl .loop ; ecx < 10
+
+; yield
+mov eax, 3
+int 0x30
+
+jmp infloop
+
 ret
 
 times 512-($-$$) db 0

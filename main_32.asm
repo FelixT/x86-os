@@ -3,6 +3,8 @@
 VIDEO_MEMORY equ 0xb8000
 WHITE_ON_BLACK equ 0x0f
 
+extern tos_kernel
+
 .main_32:
    ; setup registers
    mov ax, DATA_SEG
@@ -11,7 +13,7 @@ WHITE_ON_BLACK equ 0x0f
    mov fs, ax
    mov gs, ax
    mov ss, ax
-   mov ebp, stack_top
+   mov ebp, tos_kernel
    mov esp, ebp
 
    ; setup idt
@@ -36,7 +38,7 @@ WHITE_ON_BLACK equ 0x0f
    mov fs, ax
    mov gs, ax
    mov ss, ax
-   mov ebp, stack_top
+   mov ebp, tos_kernel
    mov esp, ebp
 
    ; setup idt

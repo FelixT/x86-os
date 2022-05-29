@@ -22,11 +22,12 @@ SECTIONS {
         *(COMMON)
         *(.bss)
     } > ram
-    /* allocate stack */
+
+    /* allocate stacks */
     . = ALIGN( 8 );
     . = . + 0x00001000;  
-    tos_kernel = .; /* currently unused... */
+    tos_kernel = .;
 
     . = . + 0x00001000;
-    tos_program = .; /* program stacks */
+    tos_program = .; /* program stacks, currently unused */
 }

@@ -1,13 +1,5 @@
 [bits 16]
 
-; allocate new 16 byte aligned, 8 KiB stack
-section .bss
-
-align 16
-stack_bottom:
-resb 8192
-stack_top:
-
 section .text
 
 jmp kmain
@@ -18,9 +10,11 @@ jmp kmain
 %include "gui.asm"
 %include "gdt.asm"
 
+extern tos_kernel
+
 global kmain
 kmain:
-   mov sp, stack_top
+   mov sp, tos_kernel
 
    ;extern terminal_clear
    ;call terminal_clear

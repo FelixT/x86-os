@@ -219,10 +219,10 @@ void gui_writenumat(int num, int colour, int x, int y) {
 
 void gui_window_init(gui_window_t *window) {
    strcpy(window->title, "TERMINAL");
-   window->x = 15;
-   window->y = 15;
-   window->width = 220;
-   window->height = 160;
+   window->x = 8;
+   window->y = 8;
+   window->width = 240;
+   window->height = 170;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = 0;
@@ -304,6 +304,7 @@ void gui_keypress(char key) {
 
 void mouse_enable();
 
+extern void create_task_entry(int index, uint32_t entry);
 void gui_checkcmd() {
    char *command = gui_windows[gui_selected_window].text_buffer;
 
@@ -334,11 +335,42 @@ void gui_checkcmd() {
          :: "a" (3), "d" (428) // put operands in eax, ebx
       );
    }
+   if(strcmp(command, "INT4")) {
+      asm(
+         "int $0x30"
+         :: "a" (4), "d" (0) // put operands in eax, ebx
+      );
+   }
+   if(strcmp(command, "INT5")) {
+      asm(
+         "int $0x30"
+         :: "a" (5), "d" (0) // put operands in eax, ebx
+      );
+   }
    if(strcmp(command, "PROG1")) {
-      int progAddr = 15000+0x7c00;
+      int progAddr = 20000+0x7c00;
       asm(
          "call *%0"
          : : "r" (progAddr)
+      );
+   }
+   if(strcmp(command, "PROG2")) {
+      int progAddr = 20000+0x7c00+512;
+      asm(
+         "call *%0"
+         : : "r" (progAddr)
+      );
+   }
+   if(strcmp(command, "PROGA")) {
+      // set up tasks
+      uint32_t p0entry = 20000+0x7c00;
+      uint32_t p1entry = 20000+0x7c00+512;
+      create_task_entry(0, p0entry);
+      create_task_entry(1, p1entry);
+      // launch task
+      asm(
+         "int $0x30"
+         :: "a" (6), "b" (0) // put operands in eax, ebx
       );
    }
 }
