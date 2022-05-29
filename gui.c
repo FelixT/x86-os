@@ -305,7 +305,8 @@ void gui_keypress(char key) {
 void mouse_enable();
 
 extern void create_task_entry(int index, uint32_t entry);
-void gui_checkcmd() {
+extern void launch_task(int index, void *regs);
+void gui_checkcmd(void *regs) {
    char *command = gui_windows[gui_selected_window].text_buffer;
 
    if(strcmp(command, "CLEAR")) {
@@ -367,15 +368,19 @@ void gui_checkcmd() {
       uint32_t p1entry = 20000+0x7c00+512;
       create_task_entry(0, p0entry);
       create_task_entry(1, p1entry);
+
+      launch_task(0, regs);
+
       // launch task
-      asm(
-         "int $0x30"
-         :: "a" (6), "b" (0) // put operands in eax, ebx
-      );
+      // here the interrupt within interrupt causes issues...
+      //asm(
+      //   "int $0x30"
+      //   :: "a" (6), "b" (0) // put operands in eax, ebx
+      //);
    }
 }
 
-void gui_return() {
+void gui_return(void *regs) {
    if(gui_selected_window >= 0) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
 
@@ -386,7 +391,7 @@ void gui_return() {
 
       gui_drawchar('\n', 0);
 
-      gui_checkcmd();
+      gui_checkcmd(regs);
 
       gui_drawchar('\n', 0);
 

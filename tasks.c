@@ -40,3 +40,22 @@ void create_task_entry(int index, uint32_t entry) {
    tasks[index].registers.eax = 0x10;
    tasks[index].registers.eip = entry;
 }
+
+void launch_task(int index, registers_t *regs) {
+   current_task = index;
+   
+   tasks[current_task].registers.esp = regs->esp;//temporary
+   tasks[current_task].registers.cs = regs->cs;
+   tasks[current_task].registers.eflags = regs->eflags;
+   tasks[current_task].registers.useresp = regs->useresp;
+   tasks[current_task].registers.ss = regs->ss;
+
+   tasks[1].registers.esp = regs->esp;//temporary
+   tasks[1].registers.cs = regs->cs;
+   tasks[1].registers.eflags = regs->eflags;
+   tasks[1].registers.useresp = regs->useresp;
+   tasks[1].registers.ss = regs->ss;
+
+   *regs = tasks[current_task].registers;
+   tasks[current_task].active = true;
+}

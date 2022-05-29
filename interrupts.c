@@ -143,7 +143,7 @@ extern void gui_writenum(int num, int colour);
 extern void gui_writestr(char *c, int colour);
 extern void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
 extern void gui_keypress(char key);
-extern void gui_return();
+extern void gui_return(void *regs);
 extern void gui_backspace();
 extern void gui_writestrat(char *c, int colour, int x, int y);
 
@@ -183,6 +183,7 @@ void exception_handler(int int_no, registers_t *regs) {
 
          timer_i++;
          timer_i%=10;
+         
       } else if(irq_no == 1) {
          // keyboard
 
@@ -193,7 +194,7 @@ void exception_handler(int int_no, registers_t *regs) {
             if(videomode == 0)
                terminal_return();
             else
-               gui_return();
+               gui_return(regs);
 
          } else if(scan_code == 14) { // backspace
             
