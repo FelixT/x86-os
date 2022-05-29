@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include "tasks.c"
 
 typedef struct {
    uint16_t    isr_low;      // lower 16 bits of isr address/offset
@@ -22,7 +23,6 @@ typedef struct {
 } __attribute__((packed)) idtr_t;
 
 static idtr_t idtr;
-
 
 // https://wiki.osdev.org/Inline_Assembly/Examples
 static inline void outb(uint16_t port, uint8_t val) {
@@ -157,7 +157,7 @@ extern void mouse_leftrelease();
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
 
-void exception_handler(int int_no) {
+void exception_handler(int int_no, registers_t regs) {
 
    if(int_no < 32) {
 
@@ -242,30 +242,28 @@ void exception_handler(int int_no) {
 
          // 0x30: software interrupt
 
-         int eax, ebx;
+         gui_writenum(regs.eax, 0);
 
-         //asm("movl 32(%%esp), %0" : "=r"(eax)); // first value off stack, here the interrupt number
-
-         asm("movl 64(%%esp), %0" : "=r"(eax)); // get eax off stack
-         asm("movl 52(%%esp), %0" : "=r"(ebx)); // get ebx off stack
-
-         //gui_writenumat(eax, 14, 60, 0);
-         //gui_writenumat(ebx, 14, 60, 20);
-         //gui_writenumat(((char*)ebx)[0], 14, 60, 60);
-         //gui_writestrat((char*)ebx, 0, 50, 100);
-         //gui_drawchar(73, 0);
-
-         if(eax == 1) {
+         if(regs.eax == 1) {
             // WRITE STRING...
             // ebx contains string address
-            gui_writestr((char*)ebx, 0);
+            gui_writestr((char*)regs.ebx, 0);
          }
 
-         if(eax == 2) {
+         if(regs.eax == 2) {
             // WRITE NUMBER...
-            // ebx contains string address
-            gui_writenum(ebx, 0);
-            gui_writenumat(ebx, 14, 60, 20);
+            // ebx contains int
+            gui_writenum(regs.ebx, 0);
+            gui_writenumat(regs.ebx, 14, 60, 20);
+         }
+
+         if(regs.eax == 3) {
+             gui_writenum(regs.eip, 4);
+            
+
+            //asm("movl 68(%%esp), %0" : "=r"(addr));
+
+            //gui_writenum(addr, 4);*/
          }
          
 
@@ -291,7 +289,7 @@ void exception_handler(int int_no) {
    }
 }
 
-void err_exception_handler(int int_no, int error_code) {
+void err_exception_handler(int int_no, int error_code, registers_t regs) {
    //uint32_t *zer = (uint32_t*) 0x00;
 
    //zer[0] = int_no;
@@ -301,5 +299,5 @@ void err_exception_handler(int int_no, int error_code) {
    gui_writenum(error_code, 0);
    gui_writestr(" ", 0);
 
-   exception_handler(int_no);
+   exception_handler(int_no, regs);
 }

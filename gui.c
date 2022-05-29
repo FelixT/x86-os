@@ -4,9 +4,6 @@
 
 extern int videomode;
 
-int gui_text_x = 0;
-int gui_text_y = 20;
-
 int gui_mouse_x = 0;
 int gui_mouse_y = 0;
 
@@ -63,6 +60,44 @@ void gui_drawrect(uint8_t colour, int x, int y, int width, int height) {
    return;
 }
 
+void gui_drawunfilledrect(uint8_t colour, int x, int y, int width, int height) {
+   uint8_t *terminal_buffer = (uint8_t*) 0xA0000;
+
+   for(int xi = x; xi < x+width; xi++) // top
+      terminal_buffer[y*(int)gui_width+xi] = colour;
+
+   for(int xi = x; xi < x+width; xi++) // bottom
+      terminal_buffer[(y+height)*(int)gui_width+xi] = colour;
+
+   for(int yi = y; yi < y+height; yi++) // left
+      terminal_buffer[(yi)*(int)gui_width+x] = colour;
+
+   for(int yi = y; yi < y+height; yi++) // right
+      terminal_buffer[(yi)*(int)gui_width+x+width] = colour;
+}
+
+void gui_drawdottedrect(uint8_t colour, int x, int y, int width, int height) {
+   uint8_t *terminal_buffer = (uint8_t*) 0xA0000;
+
+   for(int xi = x; xi < x+width; xi++) // top
+      if((xi%2) == 0)
+         terminal_buffer[y*(int)gui_width+xi] = colour;
+
+   for(int xi = x; xi < x+width; xi++) // bottom
+      if((xi%2) == 0)
+         terminal_buffer[(y+height)*(int)gui_width+xi] = colour;
+
+   for(int yi = y; yi < y+height; yi++) // left
+      if((yi%2) == 0)
+      terminal_buffer[(yi)*(int)gui_width+x] = colour;
+
+   for(int yi = y; yi < y+height; yi++) // right
+      if((yi%2) == 0)
+      terminal_buffer[(yi)*(int)gui_width+x+width] = colour;
+}
+
+
+
 void gui_clear(uint8_t colour) {
    uint8_t *terminal_buffer = (uint8_t*) 0xA0000;
    for(int y = 0; y < (int)gui_height; y++) {
@@ -95,6 +130,23 @@ void gui_drawcharat(char c, int colour, int x, int y) {
    }
 }
 
+void gui_scrollwindow() {
+   gui_window_t *window = &gui_windows[gui_selected_window];
+   uint8_t *terminal_buffer = (uint8_t*) 0xA0000;
+
+   int scrollY = 9;
+   for(int y = window->y + scrollY + 10; y < window->y + window->height; y++) {
+      for(int x = window->x; x < window->x + window->width; x++) {
+         terminal_buffer[(y-scrollY)*(int)gui_width+x] = terminal_buffer[y*(int)gui_width+x];
+      }
+   }
+   // clear bottom
+   gui_drawrect(15, window->x, window->y + window->height - scrollY, window->width, scrollY);
+   window->text_y = window->y + window->height - scrollY - 10 - 8;
+   window->text_x = 0;
+}
+
+void gui_redrawall();
 void gui_drawchar(char c, int colour) {
 
    if(gui_selected_window < 0)
@@ -104,10 +156,19 @@ void gui_drawchar(char c, int colour) {
    if(c == '\n') {
       selected->text_x = 0;
       selected->text_y += 8;
+
+      if(selected->text_y > selected->height - 12) {
+         // y overflow... scroll
+         //selected->text_y = 12;
+         //selected->text_x = 0;
+         //gui_redrawall();
+         gui_scrollwindow();
+      }
+
       return;
    }
 
-   // overflow
+   // x overflow
    if(selected->text_x + 6 >= selected->width) {
       gui_drawcharat('-', colour, selected->x + selected->text_x-2, selected->y + selected->text_y);
       selected->text_x = 0;
@@ -117,10 +178,11 @@ void gui_drawchar(char c, int colour) {
    gui_drawcharat(c, colour, selected->x + selected->text_x, selected->y + selected->text_y);
    selected->text_x+=6;
 
-   if(gui_text_y > (int)gui_height) {
-      selected->text_y = 12;
-      selected->text_x = 0;
-      gui_clear(3);
+   if(selected->text_y > selected->height - 12) {
+      //selected->text_y = 12;
+      //selected->text_x = 0;
+      //gui_redrawall();
+      gui_scrollwindow();
    }
 }
 
@@ -159,8 +221,8 @@ void gui_window_init(gui_window_t *window) {
    strcpy(window->title, "TERMINAL");
    window->x = 15;
    window->y = 15;
-   window->width = 120;
-   window->height = 120;
+   window->width = 220;
+   window->height = 160;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = 0;
@@ -210,6 +272,17 @@ void gui_draw(void) {
    }
 }
 
+void gui_cursor_save_bg();
+void gui_redrawall() {
+   for(int i = 0; i < 4; i++) {
+      gui_window_t *window = &gui_windows[i];
+      window->needs_redraw = true;
+   }
+   gui_clear(3);
+   gui_draw();
+   gui_cursor_save_bg();
+}
+
 void gui_keypress(char key) {
    if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')) {
 
@@ -222,9 +295,10 @@ void gui_keypress(char key) {
             selected->text_index++;
             selected->text_x = (selected->text_index)*6;
          }
+
+         gui_drawwindow(&gui_windows[gui_selected_window]);
       }
 
-      gui_draw();
    }
 }
 
@@ -235,8 +309,7 @@ void gui_checkcmd() {
 
    if(strcmp(command, "CLEAR")) {
       gui_windows[gui_selected_window].text_y = 12;
-      gui_clear(3);
-      gui_draw();
+      gui_redrawall();
    }
    if(strcmp(command, "MOUSE")) {
       mouse_enable();
@@ -255,6 +328,12 @@ void gui_checkcmd() {
          :: "a" (2), "b" (428) // put operands in eax, ebx
       );
    }
+   if(strcmp(command, "INT3")) {
+      asm(
+         "int $0x30"
+         :: "a" (3), "d" (428) // put operands in eax, ebx
+      );
+   }
    if(strcmp(command, "PROG1")) {
       int progAddr = 15000+0x7c00;
       asm(
@@ -270,8 +349,9 @@ void gui_return() {
 
       gui_drawchar('\n', 0);
 
-      gui_writestrat(selected->text_buffer, 1, selected->x + selected->text_x + 1, selected->y + selected->text_y);
-      
+      //gui_writestrat(selected->text_buffer, 1, selected->x + selected->text_x + 1, selected->y + selected->text_y);
+      gui_writestr(selected->text_buffer, 1);
+
       gui_drawchar('\n', 0);
 
       gui_checkcmd();
@@ -293,10 +373,9 @@ void gui_backspace() {
          selected->text_x-=6;
          selected->text_buffer[selected->text_index] = '\0';
       }
+
+      gui_drawwindow(&gui_windows[gui_selected_window]);
    }
-
-
-   gui_draw();
 }
 
 void gui_drawwindow(gui_window_t *window) {
@@ -388,8 +467,17 @@ void mouse_update(int relX, int relY) {
    gui_mouse_x += relX;
    gui_mouse_y -= relY;
 
-   gui_mouse_x %= gui_width;
-   gui_mouse_y %= gui_height;
+   if(gui_mouse_x > (int)gui_width)
+      gui_mouse_x %= gui_width;
+
+   if(gui_mouse_y > (int)gui_height)
+      gui_mouse_y %= gui_height;
+
+   if(gui_mouse_x < 0)
+      gui_mouse_x = gui_width - gui_mouse_x;
+
+   if(gui_mouse_y < 0)
+      gui_mouse_y = gui_height - gui_mouse_y;
 
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
 
@@ -398,6 +486,30 @@ void mouse_update(int relX, int relY) {
    // draw cursor
    gui_drawcharat(27, 0, gui_mouse_x, gui_mouse_y); // outline
    gui_drawcharat(28, 15, gui_mouse_x, gui_mouse_y); // fill
+}
+
+bool mouse_clicked_on_window(int index) {
+   gui_window_t *window = &gui_windows[index];
+   if(window->minimised) {
+         if(gui_mouse_x >= window->toolbar_pos*18+2 && gui_mouse_x <= window->toolbar_pos*18+2+16
+            && gui_mouse_y >= (int)gui_height-10 && gui_mouse_y <= (int)gui_height-1) {
+               window->minimised = false;
+               window->active = true;
+               window->needs_redraw = true;
+               gui_selected_window = index;
+               return true;
+            }
+      }
+
+   else if(gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
+      && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
+         window->active = true;
+         window->needs_redraw = true;
+         gui_selected_window = index;
+         return true;
+   }
+
+   return false;
 }
 
 void mouse_leftclick(int relX, int relY) {
@@ -417,38 +529,29 @@ void mouse_leftclick(int relX, int relY) {
             window->y = gui_height - window->height;
 
          window->needs_redraw = true;
-         gui_draw();
+         gui_drawdottedrect(15, window->x, window->y, window->width, window->height);
+         //gui_draw();
       }
       return;
    }
    
    mouse_held = true;
 
-   gui_selected_window = -1;
+   // check if clicked on current window
+   if(mouse_clicked_on_window(gui_selected_window)) {
+      // 
+   } else {
+      // check other windows
 
-   for(int i = 0; i < 4; i++) {
-      gui_window_t *window = &gui_windows[i];
-      // check if clicked on a window
-      if(window->minimised) {
-         if(gui_mouse_x >= window->toolbar_pos*18+2 && gui_mouse_x <= window->toolbar_pos*18+2+16
-            && gui_mouse_y >= (int)gui_height-10 && gui_mouse_y <= (int)gui_height-1) {
-               window->minimised = false;
-               window->active = true;
-               window->needs_redraw = true;
-               gui_selected_window = i;
-               break;
-            }
-      }
-      
-      else if(gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
-         && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
-            window->active = true;
-            window->needs_redraw = true;
-            gui_selected_window = i;
+      gui_selected_window = -1;
+      for(int i = 0; i < 4; i++) {
+         if(mouse_clicked_on_window(i))
             break;
       }
+   
    }
 
+   // make all other windows inactive
    for(int i = 0; i < 4; i++) {
       if(i != gui_selected_window) {
          gui_window_t *window = &gui_windows[i];
@@ -463,14 +566,7 @@ void mouse_leftclick(int relX, int relY) {
 
 void mouse_leftrelease() {
    if(mouse_held) {
-      // redraw all
-      for(int i = 0; i < 4; i++) {
-         gui_window_t *window = &gui_windows[i];
-         window->needs_redraw = true;
-      }
-      gui_clear(3);
-      gui_draw();
-      gui_cursor_save_bg();
+      gui_redrawall();
    }
 
    mouse_held = false;
