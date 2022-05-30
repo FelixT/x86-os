@@ -6,8 +6,9 @@ mov ecx, 0 ; counter
 
 .loop:
 
-mov eax, 2 ; print 42
+mov eax, 6 ; print 42
 mov ebx, 42
+mov ecx, 0 ; window 0
 int 0x30
 
 inc ecx

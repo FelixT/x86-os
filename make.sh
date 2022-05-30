@@ -24,9 +24,10 @@ cat o/boot.bin o/main.bin > hd.bin
 # add programs at 20k 
 nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
+nasm progidle.asm -f bin -o o/progidle.bin
 
 dd if=/dev/zero of=hd2.bin bs=20000 count=1 status=none
 dd if=./hd.bin of=hd2.bin bs=20000 count=1 conv=notrunc status=none
-cat hd2.bin o/prog1.bin o/prog2.bin > hd3.bin
+cat hd2.bin o/progidle.bin o/prog1.bin o/prog2.bin > hd3.bin
 
 qemu-system-i386 -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio

@@ -118,36 +118,6 @@ check_cmd:
       jmp .done
 
    .cmd_protected:
-
-      ;mov ax, 0x4F00
-      ;mov cx, 0x0100 ; mode no
-      ;mov di, [vbe_info]
-      ;int 0x10
-      ;cmp ax, 0x004F	; test for error
-      ;j;ne .gui_error
-
-      ; https://mirror.cs.msu.ru/oldlinux.org/Linux.old/docs/interrupts/int-html/rb-0069.htm
-      ; =test==
-      ;mov ax, 0x4F02	; set VBE mode
-      ;mov bx, 0x4100	; mode no = 0x100: 640x400, 256 colour (https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial)
-      ;int 0x10
-      ;cmp ax, 0x004F	; test for error
-      ;jne .gui_error
-      ; get vesa bios info
-      ;extern vbe_mode_info
-      ;mov ax, 0x4F01
-      ;mov cx, 0x0100 ; mode no
-      ;mov es, [DATA_SEG]
-      ;mov di, [vbe_mode_info]
-      ;int 0x10
-      ;cmp ax, 0x004F	; test for error
-      ;jne .gui_error
-      ; revert to text mode 
-      ;mov ah, 0x00 ; set video mode
-      ;mov al, 0x03 ; video mode = 80x25 16 color text vga
-      ;int 0x10
-      ; ==endtest==
-
       ; enter protected mode
       cli ; disable interrupts
       lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
@@ -163,14 +133,105 @@ check_cmd:
       [bits 16]
 
    .cmd_protectedgui:
-      mov ah, 0x00 ; set video mode
-      mov al, 0x13 ; video mode = 80x25 16 color text vga
+
+      ; get vesa modes https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
+      mov ax, 0x4F00
+      mov bx, 0
+      mov es, bx
+      mov di, vbe_info_structure
       int 0x10
 
-      ;mov ax, 0x4F02	; set VBE mode
-      ;mov bx, 0x4101	; mode no = 0x100: 640x400, 256 colour (https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial)
-      ;int 0x10
+      cmp ax, 0x004F
+      jne .gui_error
 
+      
+      ; get video_modes
+      mov di, [vbe_info_structure+14]
+      mov es, [vbe_info_structure+16]
+
+      ; pick best mode
+      mov cx, 0 ; best entry
+      mov dx, 0 ; best width
+
+      mov bx, 0 ; i = 0
+      .loop:
+         ; get mode info
+         push cx
+         push di
+         add di, bx
+         add di, bx
+         mov cx, [es:di]
+         pop di
+         cmp cx, 0xFFFF ; reached end of array
+         je .loop_done
+
+         push di
+         mov ax, 0x4F01
+         mov di, vbe_mode_info_structure
+         int 0x10
+         pop di
+
+         pop cx
+
+         cmp ax, 0x004F ; mode unsupported
+         jne .loop_next
+
+         ; get width
+         mov ax, [vbe_mode_info_structure+18]
+         cmp dx, ax
+         jnl .loop_next ; less than or equal to best, discard
+
+         ; if width too big, discard...
+         cmp ax, 800
+         jnl .loop_next
+
+         ; get bpp
+         mov ah, [vbe_mode_info_structure+25]
+         cmp ah, 8
+         jne .loop_next ; only use bpp 8 for now...
+
+         ; get framebuffer status, check 7th bit
+         mov ax, [vbe_mode_info_structure]
+         and ax, 0x80
+         cmp ax, 0x80 ; supports linear frame buffer
+         jne .loop_next ; otherwise discard
+
+         ; otherwise, this is our new best width & entry
+         push di
+         add di, bx
+         add di, bx
+         mov dx, [vbe_mode_info_structure+18]
+         mov ax, bx
+         add ax, ax
+         mov cx, [es:di]
+         pop di
+         
+         jmp .loop_next
+
+      .loop_next:
+         inc bx
+         jmp .loop
+
+      .loop_done:
+         pop cx
+
+         cmp cx, 0
+         je .gui_error
+
+         ; get info for this specific mode cx
+         mov ax, 0x4F01
+         mov di, vbe_mode_info_structure
+         int 0x10
+
+         ; set vga mode
+         mov ax, 0x4F02	; set VBE mode
+         mov bx, cx
+         or bx, 0x4000 ; set bit 14 of bx to enable linear framebuffer
+         int 0x10
+
+         cmp ax, 0x004F
+         jne .gui_error
+         
       ; enter protected mode
       cli ; disable interrupts
       lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
@@ -184,6 +245,11 @@ check_cmd:
          mov ah, 0x00 ; set video mode
          mov al, 0x03 ; video mode = 80x25 16 color text vga
          int 0x10
+
+         ; revert to 320x200
+         ;mov ah, 0x00 ; set video mode
+         ;mov al, 0x13 ; video mode = 80x25 16 color text vga
+         ;int 0x10
 
          mov si, error
          call print
@@ -200,8 +266,6 @@ load_gui:
    ;call gui_draw
 
    call drawrect
-
-   
 
    ret
 
@@ -305,6 +369,14 @@ cmd_mouse db 'mouse', 0
 cmd_mouseinfo db 'mouseinfo', 0
 cmd_protected db 'protected', 0
 cmd_protectedgui db 'protectedgui', 0
+
+vbe_info_structure:
+	.signature		db "VBE2"	; indicate support for VBE 2.0+
+	.table_data:	resb 512-4	; reserve space for the table below
+
+global vbe_mode_info_structure
+vbe_mode_info_structure:
+	.table_data:	resb 256	; reserve space for the table below
 
 %include "font.asm"
 

@@ -107,6 +107,7 @@ extern void terminal_prompt(void);
 
 extern void gui_draw(void);
 extern int videomode;
+extern bool switching; // preemptive multitasking enabled
 
 char scan_to_char(int scan_code) {
    // https://www.millisecond.com/support/docs/current/html/language/scancodes.htm
@@ -157,6 +158,8 @@ extern void mouse_leftrelease();
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
 
+extern int gui_selected_window;
+
 void exception_handler(int int_no, registers_t *regs) {
 
    if(int_no < 32) {
@@ -179,6 +182,9 @@ void exception_handler(int int_no, registers_t *regs) {
          } else {
             gui_drawrect(3, 314, 0, 5, 7);
             gui_writenumat(timer_i, 7, 314, 0);
+
+            if(switching)
+               switch_task(regs);
          }
 
          timer_i++;
@@ -243,9 +249,8 @@ void exception_handler(int int_no, registers_t *regs) {
 
          // 0x30: software interrupt
          // uses eax, ebx, ecx as potential arguments
-         // note: edx is used in our handler to store the pre-interrupt esp
 
-         gui_writenum(regs->eax, 0);
+         //gui_writenum(regs->eax, 0);
 
          if(regs->eax == 1) {
             // WRITE STRING...
@@ -263,15 +268,7 @@ void exception_handler(int int_no, registers_t *regs) {
          if(regs->eax == 3) {
             // yield
 
-            // save registers
-            tasks[current_task].registers = *regs;
-            tasks[current_task].active = false;
-
-            current_task++;
-            current_task%=TOTAL_TASKS;
-            // restore registers
-            *regs = tasks[current_task].registers;
-            tasks[current_task].active = true;
+            switch_task(regs);
          }
 
          if(regs->eax == 4) {
@@ -294,22 +291,11 @@ void exception_handler(int int_no, registers_t *regs) {
          }
 
          if(regs->eax == 6) {
-            // launch task ebx
-            current_task = regs->ebx;
-            tasks[current_task].registers.esp = regs->esp;//temporary
-            tasks[current_task].registers.cs = regs->cs;
-            tasks[current_task].registers.eflags = regs->eflags;
-            tasks[current_task].registers.useresp = regs->useresp;
-            tasks[current_task].registers.ss = regs->ss;
-
-            tasks[1].registers.esp = regs->esp;//temporary
-            tasks[1].registers.cs = regs->cs;
-            tasks[1].registers.eflags = regs->eflags;
-            tasks[1].registers.useresp = regs->useresp;
-            tasks[1].registers.ss = regs->ss;
-
-            *regs = tasks[current_task].registers;
-            tasks[current_task].active = true;
+            // print num ebx to window ecx
+            int tmp = gui_selected_window;
+            gui_selected_window = regs->ecx;
+            gui_writenum(regs->ebx, 0);
+            gui_selected_window = tmp;
          }
          
 
