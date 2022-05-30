@@ -14,8 +14,6 @@ size_t gui_height = 200;
 
 bool mouse_held = false;
 
-// https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
-
 typedef struct gui_window_t {
    char title[20];
    int x;
@@ -35,9 +33,9 @@ typedef struct gui_window_t {
 gui_window_t gui_windows[4];
 int gui_selected_window = 0;
 
-uint32_t framebuffer;
-
 // colours: https://www.fountainware.com/EXPL/vga_color_palettes.htm , 8bit
+
+uint32_t framebuffer;
 
 uint8_t cursor_buffer[7*5]; // store whats behind cursor so it can be restored
 
@@ -257,7 +255,6 @@ void gui_init(void) {
    gui_windows[3].active = true;
    gui_windows[3].minimised = false;
    gui_selected_window = 3;
-
 }
 
 void gui_drawwindow(gui_window_t *window);

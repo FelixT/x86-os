@@ -1,3 +1,5 @@
+#include "memory.c"
+
 // https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
 typedef struct vbe_mode_info_t {
 	uint16_t attributes;

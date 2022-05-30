@@ -30,4 +30,8 @@ SECTIONS {
 
     . = . + 0x00001000;
     tos_program = .; /* program stacks, currently unused */
+
+    heap_kernel = .;
+    . = . + 0x00001000;
+     
 }
