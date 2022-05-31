@@ -23,14 +23,16 @@ typedef struct gui_window_t {
    char text_buffer[40];
    int text_index;
    int text_x;
-   int text_y;
+   int text_y; // includes 10px titlebar
    bool needs_redraw;
    bool active;
    bool minimised;
    int toolbar_pos;
+   uint8_t *framebuffer;
 } gui_window_t;
 
-gui_window_t gui_windows[4];
+#define NUM_WINDOWS 4
+gui_window_t gui_windows[NUM_WINDOWS];
 int gui_selected_window = 0;
 
 // colours: https://www.fountainware.com/EXPL/vga_color_palettes.htm , 8bit
@@ -100,8 +102,6 @@ void gui_drawdottedrect(uint8_t colour, int x, int y, int width, int height) {
       terminal_buffer[(yi)*(int)gui_width+x+width-1] = colour;
 }
 
-
-
 void gui_clear(uint8_t colour) {
    uint8_t *terminal_buffer = (uint8_t*) framebuffer;
    for(int y = 0; y < (int)gui_height; y++) {
@@ -134,22 +134,132 @@ void gui_drawcharat(char c, int colour, int x, int y) {
    }
 }
 
-void gui_scrollwindow() {
-   gui_window_t *window = &gui_windows[gui_selected_window];
-   uint8_t *terminal_buffer = (uint8_t*) framebuffer;
+void gui_window_drawcharat(char c, int colour, int x, int y, int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
+   uint8_t *terminal_buffer = window->framebuffer;
+   
+   getFontLetter(c, font_letter);
+
+   int i = 0;      
+   for(int yi = y; yi < y+7; yi++) {
+      for(int xi = x; xi < x+5; xi++) {
+         if(font_letter[i] == 1)
+            terminal_buffer[yi*(int)window->width+xi] = colour;
+         i++;
+      }
+   }
+}
+
+void gui_window_drawrect(uint8_t colour, int x, int y, int width, int height, int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
+   uint8_t *terminal_buffer = (uint8_t*)window->framebuffer;
+   for(int yi = y; yi < y+height; yi++) {
+      for(int xi = x; xi < x+width; xi++) {
+         terminal_buffer[yi*(int)window->width+xi] = colour;
+      }
+   }
+   return;
+}
+
+void gui_window_writestrat(char *c, int colour, int x, int y, int windowIndex) {
+   int i = 0;
+   while(c[i] != '\0') {
+      gui_window_drawcharat(c[i++], colour, x, y, windowIndex);
+      x+=6;
+   }
+}
+
+void gui_window_scroll(int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
+   uint8_t *terminal_buffer = window->framebuffer;
 
    int scrollY = 8;
-   for(int y = window->y + scrollY + 11; y < window->y + window->height; y++) {
-      if(y >= (int)gui_height-12) continue;
+   for(int y = scrollY; y < window->height - 10; y++) {
       for(int x = window->x; x < window->x + window->width; x++) {
-         terminal_buffer[(y-scrollY)*(int)gui_width+x] = terminal_buffer[y*(int)gui_width+x];
+         terminal_buffer[(y-scrollY)*window->width+x] = terminal_buffer[y*(int)window->width+x];
       }
    }
    // clear bottom
-   int newY = window->height - scrollY - 1;
-   gui_drawrect(15, window->x, window->y + newY, window->width, scrollY);
+   int newY = window->height - (scrollY + 10);
+   gui_window_drawrect(15, 0, newY, window->width, scrollY, windowIndex);
    window->text_y = newY;
    window->text_x = 0;
+}
+
+void gui_window_drawchar(char c, int colour, int windowIndex) {
+
+   gui_window_t *selected = &gui_windows[windowIndex];
+      
+   //if(selected->minimised || !selected->active)
+   //   return;
+
+   if(c == '\n') {
+      selected->text_x = 0;
+      selected->text_y += 8;
+
+      if(selected->text_y > selected->height - (10 + 8)) {
+         gui_window_scroll(windowIndex);
+      }
+
+      return;
+   }
+
+   // x overflow
+   if(selected->text_x + 6 >= selected->width) {
+      gui_window_drawcharat('-', colour, selected->text_x-2, selected->text_y, windowIndex);
+      selected->text_x = 0;
+      selected->text_y += 8;
+
+      if(selected->text_y > selected->height - (10 + 8)) {
+         gui_window_scroll(windowIndex);
+      }
+   }
+
+   gui_window_drawcharat(c, colour, selected->text_x, selected->text_y, windowIndex);
+   selected->text_x+=6;
+
+   if(selected->text_y > selected->height - (10 + 8)) {
+      gui_window_scroll(windowIndex);
+   }
+
+   selected->needs_redraw = true;
+
+}
+
+void gui_window_writestr(char *c, int colour, int windowIndex) {
+   int i = 0;
+   while(c[i] != '\0')
+      gui_window_drawchar(c[i++], colour, windowIndex);
+}
+
+extern void terminal_numtostr(int num, char *out);
+void gui_window_writenum(int num, int colour, int windowIndex) {
+   if(num < 0)
+      gui_window_drawchar('-', colour, windowIndex);
+
+   char out[20];
+   terminal_numtostr(num, out);
+   gui_window_writestr(out, colour, windowIndex);
+}
+
+void gui_window_init(gui_window_t *window) {
+   strcpy(window->title, "TERMINAL");
+   window->x = 8;
+   window->y = 8;
+   window->width = 220;
+   window->height = 140;
+   window->text_buffer[0] = '\0';
+   window->text_index = 0;
+   window->text_x = 0;
+   window->text_y = 0;
+   window->needs_redraw = true;
+   window->active = false;
+   window->minimised = true;
+   
+   window->framebuffer = malloc(window->width*(window->height-10));
+   for(int i = 0; i < window->width*window->height; i++) {
+      window->framebuffer[i] = 15;
+   }
 }
 
 void gui_redrawall();
@@ -158,38 +268,8 @@ void gui_drawchar(char c, int colour) {
    if(gui_selected_window < 0)
       return;
 
-   gui_window_t *selected = &gui_windows[gui_selected_window];
-   if(selected->minimised || !selected->active)
-      return;
+   gui_window_drawchar(c, colour, gui_selected_window);
 
-   if(c == '\n') {
-      selected->text_x = 0;
-      selected->text_y += 8;
-
-      if(selected->text_y > selected->height - 8) {
-         gui_scrollwindow();
-      }
-
-      return;
-   }
-
-   // x overflow
-   if(selected->text_x + 6 >= selected->width) {
-      gui_drawcharat('-', colour, selected->x + selected->text_x-2, selected->y + selected->text_y);
-      selected->text_x = 0;
-      selected->text_y += 8;
-
-      if(selected->text_y > selected->height - 8) {
-         gui_scrollwindow();
-      }
-   }
-
-   gui_drawcharat(c, colour, selected->x + selected->text_x, selected->y + selected->text_y);
-   selected->text_x+=6;
-
-   if(selected->text_y > selected->height - 8) {
-      gui_scrollwindow();
-   }
 }
 
 void gui_writestr(char *c, int colour) {
@@ -206,8 +286,6 @@ void gui_writestrat(char *c, int colour, int x, int y) {
    }
 }
 
-extern void terminal_numtostr(int num, char *out);
-
 void gui_writenum(int num, int colour) {
    if(num < 0)
       gui_drawchar('-', colour);
@@ -223,21 +301,6 @@ void gui_writenumat(int num, int colour, int x, int y) {
    gui_writestrat(out, colour, x, y);
 }
 
-void gui_window_init(gui_window_t *window) {
-   strcpy(window->title, "TERMINAL");
-   window->x = 8;
-   window->y = 8;
-   window->width = 220;
-   window->height = 140;
-   window->text_buffer[0] = '\0';
-   window->text_index = 0;
-   window->text_x = 0;
-   window->text_y = 12;
-   window->needs_redraw = true;
-   window->active = false;
-   window->minimised = true;
-}
-
 extern vbe_mode_info_t vbe_mode_info_structure;
 void gui_init(void) {
    videomode = 1;
@@ -248,26 +311,29 @@ void gui_init(void) {
 
    gui_clear(3);
 
-   for(int i = 0; i < 4; i++) {
+   // TODO: reserve framebuffer memory so malloc can't assign it
+
+   // init windows
+   for(int i = 0; i < NUM_WINDOWS; i++) {
       gui_window_init(&gui_windows[i]);
    }
 
-   gui_windows[3].active = true;
-   gui_windows[3].minimised = false;
-   gui_selected_window = 3;
+   gui_windows[NUM_WINDOWS-1].active = true;
+   gui_windows[NUM_WINDOWS-1].minimised = false;
+   gui_selected_window = NUM_WINDOWS-1;
 }
 
-void gui_drawwindow(gui_window_t *window);
+void gui_window_draw(int windowIndex);
 void gui_draw(void) {
    //gui_clear(3);
    
    // make sure to draw selected last
-   for(int i = 3; i >= 0; i--) {
+   for(int i = NUM_WINDOWS-1; i >= 0; i--) {
       if(i != gui_selected_window)
-         gui_drawwindow(&gui_windows[i]);
+         gui_window_draw(i);
    }
    if(gui_selected_window >= 0)
-      gui_drawwindow(&gui_windows[gui_selected_window]);
+      gui_window_draw(gui_selected_window);
 
    // draw toolbar
    gui_drawrect(0x07, 0, gui_height-12, gui_width, 12);
@@ -281,11 +347,14 @@ void gui_draw(void) {
          toolbarPos++;
       }
    }
+
+   //gui_writenumat(gui_width, 0, 400, 200);
+   //gui_writenumat(gui_height, 0, 400, 210);
 }
 
 void gui_cursor_save_bg();
 void gui_redrawall() {
-   for(int i = 0; i < 4; i++) {
+   for(int i = 0; i < NUM_WINDOWS; i++) {
       gui_window_t *window = &gui_windows[i];
       window->needs_redraw = true;
    }
@@ -307,7 +376,7 @@ void gui_keypress(char key) {
             selected->text_x = (selected->text_index)*6;
          }
 
-         gui_drawwindow(&gui_windows[gui_selected_window]);
+         gui_window_draw(gui_selected_window);
       }
 
    }
@@ -317,18 +386,18 @@ void mouse_enable();
 
 extern void create_task_entry(int index, uint32_t entry);
 extern void launch_task(int index, void *regs);
-extern void tasks_init();
+extern void tasks_init(void *regs);
 void gui_checkcmd(void *regs) {
    char *command = gui_windows[gui_selected_window].text_buffer;
 
    if(strcmp(command, "CLEAR")) {
-      gui_windows[gui_selected_window].text_y = 12;
+      gui_windows[gui_selected_window].text_y = 0;
       gui_redrawall();
    }
-   if(strcmp(command, "MOUSE")) {
+   else if(strcmp(command, "MOUSE")) {
       mouse_enable();
    }
-   if(strcmp(command, "INT")) {
+   else if(strcmp(command, "INT")) {
       char* test = "ABCDEF";
 
       asm(
@@ -336,49 +405,58 @@ void gui_checkcmd(void *regs) {
          :: "a" (1), "b" (test) // put operands in eax, ebx
       );
    }
-   if(strcmp(command, "INT2")) {
+   else if(strcmp(command, "INT2")) {
       asm(
          "int $0x30"
          :: "a" (2), "b" (428) // put operands in eax, ebx
       );
    }
-   if(strcmp(command, "INT3")) {
+   else if(strcmp(command, "INT3")) {
       asm(
          "int $0x30"
          :: "a" (3), "d" (428) // put operands in eax, ebx
       );
    }
-   if(strcmp(command, "INT4")) {
+   else if(strcmp(command, "INT4")) {
       asm(
          "int $0x30"
          :: "a" (4), "d" (0) // put operands in eax, ebx
       );
    }
-   if(strcmp(command, "INT5")) {
+   else if(strcmp(command, "INT5")) {
       asm(
          "int $0x30"
          :: "a" (5), "d" (0) // put operands in eax, ebx
       );
    }
-   if(strcmp(command, "TASKS")) {
-      tasks_init();
+   else if(strcmp(command, "TASKS")) {
+      tasks_init(regs);
 
    }
-   if(strcmp(command, "PROG1")) {
-      int progAddr = 20000+0x7c00+512;
+   else if(strcmp(command, "PROG1")) {
+      int progAddr = 25000+0x7c00+512;
       create_task_entry(1, progAddr);
       launch_task(1, regs);
    }
-   if(strcmp(command, "PROG2")) {
-      int progAddr = 20000+0x7c00+512*2;
+   else if(strcmp(command, "PROG2")) {
+      int progAddr = 25000+0x7c00+512*2;
       create_task_entry(2, progAddr);
       launch_task(2, regs);
+   }
+   else {
+      gui_writestr("UNRECOGNISED", 4);
    }
 }
 
 void gui_return(void *regs) {
    if(gui_selected_window >= 0) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
+
+      // write cmd to window framebuffer
+      //gui_window_drawrect(bg, 1, window->text_y, window->width-2, 7, windowIndex);
+      gui_window_writestrat(selected->text_buffer, 0, 1, selected->text_y, gui_selected_window);
+      // prompt
+      //gui_window_drawcharat('_', 0, window->text_x + 1, window->text_y, windowIndex);
 
       gui_drawchar('\n', 0);
 
@@ -394,9 +472,9 @@ void gui_return(void *regs) {
 
       selected->text_index = 0;
       selected->text_buffer[selected->text_index] = '\0';
-   }
 
-   //gui_draw();
+      gui_window_draw(gui_selected_window);
+   }
 }
 
 void gui_backspace() {
@@ -408,17 +486,16 @@ void gui_backspace() {
          selected->text_buffer[selected->text_index] = '\0';
       }
 
-      gui_drawwindow(&gui_windows[gui_selected_window]);
+      gui_window_draw(gui_selected_window);
    }
 }
 
-void gui_drawwindow(gui_window_t *window) {
+void gui_window_draw(int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
    if(window->minimised)
       return;
 
    int bg = 15;
-   if(!window->active)
-      bg = 7;
 
    if(window->needs_redraw) {
       // background
@@ -434,15 +511,24 @@ void gui_drawwindow(gui_window_t *window) {
       if(!window->active)
          gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
 
+      uint8_t *terminal_buffer = (uint8_t*)framebuffer;
+
+      // draw window content/framebuffer
+      for(int y = 0; y < window->height - 10; y++) {
+         for(int x = 0; x < window->width; x++) {
+            int index = (window->y + y + 10)*gui_width + (window->x + x);
+            int w_index = y*window->width + x;
+            terminal_buffer[index] = window->framebuffer[w_index];
+         }
+      }
       window->needs_redraw = false;
    }
 
    // text content
-   gui_drawrect(bg, window->x+1, window->y+window->text_y, window->width-2, 7);
-   gui_writestrat(window->text_buffer, 0, window->x + 1, window->y + window->text_y);
-
+   gui_drawrect(bg, window->x+1, window->y+window->text_y+10, window->width-2, 7);
+   gui_writestrat(window->text_buffer, 0, window->x + 1, window->y + window->text_y+10);
    // prompt
-   gui_drawcharat('_', 0, window->x + window->text_x + 1, window->y + window->text_y);
+   gui_drawcharat('_', 0, window->x + window->text_x + 1, window->y + window->text_y+10);
 }
 
 static inline void outb(uint16_t port, uint8_t val) {
@@ -591,7 +677,7 @@ void mouse_leftclick(int relX, int relY) {
       // check other windows
 
       gui_selected_window = -1;
-      for(int i = 0; i < 4; i++) {
+      for(int i = 0; i < NUM_WINDOWS; i++) {
          if(mouse_clicked_on_window(i))
             break;
       }
@@ -599,7 +685,7 @@ void mouse_leftclick(int relX, int relY) {
    }
 
    // make all other windows inactive
-   for(int i = 0; i < 4; i++) {
+   for(int i = 0; i < NUM_WINDOWS; i++) {
       if(i != gui_selected_window) {
          gui_window_t *window = &gui_windows[i];
          window->active = false;

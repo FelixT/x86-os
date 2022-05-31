@@ -147,6 +147,9 @@ extern void gui_keypress(char key);
 extern void gui_return(void *regs);
 extern void gui_backspace();
 extern void gui_writestrat(char *c, int colour, int x, int y);
+extern void gui_window_writenum(int num, int colour, int windowIndex);
+extern void gui_window_draw(int windowIndex);
+extern void gui_draw();
 
 extern void terminal_keypress(char key);
 extern void terminal_return();
@@ -182,6 +185,9 @@ void exception_handler(int int_no, registers_t *regs) {
          } else {
             gui_drawrect(3, 314, 0, 5, 7);
             gui_writenumat(timer_i, 7, 314, 0);
+
+            if(timer_i == 0)
+               gui_draw();
 
             if(switching)
                switch_task(regs);
@@ -292,10 +298,8 @@ void exception_handler(int int_no, registers_t *regs) {
 
          if(regs->eax == 6) {
             // print num ebx to window ecx
-            int tmp = gui_selected_window;
-            gui_selected_window = regs->ecx;
-            gui_writenum(regs->ebx, 0);
-            gui_selected_window = tmp;
+            gui_window_writenum(regs->ebx, 0, regs->ecx);
+            //gui_window_draw(regs->ecx);
          }
          
 

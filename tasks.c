@@ -42,15 +42,6 @@ void create_task_entry(int index, uint32_t entry) {
    tasks[index].registers.eip = entry;
 }
 
-void tasks_init() {
-   for(int i = 0; i < TOTAL_TASKS; i++) {
-      tasks[i].enabled = false;
-   }
-   uint32_t idleentry = 20000+0x7c00;
-   create_task_entry(0, idleentry);
-   switching = true;
-}
-
 void launch_task(int index, registers_t *regs) {
    current_task = index;
    
@@ -62,6 +53,16 @@ void launch_task(int index, registers_t *regs) {
    tasks[current_task].registers.ss = regs->ss;
 
    *regs = tasks[current_task].registers;
+}
+
+void tasks_init(registers_t *regs) {
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      tasks[i].enabled = false;
+   }
+   uint32_t idleentry = 25000+0x7c00;
+   create_task_entry(0, idleentry);
+   switching = true;
+   launch_task(0, regs);
 }
 
 void switch_task(registers_t *regs) {

@@ -2,8 +2,8 @@
 
 extern uint32_t heap_kernel;
 
-#define KERNEL_HEAP_SIZE 0x00001000 // bytes
-#define MEM_BLOCK_SIZE 0x04 // 32 bits
+#define KERNEL_HEAP_SIZE 0x0100000 // bytes
+#define MEM_BLOCK_SIZE 0x200 // 512 bytes
 
 typedef struct mem_segment_status_t {
    bool allocated;
