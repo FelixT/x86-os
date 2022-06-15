@@ -8,15 +8,16 @@ typedef struct registers_t {
    uint32_t edi; // saved with pusha
    uint32_t esi;
    uint32_t ebp;
-   uint32_t esp;
+   uint32_t esp; // ignored by popa
    uint32_t ebx;
    uint32_t edx;
    uint32_t ecx;
    uint32_t eax;
+   uint32_t err_code; // or dummy
    uint32_t eip, cs, eflags, useresp, ss; // automatically pushed upon interrupt
 } registers_t;
 
-// size = 13 * 32
+// size = 14 * 32
 
 typedef struct task_state_t {
    bool enabled;
@@ -49,7 +50,7 @@ void launch_task(int index, registers_t *regs) {
    tasks[current_task].registers.esp = regs->esp;
    tasks[current_task].registers.cs = regs->cs;
    tasks[current_task].registers.eflags = regs->eflags;
-   tasks[current_task].registers.useresp = regs->useresp;
+   tasks[current_task].registers.useresp = tasks[current_task].stack_top; // stack_top
    tasks[current_task].registers.ss = regs->ss;
 
    *regs = tasks[current_task].registers;

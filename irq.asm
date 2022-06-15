@@ -21,6 +21,7 @@ isr_stub_%+%1:
 
 %macro isr_no_err_stub 1
 isr_stub_%+%1:
+   push dword 0 ; dummy err code
    pusha
 
    push dword esp ; push stackpointer
@@ -31,11 +32,13 @@ isr_stub_%+%1:
    add esp, 4 ; pop stack pointer
 
    popa
+   add esp, 4 ; extra pop for err code
    iret
 %endmacro
 
 %macro irq_stub 1
 irq_stub_%+%1:
+   push dword 0 ; dummy err code
    pusha
 
    push dword esp ; push stackpointer
@@ -46,6 +49,7 @@ irq_stub_%+%1:
    add esp, 4 ; pop stack pointer
 
    popa
+   add esp, 4 ; extra pop for err code
    iret
 %endmacro
 

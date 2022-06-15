@@ -182,7 +182,7 @@ check_cmd:
          jnl .loop_next ; less than or equal to best, discard
 
          ; if width too big, discard...
-         cmp ax, 800
+         cmp ax, 1000
          jnl .loop_next
 
          ; get bpp

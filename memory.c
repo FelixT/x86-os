@@ -51,5 +51,4 @@ void *malloc(int bytes) {
    return (void*)((int)(&heap_kernel) + (int)(blockStart*MEM_BLOCK_SIZE));
 }
 
-// keep track of where on heap has been allocated
-
+// TODO: memset, memcpy, memmove and memcmp 

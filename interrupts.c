@@ -76,8 +76,12 @@ void idt_init() {
    idtr.base = (uintptr_t)&idt[0];
    idtr.limit = (uint16_t)sizeof(idt_entry_t) * 256 - 1;
  
+   // note flag 0x8E = 32bit interrupt gate, 0x8F = 32bit trap gate
+   // https://wiki.osdev.org/IDT#Gate_Types
+
+   // exceptions
    for (uint8_t vector = 0; vector < 32; vector++) {
-      idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
+      idt_set_descriptor(vector, isr_stub_table[vector], 0x8F);
    }
 
    for (uint8_t vector = 32; vector < 49; vector++) {
@@ -167,9 +171,13 @@ void exception_handler(int int_no, registers_t *regs) {
 
    if(int_no < 32) {
 
+      // https://wiki.osdev.org/Exceptions
       if(videomode == 1) {
          gui_drawrect(4, 60, 0, 6*2, 7);
          gui_writenumat(int_no, 14, 60, 0);
+
+         gui_drawrect(4, 200, 0, 6*5, 7);
+         gui_writenumat(regs->eip, 14, 200, 0);
       }
          
    } else {
@@ -183,8 +191,8 @@ void exception_handler(int int_no, registers_t *regs) {
          if(videomode == 0) {
             terminal_writenumat(timer_i, 79);
          } else {
-            gui_drawrect(3, 314, 0, 5, 7);
-            gui_writenumat(timer_i, 7, 314, 0);
+            gui_drawrect(3, -9, 5, 6, 7);
+            gui_writenumat(timer_i, 7, -8, 5);
 
             if(timer_i == 0)
                gui_draw();
@@ -316,23 +324,22 @@ void exception_handler(int int_no, registers_t *regs) {
 
       }
 
+   }
       // send end of command code 0x20 to pic
-      if(irq_no >= 8)
+      if(int_no >= 8)
          outb(0xA0, 0x20); // slave command
 
       outb(0x20, 0x20); // master command
-
-   }
 }
 
-void err_exception_handler(int int_no, int error_code, registers_t *regs) {
+void err_exception_handler(int int_no, registers_t *regs) {
    //uint32_t *zer = (uint32_t*) 0x00;
 
    //zer[0] = int_no;
    //zer[1] = error_code;
    //gui_writenumat(int_no, 0, 30, 100);
 
-   gui_writenum(error_code, 0);
+   gui_writenum(regs->err_code, 0);
    gui_writestr(" ", 0);
 
    exception_handler(int_no, regs);
