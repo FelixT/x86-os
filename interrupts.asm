@@ -24,26 +24,10 @@ interrupt_key:
    and bl, 0x80 ; if key released
    jnz .done ; don't repeat
 
-   ; if cli
-   mov ah, 0x0f
-   int 0x10
-   mov ah, 0
-   cmp ax, 0x03 ; mode = 3
-   jz .cli
-   jmp .gui ; else if gui
-
-   .cli:
-      mov al, cl ; ascii key
-      call terminal_keypress
-      jmp .done
-
-   .gui:
-      ;mov ah, 0x00 ; set video mode
-      ;mov al, 0x03 ; video mode = 80x25 16 color text vga
-      ;int 0x10
-      call clearscreen
-      jmp .done
-
+   mov al, cl ; ascii key
+   call terminal_keypress
+   jmp .done
+   
    .done:
       iret
 
