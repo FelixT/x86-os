@@ -50,6 +50,40 @@ void strcpy(char* dest, char* src) {
       dest[i] = src[i];
       i++;
    }
+   dest[i] = '\0';
+}
+
+bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
+   int i = 0;
+
+   while(src[i] != splitat) {
+      if(src[i] == '\0')
+         return false;
+
+      dest1[i] = src[i];
+      i++;
+   }
+   dest1[i] = '\0';
+   i++;
+
+   int start = i;
+   while(src[i] != '\0') {
+      dest2[i - start] = src[i];
+      i++;
+   }
+   dest2[i - start] = '\0';
+
+   return true;
+}
+
+bool strstartswith(char* src, char* startswith) {
+   int i = 0;
+   while(startswith[i] != '\0') {
+      if(src[i] != startswith[i])
+         return false;
+      i++;
+   }
+   return true;
 }
 
 uint8_t gui_colour8bit(uint8_t row, uint8_t col) {
@@ -233,6 +267,7 @@ void gui_window_writestr(char *c, int colour, int windowIndex) {
 }
 
 extern void terminal_numtostr(int num, char *out);
+extern void terminal_uinttostr(uint32_t num, char *out);
 void gui_window_writenum(int num, int colour, int windowIndex) {
    if(num < 0)
       gui_window_drawchar('-', colour, windowIndex);
@@ -240,6 +275,12 @@ void gui_window_writenum(int num, int colour, int windowIndex) {
    char out[20];
    terminal_numtostr(num, out);
    gui_window_writestr(out, colour, windowIndex);
+}
+
+void gui_window_clearbuffer(gui_window_t *window) {
+   for(int i = 0; i < window->width*window->height; i++) {
+      window->framebuffer[i] = 15;
+   }
 }
 
 void gui_window_init(gui_window_t *window) {
@@ -257,9 +298,7 @@ void gui_window_init(gui_window_t *window) {
    window->minimised = true;
    
    window->framebuffer = malloc(window->width*(window->height-10));
-   for(int i = 0; i < window->width*window->height; i++) {
-      window->framebuffer[i] = 15;
-   }
+   gui_window_clearbuffer(window);
 }
 
 void gui_redrawall();
@@ -295,6 +334,12 @@ void gui_writenum(int num, int colour) {
    gui_writestr(out, colour);
 }
 
+void gui_writeuint(uint32_t num, int colour) {
+   char out[20];
+   terminal_uinttostr(num, out);
+   gui_writestr(out, colour);
+}
+
 void gui_writenumat(int num, int colour, int x, int y) {
    char out[20];
    terminal_numtostr(num, out);
@@ -309,9 +354,10 @@ void gui_init(void) {
    gui_height = vbe_mode_info_structure.height;
    framebuffer = vbe_mode_info_structure.framebuffer;
 
+   // reserve framebuffer memory so malloc can't assign it
+   memory_reserve(framebuffer, (int)gui_width*(int)gui_height);
+   
    gui_clear(3);
-
-   // TODO: reserve framebuffer memory so malloc can't assign it
 
    // init windows
    for(int i = 0; i < NUM_WINDOWS; i++) {
@@ -391,6 +437,7 @@ void gui_checkcmd(void *regs) {
    char *command = gui_windows[gui_selected_window].text_buffer;
 
    if(strcmp(command, "CLEAR")) {
+      gui_window_clearbuffer(&gui_windows[gui_selected_window]);
       gui_windows[gui_selected_window].text_y = 0;
       gui_redrawall();
    }
@@ -442,6 +489,22 @@ void gui_checkcmd(void *regs) {
       int progAddr = 25000+0x7c00+512*2;
       create_task_entry(2, progAddr);
       launch_task(2, regs);
+   }
+   else if(strstartswith(command, "MEM")) {
+      gui_writeuint((uint32_t)&heap_kernel, 0);
+      gui_writestr("\n", 0);
+
+      char arg[5];
+      strsplit(arg, arg, command, ' ');
+
+      int offset = (arg[0]-'0')*400;
+
+      for(int i = offset; i < offset+400; i++) {
+         if(memory_status[i].allocated)
+            gui_writenum(1, 0);
+         else
+            gui_writenum(0, 0);
+      }
    }
    else {
       gui_writestr("UNRECOGNISED", 4);

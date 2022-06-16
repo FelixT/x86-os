@@ -139,6 +139,29 @@ void terminal_numtostr(int num, char* out) {
    }
 }
 
+void terminal_uinttostr(uint32_t num, char* out) {
+   if(num == 0) {
+      out[0] = '0';
+      out[1] = '\0';
+      return;
+   }
+
+   // get number length in digits
+   uint32_t tmp = num;
+   int length = 0;
+   while(tmp > 0) {
+      length++;
+      tmp/=10;
+   }
+   
+   out[length] = '\0';
+
+   for(int i = 0; i < length; i++) {
+      out[length-i-1] = '0' + num%10;
+      num/=10;
+   }
+}
+
 void terminal_writenumat(int num, int at) {
    char out[20]; // allocate more memory than required for int's maxvalue
    

@@ -45,12 +45,12 @@ extern tos_kernel
    extern idt_init
    call idt_init
 
+   extern memory_init
+   call memory_init
+
    ; main code
    extern gui_init
    call gui_init
-
-   extern memory_init
-   call memory_init
 
    extern gui_draw
    call gui_draw
