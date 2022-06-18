@@ -30,7 +30,7 @@ extern tos_kernel
 
    jmp $ ; infinite loop
 
-.maingui_32:
+.maingui_32:      
    ; setup registers
    mov ax, DATA_SEG
    mov ds, ax
@@ -51,6 +51,23 @@ extern tos_kernel
    ; main code
    extern gui_init
    call gui_init
+
+   ; setup tss
+   extern tss_init
+   call tss_init
+
+   ; flush gdt
+   lgdt [gdt_descriptor]
+   mov ax, DATA_SEG
+   mov ds, ax
+   mov es, ax
+   mov fs, ax
+   mov gs, ax
+   mov ss, ax
+
+   ; flush tss
+   mov ax, TSU_SEG | 0 ; tsu segment OR-ed with RPL 0
+	ltr ax
 
    extern gui_draw
    call gui_draw

@@ -21,13 +21,13 @@ $LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o
 
 cat o/boot.bin o/main.bin > hd.bin
 
-# add programs at 25k 
+# add programs at 28k 
 nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
 
-dd if=/dev/zero of=hd2.bin bs=25000 count=1 status=none
-dd if=./hd.bin of=hd2.bin bs=25000 count=1 conv=notrunc status=none
+dd if=/dev/zero of=hd2.bin bs=28000 count=1
+dd if=./hd.bin of=hd2.bin bs=28000 count=1 conv=notrunc
 cat hd2.bin o/progidle.bin o/prog1.bin o/prog2.bin > hd3.bin
 
 qemu-system-i386 -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio

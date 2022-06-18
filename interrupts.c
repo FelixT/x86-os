@@ -88,7 +88,7 @@ void idt_init() {
       idt_set_descriptor(vector, irq_stub_table[vector-32], 0x8E);
    }
 
-   //idt_set_descriptor(0x80, irq_stub_table[32], 0x8E);
+   idt_set_descriptor(48, irq_stub_table[48-32], 0xEE); // software interrupt 0x30, can be called from ring 3
  
    __asm__ volatile("lidt %0" : : "m"(idtr)); // load idt
 
@@ -99,6 +99,74 @@ void idt_init() {
    pic_remap();
 
    __asm__ volatile("sti"); // set the interrupt flag (enable interrupts)
+
+}
+
+typedef struct {
+   uint16_t limit_low;
+	uint16_t base_low;
+	uint8_t base_middle;
+	uint8_t access;
+	uint8_t granularity;
+	uint8_t base_high;
+} __attribute__((packed)) gdt_entry_t;
+
+
+extern void gui_writeuintat(uint32_t num, int colour, int x, int y);
+
+typedef struct {
+	uint32_t prev_tss;
+	uint32_t esp0;
+	uint32_t ss0;
+	uint32_t esp1;
+	uint32_t ss1;
+	uint32_t esp2;
+	uint32_t ss2;
+	uint32_t cr3;
+	uint32_t eip;
+	uint32_t eflags;
+	uint32_t eax;
+	uint32_t ecx;
+	uint32_t edx;
+	uint32_t ebx;
+	uint32_t esp;
+	uint32_t ebp;
+	uint32_t esi;
+	uint32_t edi;
+	uint32_t es;
+	uint32_t cs;
+	uint32_t ss;
+	uint32_t ds;
+	uint32_t fs;
+	uint32_t gs;
+	uint32_t ldt;
+	uint16_t trap;
+	uint16_t iomap_base;
+} __attribute__((packed)) tss_t;
+
+
+void tss_init() {
+   // setup tss entry in gdt
+   extern gdt_entry_t gdt_tss;
+   extern uint32_t tss_start;
+   extern uint32_t tss_end;
+   //extern tss_t tss_start;
+
+   uint32_t base = (uint32_t)&tss_start;
+   uint32_t limit = (uint32_t)&tss_end;
+   
+
+   //uint32_t tss_size = &tss_end - &tss_start;
+
+   uint8_t gran = 0x00;
+
+   gdt_tss.base_low = (base & 0xFFFF);
+	gdt_tss.base_middle = (base >> 16) & 0xFF;
+	gdt_tss.base_high = (base >> 24) & 0xFF;
+
+   gdt_tss.limit_low = (limit & 0xFFFF);
+	gdt_tss.granularity = ((limit >> 16) & 0x0F);
+   gdt_tss.granularity |= (gran & 0xF0);
 
 }
 
@@ -325,11 +393,12 @@ void exception_handler(int int_no, registers_t *regs) {
       }
 
    }
-      // send end of command code 0x20 to pic
-      if(int_no >= 8)
-         outb(0xA0, 0x20); // slave command
 
-      outb(0x20, 0x20); // master command
+   // send end of command code 0x20 to pic
+   if(int_no >= 8)
+      outb(0xA0, 0x20); // slave command
+
+   outb(0x20, 0x20); // master command
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {

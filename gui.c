@@ -346,6 +346,12 @@ void gui_writenumat(int num, int colour, int x, int y) {
    gui_writestrat(out, colour, x, y);
 }
 
+void gui_writeuintat(uint32_t num, int colour, int x, int y) {
+   char out[20];
+   terminal_uinttostr(num, out);
+   gui_writestrat(out, colour, x, y);
+}
+
 extern vbe_mode_info_t vbe_mode_info_structure;
 void gui_init(void) {
    videomode = 1;
@@ -481,14 +487,19 @@ void gui_checkcmd(void *regs) {
 
    }
    else if(strcmp(command, "PROG1")) {
-      int progAddr = 25000+0x7c00+512;
+      int progAddr = 28000+0x7c00+512;
       create_task_entry(1, progAddr);
       launch_task(1, regs);
    }
    else if(strcmp(command, "PROG2")) {
-      int progAddr = 25000+0x7c00+512*2;
+      int progAddr = 28000+0x7c00+512*2;
       create_task_entry(2, progAddr);
       launch_task(2, regs);
+   }
+   else if(strcmp(command, "TEST")) {
+      extern uint16_t gdt_tss;
+      gui_writenum(gdt_tss, 0);
+
    }
    else if(strstartswith(command, "MEM")) {
       gui_writeuint((uint32_t)&heap_kernel, 0);

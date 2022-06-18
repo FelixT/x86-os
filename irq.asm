@@ -7,12 +7,23 @@
 isr_stub_%+%1:
    pusha
 
-   push dword esp ; push stackpointer (points to register saved by pusha)
+   mov ax, ds ; save data segment in lower 16 bits of eax
+   push dword eax
+
+   push dword esp ; push stackpointer (points to register saved by pusha, used as pointer to registers_t struct)
    push dword %1 ; push int no
+
    cld 
    call err_exception_handler
+
    add esp, 4 ; pop int no
    add esp, 4 ; pop stack pointer
+
+   pop eax ; restore data segment
+   mov ds, ax
+   mov es, ax
+   mov fs, ax
+   mov gs, ax
 
    popa
    add esp, 4 ; extra pop for err code
@@ -24,12 +35,23 @@ isr_stub_%+%1:
    push dword 0 ; dummy err code
    pusha
 
-   push dword esp ; push stackpointer
+   mov ax, ds ; save data segment in lower 16 bits of eax
+   push dword eax
+
+   push dword esp ; push stackpointer (points to register saved by pusha, used as pointer to registers_t struct)
    push dword %1 ; push int no
+
    cld 
    call exception_handler
+
    add esp, 4 ; pop int no
    add esp, 4 ; pop stack pointer
+
+   pop eax ; restore data segment
+   mov ds, ax
+   mov es, ax
+   mov fs, ax
+   mov gs, ax
 
    popa
    add esp, 4 ; extra pop for err code
@@ -41,12 +63,23 @@ irq_stub_%+%1:
    push dword 0 ; dummy err code
    pusha
 
-   push dword esp ; push stackpointer
+   mov ax, ds ; save data segment in lower 16 bits of eax
+   push dword eax
+
+   push dword esp ; push stackpointer (points to register saved by pusha, used as pointer to registers_t struct)
    push dword %1 ; push int no
+
    cld 
    call exception_handler
+
    add esp, 4 ; pop int no
    add esp, 4 ; pop stack pointer
+
+   pop eax ; restore data segment
+   mov ds, ax
+   mov es, ax
+   mov fs, ax
+   mov gs, ax
 
    popa
    add esp, 4 ; extra pop for err code

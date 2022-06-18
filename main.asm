@@ -9,11 +9,9 @@ jmp kmain
 %include "interrupts.asm"
 %include "gdt.asm"
 
-extern tos_kernel
-
 global kmain
 kmain:
-   mov sp, tos_kernel
+   mov sp, 0x7a00 ; set stack to before bootloader for now
 
    ;extern terminal_clear
    ;call terminal_clear
@@ -34,7 +32,7 @@ check_cmd:
    cmp ax, 1
    jz .cmd_protected
 
-   ; 'protectedgui'
+   ; 'gui'
    mov di, cmd_protectedgui
    call compare_strings
    cmp ax, 1
@@ -58,6 +56,10 @@ check_cmd:
       [bits 16]
 
    .cmd_protectedgui:
+
+      ; enable A20
+      mov ax, 0x2401
+      int 0x15
 
       ; get vesa modes https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
       mov ax, 0x4F00
@@ -156,13 +158,16 @@ check_cmd:
 
          cmp ax, 0x004F
          jne .gui_error
-         
+
+      
       ; enter protected mode
       cli ; disable interrupts
       lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
+
       mov eax, cr0
       or eax, 0x1
       mov cr0, eax
+      
       jmp CODE_SEG:.maingui_32
 
       .gui_error:
@@ -189,7 +194,7 @@ section .data
 boot1msg db 'Loaded into bootloader1', 13, 10, 0 ; label pointing to address of message + CR + LF
 error db 'Error!', 13, 10, 0
 cmd_protected db 'protected', 0
-cmd_protectedgui db 'protectedgui', 0
+cmd_protectedgui db 'gui', 0
 
 vbe_info_structure:
 	.signature		db "VBE2"	; indicate support for VBE 2.0+
@@ -200,5 +205,9 @@ vbe_mode_info_structure:
 	.table_data:	resb 256	; reserve space for the table below
 
 %include "font.asm"
+
+[bits 32]
+%include "tss.asm"
+[bits 16]
 
 ;times 32768-($-$$) db 0 ; fill rest of 32768 bytes with 0s

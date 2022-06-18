@@ -5,6 +5,7 @@
 // general registers in order they are pushed onto stack
 // https://faydoc.tripod.com/cpu/pusha.htm
 typedef struct registers_t {
+   uint32_t ds;
    uint32_t edi; // saved with pusha
    uint32_t esi;
    uint32_t ebp;
@@ -15,7 +16,7 @@ typedef struct registers_t {
    uint32_t eax;
    uint32_t err_code; // or dummy
    uint32_t eip, cs, eflags, useresp, ss; // automatically pushed upon interrupt
-} registers_t;
+} __attribute__((packed)) registers_t;
 
 // size = 14 * 32
 
@@ -35,23 +36,28 @@ task_state_t tasks[TOTAL_TASKS];
 int current_task = 0;
 bool switching = false; // preemptive multitasking
 
+uint32_t USR_CODE_SEG = 8*3;
+uint32_t USR_DATA_SEG = 8*4;
+
 void create_task_entry(int index, uint32_t entry) {
    tasks[index].enabled = true;
    tasks[index].stack_top = (uint32_t)(&tos_program - (TASK_STACK_SIZE * index));
+   
    tasks[index].registers.esp = tasks[index].stack_top;
-   tasks[index].registers.eax = 0x10;
+   tasks[index].registers.eax = USR_DATA_SEG | 3;
    tasks[index].registers.eip = entry;
 }
 
 void launch_task(int index, registers_t *regs) {
    current_task = index;
-   
-   // set flags to current used values (temporary fix)
-   tasks[current_task].registers.esp = regs->esp;
-   tasks[current_task].registers.cs = regs->cs;
+
+   tasks[current_task].registers.ds = USR_DATA_SEG | 3;
+   tasks[current_task].registers.cs = USR_CODE_SEG | 3; // user code segment
+
+   tasks[current_task].registers.esp = regs->esp; // ignored
    tasks[current_task].registers.eflags = regs->eflags;
    tasks[current_task].registers.useresp = tasks[current_task].stack_top; // stack_top
-   tasks[current_task].registers.ss = regs->ss;
+   tasks[current_task].registers.ss = USR_DATA_SEG | 3;
 
    *regs = tasks[current_task].registers;
 }
@@ -60,7 +66,7 @@ void tasks_init(registers_t *regs) {
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
    }
-   uint32_t idleentry = 25000+0x7c00;
+   uint32_t idleentry = 28000+0x7c00;
    create_task_entry(0, idleentry);
    switching = true;
    launch_task(0, regs);
