@@ -2,59 +2,62 @@
 
 // defines 5*7 gui font
 
-extern uint8_t font_null[7];
+#define FONT_WIDTH 7
+#define FONT_HEIGHT 11
 
-extern uint8_t font_space[7];
-extern uint8_t font_minus[7];
-extern uint8_t font_cursor_outline[7];
-extern uint8_t font_cursor_fill[7];
+extern uint8_t font_null[FONT_HEIGHT];
 
-extern uint8_t font_0[7];
-extern uint8_t font_1[7];
-extern uint8_t font_2[7];
-extern uint8_t font_3[7];
-extern uint8_t font_4[7];
-extern uint8_t font_5[7];
-extern uint8_t font_6[7];
-extern uint8_t font_7[7];
-extern uint8_t font_8[7];
-extern uint8_t font_9[7];
+extern uint8_t font_space[FONT_HEIGHT];
+extern uint8_t font_minus[FONT_HEIGHT];
+extern uint8_t font_cursor_outline[FONT_HEIGHT];
+extern uint8_t font_cursor_fill[FONT_HEIGHT];
 
-extern uint8_t font_A[7];
-extern uint8_t font_B[7];
-extern uint8_t font_C[7];
-extern uint8_t font_D[7];
-extern uint8_t font_E[7];
-extern uint8_t font_F[7];
-extern uint8_t font_G[7];
-extern uint8_t font_H[7];
-extern uint8_t font_I[7];
-extern uint8_t font_J[7];
-extern uint8_t font_K[7];
-extern uint8_t font_L[7];
-extern uint8_t font_M[7];
-extern uint8_t font_N[7];
-extern uint8_t font_O[7];
-extern uint8_t font_P[7];
-extern uint8_t font_Q[7];
-extern uint8_t font_R[7];
-extern uint8_t font_S[7];
-extern uint8_t font_T[7];
-extern uint8_t font_U[7];
-extern uint8_t font_V[7];
-extern uint8_t font_W[7];
-extern uint8_t font_X[7];
-extern uint8_t font_Y[7];
-extern uint8_t font_Z[7];
+extern uint8_t font_0[FONT_HEIGHT];
+extern uint8_t font_1[FONT_HEIGHT];
+extern uint8_t font_2[FONT_HEIGHT];
+extern uint8_t font_3[FONT_HEIGHT];
+extern uint8_t font_4[FONT_HEIGHT];
+extern uint8_t font_5[FONT_HEIGHT];
+extern uint8_t font_6[FONT_HEIGHT];
+extern uint8_t font_7[FONT_HEIGHT];
+extern uint8_t font_8[FONT_HEIGHT];
+extern uint8_t font_9[FONT_HEIGHT];
+
+extern uint8_t font_A[FONT_HEIGHT];
+extern uint8_t font_B[FONT_HEIGHT];
+extern uint8_t font_C[FONT_HEIGHT];
+extern uint8_t font_D[FONT_HEIGHT];
+extern uint8_t font_E[FONT_HEIGHT];
+extern uint8_t font_F[FONT_HEIGHT];
+extern uint8_t font_G[FONT_HEIGHT];
+extern uint8_t font_H[FONT_HEIGHT];
+extern uint8_t font_I[FONT_HEIGHT];
+extern uint8_t font_J[FONT_HEIGHT];
+extern uint8_t font_K[FONT_HEIGHT];
+extern uint8_t font_L[FONT_HEIGHT];
+extern uint8_t font_M[FONT_HEIGHT];
+extern uint8_t font_N[FONT_HEIGHT];
+extern uint8_t font_O[FONT_HEIGHT];
+extern uint8_t font_P[FONT_HEIGHT];
+extern uint8_t font_Q[FONT_HEIGHT];
+extern uint8_t font_R[FONT_HEIGHT];
+extern uint8_t font_S[FONT_HEIGHT];
+extern uint8_t font_T[FONT_HEIGHT];
+extern uint8_t font_U[FONT_HEIGHT];
+extern uint8_t font_V[FONT_HEIGHT];
+extern uint8_t font_W[FONT_HEIGHT];
+extern uint8_t font_X[FONT_HEIGHT];
+extern uint8_t font_Y[FONT_HEIGHT];
+extern uint8_t font_Z[FONT_HEIGHT];
 
 void copyFont(uint8_t* letter, int* dest) {
-   for(int y = 0; y < 7; y++) {
+   for(int y = 0; y < FONT_HEIGHT; y++) {
       //uint8_t fontrow = letter[y];
 
-      for(int x = 0; x < 5; x++) {
+      for(int x = 0; x < FONT_WIDTH; x++) {
          // get bit in reverse order
-         int bit = (letter[y] >> (4-x)) & 1;
-         dest[y*5+x] = bit;
+         int bit = (letter[y] >> ((FONT_WIDTH-1)-x)) & 1;
+         dest[y*FONT_WIDTH+x] = bit;
       }
    }
 }

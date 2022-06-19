@@ -6,6 +6,14 @@
 
 extern int videomode;
 
+#define FONT_WIDTH 7
+#define FONT_HEIGHT 11
+#define FONT_PADDING 1
+#define TITLEBAR_HEIGHT 15
+#define TOOLBAR_HEIGHT 17
+#define TOOLBAR_ITEM_WIDTH 25
+#define TOOLBAR_ITEM_HEIGHT 13
+
 int gui_mouse_x = 0;
 int gui_mouse_y = 0;
 
@@ -19,16 +27,16 @@ typedef struct gui_window_t {
    int x;
    int y;
    int width;
-   int height;
+   int height; // includes 10px titlebar
    char text_buffer[40];
    int text_index;
    int text_x;
-   int text_y; // includes 10px titlebar
+   int text_y;
    bool needs_redraw;
    bool active;
    bool minimised;
-   int toolbar_pos;
-   uint8_t *framebuffer;
+   int toolbar_pos; // index in toolbar
+   uint8_t *framebuffer; // width*(height-titlebar_height)
 } gui_window_t;
 
 #define NUM_WINDOWS 4
@@ -39,7 +47,7 @@ int gui_selected_window = 0;
 
 uint32_t framebuffer;
 
-uint8_t cursor_buffer[7*5]; // store whats behind cursor so it can be restored
+uint8_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
 
 extern bool strcmp(char* str1, char* str2);
 
@@ -148,21 +156,18 @@ void gui_clear(uint8_t colour) {
 
 extern void getFontLetter(char c, int* dest);
 
-int font_letter[35];
+int font_letter[FONT_WIDTH*FONT_HEIGHT];
 
 void gui_drawcharat(char c, int colour, int x, int y) {
    uint8_t *terminal_buffer = (uint8_t*) framebuffer;
-   // 7*5
    
    getFontLetter(c, font_letter);
 
    int i = 0;      
-   for(int yi = y; yi < y+7; yi++) {
-      for(int xi = x; xi < x+5; xi++) {
+   for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
+      for(int xi = x; xi < x+FONT_WIDTH; xi++) {
          if(font_letter[i] == 1)
             terminal_buffer[yi*(int)gui_width+xi] = colour;
-         //else
-            //terminal_buffer[yi*(int)gui_width+xi] = 0;
          i++;
       }
    }
@@ -175,8 +180,8 @@ void gui_window_drawcharat(char c, int colour, int x, int y, int windowIndex) {
    getFontLetter(c, font_letter);
 
    int i = 0;      
-   for(int yi = y; yi < y+7; yi++) {
-      for(int xi = x; xi < x+5; xi++) {
+   for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
+      for(int xi = x; xi < x+FONT_WIDTH; xi++) {
          if(font_letter[i] == 1)
             terminal_buffer[yi*(int)window->width+xi] = colour;
          i++;
@@ -199,7 +204,7 @@ void gui_window_writestrat(char *c, int colour, int x, int y, int windowIndex) {
    int i = 0;
    while(c[i] != '\0') {
       gui_window_drawcharat(c[i++], colour, x, y, windowIndex);
-      x+=6;
+      x+=FONT_WIDTH+FONT_PADDING;
    }
 }
 
@@ -207,17 +212,17 @@ void gui_window_scroll(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
    uint8_t *terminal_buffer = window->framebuffer;
 
-   int scrollY = 8;
-   for(int y = scrollY; y < window->height - 10; y++) {
+   int scrollY = FONT_HEIGHT+FONT_PADDING;
+   for(int y = scrollY; y < window->height - TITLEBAR_HEIGHT; y++) {
       for(int x = window->x; x < window->x + window->width; x++) {
          terminal_buffer[(y-scrollY)*window->width+x] = terminal_buffer[y*(int)window->width+x];
       }
    }
    // clear bottom
-   int newY = window->height - (scrollY + 10);
+   int newY = window->height - (scrollY + TITLEBAR_HEIGHT);
    gui_window_drawrect(15, 0, newY, window->width, scrollY, windowIndex);
    window->text_y = newY;
-   window->text_x = 0;
+   window->text_x = FONT_PADDING;
 }
 
 void gui_window_drawchar(char c, int colour, int windowIndex) {
@@ -228,10 +233,10 @@ void gui_window_drawchar(char c, int colour, int windowIndex) {
    //   return;
 
    if(c == '\n') {
-      selected->text_x = 0;
-      selected->text_y += 8;
+      selected->text_x = FONT_PADDING;
+      selected->text_y += FONT_HEIGHT + FONT_PADDING;
 
-      if(selected->text_y > selected->height - (10 + 8)) {
+      if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
          gui_window_scroll(windowIndex);
       }
 
@@ -239,20 +244,20 @@ void gui_window_drawchar(char c, int colour, int windowIndex) {
    }
 
    // x overflow
-   if(selected->text_x + 6 >= selected->width) {
+   if(selected->text_x + FONT_WIDTH + FONT_PADDING >= selected->width) {
       gui_window_drawcharat('-', colour, selected->text_x-2, selected->text_y, windowIndex);
-      selected->text_x = 0;
-      selected->text_y += 8;
+      selected->text_x = FONT_PADDING;
+      selected->text_y += FONT_HEIGHT + FONT_PADDING;
 
-      if(selected->text_y > selected->height - (10 + 8)) {
+      if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
          gui_window_scroll(windowIndex);
       }
    }
 
    gui_window_drawcharat(c, colour, selected->text_x, selected->text_y, windowIndex);
-   selected->text_x+=6;
+   selected->text_x+=FONT_WIDTH+FONT_PADDING;
 
-   if(selected->text_y > selected->height - (10 + 8)) {
+   if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
       gui_window_scroll(windowIndex);
    }
 
@@ -287,17 +292,17 @@ void gui_window_init(gui_window_t *window) {
    strcpy(window->title, "TERMINAL");
    window->x = 8;
    window->y = 8;
-   window->width = 220;
-   window->height = 140;
+   window->width = 300;
+   window->height = 180;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
-   window->text_x = 0;
-   window->text_y = 0;
+   window->text_x = FONT_PADDING;
+   window->text_y = FONT_PADDING;
    window->needs_redraw = true;
    window->active = false;
    window->minimised = true;
    
-   window->framebuffer = malloc(window->width*(window->height-10));
+   window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT));
    gui_window_clearbuffer(window);
 }
 
@@ -321,7 +326,7 @@ void gui_writestrat(char *c, int colour, int x, int y) {
    int i = 0;
    while(c[i] != '\0') {
       gui_drawcharat(c[i++], colour, x, y);
-      x+=6;
+      x+=FONT_WIDTH+FONT_PADDING;
    }
 }
 
@@ -388,20 +393,18 @@ void gui_draw(void) {
       gui_window_draw(gui_selected_window);
 
    // draw toolbar
-   gui_drawrect(0x07, 0, gui_height-12, gui_width, 12);
+   gui_drawrect(0x07, 0, gui_height-TOOLBAR_HEIGHT, gui_width, TOOLBAR_HEIGHT);
 
    int toolbarPos = 0;
+   // padding = 2px
    for(int i = 0; i < 4; i++) {
       if(gui_windows[i].minimised) {
-         gui_drawrect(4, toolbarPos*18+2, gui_height-10, 16, 8);
-         gui_drawcharat(gui_windows[i].title[0], 15, toolbarPos*18+2, gui_height-10);
+         gui_drawrect(4, 2+toolbarPos*(TOOLBAR_ITEM_WIDTH+2), gui_height-(TOOLBAR_ITEM_HEIGHT+2), TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
+         gui_drawcharat(gui_windows[i].title[0], 15, 2+toolbarPos*(TOOLBAR_ITEM_WIDTH+2), gui_height-(TOOLBAR_ITEM_HEIGHT+2));
          gui_windows[i].toolbar_pos = toolbarPos;
          toolbarPos++;
       }
    }
-
-   //gui_writenumat(gui_width, 0, 400, 200);
-   //gui_writenumat(gui_height, 0, 400, 210);
 }
 
 void gui_cursor_save_bg();
@@ -425,7 +428,7 @@ void gui_keypress(char key) {
             selected->text_buffer[selected->text_index] = key;
             selected->text_buffer[selected->text_index+1] = '\0';
             selected->text_index++;
-            selected->text_x = (selected->text_index)*6;
+            selected->text_x = (selected->text_index)*(FONT_WIDTH+FONT_PADDING);
          }
 
          gui_window_draw(gui_selected_window);
@@ -444,7 +447,7 @@ void gui_checkcmd(void *regs) {
 
    if(strcmp(command, "CLEAR")) {
       gui_window_clearbuffer(&gui_windows[gui_selected_window]);
-      gui_windows[gui_selected_window].text_y = 0;
+      gui_windows[gui_selected_window].text_y = FONT_PADDING;
       gui_redrawall();
    }
    else if(strcmp(command, "MOUSE")) {
@@ -556,7 +559,7 @@ void gui_backspace() {
       gui_window_t *selected = &gui_windows[gui_selected_window];
       if(selected->text_index > 0) {
          selected->text_index--;
-         selected->text_x-=6;
+         selected->text_x-=FONT_WIDTH+FONT_PADDING;
          selected->text_buffer[selected->text_index] = '\0';
       }
 
@@ -576,11 +579,11 @@ void gui_window_draw(int windowIndex) {
       gui_drawrect(bg, window->x, window->y, window->width, window->height);
 
       // titlebar
-      gui_drawrect(7, window->x+1, window->y+1, window->width-2, 10);
+      gui_drawrect(7, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
       gui_writestrat(window->title, 0, window->x+2, window->y+2);
       // titlebar buttons
-      gui_drawcharat('x', 0, window->x+window->width-8, window->y+2);
-      gui_drawcharat('-', 0, window->x+window->width-16, window->y+2);
+      gui_drawcharat('x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
+      gui_drawcharat('-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
 
       if(!window->active)
          gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
@@ -588,9 +591,9 @@ void gui_window_draw(int windowIndex) {
       uint8_t *terminal_buffer = (uint8_t*)framebuffer;
 
       // draw window content/framebuffer
-      for(int y = 0; y < window->height - 10; y++) {
+      for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
          for(int x = 0; x < window->width; x++) {
-            int index = (window->y + y + 10)*gui_width + (window->x + x);
+            int index = (window->y + y + TITLEBAR_HEIGHT)*gui_width + (window->x + x);
             int w_index = y*window->width + x;
             terminal_buffer[index] = window->framebuffer[w_index];
          }
@@ -599,10 +602,10 @@ void gui_window_draw(int windowIndex) {
    }
 
    // text content
-   gui_drawrect(bg, window->x+1, window->y+window->text_y+10, window->width-2, 7);
-   gui_writestrat(window->text_buffer, 0, window->x + 1, window->y + window->text_y+10);
+   gui_drawrect(bg, window->x+1, window->y+window->text_y+TITLEBAR_HEIGHT, window->width-2, FONT_HEIGHT);
+   gui_writestrat(window->text_buffer, 0, window->x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
    // prompt
-   gui_drawcharat('_', 0, window->x + window->text_x + 1, window->y + window->text_y+10);
+   gui_drawcharat('_', 0, window->x + window->text_x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
 }
 
 static inline void outb(uint16_t port, uint8_t val) {
@@ -641,18 +644,18 @@ void mouse_enable() {
 
 void gui_cursor_save_bg() {
    uint8_t *terminal_buffer = (uint8_t*) framebuffer;
-   for(int y = gui_mouse_y; y < gui_mouse_y + 7; y++) {
-      for(int x = gui_mouse_x; x < gui_mouse_x + 5; x++) {
-         cursor_buffer[(y-gui_mouse_y)*5+(x-gui_mouse_x)] = terminal_buffer[y*(int)gui_width+x];
+   for(int y = gui_mouse_y; y < gui_mouse_y + FONT_HEIGHT; y++) {
+      for(int x = gui_mouse_x; x < gui_mouse_x + FONT_WIDTH; x++) {
+         cursor_buffer[(y-gui_mouse_y)*FONT_WIDTH+(x-gui_mouse_x)] = terminal_buffer[y*(int)gui_width+x];
       }
    }
 }
 
 void gui_cursor_restore_bg(int old_x, int old_y) {
    uint8_t *terminal_buffer = (uint8_t*) framebuffer;
-   for(int y = old_y; y < old_y + 7; y++) {
-      for(int x = old_x; x < old_x + 5; x++) {
-         terminal_buffer[y*(int)gui_width+x] = cursor_buffer[(y-old_y)*5+(x-old_x)];
+   for(int y = old_y; y < old_y + FONT_HEIGHT; y++) {
+      for(int x = old_x; x < old_x + FONT_WIDTH; x++) {
+         terminal_buffer[y*(int)gui_width+x] = cursor_buffer[(y-old_y)*FONT_WIDTH+(x-old_x)];
       }
    }
 }
@@ -687,9 +690,10 @@ void mouse_update(int relX, int relY) {
 
 bool mouse_clicked_on_window(int index) {
    gui_window_t *window = &gui_windows[index];
+   // clicked on window's icon in toolbar
    if(window->minimised) {
-         if(gui_mouse_x >= window->toolbar_pos*18+2 && gui_mouse_x <= window->toolbar_pos*18+2+16
-            && gui_mouse_y >= (int)gui_height-10 && gui_mouse_y <= (int)gui_height-1) {
+         if(gui_mouse_x >= 2+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+2) && gui_mouse_x <= 2+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+2)+TOOLBAR_ITEM_WIDTH
+            && gui_mouse_y >= (int)gui_height-(TOOLBAR_ITEM_HEIGHT+2) && gui_mouse_y <= (int)gui_height-2) {
                window->minimised = false;
                window->active = true;
                window->needs_redraw = true;
@@ -705,7 +709,7 @@ bool mouse_clicked_on_window(int index) {
          int relY = gui_mouse_y - window->y;
 
          // minimise
-         if(relY < 10 && relX > window->width - 16 && relX < window->width - 8)
+         if(relY < 10 && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3))
             window->minimised = true;
 
          window->active = true;
@@ -731,8 +735,8 @@ void mouse_leftclick(int relX, int relY) {
                window->x = gui_width - window->width;
             if(window->y < 0)
                window->y = 0;
-            if(window->y + window->height > (int)gui_height - 12)
-               window->y = gui_height - window->height - 12;
+            if(window->y + window->height > (int)gui_height - TOOLBAR_HEIGHT)
+               window->y = gui_height - window->height - TOOLBAR_HEIGHT;
 
             window->needs_redraw = true;
             gui_drawdottedrect(15, window->x, window->y, window->width, window->height);
