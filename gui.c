@@ -433,6 +433,9 @@ void gui_keypress(char key) {
 
 void mouse_enable();
 
+extern void ata_identify(bool primaryBus, bool masterDrive);
+extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
+
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
    char *command = selected->text_buffer;
@@ -512,7 +515,29 @@ void gui_checkcmd(void *regs) {
    else if(strcmp(command, "TEST")) {
       extern uint16_t gdt_tss;
       gui_writenum(gdt_tss, 0);
+   }
+   else if(strcmp(command, "ATA")) {
+      ata_identify(true, true); 
+   }
+   else if(strstartswith(command, "READ")) {
+      char arg[5];
+      if(strsplit(arg, arg, command, ' ')) {
+         // convert str to int
+         uint32_t lba = 0;
+         int power = 1;
+         for(int i = strlen(arg) - 1; i >= 0 ; i--) {
+            if(arg[i] >= '0' && arg[i] <= '9') {
+               lba += power*(arg[i]-'0');
+               power *= 10;
+            }
+         }
+         gui_writeuint(lba, 0);
+         gui_writestr("\n", 0);
+         uint16_t buf[256];
+         ata_read(true, true, lba, buf);
+         gui_writenum(buf[255], 0);
 
+      }
    }
    else if(strstartswith(command, "BG")) {
       char arg[5];

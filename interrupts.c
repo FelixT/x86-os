@@ -249,8 +249,8 @@ void timer_handler(registers_t *regs) {
    if(videomode == 0) {
       terminal_writenumat(timer_i, 79);
    } else {
-      gui_drawrect(3, -9, 5, 6, 7);
-      gui_writenumat(timer_i, 7, -8, 5);
+      gui_drawrect(3, -10, 5, 7, 11);
+      gui_writenumat(timer_i, 8, -10, 5);
 
       if(timer_i == 0)
          gui_draw();
