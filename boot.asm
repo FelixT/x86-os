@@ -27,7 +27,7 @@ read_kernel:
 
    mov dl, 0x80 ; read from hard drive
    mov ah, 0x02 ; 'read sectors from drive'
-   mov al, 64 ; number of sectors to read: 64=32KiB
+   mov al, 128 ; number of sectors to read: 128=64KiB
    mov ch, 0 ; cyclinder no
    mov cl, 2 ; sector no [starts at 1]
    mov dh, 0 ; head no

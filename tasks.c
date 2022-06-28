@@ -2,42 +2,15 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-// general registers in order they are pushed onto stack
-// https://faydoc.tripod.com/cpu/pusha.htm
-typedef struct registers_t {
-   uint32_t ds;
-   uint32_t edi; // saved with pusha
-   uint32_t esi;
-   uint32_t ebp;
-   uint32_t esp; // ignored by popa
-   uint32_t ebx;
-   uint32_t edx;
-   uint32_t ecx;
-   uint32_t eax;
-   uint32_t err_code; // or dummy
-   uint32_t eip, cs, eflags, useresp, ss; // automatically pushed upon interrupt
-} __attribute__((packed)) registers_t;
-
-// size = 14 * 32
-
-typedef struct task_state_t {
-   bool enabled;
-   uint32_t stack_top; // address
-   registers_t registers;
-} task_state_t;
+#include "tasks.h"
 
 extern uint32_t tos_program;
-
-#define TOTAL_STACK_SIZE 0x0010000
-#define TASK_STACK_SIZE 0x0001000
-#define TOTAL_TASKS 3
+uint32_t USR_CODE_SEG = 8*3;
+uint32_t USR_DATA_SEG = 8*4;
 
 task_state_t tasks[TOTAL_TASKS];
 int current_task = 0;
 bool switching = false; // preemptive multitasking
-
-uint32_t USR_CODE_SEG = 8*3;
-uint32_t USR_DATA_SEG = 8*4;
 
 void create_task_entry(int index, uint32_t entry) {
    tasks[index].enabled = true;
@@ -66,10 +39,11 @@ void tasks_init(registers_t *regs) {
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
    }
-   uint32_t idleentry = 28000+0x7c00;
+   uint32_t idleentry = 31000+0x7c00;
    create_task_entry(0, idleentry);
-   switching = true;
    launch_task(0, regs);
+
+   switching = true;
 }
 
 void switch_task(registers_t *regs) {
@@ -88,4 +62,8 @@ void switch_task(registers_t *regs) {
 
    // restore registers
    *regs = tasks[current_task].registers;
+}
+
+task_state_t *gettasks() {
+   return &tasks[0];
 }

@@ -1,4 +1,35 @@
 #include "memory.c"
+#include "tasks.h"
+
+#define FONT_WIDTH 7
+#define FONT_HEIGHT 11
+#define FONT_PADDING 1
+#define TITLEBAR_HEIGHT 15
+#define TOOLBAR_HEIGHT 22
+#define TOOLBAR_ITEM_WIDTH 30
+#define TOOLBAR_ITEM_HEIGHT 15
+#define TOOLBAR_PADDING 4
+
+#define NUM_WINDOWS 4
+
+typedef struct gui_window_t {
+   char title[20];
+   int x;
+   int y;
+   int width;
+   int height; // includes 10px titlebar
+   char text_buffer[40];
+   int text_index;
+   int text_x;
+   int text_y;
+   bool needs_redraw;
+   bool active;
+   bool minimised;
+	bool dragged;
+   int toolbar_pos; // index in toolbar
+   uint8_t *framebuffer; // width*(height-titlebar_height)
+} gui_window_t;
+
 
 // https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
 typedef struct vbe_mode_info_t {

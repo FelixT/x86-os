@@ -198,11 +198,11 @@ cmd_protectedgui db 'gui', 0
 
 vbe_info_structure:
 	.signature		db "VBE2"	; indicate support for VBE 2.0+
-	.table_data:	resb 512-4	; reserve space for the table below
+	.table_data:	times 512-4 db 0	; reserve space for the table below
 
 global vbe_mode_info_structure
 vbe_mode_info_structure:
-	.table_data:	resb 256	; reserve space for the table below
+	.table_data:	times 256 db 0	; reserve space for the table below
 
 %include "font.asm"
 

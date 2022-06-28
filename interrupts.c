@@ -1,26 +1,10 @@
 // https://wiki.osdev.org/Interrupts_tutorial
 // https://wiki.osdev.org/Interrupt_Descriptor_Table
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-#include "tasks.c"
-
-typedef struct {
-   uint16_t    isr_low;      // lower 16 bits of isr address/offset
-   uint16_t    kernel_cs;    // code segment in gdt, the CPU will load this into cs before calling the isr
-   uint8_t     zero;
-   uint8_t     attributes;
-   uint16_t    isr_high;     // higher 16 bits of isr address/offset
-} __attribute__((packed)) idt_entry_t;
+#include "interrupts.h"
 
 __attribute__((aligned(0x10))) 
 static idt_entry_t idt[256];
-
-typedef struct {
-   uint16_t	limit;
-   uint32_t	base;
-} __attribute__((packed)) idtr_t;
 
 static idtr_t idtr;
 
@@ -48,6 +32,9 @@ void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
 extern void* software_interrupt_routine;
+
+extern int videomode;
+extern bool switching; // preemptive multitasking enabled
 
 void pic_remap() {
 
@@ -102,49 +89,6 @@ void idt_init() {
 
 }
 
-typedef struct {
-   uint16_t limit_low;
-	uint16_t base_low;
-	uint8_t base_middle;
-	uint8_t access;
-	uint8_t granularity;
-	uint8_t base_high;
-} __attribute__((packed)) gdt_entry_t;
-
-
-extern void gui_writeuintat(uint32_t num, int colour, int x, int y);
-
-typedef struct {
-	uint32_t prev_tss;
-	uint32_t esp0;
-	uint32_t ss0;
-	uint32_t esp1;
-	uint32_t ss1;
-	uint32_t esp2;
-	uint32_t ss2;
-	uint32_t cr3;
-	uint32_t eip;
-	uint32_t eflags;
-	uint32_t eax;
-	uint32_t ecx;
-	uint32_t edx;
-	uint32_t ebx;
-	uint32_t esp;
-	uint32_t ebp;
-	uint32_t esi;
-	uint32_t edi;
-	uint32_t es;
-	uint32_t cs;
-	uint32_t ss;
-	uint32_t ds;
-	uint32_t fs;
-	uint32_t gs;
-	uint32_t ldt;
-	uint16_t trap;
-	uint16_t iomap_base;
-} __attribute__((packed)) tss_t;
-
-
 void tss_init() {
    // setup tss entry in gdt
    extern gdt_entry_t gdt_tss;
@@ -155,7 +99,6 @@ void tss_init() {
    uint32_t base = (uint32_t)&tss_start;
    uint32_t limit = (uint32_t)&tss_end;
    
-
    //uint32_t tss_size = &tss_end - &tss_start;
 
    uint8_t gran = 0x00;
@@ -169,17 +112,6 @@ void tss_init() {
    gdt_tss.granularity |= (gran & 0xF0);
 
 }
-
-extern void terminal_clear(void);
-extern void terminal_write(char* str);
-extern void terminal_writeat(char* str, int at);
-extern void terminal_writenumat(int num, int at);
-extern void terminal_backspace(void);
-extern void terminal_prompt(void);
-
-extern void gui_draw(void);
-extern int videomode;
-extern bool switching; // preemptive multitasking enabled
 
 char scan_to_char(int scan_code) {
    // https://www.millisecond.com/support/docs/current/html/language/scancodes.htm
@@ -207,33 +139,130 @@ char scan_to_char(int scan_code) {
    return '\0';
 }
 
-int timer_i = 0;
+void software_handler(registers_t *regs) {
+   if(regs->eax == 1) {
+      // WRITE STRING...
+      // ebx contains string address
+      gui_writestr((char*)regs->ebx, 0);
+   }
 
-extern void gui_clear(int colour);
-extern void gui_drawchar(char c, int colour);
-extern void gui_writenumat(int num, int colour, int x, int y);
-extern void gui_writenum(int num, int colour);
-extern void gui_writestr(char *c, int colour);
-extern void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
-extern void gui_keypress(char key);
-extern void gui_return(void *regs);
-extern void gui_backspace();
-extern void gui_writestrat(char *c, int colour, int x, int y);
-extern void gui_window_writenum(int num, int colour, int windowIndex);
-extern void gui_window_draw(int windowIndex);
-extern void gui_draw();
+   if(regs->eax == 2) {
+      // WRITE NUMBER...
+      // ebx contains int
+      gui_writenum(regs->ebx, 0);
+      gui_writenumat(regs->ebx, 14, 60, 20);
+   }
 
-extern void terminal_keypress(char key);
-extern void terminal_return();
+   if(regs->eax == 3) {
+      // yield
 
-extern void mouse_update(uint32_t relX, uint32_t relY);
-extern void mouse_leftclick(int relX, int relY);
-extern void mouse_leftrelease();
+      switch_task(regs);
+   }
+
+   if(regs->eax == 4) {
+      // show program stack contents
+      for(int i = 0; i < 64; i++) {
+         gui_writenum(((int*)regs->esp)[i], 0);
+         gui_writestr(" ", 0);
+      }
+   }
+
+   if(regs->eax == 5) {
+      // show current stack contents
+      int esp;
+      asm("movl %%esp, %0" : "=r"(esp));
+
+      for(int i = 0; i < 64; i++) {
+         gui_writenum(((int*)esp)[i], 0);
+         gui_writestr(" ", 0);
+      }
+   }
+
+   if(regs->eax == 6) {
+      // print num ebx to window ecx
+      gui_window_writenum(regs->ebx, 0, regs->ecx);
+      //gui_window_draw(regs->ecx);
+   }
+}
+
+void keyboard_handler(registers_t *regs) {
+   unsigned char scan_code = inb(0x60);
+
+   if(scan_code == 28)  { // return
+
+      if(videomode == 0)
+         terminal_return();
+      else
+         gui_return(regs);
+
+   } else if(scan_code == 14) { // backspace
+      
+      if(videomode == 0)
+         terminal_backspace();
+      else
+         gui_backspace();
+
+   } else {
+      // other key pressed
+
+      char c = scan_to_char(scan_code);
+
+      if(videomode == 1)
+         gui_keypress(c);
+      else
+         terminal_keypress(c);
+   }
+}
 
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
 
-extern int gui_selected_window;
+void mouse_handler() {
+   // mouse!
+   mouse_data[mouse_cycle] = inb(0x60);
+   
+   mouse_cycle++;
+
+   if(mouse_cycle == 3) {
+      int8_t xm = mouse_data[2];
+      int8_t ym = mouse_data[0];
+
+      // handle case of negative relative values
+      //int relX = xm - ((mouse_data[1] << 4) & 0x100);
+      //int relY = ym - ((mouse_data[1] << 3) & 0x100);
+
+      mouse_update(xm, ym);
+
+      if(mouse_data[1] & 0x1) {
+         mouse_leftclick(xm, ym);
+      } else {
+         mouse_leftrelease();
+      }
+
+      mouse_cycle = 0;
+   }
+}
+
+int timer_i = 0;
+
+void timer_handler(registers_t *regs) {
+   if(videomode == 0) {
+      terminal_writenumat(timer_i, 79);
+   } else {
+      gui_drawrect(3, -9, 5, 6, 7);
+      gui_writenumat(timer_i, 7, -8, 5);
+
+      if(timer_i == 0)
+         gui_draw();
+
+      if(switching)
+         switch_task(regs);
+   }
+
+   timer_i++;
+   timer_i%=10;
+
+}
 
 void exception_handler(int int_no, registers_t *regs) {
 
@@ -256,129 +285,20 @@ void exception_handler(int int_no, registers_t *regs) {
       if(irq_no == 0) {
          // system timer
          
-         if(videomode == 0) {
-            terminal_writenumat(timer_i, 79);
-         } else {
-            gui_drawrect(3, -9, 5, 6, 7);
-            gui_writenumat(timer_i, 7, -8, 5);
-
-            if(timer_i == 0)
-               gui_draw();
-
-            if(switching)
-               switch_task(regs);
-         }
-
-         timer_i++;
-         timer_i%=10;
-         
+         timer_handler(regs);         
       } else if(irq_no == 1) {
          // keyboard
-
-         unsigned char scan_code = inb(0x60);
-
-         if(scan_code == 28)  { // return
-
-            if(videomode == 0)
-               terminal_return();
-            else
-               gui_return(regs);
-
-         } else if(scan_code == 14) { // backspace
-            
-            if(videomode == 0)
-               terminal_backspace();
-            else
-               gui_backspace();
-
-         } else {
-            // other key pressed
-
-            char c = scan_to_char(scan_code);
-
-            if(videomode == 1)
-               gui_keypress(c);
-            else
-               terminal_keypress(c);
-         }
+         keyboard_handler(regs);
       } else if(irq_no == 12) {
 
-         // mouse!
-         mouse_data[mouse_cycle] = inb(0x60);
-         
-         mouse_cycle++;
-
-         if(mouse_cycle == 3) {
-            int8_t xm = mouse_data[2];
-            int8_t ym = mouse_data[0];
-
-            // handle case of negative relative values
-            //int relX = xm - ((mouse_data[1] << 4) & 0x100);
-            //int relY = ym - ((mouse_data[1] << 3) & 0x100);
-
-            mouse_update(xm, ym);
-
-            if(mouse_data[1] & 0x1) {
-               mouse_leftclick(xm, ym);
-            } else {
-               mouse_leftrelease();
-            }
-
-            mouse_cycle = 0;
-         }
+         mouse_handler();
 
       } else if(irq_no == 16) {
 
          // 0x30: software interrupt
          // uses eax, ebx, ecx as potential arguments
 
-         //gui_writenum(regs->eax, 0);
-
-         if(regs->eax == 1) {
-            // WRITE STRING...
-            // ebx contains string address
-            gui_writestr((char*)regs->ebx, 0);
-         }
-
-         if(regs->eax == 2) {
-            // WRITE NUMBER...
-            // ebx contains int
-            gui_writenum(regs->ebx, 0);
-            gui_writenumat(regs->ebx, 14, 60, 20);
-         }
-
-         if(regs->eax == 3) {
-            // yield
-
-            switch_task(regs);
-         }
-
-         if(regs->eax == 4) {
-            // show program stack contents
-            for(int i = 0; i < 64; i++) {
-               gui_writenum(((int*)regs->esp)[i], 0);
-               gui_writestr(" ", 0);
-            }
-         }
-
-         if(regs->eax == 5) {
-            // show current stack contents
-            int esp;
-            asm("movl %%esp, %0" : "=r"(esp));
-
-            for(int i = 0; i < 64; i++) {
-               gui_writenum(((int*)esp)[i], 0);
-               gui_writestr(" ", 0);
-            }
-         }
-
-         if(regs->eax == 6) {
-            // print num ebx to window ecx
-            gui_window_writenum(regs->ebx, 0, regs->ecx);
-            //gui_window_draw(regs->ecx);
-         }
-         
-
+         software_handler(regs);
       } else {
 
          // other interrupt no
@@ -402,12 +322,6 @@ void exception_handler(int int_no, registers_t *regs) {
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
-   //uint32_t *zer = (uint32_t*) 0x00;
-
-   //zer[0] = int_no;
-   //zer[1] = error_code;
-   //gui_writenumat(int_no, 0, 30, 100);
-
    gui_writenum(regs->err_code, 0);
    gui_writestr(" ", 0);
 

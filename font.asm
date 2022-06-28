@@ -43,6 +43,48 @@ font_minus:
    db 0000000b
    db 0000000b
 
+global font_fwdslash
+font_fwdslash:
+   db 0000010b
+   db 0000010b
+   db 0000100b
+   db 0000100b
+   db 0001000b
+   db 0001000b
+   db 0001000b
+   db 0010000b
+   db 0010000b
+   db 0100000b
+   db 0100000b
+
+global font_colon
+font_colon:
+   db 0000000b
+   db 0000000b
+   db 0001000b
+   db 0001000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0001000b
+   db 0001000b
+   db 0000000b
+   db 0000000b
+
+global font_apostrophe
+font_apostrophe:
+   db 0000000b
+   db 0010000b
+   db 0001000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+
 global font_cursor_outline
 font_cursor_outline:
    db 1100000b
@@ -67,7 +109,7 @@ font_cursor_fill:
    db 0111000b
    db 0111000b
    db 0101100b
-   db 0010110b
+   db 0000110b
    db 0000010b
    db 0000000b
 
@@ -575,4 +617,3 @@ font_Z:
    db 0100000b
    db 1000000b
    db 1111111b
-
