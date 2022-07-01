@@ -6,8 +6,8 @@
 
 #define FONT_WIDTH 7
 #define FONT_HEIGHT 11
-#define FONT_PADDING 1
-#define TITLEBAR_HEIGHT 15
+#define FONT_PADDING 2
+#define TITLEBAR_HEIGHT 17
 #define TOOLBAR_HEIGHT 22
 #define TOOLBAR_ITEM_WIDTH 30
 #define TOOLBAR_ITEM_HEIGHT 15
@@ -70,6 +70,9 @@ typedef struct vbe_mode_info_t {
 	uint16_t off_screen_mem_size;
 	uint8_t reserved1[206];
 } __attribute__ ((packed)) vbe_mode_info_t;
+
+void strcpy(char* dest, char* src);
+void strcpy_fixed(char* dest, char* src, int length);
 
 void gui_clear(uint8_t colour);
 void gui_drawchar(char c, int colour);

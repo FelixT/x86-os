@@ -1,6 +1,7 @@
 // fat16 driver
 // https://wiki.osdev.org/FAT16
 // https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system
+// http://www.c-jump.com/CIS24/Slides/FAT/FAT.html
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -66,7 +67,6 @@ uint32_t noClusters;
 extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
 extern uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
 
-void fat_read_cluster(uint16_t clusterNo, uint32_t size);
 void fat_read_dir(uint16_t clusterNo);
 void fat_read_file(uint16_t clusterNo, uint32_t size);
 
@@ -93,7 +93,11 @@ void fat_get_info() {
 }
 
 void fat_parse_dir_entry(fat_dir_t *fat_dir) {
-   gui_writestr((char*)fat_dir->filename, 0);
+   if(fat_dir->firstClusterNo < 2) return;
+   
+   char fileName[9];
+   strcpy_fixed((char*)fileName, (char*)fat_dir->filename, 8);
+   gui_writestr(fileName, 0);
    gui_writestr(": ", 0);
    if((fat_dir->attributes & 0x10) == 0x10) // directory
       gui_writestr("DIR", 4);
@@ -129,17 +133,13 @@ void fat_setup() {
    
    fat_get_info();
 
-   // read entire fat table
-   //uint32_t fatTableAddr = baseAddr + fat_bpb->noReservedSectors*fat_bpb->bytesPerSector;
-   //uint8_t *fatTable = ata_read_exact(true, true, fatTableAddr, 2*noClusters);
-
    fat_read_root();
 
-   gui_drawchar('\n', 0);
+   //gui_drawchar('\n', 0);
 
-   fat_read_dir(3);
+   //fat_read_dir(3);
 
-   fat_read_file(7, 0);
+   //fat_read_file(7, 0);
 }
 
 void fat_read_dir(uint16_t clusterNo) {
@@ -193,20 +193,13 @@ void fat_read_file(uint16_t clusterNo, uint32_t size) {
    }
 
    gui_writeuint(clusterCount, 0);
-   gui_writestr(" clusters\n", 0);
+   gui_writestr(" clusters ", 0);
 
    uint32_t fileSize = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector;
    uint8_t *fileContents = malloc(fileSize);
 
-   gui_writeuint_hex((uint32_t)fileContents, 0);
-   gui_drawchar('\n', 0);
-
    gui_writeuint(fileSize, 0);
    gui_writestr(" bytes\n", 0);
-
-   // get cluster info
-   gui_drawchar('\n', 0);
-   gui_writeuint(fileFirstSector, 0);
 
    int cluster = 0;
    while(true) { // until we reach the end of the cluster chain
@@ -235,5 +228,11 @@ void fat_read_file(uint16_t clusterNo, uint32_t size) {
          cluster++;
       }
    }
+
+   gui_writestr("Loaded into ", 0);
+   gui_writeuint_hex((uint32_t)fileContents, 0);
+   gui_drawchar('\n', 0);
+
+   free((uint32_t)fatTable, 2*noClusters);
 
 }

@@ -85,6 +85,34 @@ font_apostrophe:
    db 0000000b
    db 0000000b
 
+global font_fullstop
+font_fullstop:
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0011000b
+   db 0011000b
+   db 0000000b
+
+global font_greaterthan
+font_greaterthan:
+   db 0000000b
+   db 0010000b
+   db 0001000b
+   db 0000100b
+   db 0000010b
+   db 0000001b
+   db 0000010b
+   db 0000100b
+   db 0001000b
+   db 0010000b
+   db 0000000b
+
 global font_cursor_outline
 font_cursor_outline:
    db 1100000b

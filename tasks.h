@@ -25,7 +25,7 @@ typedef struct task_state_t {
 
 #define TOTAL_STACK_SIZE 0x0010000
 #define TASK_STACK_SIZE 0x0001000
-#define TOTAL_TASKS 3
+#define TOTAL_TASKS 4
 
 void create_task_entry(int index, uint32_t entry);
 

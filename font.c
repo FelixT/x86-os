@@ -12,6 +12,8 @@ extern uint8_t font_minus[FONT_HEIGHT];
 extern uint8_t font_fwdslash[FONT_HEIGHT];
 extern uint8_t font_colon[FONT_HEIGHT];
 extern uint8_t font_apostrophe[FONT_HEIGHT];
+extern uint8_t font_fullstop[FONT_HEIGHT];
+extern uint8_t font_greaterthan[FONT_HEIGHT];
 
 extern uint8_t font_cursor_outline[FONT_HEIGHT];
 extern uint8_t font_cursor_fill[FONT_HEIGHT];
@@ -77,6 +79,10 @@ void getFontLetter(char c, int* dest) {
       copyFont(font_colon, dest);
    else if(c == '\'')
       copyFont(font_apostrophe, dest);
+   else if(c == '.')
+      copyFont(font_fullstop, dest);
+   else if(c == '>')
+      copyFont(font_greaterthan, dest);
    else if(c == 27) // unused control characters used for cursor
       copyFont(font_cursor_outline, dest);
    else if(c == 28) // unused control characters used for cursor

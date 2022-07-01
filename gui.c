@@ -39,6 +39,25 @@ void strcpy(char* dest, char* src) {
    dest[i] = '\0';
 }
 
+void strcpy_fixed(char* dest, char* src, int length) {
+   for(int i = 0; i < length; i++)
+      dest[i] = src[i];
+   dest[length] = '\0';
+}
+
+int stoi(char* str) {
+   // convert str to int
+   int out = 0;
+   int power = 1;
+   for(int i = strlen(str) - 1; i >= 0 ; i--) {
+      if(str[i] >= '0' && str[i] <= '9') {
+         out += power*(str[i]-'0');
+         power *= 10;
+      }
+   }
+   return out;
+}
+
 bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
    int i = 0;
 
@@ -282,7 +301,7 @@ void gui_window_clearbuffer(gui_window_t *window) {
 }
 
 void gui_window_init(gui_window_t *window) {
-   strcpy(window->title, "TERMINAL");
+   strcpy(window->title, " TERMINAL");
    window->x = 8;
    window->y = 8;
    window->width = 360;
@@ -374,6 +393,7 @@ void gui_init(void) {
    // init windows
    for(int i = 0; i < NUM_WINDOWS; i++) {
       gui_window_init(&gui_windows[i]);
+      gui_windows[i].title[0] = i+'0';
    }
 
    gui_windows[NUM_WINDOWS-1].active = true;
@@ -444,7 +464,10 @@ void mouse_enable();
 
 extern void ata_identify(bool primaryBus, bool masterDrive);
 extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
+
 extern void fat_setup();
+extern void fat_read_dir(uint16_t clusterNo);
+extern void fat_read_file(uint16_t clusterNo, uint32_t size);
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -462,6 +485,7 @@ void gui_checkcmd(void *regs) {
    }
    else if(strcmp(command, "MOUSE")) {
       mouse_enable();
+      gui_writestr("Enabled", 0);
    }
    else if(strcmp(command, "TASKS")) {
       tasks_init(regs);
@@ -526,6 +550,29 @@ void gui_checkcmd(void *regs) {
    else if(strcmp(command, "FAT")) {
       fat_setup();
    }
+   else if(strstartswith(command, "PROGC")) {
+      char arg[10];
+      if(strsplit(arg, arg, command, ' ')) {
+         int addr = stoi((char*)arg);
+         gui_writeuint_hex(addr, 0);
+         create_task_entry(3, addr);
+         launch_task(3, regs);
+      }
+   }
+   else if(strstartswith(command, "FATDIR")) {
+      char arg[5];
+      if(strsplit(arg, arg, command, ' ')) {
+         int cluster = stoi((char*)arg);
+         fat_read_dir((uint16_t)cluster);
+      }
+   }
+   else if(strstartswith(command, "FATFILE")) {
+      char arg[5];
+      if(strsplit(arg, arg, command, ' ')) {
+         int cluster = stoi((char*)arg);
+         fat_read_file((uint16_t)cluster, 0);
+      }
+   }
    else if(strstartswith(command, "READ")) {
       char arg[5];
       if(strsplit(arg, arg, command, ' ')) {
@@ -553,16 +600,7 @@ void gui_checkcmd(void *regs) {
    else if(strstartswith(command, "BG")) {
       char arg[5];
       if(strsplit(arg, arg, command, ' ')) {
-         // convert str to int
-         int bg = 0;
-         int power = 1;
-         for(int i = strlen(arg) - 1; i >= 0 ; i--) {
-            if(arg[i] >= '0' && arg[i] <= '9') {
-               bg += power*(arg[i]-'0');
-               power *= 10;
-            }
-
-         }
+         int bg = stoi((char*)arg);
          gui_writenum(bg, 0);
          gui_bg = bg;
          gui_redrawall();
@@ -593,6 +631,9 @@ void gui_checkcmd(void *regs) {
       }
    }
    else {
+      gui_drawchar('\'', 1);
+      gui_writestr(selected->text_buffer, 1);
+      gui_drawchar('\'', 1);
       gui_writestr(": UNRECOGNISED", 4);
    }
    gui_drawchar('\n', 0);
@@ -603,15 +644,12 @@ void gui_return(void *regs) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
 
       // write cmd to window framebuffer
-      gui_window_writestrat(selected->text_buffer, 0, 1, selected->text_y, gui_selected_window);
+      gui_window_drawcharat('>', 8, 1, selected->text_y, gui_selected_window);
+      gui_window_writestrat(selected->text_buffer, 0, 1 + FONT_WIDTH + FONT_PADDING, selected->text_y, gui_selected_window);
       // write prompt to framebuffer
       //gui_window_drawcharat('_', 0, window->text_x + 1, window->text_y, windowIndex);
       
       gui_drawchar('\n', 0);
-
-      gui_drawchar('\'', 1);
-      gui_writestr(selected->text_buffer, 1);
-      gui_drawchar('\'', 1);
       
       gui_checkcmd(regs);
 
@@ -649,7 +687,7 @@ void gui_window_draw(int windowIndex) {
 
       // titlebar
       gui_drawrect(7, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
-      gui_writestrat(window->title, 0, window->x+2, window->y+2);
+      gui_writestrat(window->title, 0, window->x+2, window->y+3);
       // titlebar buttons
       gui_drawcharat('x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
       gui_drawcharat('-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
@@ -684,9 +722,10 @@ void gui_window_draw(int windowIndex) {
 
       // current text content/buffer
       gui_drawrect(bg, window->x+1, window->y+window->text_y+TITLEBAR_HEIGHT, window->width-2, FONT_HEIGHT);
-      gui_writestrat(window->text_buffer, 0, window->x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
+      gui_drawcharat('>', 8, window->x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
+      gui_writestrat(window->text_buffer, 0, window->x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
       // prompt
-      gui_drawcharat('_', 0, window->x + window->text_x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
+      gui_drawcharat('_', 0, window->x + window->text_x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
 
       // drop shadow if selected
       gui_drawline(24, window->x+window->width, window->y, true, window->height);
