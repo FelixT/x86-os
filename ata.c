@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "memory.h"
+
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
 
@@ -158,4 +160,21 @@ void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf) {
       buf[i] = inw(ioPort + ATA_REG_DATA);
    }
 
+}
+
+uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes) {
+   uint32_t lba = addr/512;
+   uint32_t offset = addr - lba*512;
+   uint32_t extraBytes = 512 - offset;
+
+   uint32_t bytesRequired = bytes + extraBytes;
+
+   uint16_t *buf1 = malloc(bytesRequired);
+
+   int reads = (bytesRequired + (512-1))/512;
+   for(int i = 0; i < reads; i++) {
+      ata_read(primaryBus, masterDrive, lba+i, &buf1[256*i]);
+   }
+
+   return (uint8_t *) (&buf1[0]) + offset;
 }

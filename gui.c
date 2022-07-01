@@ -151,7 +151,7 @@ int font_letter[FONT_WIDTH*FONT_HEIGHT];
 
 void gui_drawcharat(char c, int colour, int x, int y) {
    uint8_t *terminal_buffer = (uint8_t*) framebuffer;
-   
+
    getFontLetter(c, font_letter);
 
    int i = 0;      
@@ -168,6 +168,8 @@ void gui_window_drawcharat(char c, int colour, int x, int y, int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
    uint8_t *terminal_buffer = window->framebuffer;
    
+   if(c >= 'a' && c <= 'z') c = (c - 'a') + 'A'; // convert to uppercase
+
    getFontLetter(c, font_letter);
 
    int i = 0;      
@@ -283,8 +285,8 @@ void gui_window_init(gui_window_t *window) {
    strcpy(window->title, "TERMINAL");
    window->x = 8;
    window->y = 8;
-   window->width = 300;
-   window->height = 180;
+   window->width = 360;
+   window->height = 240;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = FONT_PADDING;
@@ -328,6 +330,13 @@ void gui_writenum(int num, int colour) {
 
    char out[20];
    terminal_numtostr(num, out);
+   gui_writestr(out, colour);
+}
+
+extern void terminal_uinttohex(uint32_t num, char* out);
+void gui_writeuint_hex(uint32_t num, int colour) {
+   char out[20];
+   terminal_uinttohex(num, out);
    gui_writestr(out, colour);
 }
 
@@ -435,6 +444,7 @@ void mouse_enable();
 
 extern void ata_identify(bool primaryBus, bool masterDrive);
 extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
+extern void fat_setup();
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -452,38 +462,6 @@ void gui_checkcmd(void *regs) {
    }
    else if(strcmp(command, "MOUSE")) {
       mouse_enable();
-   }
-   else if(strcmp(command, "INT")) {
-      char* test = "ABCDEF";
-
-      asm(
-         "int $0x30"
-         :: "a" (1), "b" (test) // put operands in eax, ebx
-      );
-   }
-   else if(strcmp(command, "INT2")) {
-      asm(
-         "int $0x30"
-         :: "a" (2), "b" (428) // put operands in eax, ebx
-      );
-   }
-   else if(strcmp(command, "INT3")) {
-      asm(
-         "int $0x30"
-         :: "a" (3), "d" (428) // put operands in eax, ebx
-      );
-   }
-   else if(strcmp(command, "INT4")) {
-      asm(
-         "int $0x30"
-         :: "a" (4), "d" (0) // put operands in eax, ebx
-      );
-   }
-   else if(strcmp(command, "INT5")) {
-      asm(
-         "int $0x30"
-         :: "a" (5), "d" (0) // put operands in eax, ebx
-      );
    }
    else if(strcmp(command, "TASKS")) {
       tasks_init(regs);
@@ -503,21 +481,50 @@ void gui_checkcmd(void *regs) {
       }
    }
    else if(strcmp(command, "PROG1")) {
-      int progAddr = 31000+0x7c00+512;
+      int progAddr = 40000+0x7c00+512;
       create_task_entry(1, progAddr);
       launch_task(1, regs);
    }
    else if(strcmp(command, "PROG2")) {
-      int progAddr = 31000+0x7c00+512*2;
+      int progAddr = 40000+0x7c00+512*2;
       create_task_entry(2, progAddr);
       launch_task(2, regs);
    }
    else if(strcmp(command, "TEST")) {
-      extern uint16_t gdt_tss;
-      gui_writenum(gdt_tss, 0);
+      extern uint32_t tos_kernel;
+      extern uint32_t tos_program;
+      extern uint8_t heap_kernel;
+      
+      gui_drawchar('\n', 0);
+      gui_writestr("TOS KERNEL ", 4);
+      gui_writeuint((uint32_t)&tos_kernel, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)&tos_kernel, 0);
+
+      gui_drawchar('\n', 0);
+      gui_writestr("TOS PROGRAM ", 4);
+      gui_writeuint((uint32_t)&tos_program, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)&tos_program, 0);
+
+      gui_drawchar('\n', 0);
+      gui_writestr("HEAP KERNEL ", 4);
+      gui_writeuint((uint32_t)&heap_kernel, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)&heap_kernel, 0);
+
+      gui_drawchar('\n', 0);
+      gui_writestr("HEAP KERNEL END ", 4);
+      gui_writeuint((uint32_t)&heap_kernel+0x0100000, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)&heap_kernel+0x0100000, 0);
+
    }
    else if(strcmp(command, "ATA")) {
       ata_identify(true, true); 
+   }
+   else if(strcmp(command, "FAT")) {
+      fat_setup();
    }
    else if(strstartswith(command, "READ")) {
       char arg[5];
@@ -533,9 +540,13 @@ void gui_checkcmd(void *regs) {
          }
          gui_writeuint(lba, 0);
          gui_writestr("\n", 0);
-         uint16_t buf[256];
+         uint16_t *buf = malloc(512);
          ata_read(true, true, lba, buf);
-         gui_writenum(buf[255], 0);
+         for(int i = 0; i < 256; i++) {
+            gui_writeuint_hex(buf[i], 0);
+            gui_drawchar(' ', 0);
+         }
+         free((uint32_t)buf, 512);
 
       }
    }
@@ -559,11 +570,13 @@ void gui_checkcmd(void *regs) {
    }
    else if(strstartswith(command, "MEM")) {
       char arg[5];
+      mem_segment_status_t *status = memory_get_table();
+      
       if(strsplit(arg, arg, command, ' ')) {
          int offset = (arg[0]-'0')*400;
 
          for(int i = offset; i < offset+400 && i < 2048; i++) {
-            if(memory_status[i].allocated)
+            if(status[i].allocated)
                gui_writenum(1, 0);
             else
                gui_writenum(0, 0);
@@ -571,7 +584,7 @@ void gui_checkcmd(void *regs) {
       } else {
          int used = 0;
          for(int i = 0; i < 2048; i++) {
-            if(memory_status[i].allocated) used++;
+            if(status[i].allocated) used++;
          }
          gui_writenum(used, 0);
          gui_drawchar('/', 0);

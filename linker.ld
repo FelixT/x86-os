@@ -29,7 +29,7 @@ SECTIONS {
     tos_kernel = .;
 
     . = . + 0x00001000;
-    tos_program = .; /* program stacks, currently unused */
+    tos_program = .; /* program stacks */
 
     . = 0x00100000;
     heap_kernel = .;

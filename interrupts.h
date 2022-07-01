@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "tasks.h"
+#include "gui.h"
 
 typedef struct {
    uint16_t    isr_low;      // lower 16 bits of isr address/offset
@@ -54,22 +55,6 @@ typedef struct {
 	uint16_t trap;
 	uint16_t iomap_base;
 } __attribute__((packed)) tss_t;
-
-extern void gui_clear(int colour);
-extern void gui_drawchar(char c, int colour);
-extern void gui_writenumat(int num, int colour, int x, int y);
-extern void gui_writenum(int num, int colour);
-extern void gui_writestr(char *c, int colour);
-extern void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
-extern void gui_keypress(char key);
-extern void gui_return(void *regs);
-extern void gui_backspace();
-extern void gui_writestrat(char *c, int colour, int x, int y);
-extern void gui_window_writenum(int num, int colour, int windowIndex);
-extern void gui_window_draw(int windowIndex);
-extern void gui_draw();
-extern void gui_writeuintat(uint32_t num, int colour, int x, int y);
-
 
 extern void terminal_keypress(char key);
 extern void terminal_return();
