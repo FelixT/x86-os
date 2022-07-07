@@ -9,7 +9,7 @@
 #define FONT_PADDING 2
 #define TITLEBAR_HEIGHT 17
 #define TOOLBAR_HEIGHT 22
-#define TOOLBAR_ITEM_WIDTH 30
+#define TOOLBAR_ITEM_WIDTH 50
 #define TOOLBAR_ITEM_HEIGHT 15
 #define TOOLBAR_PADDING 4
 
@@ -30,7 +30,7 @@ typedef struct gui_window_t {
    bool minimised;
 	bool dragged;
    int toolbar_pos; // index in toolbar
-   uint8_t *framebuffer; // width*(height-titlebar_height)
+   uint16_t *framebuffer; // width*(height-titlebar_height)
 } gui_window_t;
 
 
@@ -74,21 +74,30 @@ typedef struct vbe_mode_info_t {
 void strcpy(char* dest, char* src);
 void strcpy_fixed(char* dest, char* src, int length);
 
-void gui_clear(uint8_t colour);
-void gui_drawchar(char c, int colour);
-void gui_writenumat(int num, int colour, int x, int y);
-void gui_writenum(int num, int colour);
-void gui_writestr(char *c, int colour);
-void gui_drawrect(uint8_t colour, int x, int y, int width, int height);
+uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
+
+#define COLOUR_DARK_GREY gui_rgb16(100, 100, 100) 
+#define COLOUR_TASKBAR_ENTRY gui_rgb16(100, 100, 100)
+#define COLOUR_TOOLBAR gui_rgb16(200, 200, 200)
+#define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)
+#define COLOUR_WHITE gui_rgb16(255, 255, 255)
+#define COLOUR_CYAN gui_rgb16(0, 183, 235)
+
+void gui_clear(uint16_t colour);
+void gui_drawchar(char c, uint16_t colour);
+void gui_writenumat(int num, uint16_t colour, int x, int y);
+void gui_writenum(int num, uint16_t colour);
+void gui_writestr(char *c, uint16_t colour);
+void gui_drawrect(uint16_t colour, int x, int y, int width, int height);
 void gui_keypress(char key);
 void gui_return(void *regs);
 void gui_backspace();
-void gui_writestrat(char *c, int colour, int x, int y);
-void gui_window_writenum(int num, int colour, int windowIndex);
+void gui_writestrat(char *c, uint16_t colour, int x, int y);
+void gui_window_writenum(int num, uint16_t colour, int windowIndex);
 void gui_window_draw(int windowIndex);
 void gui_draw();
-void gui_writeuintat(uint32_t num, int colour, int x, int y);
-void gui_writeuint(uint32_t num, int colour);
-void gui_writeuint_hex(uint32_t num, int colour);
+void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y);
+void gui_writeuint(uint32_t num, uint16_t colour);
+void gui_writeuint_hex(uint32_t num, uint16_t colour);
 
 #endif

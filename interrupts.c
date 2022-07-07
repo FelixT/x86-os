@@ -249,8 +249,8 @@ void timer_handler(registers_t *regs) {
    if(videomode == 0) {
       terminal_writenumat(timer_i, 79);
    } else {
-      gui_drawrect(3, -10, 5, 7, 11);
-      gui_writenumat(timer_i, 8, -10, 5);
+      gui_drawrect(gui_rgb16(0, 255, 255), -10, 5, 7, 11);
+      gui_writenumat(timer_i, gui_rgb16(255, 255, 255), -10, 5);
 
       if(timer_i == 0)
          gui_draw();
@@ -270,11 +270,11 @@ void exception_handler(int int_no, registers_t *regs) {
 
       // https://wiki.osdev.org/Exceptions
       if(videomode == 1) {
-         gui_drawrect(4, 60, 0, 8*2, 11);
-         gui_writenumat(int_no, 14, 60, 0);
+         gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);
+         gui_writenumat(int_no, gui_rgb16(255, 200, 200), 60, 0);
 
-         gui_drawrect(4, 200, 0, 8*5, 11);
-         gui_writenumat(regs->eip, 14, 200, 0);
+         gui_drawrect(gui_rgb16(255, 0, 0), 200, 0, 8*6, 11);
+         gui_writenumat(regs->eip, gui_rgb16(255, 200, 200), 200, 0);
       }
          
    } else {
@@ -306,7 +306,7 @@ void exception_handler(int int_no, registers_t *regs) {
             terminal_writeat("  ", 0);
             terminal_writenumat(int_no, 0);
          } else {
-            gui_drawrect(3, 0, 0, 7*2, 7);
+            gui_drawrect(gui_rgb16(0, 255, 255), 0, 0, 7*2, 7);
             gui_writenumat(int_no, 0, 0, 0);
          }
 

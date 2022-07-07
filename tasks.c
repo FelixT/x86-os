@@ -39,7 +39,7 @@ void tasks_init(registers_t *regs) {
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
    }
-   uint32_t idleentry = 40000+0x7c00;
+   uint32_t idleentry = 42000+0x7c00;
    create_task_entry(0, idleentry);
    launch_task(0, regs);
 

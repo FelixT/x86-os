@@ -6,9 +6,14 @@
 start:
    mov ax, 0
    mov ds, ax ; data segment=0
+   mov es, ax
    mov ss, ax ; stack starts at 0
    mov sp, 0x5c00 ; stack pointer starts 0x2000 before code - so as to not overwrite anything
    cld ; clear direction flag
+
+   ; enable A20
+   mov ax, 0x2401
+   int 0x15
 
    mov si, boot0msg
    call print
@@ -27,14 +32,15 @@ read_kernel:
 
    mov dl, 0x80 ; read from hard drive
    mov ah, 0x02 ; 'read sectors from drive'
-   mov al, 128 ; number of sectors to read: 128=64KiB
+   mov al, 127 ; number of sectors to read: 128=64KiB
    mov ch, 0 ; cyclinder no
    mov cl, 2 ; sector no [starts at 1]
    mov dh, 0 ; head no
-   mov bx, 0
+   mov bx, 0 ; set es:bx
    mov es, bx ; first part of memory pointer (should be 0)
    mov bx, 0x7e00 ; 512 after our bootloader start 
    int 0x13
+
    jmp 0x7e00
 
    ; strings

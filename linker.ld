@@ -2,7 +2,7 @@ ENTRY(kmain)
 OUTPUT_FORMAT(binary)
 
 MEMORY {
-    ram : org = 0x7e00, l = 64K
+    ram : org = 0x7e00, len = 64K
  }
 
 
@@ -13,7 +13,7 @@ SECTIONS {
         *(.text)
         *(.rodata)
     } >ram
-
+    
     .data : {
         *(.data)
     } >ram

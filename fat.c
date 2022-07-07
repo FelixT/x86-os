@@ -57,7 +57,7 @@ typedef struct {
    uint32_t fileSize; // bytes
 } __attribute__((packed)) fat_dir_t;
 
-uint32_t baseAddr = 40000 + 512*3;
+uint32_t baseAddr = 42000 + 512*3;
 
 fat_bpb_t *fat_bpb;
 fat_ebr_t *fat_ebr;
@@ -94,7 +94,7 @@ void fat_get_info() {
 
 void fat_parse_dir_entry(fat_dir_t *fat_dir) {
    if(fat_dir->firstClusterNo < 2) return;
-   
+
    char fileName[9];
    strcpy_fixed((char*)fileName, (char*)fat_dir->filename, 8);
    gui_writestr(fileName, 0);
@@ -231,6 +231,8 @@ void fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    gui_writestr("Loaded into ", 0);
    gui_writeuint_hex((uint32_t)fileContents, 0);
+   gui_writestr(" / ", 0);
+   gui_writeuint((uint32_t)fileContents, 0);
    gui_drawchar('\n', 0);
 
    free((uint32_t)fatTable, 2*noClusters);
