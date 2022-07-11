@@ -30,12 +30,17 @@ typedef struct {
    uint8_t zero;
 } __attribute__((packed)) bmp_colour_t;
 
-void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth) {
+void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIsTransparent) {
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    
-   if(info->bpp != 8) gui_writestr("BPP not 8\n", 0);// bad
-   if(info->compressionMethod != 0) gui_writestr("Compression method not BI_RGB\n", 0);
+   if(info->bpp != 8) {
+      gui_writestr("BPP not 8bit\n", 0);// bad
+      return;
+   }
+   if(info->compressionMethod != 0) {
+      gui_writestr("Compression method not BI_RGB\n", 0);
+   }
 
    if(info->colourPaletteLength == 0)
       info->colourPaletteLength = 1 << info->bpp; // 2^n
@@ -45,13 +50,14 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth) {
    uint8_t *pixels = (uint8_t*)(&bmp[0] + header->dataOffset);
 
    uint32_t rowSize = ((info->width+(4-1))/4)*4; // has to be multiple of 4 bytes
-   uint32_t padding = rowSize - info->width;
 
+   // pixels starts at bottom, works up left to right
    for(int y = 0; y < info->height; y++) {
       for(int x = 0; x < info->width; x++) {
-         int index = (info->height-y)*rowSize+x;
+         int index = (info->height-(y+1))*rowSize+x;
          uint16_t colour = gui_rgb16(colours[pixels[index]].red, colours[pixels[index]].green, colours[pixels[index]].blue);
-         framebuffer[y*screenWidth+x] = colour;
+         if(!whiteIsTransparent || colour != COLOUR_WHITE)
+            framebuffer[y*screenWidth+x] = colour;
       }
 
    }

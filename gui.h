@@ -73,10 +73,13 @@ typedef struct vbe_mode_info_t {
 
 void strcpy(char* dest, char* src);
 void strcpy_fixed(char* dest, char* src, int length);
+bool strsplit(char* dest1, char* dest2, char* src, char splitat);
+void strtoupper(char* dest, char* src);
 
 uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 
-#define COLOUR_DARK_GREY gui_rgb16(100, 100, 100) 
+#define COLOUR_WINDOW_OUTLINE gui_rgb16(230, 230, 230)
+#define COLOUR_DARK_GREY gui_rgb16(140, 140, 140) 
 #define COLOUR_TASKBAR_ENTRY gui_rgb16(100, 100, 100)
 #define COLOUR_TOOLBAR gui_rgb16(200, 200, 200)
 #define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)

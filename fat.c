@@ -96,8 +96,15 @@ void fat_parse_dir_entry(fat_dir_t *fat_dir) {
    if(fat_dir->firstClusterNo < 2) return;
 
    char fileName[9];
+   char extension[4];
    strcpy_fixed((char*)fileName, (char*)fat_dir->filename, 8);
+   strcpy_fixed((char*)extension, (char*)fat_dir->filename+8, 3);
+   strsplit((char*)fileName, NULL, (char*)fileName, ' '); // null terminate at first space
+   strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
    gui_writestr(fileName, 0);
+   if(extension[0] != '\0')
+      gui_drawchar('.', 0);
+   gui_writestr(extension, 0);
    gui_writestr(": ", 0);
    if((fat_dir->attributes & 0x10) == 0x10) // directory
       gui_writestr("DIR", 4);
@@ -106,6 +113,28 @@ void fat_parse_dir_entry(fat_dir_t *fat_dir) {
    gui_drawchar(' ', 0);
    gui_writenum(fat_dir->firstClusterNo, 0);
    gui_drawchar('\n', 0);
+}
+
+extern bool strcmp(char* str1, char* str2);
+// return clusterNo from filename and extension in a specific directory
+bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension) {
+   if(fat_dir->firstClusterNo < 2) return false;
+
+   char entryName[9];
+   char entryExtension[4];
+   strcpy_fixed((char*)entryName, (char*)fat_dir->filename, 8);
+   strcpy_fixed((char*)entryExtension, (char*)fat_dir->filename+8, 3);
+   strsplit((char*)entryName, NULL, (char*)entryName, ' '); // null terminate at first space
+   strsplit((char*)entryExtension, NULL, (char*)entryExtension, ' '); // null terminate at first space
+   strtoupper((char*)name, (char*)name); // fat ignores file case
+   strtoupper((char*)extension, (char*)extension);
+   strtoupper((char*)entryName, (char*)entryName); // fat ignores file case
+   strtoupper((char*)entryExtension, (char*)entryExtension);
+
+   if(!strcmp(entryName, name)) return false;
+   if(!strcmp(entryExtension, extension)) return false;
+   
+   return true;
 }
 
 void fat_read_root() {
@@ -152,7 +181,7 @@ void fat_read_dir(uint16_t clusterNo) {
 
    uint32_t dirAddr = baseAddr + dirFirstSector*fat_bpb->bytesPerSector;
 
-   // get each file/dir in root
+   // get each file/dir in dir
    while(true) {
       uint8_t *buf2 = ata_read_exact(true, true, dirAddr + offset, sizeof(fat_dir_t));
       fat_dir_t *fat_dir = (fat_dir_t*)buf2;
@@ -164,6 +193,54 @@ void fat_read_dir(uint16_t clusterNo) {
       free((uint32_t)buf2, sizeof(fat_dir_t));
    }
 
+}
+
+fat_dir_t *fat_find_in_root(char* filename, char* extension) {
+   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
+   uint32_t rootDirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
+
+   uint32_t offset = 0;
+   // get each file/dir in root
+   for(int i = 0; i < fat_bpb->noRootEntries; i++) {
+      uint8_t *buf2 = ata_read_exact(true, true, rootDirAddr + offset, sizeof(fat_dir_t));
+      fat_dir_t *fat_dir = (fat_dir_t*)buf2;
+      if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
+
+      if(fat_entry_matches_filename(fat_dir, filename, extension))
+         return fat_dir;
+
+      offset+=32; // each entry is 32 bytes
+      free((uint32_t)buf2, sizeof(fat_dir_t));
+   }
+
+   return NULL;
+
+}
+
+// and return info
+fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) {
+   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
+   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
+   uint32_t firstDataSector = rootSector + rootSize;
+   uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+
+   uint32_t offset = 0;
+
+   uint32_t dirAddr = baseAddr + dirFirstSector*fat_bpb->bytesPerSector;
+
+   // get each file/dir in dir
+   while(true) {
+      uint8_t *buf2 = ata_read_exact(true, true, dirAddr + offset, sizeof(fat_dir_t));
+      fat_dir_t *fat_dir = (fat_dir_t*)buf2;
+      if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
+
+      if(fat_entry_matches_filename(fat_dir, filename, extension))
+         return fat_dir;
+      
+      offset+=32; // each entry is 32 bytes
+      free((uint32_t)buf2, sizeof(fat_dir_t));
+   }
+   return NULL;
 }
 
 void fat_read_file(uint16_t clusterNo, uint32_t size) {
@@ -237,4 +314,107 @@ void fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    free((uint32_t)fatTable, 2*noClusters);
 
+}
+
+extern int strlen(char* str);
+
+fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
+   if(strlen(pathElement) == 0)
+      return dir;
+
+   if(strlen(pathElement) > 11)
+      return NULL;
+
+   char name[9];
+   char ext[4];
+   if(!strsplit(name, ext, pathElement, '.')) {
+      strcpy(name, pathElement);
+      ext[0] = '\0';
+   }
+
+   if(dir == NULL) {
+      return fat_find_in_root((char*)name, (char*)ext);
+   } else {
+      return fat_find_in_dir(dir->firstClusterNo, (char*)name, (char*)ext);
+   }
+}
+
+fat_dir_t *fat_parse_path(char *path) {
+   char *pathRemaining = malloc(strlen(path));
+   char *tmp = malloc(strlen(path));
+   char *pathElement = malloc(strlen(path));
+   strcpy(pathRemaining, path);
+
+   int i = 0; // arg no
+
+   fat_dir_t *curDir = NULL; // NULL = root
+
+   while(strsplit(pathElement, tmp, pathRemaining, '/')) {
+      strcpy(pathRemaining, tmp);
+
+      fat_dir_t *lastDir = curDir;
+      curDir = fat_follow_path_chain(pathElement, curDir);
+      
+      if(curDir == lastDir) {
+         if(i == 0)
+            curDir = NULL; // begins with /, set environment to root
+         // otherwise ignore
+      } else {
+         free((uint32_t)lastDir, sizeof(fat_dir_t));
+
+         if(curDir == NULL) {
+            free((uint32_t)tmp, strlen(path));
+            free((uint32_t)pathRemaining, strlen(path));
+            free((uint32_t)pathElement, strlen(path));
+            return NULL; // file not found
+         }
+      }
+
+      // relative to current directory
+      if(curDir == NULL)
+         gui_writenum(0, 0);
+      else
+         gui_writenum(curDir->firstClusterNo, 0);
+      
+      gui_writestr(":", 0);
+      gui_writestr(pathElement, 0);
+      gui_drawchar('\n', 0);
+
+      i++;
+   }
+   
+   // if(strlen(pathRemaining) == 0) // ends with trailing slash
+   fat_dir_t *lastDir = curDir;
+   curDir = fat_follow_path_chain(pathRemaining, curDir);
+   if(curDir == NULL)
+         gui_writenum(0, 0);
+      else
+         gui_writenum(curDir->firstClusterNo, 0);
+      
+   gui_writestr(":", 0);
+   gui_writestr(pathRemaining, 0);
+   gui_drawchar('\n', 0);
+
+   free((uint32_t)tmp, strlen(path));
+   free((uint32_t)pathRemaining, strlen(path));
+   free((uint32_t)pathElement, strlen(path));
+
+   if(lastDir != curDir)
+      free((uint32_t)lastDir, sizeof(fat_dir_t));
+
+   return curDir; // note that NULL = file not found or root
+}
+
+void fat_test() {
+   char *path = malloc(40);
+   strcpy(path, "/bmp/file.bmp");
+   fat_dir_t *dir = fat_parse_path(path);
+   gui_writenum(dir->fileSize, 0);
+   gui_drawchar('\n', 0);
+   fat_read_file(dir->firstClusterNo, dir->fileSize);
+
+   // example: find and load file "/bmp/file.bmp"
+   //fat_dir_t *bmpDir = fat_find_in_root("bmp", "");
+   //fat_dir_t *file = fat_find_in_dir(bmpDir->firstClusterNo, "file", "bmp");
+   //fat_read_file(file->firstClusterNo, file->fileSize);
 }

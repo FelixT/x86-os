@@ -20,14 +20,25 @@ bool mouse_held = false;
 gui_window_t gui_windows[NUM_WINDOWS];
 int gui_selected_window = 0;
 
-// colours: https://www.fountainware.com/EXPL/vga_color_palettes.htm , 8bit
-
 uint32_t framebuffer;
 
 uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
 
 extern bool strcmp(char* str1, char* str2);
 extern int strlen(char* str);
+
+void strtoupper(char* dest, char* src) {
+   int i = 0;
+
+   while(src[i] != '\0') {
+      if(src[i] >= 'a' && src[i] <= 'z')
+         dest[i] = src[i] + ('A' - 'a');
+      else
+         dest[i] = src[i];
+      i++;
+   }
+   dest[i] = '\0';
+}
 
 void strcpy(char* dest, char* src) {
    int i = 0;
@@ -66,7 +77,8 @@ bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
       if(src[i] == '\0')
          return false;
 
-      dest1[i] = src[i];
+      if(dest1 != NULL)
+         dest1[i] = src[i];
       i++;
    }
    dest1[i] = '\0';
@@ -74,10 +86,12 @@ bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
 
    int start = i;
    while(src[i] != '\0') {
-      dest2[i - start] = src[i];
+      if(dest2 != NULL)
+         dest2[i - start] = src[i];
       i++;
    }
-   dest2[i - start] = '\0';
+   if(dest2 != NULL)
+      dest2[i - start] = '\0';
 
    return true;
 }
@@ -253,6 +267,10 @@ void gui_window_drawchar(char c, uint16_t colour, int windowIndex) {
       if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
          gui_window_scroll(windowIndex);
       }
+
+      // immediately output each line
+      selected->needs_redraw=true;
+      gui_window_draw(windowIndex);
 
       return;
    }
@@ -446,7 +464,8 @@ void gui_redrawall() {
 }
 
 void gui_keypress(char key) {
-   if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')) {
+   if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')
+   || (key == '/') || (key == '.')) {
 
       // write to current window
       if(gui_selected_window >= 0) {
@@ -472,8 +491,10 @@ extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *
 extern void fat_setup();
 extern void fat_read_dir(uint16_t clusterNo);
 extern void fat_read_file(uint16_t clusterNo, uint32_t size);
+extern void fat_test();
+extern void *fat_parse_path(char *path);
 
-extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth);
+extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIsTransparent);
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -556,6 +577,16 @@ void gui_checkcmd(void *regs) {
    else if(strcmp(command, "FAT")) {
       fat_setup();
    }
+   else if(strcmp(command, "FATTEST")) {
+      fat_test();
+   }
+   else if(strstartswith(command, "FATPATH")) {
+      char arg[40];
+      if(strsplit(arg, arg, command, ' ')) {
+         if(!fat_parse_path(arg))
+            gui_writestr("File not found\n", 0);
+      }
+   }
    else if(strstartswith(command, "PROGC")) {
       char arg[10];
       if(strsplit(arg, arg, command, ' ')) {
@@ -571,7 +602,7 @@ void gui_checkcmd(void *regs) {
          int addr = stoi((char*)arg);
          uint8_t *bmp = (uint8_t*)addr;
          uint16_t *buffer = selected->framebuffer;
-         bmp_draw(bmp, buffer, selected->width);
+         bmp_draw(bmp, buffer, selected->width, false);
          selected->needs_redraw = true;
          gui_draw();
       }
@@ -708,6 +739,7 @@ void gui_return(void *regs) {
 
       selected->text_index = 0;
       selected->text_buffer[selected->text_index] = '\0';
+      selected->needs_redraw = true;
 
       gui_window_draw(gui_selected_window);
    }
@@ -733,10 +765,9 @@ void gui_window_draw(int windowIndex) {
 
    uint16_t bg = COLOUR_WHITE;
 
-   if(window->needs_redraw) {
+   if(window->needs_redraw || windowIndex == gui_selected_window) {
       // background
       //gui_drawrect(bg, window->x, window->y, window->width, window->height);
-      gui_drawunfilledrect(bg, window->x, window->y, window->width, window->height);
 
       // titlebar
       gui_drawrect(COLOUR_TITLEBAR, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
@@ -744,9 +775,6 @@ void gui_window_draw(int windowIndex) {
       // titlebar buttons
       gui_drawcharat('x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
       gui_drawcharat('-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
-
-      if(!window->active)
-         gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
 
       uint16_t *terminal_buffer = (uint16_t*)framebuffer;
 
@@ -771,6 +799,7 @@ void gui_window_draw(int windowIndex) {
       window->needs_redraw = false;
    }
 
+
    if(windowIndex == gui_selected_window) {
 
       // current text content/buffer
@@ -783,6 +812,10 @@ void gui_window_draw(int windowIndex) {
       // drop shadow if selected
       gui_drawline(COLOUR_DARK_GREY, window->x+window->width, window->y+1, true, window->height);
       gui_drawline(COLOUR_DARK_GREY, window->x+1, window->y+window->height, false, window->width);
+
+      gui_drawunfilledrect(COLOUR_WINDOW_OUTLINE, window->x, window->y, window->width, window->height);
+   } else {
+      gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
    }
 }
 

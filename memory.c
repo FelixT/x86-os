@@ -37,7 +37,7 @@ void free(uint32_t offset, int bytes) {
    char freeASCII[6] = "FREE ";
    for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
       char *byte = (char*) ((&heap_kernel) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
-      *byte = freeASCII[i%5];
+      *byte = freeASCII[i%6];
    }
 }
 
@@ -49,7 +49,7 @@ void memory_init() {
    char freeASCII[6] = "FREE ";
    for(int i = 0; i < KERNEL_HEAP_SIZE; i++) {
       char *byte = (char*) ((&heap_kernel) + i);
-      *byte = freeASCII[i%5];
+      *byte = freeASCII[i%6];
    }
 }
 
@@ -88,7 +88,7 @@ void *malloc(int bytes) {
    char allcASCII[6] = "ALLC ";
    for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
       char *byte = (char*) ((&heap_kernel) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
-      *byte = allcASCII[i%5];
+      *byte = allcASCII[i%6];
    }
 
    return (void*)((int)(&heap_kernel) + (int)(blockStart*MEM_BLOCK_SIZE));
