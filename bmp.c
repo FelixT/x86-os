@@ -34,12 +34,16 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIs
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    
+   //gui_writenum(info->width, 0);
+   //gui_drawchar('\n', 0);
+
    if(info->bpp != 8) {
       gui_writestr("BPP not 8bit\n", 0);// bad
       return;
    }
    if(info->compressionMethod != 0) {
       gui_writestr("Compression method not BI_RGB\n", 0);
+      return;
    }
 
    if(info->colourPaletteLength == 0)
@@ -62,6 +66,5 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIs
 
    }
 
-   gui_writenum(info->width, 0);
    
 }

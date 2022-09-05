@@ -202,6 +202,12 @@ void keyboard_handler(registers_t *regs) {
       else
          gui_backspace();
 
+   } else if(scan_code == 72) { // up arrow
+      if(videomode == 1)
+         gui_uparrow();
+   } else if(scan_code == 80) { // up arrow
+      if(videomode == 1)
+         gui_downarrow();
    } else {
       // other key pressed
 
@@ -249,8 +255,8 @@ void timer_handler(registers_t *regs) {
    if(videomode == 0) {
       terminal_writenumat(timer_i, 79);
    } else {
-      gui_drawrect(gui_rgb16(0, 255, 255), -10, 5, 7, 11);
-      gui_writenumat(timer_i, gui_rgb16(255, 255, 255), -10, 5);
+      gui_drawrect(COLOUR_CYAN, -10, 5, 7, 11);
+      gui_writenumat(timer_i, COLOUR_WHITE, -10, 5);
 
       if(timer_i == 0)
          gui_draw();
@@ -306,7 +312,7 @@ void exception_handler(int int_no, registers_t *regs) {
             terminal_writeat("  ", 0);
             terminal_writenumat(int_no, 0);
          } else {
-            gui_drawrect(gui_rgb16(0, 255, 255), 0, 0, 7*2, 7);
+            gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
             gui_writenumat(int_no, 0, 0, 0);
          }
 

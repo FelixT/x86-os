@@ -113,6 +113,20 @@ font_greaterthan:
    db 0010000b
    db 0000000b
 
+global font_lessthan
+font_lessthan:
+   db 0000000b
+   db 0000100b
+   db 0001000b
+   db 0010000b
+   db 0100000b
+   db 1000000b
+   db 0100000b
+   db 0010000b
+   db 0001000b
+   db 0000100b
+   db 0000000b
+
 global font_underscore
 font_underscore:
    db 0000000b
@@ -126,6 +140,20 @@ font_underscore:
    db 0000000b
    db 0000000b
    db 0111110b
+
+global font_comma
+font_comma:
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0000000b
+   db 0010000b
+   db 0100000b
+   db 0000000b
 
 global font_cursor_outline
 font_cursor_outline:

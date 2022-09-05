@@ -3,61 +3,11 @@
 // https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system
 // http://www.c-jump.com/CIS24/Slides/FAT/FAT.html
 
-#include <stdint.h>
-#include <stdbool.h>
-
-#include "memory.h"
-#include "gui.h"
-
-// https://www.freebsd.org/cgi/man.cgi?query=newfs_msdos&apropos=0&sektion=0&manpath=FreeBSD+5.2-RELEASE&format=html
-// BPB / bios parameter block
-typedef struct {
-   uint8_t start[3];
-   uint8_t identifier[8];
-   uint16_t bytesPerSector;
-   uint8_t sectorsPerCluster;
-   uint16_t noReservedSectors;
-   uint8_t noTables;
-   uint16_t noRootEntries;
-   uint16_t noSectors;
-   uint8_t mediaDescriptor;
-   uint16_t sectorsPerFat;
-   uint16_t sectorsPerTrack;
-   uint16_t noDriveHeads;
-   uint32_t noHiddenSectors;
-   uint32_t largeNoSectors; // used if value doesn't fit noSectors
-
-} __attribute__((packed)) fat_bpb_t;
-
-// extended boot record
-typedef struct {
-   uint8_t driveNo;
-   uint8_t flags;
-   uint8_t signature;
-   uint32_t volumeID;
-   uint8_t volumeLabel[11];
-   uint8_t fatTypeStr[8];
-   uint32_t bootCode[112];
-   uint16_t bootSignature;
-} __attribute__((packed)) fat_ebr_t;
+#include "fat.h"
 
 // 8.3 directory structure
-typedef struct {
-   uint8_t filename[11];
-   uint8_t attributes;
-   uint8_t reserved;
-   uint8_t creationTimeFine; // in 10ths of a second
-   uint16_t creationTime;
-   uint16_t creationDate;
-   uint16_t lastAccessDate;
-   uint16_t zero; // high 16 bits of entry's first cluster no in other fat vers
-   uint16_t lastModifyTime;
-   uint16_t lastModifyDate;
-   uint16_t firstClusterNo;
-   uint32_t fileSize; // bytes
-} __attribute__((packed)) fat_dir_t;
 
-uint32_t baseAddr = 42000 + 512*3;
+uint32_t baseAddr = 48000 + 512*3;
 
 fat_bpb_t *fat_bpb;
 fat_ebr_t *fat_ebr;
@@ -68,7 +18,7 @@ extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *
 extern uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
 
 void fat_read_dir(uint16_t clusterNo);
-void fat_read_file(uint16_t clusterNo, uint32_t size);
+uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
 
 void fat_get_info() {
    // get drive formatting info
@@ -94,6 +44,7 @@ void fat_get_info() {
 
 void fat_parse_dir_entry(fat_dir_t *fat_dir) {
    if(fat_dir->firstClusterNo < 2) return;
+   if((fat_dir->attributes & 0x02) == 0x02) return; // hidden
 
    char fileName[9];
    char extension[4];
@@ -110,9 +61,10 @@ void fat_parse_dir_entry(fat_dir_t *fat_dir) {
       gui_writestr("DIR", 4);
    else
       gui_writenum(fat_dir->fileSize, 4);
-   gui_drawchar(' ', 0);
+   
+   gui_writestr(" <", 0);
    gui_writenum(fat_dir->firstClusterNo, 0);
-   gui_drawchar('\n', 0);
+   gui_writestr(">\n", 0);
 }
 
 extern bool strcmp(char* str1, char* str2);
@@ -141,6 +93,7 @@ void fat_read_root() {
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t rootDirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
 
+   //gui_writeuint(rootDirAddr, 0);
    gui_writestr("\n", 0);
 
    uint32_t offset = 0;
@@ -180,6 +133,10 @@ void fat_read_dir(uint16_t clusterNo) {
    uint32_t offset = 0;
 
    uint32_t dirAddr = baseAddr + dirFirstSector*fat_bpb->bytesPerSector;
+   gui_drawchar('\n', 0);
+   gui_writeuint(dirAddr, 0);
+   gui_drawchar('\n', 0);
+   //return;
 
    // get each file/dir in dir
    while(true) {
@@ -243,7 +200,7 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
    return NULL;
 }
 
-void fat_read_file(uint16_t clusterNo, uint32_t size) {
+uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
@@ -273,6 +230,15 @@ void fat_read_file(uint16_t clusterNo, uint32_t size) {
    gui_writestr(" clusters ", 0);
 
    uint32_t fileSize = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector;
+
+   gui_writestr("ADDR ", 0);
+   gui_writeuint((uint32_t)(fileFirstSector*fat_bpb->bytesPerSector + baseAddr), 0);
+   gui_drawchar('\n', 0);
+   gui_writestr("SIZE ", 0);
+   gui_writeuint(fileSize, 0);
+   gui_drawchar('\n', 0);
+   //return;
+
    uint8_t *fileContents = malloc(fileSize);
 
    gui_writeuint(fileSize, 0);
@@ -313,6 +279,8 @@ void fat_read_file(uint16_t clusterNo, uint32_t size) {
    gui_drawchar('\n', 0);
 
    free((uint32_t)fatTable, 2*noClusters);
+
+   return fileContents;
 
 }
 

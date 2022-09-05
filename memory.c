@@ -36,8 +36,10 @@ void free(uint32_t offset, int bytes) {
 
    char freeASCII[6] = "FREE ";
    for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
-      char *byte = (char*) ((&heap_kernel) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
-      *byte = freeASCII[i%6];
+      if(blockStart*MEM_BLOCK_SIZE+i >= 0 && blockStart*MEM_BLOCK_SIZE+i < KERNEL_HEAP_SIZE) {
+         char *byte = (char*) ((&heap_kernel) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
+         *byte = freeASCII[i%6];
+      }
    }
 }
 
@@ -92,6 +94,21 @@ void *malloc(int bytes) {
    }
 
    return (void*)((int)(&heap_kernel) + (int)(blockStart*MEM_BLOCK_SIZE));
+}
+
+void *resize(uint32_t offset, int oldsize, int newsize) {
+   // TODO
+
+   // if current memory location block can be extended, extend
+   // otherwise malloc the new size, copy from old to new then free old
+   uint8_t *newaddr = malloc(newsize);
+   if(newaddr == NULL)
+      return NULL;
+   uint8_t *oldaddr = (uint8_t *)offset;
+   for(int i = 0; i < oldsize; i++)
+      newaddr[i] = oldaddr[i];
+   free(offset, oldsize);
+   return newaddr;
 }
 
 mem_segment_status_t *memory_get_table() {

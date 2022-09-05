@@ -17,12 +17,18 @@ size_t gui_height = 200;
 bool mouse_enabled = false;
 bool mouse_held = false;
 
-gui_window_t gui_windows[NUM_WINDOWS];
+gui_window_t *gui_windows;
 int gui_selected_window = 0;
 
 uint32_t framebuffer;
 
 uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
+
+gui_window_t *gui_windows;
+int NUM_WINDOWS;
+
+bool desktop_enabled = false;
+uint8_t *icon_window;
 
 extern bool strcmp(char* str1, char* str2);
 extern int strlen(char* str);
@@ -320,7 +326,7 @@ void gui_window_clearbuffer(gui_window_t *window) {
    }
 }
 
-void gui_window_init(gui_window_t *window) {
+bool gui_window_init(gui_window_t *window) {
    strcpy(window->title, " TERMINAL");
    window->x = 8;
    window->y = 8;
@@ -335,8 +341,16 @@ void gui_window_init(gui_window_t *window) {
    window->minimised = true;
    window->dragged = false;
    
+   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
+      window->cmd_history[i] = malloc(TEXT_BUFFER_LENGTH);
+      window->cmd_history[i][0] = '\0';
+   }
+   window->cmd_history_pos = -1;
+
    window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
+   if(window->framebuffer == NULL) return false;
    gui_window_clearbuffer(window);
+   return true;
 }
 
 void gui_redrawall();
@@ -413,16 +427,19 @@ void gui_init(void) {
    gui_clear(gui_bg);
 
    // init windows
+   NUM_WINDOWS = 2;
+   gui_windows = malloc(sizeof(NUM_WINDOWS * sizeof(gui_window_t)));
    for(int i = 0; i < NUM_WINDOWS; i++) {
       gui_window_init(&gui_windows[i]);
       gui_windows[i].title[0] = i+'0';
    }
 
-   gui_windows[NUM_WINDOWS-1].active = true;
-   gui_windows[NUM_WINDOWS-1].minimised = false;
-   gui_selected_window = NUM_WINDOWS-1;
+   gui_selected_window = 0;
+   gui_windows[0].active = true;
+   gui_windows[0].minimised = false;
 }
 
+void gui_desktop_draw();
 void gui_window_draw(int windowIndex);
 void gui_draw(void) {
    //gui_clear(3);
@@ -440,7 +457,7 @@ void gui_draw(void) {
 
    int toolbarPos = 0;
    // padding = 2px
-   for(int i = 0; i < 4; i++) {
+   for(int i = 0; i < NUM_WINDOWS; i++) {
       if(gui_windows[i].minimised) {
          gui_drawrect(COLOUR_TASKBAR_ENTRY, TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING), gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING), TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
          gui_drawcharat(gui_windows[i].title[0], COLOUR_WHITE, TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING), gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING));
@@ -458,6 +475,7 @@ void gui_redrawall() {
       window->needs_redraw = true;
    }
    gui_clear(gui_bg);
+   if(desktop_enabled) gui_desktop_draw();
    gui_draw();
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
@@ -470,7 +488,7 @@ void gui_keypress(char key) {
       // write to current window
       if(gui_selected_window >= 0) {
          gui_window_t *selected = &gui_windows[gui_selected_window];
-         if(selected->text_index < 40-1) {
+         if(selected->text_index < TEXT_BUFFER_LENGTH-1) {
             selected->text_buffer[selected->text_index] = key;
             selected->text_buffer[selected->text_index+1] = '\0';
             selected->text_index++;
@@ -490,7 +508,7 @@ extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *
 
 extern void fat_setup();
 extern void fat_read_dir(uint16_t clusterNo);
-extern void fat_read_file(uint16_t clusterNo, uint32_t size);
+extern uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
 extern void fat_test();
 extern void *fat_parse_path(char *path);
 
@@ -500,7 +518,11 @@ void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
    char *command = selected->text_buffer;
 
-   if(strcmp(command, "CLEAR")) {
+   
+   if(strcmp(command, "HELP")) {
+      gui_writestr("CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
+   }
+   else if(strcmp(command, "CLEAR")) {
       gui_window_clearbuffer(selected);
       selected->text_x = FONT_PADDING;
       selected->text_y = FONT_PADDING;
@@ -532,12 +554,12 @@ void gui_checkcmd(void *regs) {
       }
    }
    else if(strcmp(command, "PROG1")) {
-      int progAddr = 42000+0x7c00+512;
+      int progAddr = 48000+0x7c00+512;
       create_task_entry(1, progAddr);
       launch_task(1, regs);
    }
    else if(strcmp(command, "PROG2")) {
-      int progAddr = 42000+0x7c00+512*2;
+      int progAddr = 48000+0x7c00+512*2;
       create_task_entry(2, progAddr);
       launch_task(2, regs);
    }
@@ -580,10 +602,13 @@ void gui_checkcmd(void *regs) {
    else if(strcmp(command, "FATTEST")) {
       fat_test();
    }
+   else if(strcmp(command, "DESKTOP")) {
+      gui_desktop_init();
+   }
    else if(strstartswith(command, "FATPATH")) {
       char arg[40];
       if(strsplit(arg, arg, command, ' ')) {
-         if(!fat_parse_path(arg))
+         if(fat_parse_path(arg) == NULL)
             gui_writestr("File not found\n", 0);
       }
    }
@@ -622,7 +647,7 @@ void gui_checkcmd(void *regs) {
       }
    }
    else if(strstartswith(command, "READ")) {
-      char arg[5];
+      char arg[8];
       if(strsplit(arg, arg, command, ' ')) {
          // convert str to int
          uint32_t lba = 0;
@@ -681,7 +706,7 @@ void gui_checkcmd(void *regs) {
    else if(strstartswith(command, "DMPMEM")) {
       char arg[20];
       if(strsplit(arg, arg, command, ' ')) {
-         int bytes = 20;
+         int bytes = 32;
          int rowlen = 8;
          char arg2[10];
          if(strsplit(arg, arg2, arg, ' ')) {
@@ -733,6 +758,15 @@ void gui_return(void *regs) {
       // write prompt to framebuffer
       //gui_window_drawcharat('_', 0, window->text_x + 1, window->text_y, windowIndex);
       
+      // write cmd to cmdbuffer
+      // shift all entries up
+      for(int i = CMD_HISTORY_LENGTH-1; i > 0; i--)
+         strcpy(selected->cmd_history[i], selected->cmd_history[i-1]);
+      // add new entry
+      strcpy_fixed(selected->cmd_history[0], selected->text_buffer, selected->text_index);
+      selected->cmd_history[0][selected->text_index] = '\0';
+      selected->cmd_history_pos = -1;
+
       gui_drawchar('\n', 0);
       
       gui_checkcmd(regs);
@@ -796,6 +830,8 @@ void gui_window_draw(int windowIndex) {
             terminal_buffer[index] = window->framebuffer[w_index];
          }
       }
+      if(windowIndex != gui_selected_window) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
+
       window->needs_redraw = false;
    }
 
@@ -815,8 +851,44 @@ void gui_window_draw(int windowIndex) {
 
       gui_drawunfilledrect(COLOUR_WINDOW_OUTLINE, window->x, window->y, window->width, window->height);
    } else {
-      gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
    }
+}
+
+void gui_desktop_init() {
+   // load add window icon
+   fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
+   if(entry == NULL) {
+      gui_writestr("ICON not found\n", 0);
+      return;
+   }
+
+   icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
+
+   desktop_enabled = true;
+}
+
+void gui_window_add() {
+   gui_window_t *windows_new = resize((uint32_t)gui_windows, NUM_WINDOWS*sizeof(gui_window_t), (NUM_WINDOWS+1)*sizeof(gui_window_t));
+   if(windows_new != NULL) {
+      if(gui_window_init(&windows_new[NUM_WINDOWS])) {
+         gui_windows = windows_new;
+         gui_windows[NUM_WINDOWS].title[0] = NUM_WINDOWS+'0';
+         NUM_WINDOWS++;
+      } else {
+         gui_windows = windows_new;
+         strcpy((char*)gui_windows[NUM_WINDOWS].title, "ERROR");
+      }
+   }
+}
+
+void gui_desktop_draw() {
+   //gui_writeuint((uint32_t)icon_window, 0);
+   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, 1);
+}
+
+void gui_desktop_click() {
+   if(gui_mouse_x < 50 && gui_mouse_y < 50)
+      gui_window_add();
 }
 
 static inline void outb(uint16_t port, uint8_t val) {
@@ -878,6 +950,39 @@ void gui_cursor_draw() {
    gui_drawcharat(27, 0, gui_mouse_x, gui_mouse_y); // outline
    gui_drawcharat(28, COLOUR_WHITE, gui_mouse_x, gui_mouse_y); // fill
 
+}
+
+void gui_uparrow() {
+   gui_window_t *selected = &gui_windows[gui_selected_window];
+
+   selected->cmd_history_pos++;
+   if(selected->cmd_history_pos == CMD_HISTORY_LENGTH)
+      selected->cmd_history_pos = CMD_HISTORY_LENGTH - 1;
+
+   int len = strlen(selected->cmd_history[selected->cmd_history_pos]);
+   strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
+   selected->text_index = len;
+   selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
+   gui_window_draw(gui_selected_window);
+}
+
+void gui_downarrow() {
+   gui_window_t *selected = &gui_windows[gui_selected_window];
+
+   selected->cmd_history_pos--;
+
+   if(selected->cmd_history_pos <= -1) {
+      selected->cmd_history_pos = -1;
+      selected->text_index = 0;
+      selected->text_x = FONT_PADDING;
+      selected->text_buffer[0] = '\0';
+   } else {
+      int len = strlen(selected->cmd_history[selected->cmd_history_pos]);
+      strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
+      selected->text_index = len;
+      selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
+   }
+   gui_window_draw(gui_selected_window);
 }
 
 void mouse_update(int relX, int relY) {
@@ -989,6 +1094,9 @@ void mouse_leftclick(int relX, int relY) {
          window->needs_redraw = true;
       }
    }
+
+   if(desktop_enabled)
+      gui_desktop_click();
 
    gui_draw();
 

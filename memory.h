@@ -16,6 +16,7 @@ void memory_reserve(uint32_t offset, int bytes);
 void free(uint32_t offset, int bytes);
 void memory_init();
 void *malloc(int bytes);
+void *resize(uint32_t offset, int oldsize, int newsize);
 mem_segment_status_t *memory_get_table();
 
 

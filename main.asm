@@ -104,9 +104,6 @@ check_cmd:
       mov bx, 0 ; i = 0
 
       .loop:
-         ; write char
-         mov ah, 0x0E ; teletype output mode for int 10h
-         mov al, 'v'
          push bx
          mov bh, 0 ; page number
          int 0x10

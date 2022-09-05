@@ -5,6 +5,7 @@ export LD="$CROSS/i686-elf-ld"
 
 mkdir -p o
 mkdir -p fs_root
+mkdir -p fs_root/sys
 
 nasm boot.asm -f bin -o o/boot.bin
 
@@ -26,26 +27,31 @@ $LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o
 
 cat o/boot.bin o/main.bin > hd.bin
 
-# add programs at 42k 
+# add programs at 48k 
 nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
 
-dd if=/dev/zero of=hd2.bin bs=42000 count=1
-dd if=./hd.bin of=hd2.bin bs=42000 count=1 conv=notrunc
+# copy programs to fs
+cp o/prog1.bin fs_root/sys/prog1.bin
+cp o/prog2.bin fs_root/sys/prog2.bin
+cp o/progidle.bin fs_root/sys/progidle.bin
+
+dd if=/dev/zero of=hd2.bin bs=48000 count=1
+dd if=./hd.bin of=hd2.bin bs=48000 count=1 conv=notrunc
 cat hd2.bin o/progidle.bin o/prog1.bin o/prog2.bin > hd3.bin
 
-# create FAT32 filesystem
+# create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
 rm fs.img
-mkfs.fat -F 16 -n FATFS -C fs.img 10000
+/usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
 # copy files from fs_root dir
 hdiutil mount fs.img
 cp -R fs_root/ /Volumes/FATFS
 # unmount
 hdiutil unmount /Volumes/FATFS
 
-# add fs at 42000 + 512*3 (32536/0x7f18)
+# add fs at 48000 + 512*3 (32536/0x7f18)
 cat hd3.bin fs.img > hd4.bin
 
 qemu-system-i386 -drive file=hd4.bin,format=raw,index=0,media=disk -monitor stdio

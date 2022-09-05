@@ -3,6 +3,7 @@
 
 #include "memory.h"
 #include "tasks.h"
+#include "fat.h"
 
 #define FONT_WIDTH 7
 #define FONT_HEIGHT 11
@@ -13,7 +14,8 @@
 #define TOOLBAR_ITEM_HEIGHT 15
 #define TOOLBAR_PADDING 4
 
-#define NUM_WINDOWS 4
+#define TEXT_BUFFER_LENGTH 40
+#define CMD_HISTORY_LENGTH 10
 
 typedef struct gui_window_t {
    char title[20];
@@ -21,7 +23,9 @@ typedef struct gui_window_t {
    int y;
    int width;
    int height; // includes 10px titlebar
-   char text_buffer[40];
+   char text_buffer[TEXT_BUFFER_LENGTH];
+   char *cmd_history[CMD_HISTORY_LENGTH];
+   int cmd_history_pos;
    int text_index;
    int text_x;
    int text_y;
@@ -32,7 +36,6 @@ typedef struct gui_window_t {
    int toolbar_pos; // index in toolbar
    uint16_t *framebuffer; // width*(height-titlebar_height)
 } gui_window_t;
-
 
 // https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
 typedef struct vbe_mode_info_t {
@@ -95,6 +98,8 @@ void gui_drawrect(uint16_t colour, int x, int y, int width, int height);
 void gui_keypress(char key);
 void gui_return(void *regs);
 void gui_backspace();
+void gui_uparrow();
+void gui_downarrow();
 void gui_writestrat(char *c, uint16_t colour, int x, int y);
 void gui_window_writenum(int num, uint16_t colour, int windowIndex);
 void gui_window_draw(int windowIndex);
@@ -102,5 +107,6 @@ void gui_draw();
 void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y);
 void gui_writeuint(uint32_t num, uint16_t colour);
 void gui_writeuint_hex(uint32_t num, uint16_t colour);
+void gui_desktop_init();
 
 #endif
