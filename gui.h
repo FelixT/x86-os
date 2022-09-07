@@ -1,6 +1,10 @@
 #ifndef GUI_H
 #define GUI_H
 
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
 #include "memory.h"
 #include "tasks.h"
 #include "fat.h"
@@ -88,6 +92,7 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 #define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)
 #define COLOUR_WHITE gui_rgb16(255, 255, 255)
 #define COLOUR_CYAN gui_rgb16(0, 183, 235)
+#define COLOUR_ORANGE gui_rgb16(200, 125, 0)
 
 void gui_clear(uint16_t colour);
 void gui_drawchar(char c, uint16_t colour);
@@ -101,12 +106,29 @@ void gui_backspace();
 void gui_uparrow();
 void gui_downarrow();
 void gui_writestrat(char *c, uint16_t colour, int x, int y);
-void gui_window_writenum(int num, uint16_t colour, int windowIndex);
-void gui_window_draw(int windowIndex);
 void gui_draw();
 void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y);
 void gui_writeuint(uint32_t num, uint16_t colour);
 void gui_writeuint_hex(uint32_t num, uint16_t colour);
 void gui_desktop_init();
+void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length);
+void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height);
+void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height);
+void gui_drawcharat(char c, uint16_t colour, int x, int y);
+
+int gui_window_add();
+void gui_window_writeuint(uint32_t num, uint16_t colour, int windowIndex);
+void gui_window_writestr(char *c, uint16_t colour, int windowIndex);
+void gui_window_drawchar(char c, uint16_t colour, int windowIndex);
+void gui_window_writenum(int num, uint16_t colour, int windowIndex);
+void gui_window_draw(int windowIndex);
+
+uint16_t *gui_get_framebuffer();
+gui_window_t *gui_get_windows();
+int gui_get_selected_window();
+size_t gui_get_width();
+size_t gui_get_height();
+int *gui_get_num_windows();
+uint32_t gui_get_window_framebuffer(int windowIndex);
 
 #endif

@@ -27,19 +27,21 @@ $LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o
 
 cat o/boot.bin o/main.bin > hd.bin
 
-# add programs at 48k 
+# userland programs
 nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
+$GCC -ffreestanding -nostartfiles -nostdlib -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
 cp o/prog2.bin fs_root/sys/prog2.bin
+cp o/prog3.bin fs_root/sys/prog3.bin
 cp o/progidle.bin fs_root/sys/progidle.bin
 
-dd if=/dev/zero of=hd2.bin bs=48000 count=1
-dd if=./hd.bin of=hd2.bin bs=48000 count=1 conv=notrunc
-cat hd2.bin o/progidle.bin o/prog1.bin o/prog2.bin > hd3.bin
+dd if=/dev/zero of=hd2.bin bs=64000 count=1
+dd if=./hd.bin of=hd2.bin bs=64000 count=1 conv=notrunc
+#cat hd2.bin o/progidle.bin o/prog1.bin o/prog2.bin > hd3.bin
 
 # create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
@@ -51,7 +53,7 @@ cp -R fs_root/ /Volumes/FATFS
 # unmount
 hdiutil unmount /Volumes/FATFS
 
-# add fs at 48000 + 512*3 (32536/0x7f18)
-cat hd3.bin fs.img > hd4.bin
+# add fs at 64000
+cat hd2.bin fs.img > hd3.bin
 
-qemu-system-i386 -drive file=hd4.bin,format=raw,index=0,media=disk -monitor stdio
+qemu-system-i386 -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio

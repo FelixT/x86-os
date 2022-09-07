@@ -71,8 +71,5 @@ extern tos_kernel
 
    extern gui_draw
    call gui_draw
-
-   ;extern terminal_prompt
-   ;call terminal_prompt
-
+   
    jmp $ ; infinite loop

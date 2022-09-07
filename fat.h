@@ -55,4 +55,7 @@ typedef struct {
    uint32_t fileSize; // bytes
 } __attribute__((packed)) fat_dir_t;
 
+fat_dir_t *fat_parse_path(char *path);
+uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
+
 #endif

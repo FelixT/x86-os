@@ -143,7 +143,8 @@ void software_handler(registers_t *regs) {
    if(regs->eax == 1) {
       // WRITE STRING...
       // ebx contains string address
-      gui_writestr((char*)regs->ebx, 0);
+      //gui_writestr((char*)regs->ebx, 0);
+      gui_window_writestr((char*)regs->ebx, 0, get_current_task_window());
    }
 
    if(regs->eax == 2) {
@@ -179,9 +180,39 @@ void software_handler(registers_t *regs) {
    }
 
    if(regs->eax == 6) {
-      // print num ebx to window ecx
-      gui_window_writenum(regs->ebx, 0, regs->ecx);
+      // print uint ebx to current window
+      gui_window_writeuint(regs->ebx, 0, get_current_task_window());
       //gui_window_draw(regs->ecx);
+   }
+
+   if(regs->eax == 7) {
+      // returns framebuffer address in ebx
+      regs->ecx = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
+      gui_window_writeuint(regs->ecx, 0, 0);
+
+      //for(int i = 0; i < 10000; i++)
+      //   ((uint16_t*) regs->ecx)[i] = 0;
+      gui_window_drawchar('\n', 0, 0);
+   }
+
+   if(regs->eax == 8) {
+      // draw newline char
+      gui_window_drawchar('\n', 0, get_current_task_window());
+   }
+
+   if(regs->eax == 9) {
+      // draw
+      gui_get_windows()[get_current_task_window()].needs_redraw = true;
+      gui_window_draw(get_current_task_window());
+   }
+
+   if(regs->eax == 10) {
+      // end task/return
+      gui_window_writestr("Task ended with status ", 0, get_current_task_window());
+      gui_window_writenum(regs->ebx, 0, get_current_task_window());
+      gui_window_drawchar('\n', 0, get_current_task_window());
+
+      end_current_task(regs);
    }
 }
 
@@ -328,8 +359,8 @@ void exception_handler(int int_no, registers_t *regs) {
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
-   gui_writenum(regs->err_code, 0);
-   gui_writestr(" ", 0);
+   gui_window_writenum(regs->err_code, 0, 0);
+   gui_window_writestr(" ", 0, 0);
 
    exception_handler(int_no, regs);
 }

@@ -1,7 +1,3 @@
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
 #include "gui.h"
 
 extern int videomode;
@@ -320,6 +316,12 @@ void gui_window_writenum(int num, uint16_t colour, int windowIndex) {
    gui_window_writestr(out, colour, windowIndex);
 }
 
+void gui_window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
+   char out[20];
+   terminal_uinttostr(num, out);
+   gui_window_writestr(out, colour, windowIndex);
+}
+
 void gui_window_clearbuffer(gui_window_t *window) {
    for(int i = 0; i < window->width*window->height; i++) {
       window->framebuffer[i] = COLOUR_WHITE;
@@ -510,7 +512,6 @@ extern void fat_setup();
 extern void fat_read_dir(uint16_t clusterNo);
 extern uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
 extern void fat_test();
-extern void *fat_parse_path(char *path);
 
 extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIsTransparent);
 
@@ -520,7 +521,23 @@ void gui_checkcmd(void *regs) {
 
    
    if(strcmp(command, "HELP")) {
-      gui_writestr("CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
+      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
+   }
+   else if(strcmp(command, "INIT")) {
+      gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
+      mouse_enable();
+
+      gui_writestr("\nEnabling ATA\n", COLOUR_ORANGE);
+      ata_identify(true, true);
+
+      gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
+      fat_setup();
+
+      gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
+      tasks_init(regs);
+
+      gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
+      gui_desktop_init();
    }
    else if(strcmp(command, "CLEAR")) {
       gui_window_clearbuffer(selected);
@@ -551,17 +568,47 @@ void gui_checkcmd(void *regs) {
             gui_writestr("ENABLED", 0);
          else
             gui_writestr("DISABLED", 0);
+
+         gui_writestr(" <", 0);
+         gui_writenum(tasks[i].window, 0);
+         gui_writestr(">", 0);
+
+         if(tasks[i].privileged)
+            gui_writestr(" privileged", 0);
       }
    }
    else if(strcmp(command, "PROG1")) {
-      int progAddr = 48000+0x7c00+512;
-      create_task_entry(1, progAddr);
+      fat_dir_t *entry = fat_parse_path("/sys/prog1.bin");
+      if(entry == NULL) {
+         gui_writestr("Not found\n", 0);
+         return;
+      }
+      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+      uint32_t progAddr = (uint32_t)prog;
+      create_task_entry(1, progAddr, false);
       launch_task(1, regs);
    }
    else if(strcmp(command, "PROG2")) {
-      int progAddr = 48000+0x7c00+512*2;
-      create_task_entry(2, progAddr);
+      fat_dir_t *entry = fat_parse_path("/sys/prog2.bin");
+      if(entry == NULL) {
+         gui_writestr("Not found\n", 0);
+         return;
+      }
+      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+      uint32_t progAddr = (uint32_t)prog;
+      create_task_entry(2, progAddr, false);
       launch_task(2, regs);
+   }
+   else if(strcmp(command, "PROG3")) {
+      fat_dir_t *entry = fat_parse_path("/sys/prog3.bin");
+      if(entry == NULL) {
+         gui_writestr("Not found\n", 0);
+         return;
+      }
+      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+      uint32_t progAddr = (uint32_t)prog;
+      create_task_entry(3, progAddr, false);
+      launch_task(3, regs);
    }
    else if(strcmp(command, "TEST")) {
       extern uint32_t tos_kernel;
@@ -617,7 +664,7 @@ void gui_checkcmd(void *regs) {
       if(strsplit(arg, arg, command, ' ')) {
          int addr = stoi((char*)arg);
          gui_writeuint_hex(addr, 0);
-         create_task_entry(3, addr);
+         create_task_entry(3, addr, false);
          launch_task(3, regs);
       }
    }
@@ -770,6 +817,7 @@ void gui_return(void *regs) {
       gui_drawchar('\n', 0);
       
       gui_checkcmd(regs);
+      selected = &gui_windows[gui_selected_window]; // in case the buffer has changed during the cmd 
 
       selected->text_index = 0;
       selected->text_buffer[selected->text_index] = '\0';
@@ -867,18 +915,20 @@ void gui_desktop_init() {
    desktop_enabled = true;
 }
 
-void gui_window_add() {
+int gui_window_add() {
    gui_window_t *windows_new = resize((uint32_t)gui_windows, NUM_WINDOWS*sizeof(gui_window_t), (NUM_WINDOWS+1)*sizeof(gui_window_t));
    if(windows_new != NULL) {
       if(gui_window_init(&windows_new[NUM_WINDOWS])) {
          gui_windows = windows_new;
          gui_windows[NUM_WINDOWS].title[0] = NUM_WINDOWS+'0';
          NUM_WINDOWS++;
+         return NUM_WINDOWS-1;
       } else {
          gui_windows = windows_new;
          strcpy((char*)gui_windows[NUM_WINDOWS].title, "ERROR");
       }
    }
+   return 0;
 }
 
 void gui_desktop_draw() {
@@ -906,6 +956,8 @@ void mouse_enable() {
    // https://wiki.osdev.org/PS/2_Mouse
    // enable ps2 mouse
    
+   if(mouse_enabled) return;
+
    outb(0x64, 0xA8);
 
    // enable irq12 interrupt by setting status
@@ -1111,4 +1163,33 @@ void mouse_leftrelease() {
    }
 
    mouse_held = false;
+}
+
+uint16_t *gui_get_framebuffer() {
+   return (uint16_t*)framebuffer;
+}
+
+gui_window_t *gui_get_windows() {
+   return gui_windows;
+}
+
+int gui_get_selected_window() {
+   return gui_selected_window;
+}
+
+size_t gui_get_width() {
+   return gui_width;
+}
+
+size_t gui_get_height() {
+   return gui_height;
+}
+
+int *gui_get_num_windows() {
+   return &NUM_WINDOWS;
+}
+
+uint32_t gui_get_window_framebuffer(int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
+   return (uint32_t)window->framebuffer;
 }

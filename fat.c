@@ -7,7 +7,7 @@
 
 // 8.3 directory structure
 
-uint32_t baseAddr = 48000 + 512*3;
+uint32_t baseAddr = 64000;
 
 fat_bpb_t *fat_bpb;
 fat_ebr_t *fat_ebr;
@@ -18,7 +18,6 @@ extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *
 extern uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
 
 void fat_read_dir(uint16_t clusterNo);
-uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
 
 void fat_get_info() {
    // get drive formatting info
@@ -290,7 +289,7 @@ fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
    if(strlen(pathElement) == 0)
       return dir;
 
-   if(strlen(pathElement) > 11)
+   if(strlen(pathElement) > 12)
       return NULL;
 
    char name[9];
