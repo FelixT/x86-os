@@ -191,5 +191,7 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    for(uint32_t i = 0; i < bytes; i++) {
       outBuf[i] = *((uint8_t *) (&readBuf[0]) + (offset + i));
    }
+
+   free((uint32_t)&readBuf[0], bytesRequired);
    return outBuf;
 }

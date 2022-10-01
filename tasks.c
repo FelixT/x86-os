@@ -37,15 +37,23 @@ void launch_task(int index, registers_t *regs) {
    *regs = tasks[current_task].registers;
 }
 
-void end_current_task(registers_t *regs) {
-   tasks[current_task].enabled = false;
-   tasks[current_task].privileged = false;
+void end_task(int index, registers_t *regs) {
+   if(index < 0 || index >= TOTAL_TASKS) return;
+   //if(!tasks[index].enabled) return;
+
+   gui_window_writestr("Ending task ", 0, 0);
+   gui_window_writenum(index, 0, 0);
+   gui_window_writestr("\n", 0, 0);
+
+   tasks[index].enabled = false;
+   tasks[index].privileged = false;
 
    // free task memory
-   if(tasks[current_task].prog_size != 0)
-      free(tasks[current_task].prog_entry, tasks[current_task].prog_size);
+   if(tasks[index].prog_size != 0)
+      free(tasks[index].prog_entry, tasks[index].prog_size);
 
-   switch_task(regs);
+   if(index == get_current_task())
+      switch_task(regs);
 }
 
 void tasks_init(registers_t *regs) {
@@ -53,7 +61,6 @@ void tasks_init(registers_t *regs) {
 
    for(int i = 0; i < TOTAL_TASKS; i++)
       tasks[i].enabled = false;
-
 
    // launch idle process
    fat_dir_t *entry = fat_parse_path("/sys/progidle.bin");
@@ -69,6 +76,13 @@ void tasks_init(registers_t *regs) {
    switching = true;
 }
 
+bool task_exists() {
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      if(tasks[i].enabled) return true;
+   }
+   return false;
+}
+
 void switch_task(registers_t *regs) {
    if(!switching)
       return;
@@ -76,14 +90,18 @@ void switch_task(registers_t *regs) {
    // save registers
    tasks[current_task].registers = *regs;
 
-   // find next enabled task
-   do {
-      current_task++;
-      current_task%=TOTAL_TASKS;
-   } while(!tasks[current_task].enabled);
+   if(task_exists()) {
+      // find next enabled task (round robin)
+      do {
+         current_task++;
+         current_task%=TOTAL_TASKS;
+      } while(!tasks[current_task].enabled);
 
-   // restore registers
-   *regs = tasks[current_task].registers;
+      // restore registers
+      *regs = tasks[current_task].registers;
+   } else {
+      tasks_init(regs);
+   }
 }
 
 task_state_t *gettasks() {
@@ -92,4 +110,16 @@ task_state_t *gettasks() {
 
 int get_current_task_window() {
    return tasks[current_task].window;
+}
+
+int get_current_task() {
+   return current_task;
+}
+
+int get_task_from_window(int windowIndex) {
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      if(tasks[i].window == windowIndex)
+         return i;
+   }
+   return -1;
 }

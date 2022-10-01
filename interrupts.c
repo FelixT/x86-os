@@ -79,10 +79,6 @@ void idt_init() {
  
    __asm__ volatile("lidt %0" : : "m"(idtr)); // load idt
 
-   // mask all interrupts except keyboard
-   // outb(0x21,0xfd); // master data
-   // outb(0xa1,0xff); // slave data
-
    pic_remap();
 
    __asm__ volatile("sti"); // set the interrupt flag (enable interrupts)
@@ -140,9 +136,6 @@ char scan_to_char(int scan_code) {
 }
 
 void software_handler(registers_t *regs) {
-   /*gui_window_writestr("SINT", 0, 0);
-   gui_window_writeuint(regs->eax, 0, 0);
-   gui_window_writestr(" ", 0, 0);*/
 
    if(regs->eax == 1) {
       // WRITE STRING...
@@ -216,9 +209,9 @@ void software_handler(registers_t *regs) {
       gui_window_writenum(regs->ebx, 0, get_current_task_window());
       gui_window_drawchar('\n', 0, get_current_task_window());
 
-      end_current_task(regs);
+      end_task(get_current_task(), regs);
    }
-}
+}  
 
 void keyboard_handler(registers_t *regs) {
    unsigned char scan_code = inb(0x60);
@@ -258,7 +251,7 @@ void keyboard_handler(registers_t *regs) {
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
 
-void mouse_handler() {
+void mouse_handler(registers_t *regs) {
    // mouse!
    mouse_data[mouse_cycle] = inb(0x60);
    
@@ -275,7 +268,7 @@ void mouse_handler() {
       mouse_update(xm, ym);
 
       if(mouse_data[1] & 0x1) {
-         mouse_leftclick(xm, ym);
+         mouse_leftclick(regs, xm, ym);
       } else {
          mouse_leftrelease();
       }
@@ -314,8 +307,14 @@ void exception_handler(int int_no, registers_t *regs) {
          gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);
          gui_writenumat(int_no, gui_rgb16(255, 200, 200), 60, 0);
 
-         gui_drawrect(gui_rgb16(255, 0, 0), 200, 0, 8*6, 11);
+         gui_drawrect(gui_rgb16(255, 0, 0), 200, 0, 8*8, 11);
          gui_writenumat(regs->eip, gui_rgb16(255, 200, 200), 200, 0);
+
+         /*gui_window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
+         gui_window_writeuint(int_no, 0, 0);
+         gui_window_writestr(" at ", gui_rgb16(255, 100, 100), 0);
+         gui_window_writeuint(regs->eip, 0, 0);
+         gui_window_writestr("\n", gui_rgb16(255, 100, 100), 0);*/
       }
          
    } else {
@@ -332,7 +331,7 @@ void exception_handler(int int_no, registers_t *regs) {
          keyboard_handler(regs);
       } else if(irq_no == 12) {
 
-         mouse_handler();
+         mouse_handler(regs);
 
       } else if(irq_no == 16) {
 

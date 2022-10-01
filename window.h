@@ -23,7 +23,7 @@ typedef struct gui_window_t {
    bool needs_redraw;
    bool active;
    bool minimised;
-   bool hidden; // for now this is synonymous with closed
+   bool closed;
 	bool dragged;
    int toolbar_pos; // index in toolbar
    uint16_t *framebuffer; // width*(height-titlebar_height)

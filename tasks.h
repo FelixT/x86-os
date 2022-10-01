@@ -40,12 +40,14 @@ typedef struct task_state_t {
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged);
 void launch_task(int index, registers_t *regs);
-void end_current_task(registers_t *regs);
+void end_task(int index, registers_t *regs);
 void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs);
 
 task_state_t *gettasks();
 
 int get_current_task_window();
+int get_current_task();
+int get_task_from_window(int windowIndex);
 
 #endif

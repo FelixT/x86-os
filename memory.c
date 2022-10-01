@@ -21,20 +21,29 @@ void memory_reserve(uint32_t offset, int bytes) {
 void free(uint32_t offset, int bytes) {
    if(offset == 0) return;
 
-   int startBlock = ((int)(offset/MEM_BLOCK_SIZE));
-   int endBlock = ((int)((offset+bytes)/MEM_BLOCK_SIZE));
+   int blockStart = ((int)offset-(int)&heap_kernel)/MEM_BLOCK_SIZE;
+   int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
+
+   /*gui_window_writestr("Freeing ", 0, 0);
+   gui_window_writenum(blockStart, 0, 0);
+   gui_window_writestr(" <", 0, 0);
+   gui_window_writenum(noBlocks, 0, 0);
+   gui_window_writestr(">\n", 0, 0);*/
 
    char freeASCII[6] = "FREE ";
 
-   for(int i = startBlock; i <= endBlock; i++) {
-      if(i > 0 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
-         memory_status[i].allocated = false;
-
-         for(int x = 0; x < MEM_BLOCK_SIZE; x++) {
-            char *byte = (char*) ((&heap_kernel) + (int)i*MEM_BLOCK_SIZE) + x;
-            *byte = freeASCII[i%6];
-         }
+   for(int i = 0; i < noBlocks; i++) {
+      int block = blockStart+i;
+      if(block >= 0 && block < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
+         //gui_window_writenum(block, 0, 0);
+         //gui_window_writestr(" ", 0, 0);
+         memory_status[block].allocated = false;
       }
+   }
+
+   for(int x = 0; x < noBlocks*MEM_BLOCK_SIZE; x++) {
+      char *byte = (char*) ((&heap_kernel) + (int)blockStart*MEM_BLOCK_SIZE) + x;
+      *byte = freeASCII[x%6];
    }
 }
 

@@ -68,5 +68,5 @@ extern void terminal_prompt(void);
 
 
 extern void mouse_update(uint32_t relX, uint32_t relY);
-extern void mouse_leftclick(int relX, int relY);
+extern void mouse_leftclick(registers_t *regs, int relX, int relY);
 extern void mouse_leftrelease();

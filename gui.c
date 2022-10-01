@@ -338,7 +338,7 @@ bool gui_window_init(gui_window_t *window) {
    window->needs_redraw = true;
    window->active = false;
    window->minimised = false;
-   window->hidden = false;
+   window->closed = false;
    window->dragged = false;
 
    // default TERMINAL functions
@@ -538,6 +538,12 @@ void gui_checkcmd(void *regs) {
    }
    else if(strcmp(command, "VIEWTASKS")) {
       task_state_t *tasks = gettasks();
+
+      extern bool switching;
+      gui_writestr("Scheduling ", 0);
+      if(switching) gui_writestr("enabled\n", 0);
+      else gui_writestr("disabled\n", 0);
+      
       for(int i = 0; i < TOTAL_TASKS; i++) {
          gui_drawchar('\n', 0);
 
@@ -817,7 +823,7 @@ void gui_downarrow() {
 
 void gui_window_draw(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
-   if(window->hidden || window->minimised || window->dragged)
+   if(window->closed || window->minimised || window->dragged)
       return;
 
    uint16_t bg = COLOUR_WHITE;
@@ -835,24 +841,27 @@ void gui_window_draw(int windowIndex) {
 
       uint16_t *terminal_buffer = (uint16_t*)framebuffer;
 
-      // draw window content/framebuffer
-      for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
-         for(int x = 0; x < window->width; x++) {
-            // ignore pixels covered by the currently selected window
-            int screenY = (window->y + y + TITLEBAR_HEIGHT);
-            int screenX = (window->x + x);
-            if(windowIndex != gui_selected_window
-            && screenX >= gui_windows[gui_selected_window].x
-            && screenX < gui_windows[gui_selected_window].x + gui_windows[gui_selected_window].width
-            && screenY >= gui_windows[gui_selected_window].y
-            && screenY < gui_windows[gui_selected_window].y + gui_windows[gui_selected_window].height)
-               continue;
+      if(window->framebuffer != NULL) {
+         // draw window content/framebuffer
+         for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
+            for(int x = 0; x < window->width; x++) {
+               // ignore pixels covered by the currently selected window
+               int screenY = (window->y + y + TITLEBAR_HEIGHT);
+               int screenX = (window->x + x);
+               if(windowIndex != gui_selected_window
+               && screenX >= gui_windows[gui_selected_window].x
+               && screenX < gui_windows[gui_selected_window].x + gui_windows[gui_selected_window].width
+               && screenY >= gui_windows[gui_selected_window].y
+               && screenY < gui_windows[gui_selected_window].y + gui_windows[gui_selected_window].height)
+                  continue;
 
-            int index = screenY*gui_width + screenX;
-            int w_index = y*window->width + x;
-            terminal_buffer[index] = window->framebuffer[w_index];
+               int index = screenY*gui_width + screenX;
+               int w_index = y*window->width + x;
+               terminal_buffer[index] = window->framebuffer[w_index];
+            }
          }
       }
+      
       if(windowIndex != gui_selected_window) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
 
       window->needs_redraw = false;
@@ -891,36 +900,61 @@ void gui_desktop_init() {
 }
 
 int gui_window_add() {
-   gui_window_t *windows_new = resize((uint32_t)gui_windows, NUM_WINDOWS*sizeof(gui_window_t), (NUM_WINDOWS+1)*sizeof(gui_window_t));
-   if(windows_new != NULL) {
-      if(gui_window_init(&windows_new[NUM_WINDOWS])) {
-         gui_windows = windows_new;
-         gui_windows[NUM_WINDOWS].title[0] = NUM_WINDOWS+'0';
-         NUM_WINDOWS++;
-         return NUM_WINDOWS-1;
-      } else {
-         gui_windows = windows_new;
-         strcpy((char*)gui_windows[NUM_WINDOWS].title, "ERROR");
+
+   int newIndex = -1;
+
+   // find first closed window
+   for(int i = 0; i < NUM_WINDOWS; i++) {
+      if(gui_windows[i].closed) {
+         newIndex = i;
+         break;
       }
    }
-   return 0;
+
+   // otherwise resize array
+   if(newIndex == -1) {
+      newIndex = NUM_WINDOWS;
+      gui_window_t *windows_new = resize((uint32_t)gui_windows, NUM_WINDOWS*sizeof(gui_window_t), (NUM_WINDOWS+1)*sizeof(gui_window_t));
+   
+      if(windows_new != NULL) {
+         NUM_WINDOWS++;
+         gui_windows = windows_new;
+      } else {
+         gui_window_writestr("Couldn't create window\n", 0, 0);
+         return -1;
+      }
+   }
+
+   if(gui_window_init(&gui_windows[newIndex])) {
+      gui_windows[newIndex].title[0] = newIndex+'0';
+      
+      return newIndex;
+   } else {
+      strcpy((char*)gui_windows[newIndex].title, "ERROR");
+      gui_windows[newIndex].closed = true;
+      gui_window_writestr("Couldn't create window\n", 0, 0);
+   }
+
+   return -1;
 }
 
-void gui_window_close(int windowIndex) {
+void gui_window_close(void *regs, int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
-   if(window->hidden) return;
+   if(window->closed) return;
 
-   window->hidden = true;
+   if(windowIndex == gui_selected_window)
+      gui_selected_window = -1;
+
+   window->closed = true;
 
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
-      free((uint32_t)&(window->cmd_history[i]), TEXT_BUFFER_LENGTH);
+      //free((uint32_t)&window->cmd_history[i][0], TEXT_BUFFER_LENGTH); // broken
       window->cmd_history[i] = NULL;
    }
    free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
    window->framebuffer = NULL;
 
-   if(windowIndex == gui_selected_window)
-      gui_selected_window = -1;
+   end_task(get_task_from_window(windowIndex), regs);
 
    gui_redrawall();
 }
@@ -1024,7 +1058,7 @@ void mouse_update(int relX, int relY) {
    gui_cursor_draw();
 }
 
-bool mouse_clicked_on_window(int index) {
+bool mouse_clicked_on_window(void *regs, int index) {
    gui_window_t *window = &gui_windows[index];
    // clicked on window's icon in toolbar
    if(window->minimised) {
@@ -1036,7 +1070,7 @@ bool mouse_clicked_on_window(int index) {
             gui_selected_window = index;
             return true;
       }
-   } else if(!window->hidden && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
+   } else if(!window->closed && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
       && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
 
          int relX = gui_mouse_x - window->x;
@@ -1047,8 +1081,10 @@ bool mouse_clicked_on_window(int index) {
             window->minimised = true;
 
          // close
-         if(relY < 10 && relX > window->width - (FONT_WIDTH+3))
-            gui_window_close(gui_selected_window);
+         if(relY < 10 && relX > window->width - (FONT_WIDTH+3)) {
+            gui_window_close(regs, index);
+            return false;
+         }
 
          window->active = true;
          window->needs_redraw = true;
@@ -1059,7 +1095,7 @@ bool mouse_clicked_on_window(int index) {
    return false;
 }
 
-void mouse_leftclick(int relX, int relY) {
+void mouse_leftclick(void *regs, int relX, int relY) {
    // dragging windows
    if(mouse_held) {
       if(gui_selected_window >= 0) {
@@ -1088,14 +1124,14 @@ void mouse_leftclick(int relX, int relY) {
    mouse_held = true;
 
    // check if clicked on current window
-   if(mouse_clicked_on_window(gui_selected_window)) {
+   if(mouse_clicked_on_window(regs, gui_selected_window)) {
       // 
    } else {
       // check other windows
 
       gui_selected_window = -1;
       for(int i = 0; i < NUM_WINDOWS; i++) {
-         if(mouse_clicked_on_window(i))
+         if(mouse_clicked_on_window(regs, i))
             break;
       }
    
