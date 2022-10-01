@@ -39,7 +39,7 @@ typedef struct task_state_t {
 #define TOTAL_TASKS 4
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged);
-void launch_task(int index, registers_t *regs);
+void launch_task(int index, registers_t *regs, bool focus);
 void end_task(int index, registers_t *regs);
 void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs);

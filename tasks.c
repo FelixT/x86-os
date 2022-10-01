@@ -20,7 +20,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].registers.eip = entry;
 }
 
-void launch_task(int index, registers_t *regs) {
+void launch_task(int index, registers_t *regs, bool focus) {
    current_task = index;
 
    tasks[current_task].enabled = true;
@@ -32,7 +32,9 @@ void launch_task(int index, registers_t *regs) {
    tasks[current_task].registers.useresp = tasks[current_task].stack_top; // stack_top
    tasks[current_task].registers.ss = USR_DATA_SEG | 3;
 
+   int tmpwindow = gui_get_selected_window();
    tasks[current_task].window = gui_window_add();
+   if(!focus) gui_set_selected_window(tmpwindow);
    
    *regs = tasks[current_task].registers;
 }
@@ -71,7 +73,7 @@ void tasks_init(registers_t *regs) {
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t idleentry = (uint32_t)prog;
    create_task_entry(0, idleentry, entry->fileSize, false);
-   launch_task(0, regs);
+   launch_task(0, regs, false);
 
    switching = true;
 }

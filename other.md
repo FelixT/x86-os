@@ -5,6 +5,7 @@ objdump -b binary -D -m i8086 main.bin
 objdump -b binary -D -m i386 o/main.bin
 
 /usr/local/Cellar/binutils/2.37/bin/objdump -b binary -D -m i386 o/main.bin
+~/opt/cross/bin/
 
 debug:
 qemu-system-i386 -s -S -drive file=hd4.bin,format=raw,index=0,media=disk -monitor stdio

@@ -25,6 +25,7 @@ int NUM_WINDOWS;
 
 bool desktop_enabled = false;
 uint8_t *icon_window;
+uint8_t *gui_bgimage;
 
 extern bool strcmp(char* str1, char* str2);
 extern int strlen(char* str);
@@ -461,8 +462,14 @@ void gui_draw(void) {
    // padding = 2px
    for(int i = 0; i < NUM_WINDOWS; i++) {
       if(gui_windows[i].minimised) {
-         gui_drawrect(COLOUR_TASKBAR_ENTRY, TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING), gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING), TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
-         gui_drawcharat(gui_windows[i].title[0], COLOUR_WHITE, TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING), gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING));
+         int textWidth = gui_gettextwidth(3);
+         int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
+         char text[4] = "   ";
+         strcpy_fixed(text, gui_windows[i].title, 3);
+         int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
+         int itemY = gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
+         gui_drawrect(COLOUR_TASKBAR_ENTRY, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
+         gui_writestrat(text, COLOUR_WHITE, itemX+textX, itemY+1);
          gui_windows[i].toolbar_pos = toolbarPos;
          toolbarPos++;
       }
@@ -493,7 +500,8 @@ extern void fat_read_dir(uint16_t clusterNo);
 extern uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
 extern void fat_test();
 
-extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIsTransparent);
+extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, bool whiteIsTransparent);
+extern uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -572,7 +580,7 @@ void gui_checkcmd(void *regs) {
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
       uint32_t progAddr = (uint32_t)prog;
       create_task_entry(1, progAddr, entry->fileSize, false);
-      launch_task(1, regs);
+      launch_task(1, regs, true);
    }
    else if(strcmp(command, "PROG2")) {
       fat_dir_t *entry = fat_parse_path("/sys/prog2.bin");
@@ -583,7 +591,7 @@ void gui_checkcmd(void *regs) {
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
       uint32_t progAddr = (uint32_t)prog;
       create_task_entry(2, progAddr, entry->fileSize, false);
-      launch_task(2, regs);
+      launch_task(2, regs, true);
    }
    else if(strcmp(command, "PROG3")) {
       fat_dir_t *entry = fat_parse_path("/sys/prog3.bin");
@@ -594,7 +602,7 @@ void gui_checkcmd(void *regs) {
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
       uint32_t progAddr = (uint32_t)prog;
       create_task_entry(3, progAddr, entry->fileSize, false);
-      launch_task(3, regs);
+      launch_task(3, regs, true);
    }
    else if(strcmp(command, "TEST")) {
       extern uint32_t tos_kernel;
@@ -651,7 +659,7 @@ void gui_checkcmd(void *regs) {
          int addr = stoi((char*)arg);
          gui_writeuint_hex(addr, 0);
          create_task_entry(3, addr, 0, false);
-         launch_task(3, regs);
+         launch_task(3, regs, true);
       }
    }
    else if(strstartswith(command, "BMP")) {
@@ -660,7 +668,7 @@ void gui_checkcmd(void *regs) {
          int addr = stoi((char*)arg);
          uint8_t *bmp = (uint8_t*)addr;
          uint16_t *buffer = selected->framebuffer;
-         bmp_draw(bmp, buffer, selected->width, false);
+         bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, false);
          selected->needs_redraw = true;
          gui_draw();
       }
@@ -719,7 +727,7 @@ void gui_checkcmd(void *regs) {
       if(strsplit(arg, arg, command, ' ')) {
          int offset = (arg[0]-'0')*400;
 
-         for(int i = offset; i < offset+400 && i < 2048; i++) {
+         for(int i = offset; i < offset+400 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
             if(status[i].allocated)
                gui_writenum(1, 0);
             else
@@ -727,12 +735,12 @@ void gui_checkcmd(void *regs) {
          }
       } else {
          int used = 0;
-         for(int i = 0; i < 2048; i++) {
+         for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
             if(status[i].allocated) used++;
          }
          gui_writenum(used, 0);
          gui_drawchar('/', 0);
-         gui_writenum(2048, 0);
+         gui_writenum(KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, 0);
          gui_writestr(" ALLOCATED", 0);
       }
    }
@@ -834,7 +842,11 @@ void gui_window_draw(int windowIndex) {
 
       // titlebar
       gui_drawrect(COLOUR_TITLEBAR, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
-      gui_writestrat(window->title, 0, window->x+2, window->y+3);
+      // titlebar text, centred
+      int titleWidth = gui_gettextwidth(strlen(window->title));
+      int titleX = window->x + window->width/2 - titleWidth/2;
+      gui_drawrect(COLOUR_WHITE, titleX-4, window->y+1, titleWidth+8, TITLEBAR_HEIGHT);
+      gui_writestrat(window->title, 0, titleX, window->y+3);
       // titlebar buttons
       gui_drawcharat('x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
       gui_drawcharat('-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
@@ -878,10 +890,10 @@ void gui_window_draw(int windowIndex) {
       gui_drawcharat('_', 0, window->x + window->text_x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
 
       // drop shadow if selected
-      gui_drawline(COLOUR_DARK_GREY, window->x+window->width, window->y+1, true, window->height);
-      gui_drawline(COLOUR_DARK_GREY, window->x+1, window->y+window->height, false, window->width);
+      gui_drawline(COLOUR_DARK_GREY, window->x+window->width, window->y+2, true, window->height-1);
+      gui_drawline(COLOUR_DARK_GREY, window->x+2, window->y+window->height, false, window->width-1);
 
-      gui_drawunfilledrect(COLOUR_WINDOW_OUTLINE, window->x, window->y, window->width, window->height);
+      gui_drawunfilledrect(gui_rgb16(80,80,80), window->x, window->y, window->width, window->height);
    } else {
    }
 }
@@ -896,7 +908,18 @@ void gui_desktop_init() {
 
    icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
 
+   // load background
+   entry = fat_parse_path("/bmp/bg.bmp");
+   if(entry == NULL) {
+      gui_writestr("BG not found\n", 0);
+      return;
+   }
+
+   gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
+
    desktop_enabled = true;
+   gui_redrawall();
 }
 
 int gui_window_add() {
@@ -927,7 +950,8 @@ int gui_window_add() {
 
    if(gui_window_init(&gui_windows[newIndex])) {
       gui_windows[newIndex].title[0] = newIndex+'0';
-      
+      gui_selected_window = newIndex;
+
       return newIndex;
    } else {
       strcpy((char*)gui_windows[newIndex].title, "ERROR");
@@ -961,7 +985,8 @@ void gui_window_close(void *regs, int windowIndex) {
 
 void gui_desktop_draw() {
    //gui_writeuint((uint32_t)icon_window, 0);
-   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, 1);
+   bmp_draw(gui_bgimage, (uint16_t *)framebuffer, gui_width, gui_height, 0);
+   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, gui_height, 1);
 }
 
 void gui_desktop_click() {
@@ -1176,6 +1201,10 @@ int gui_get_selected_window() {
    return gui_selected_window;
 }
 
+void gui_set_selected_window(int windowIndex) {
+   gui_selected_window = windowIndex;
+}
+
 size_t gui_get_width() {
    return gui_width;
 }
@@ -1191,4 +1220,13 @@ int *gui_get_num_windows() {
 uint32_t gui_get_window_framebuffer(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
    return (uint32_t)window->framebuffer;
+}
+
+void gui_showtimer(int number) {
+   gui_drawrect(gui_bg, -10, 5, 7, 11);
+   gui_writenumat(number, COLOUR_WHITE, -10, 5);
+}
+
+int gui_gettextwidth(int textlength) {
+   return textlength*(FONT_WIDTH+FONT_PADDING);
 }

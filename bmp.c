@@ -30,13 +30,31 @@ typedef struct {
    uint8_t zero;
 } __attribute__((packed)) bmp_colour_t;
 
-void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIsTransparent) {
+uint16_t bmp_get_colour(uint8_t *bmp, int x, int y) {
+   bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
+   bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
+
+   if(info->bpp != 8) {
+      gui_writestr("BPP not 8bit\n", 0);// bad
+      return 0;
+   }
+   if(info->compressionMethod != 0) {
+      gui_writestr("Compression method not BI_RGB\n", 0);
+      return 0;
+   }
+
+   bmp_colour_t *colours = (bmp_colour_t*)(&bmp[0]+sizeof(bmp_header_t)+info->headerSize);
+   uint8_t *pixels = (uint8_t*)(&bmp[0] + header->dataOffset);
+   uint32_t rowSize = ((info->width+(4-1))/4)*4; // has to be multiple of 4 bytes
+
+   int index = (info->height-(y+1))*rowSize+x;
+   return gui_rgb16(colours[pixels[index]].red, colours[pixels[index]].green, colours[pixels[index]].blue);
+}
+
+void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, bool whiteIsTransparent) {
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    
-   //gui_writenum(info->width, 0);
-   //gui_drawchar('\n', 0);
-
    if(info->bpp != 8) {
       gui_writestr("BPP not 8bit\n", 0);// bad
       return;
@@ -60,8 +78,11 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, bool whiteIs
       for(int x = 0; x < info->width; x++) {
          int index = (info->height-(y+1))*rowSize+x;
          uint16_t colour = gui_rgb16(colours[pixels[index]].red, colours[pixels[index]].green, colours[pixels[index]].blue);
-         if(!whiteIsTransparent || colour != COLOUR_WHITE)
-            framebuffer[y*screenWidth+x] = colour;
+         if(!whiteIsTransparent || colour != COLOUR_WHITE) {
+            if(x >= 0 && y >= 0 && x < screenWidth && y < screenHeight) {
+               framebuffer[y*screenWidth+x] = colour;
+            }
+         }
       }
 
    }

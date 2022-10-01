@@ -109,9 +109,13 @@ void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowInde
 uint16_t *gui_get_framebuffer();
 gui_window_t *gui_get_windows();
 int gui_get_selected_window();
+void gui_set_selected_window(int windowIndex);
 size_t gui_get_width();
 size_t gui_get_height();
 int *gui_get_num_windows();
 uint32_t gui_get_window_framebuffer(int windowIndex);
+int gui_gettextwidth(int textlength);
+
+void gui_showtimer(int number);
 
 #endif

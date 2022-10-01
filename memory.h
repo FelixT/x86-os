@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define KERNEL_HEAP_SIZE 0x0100000 // bytes
+#define KERNEL_HEAP_SIZE 0x0200000 // bytes
 #define MEM_BLOCK_SIZE 0x200 // 512 bytes
 
 typedef struct mem_segment_status_t {

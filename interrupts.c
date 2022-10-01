@@ -283,8 +283,7 @@ void timer_handler(registers_t *regs) {
    if(videomode == 0) {
       terminal_writenumat(timer_i, 79);
    } else {
-      gui_drawrect(COLOUR_CYAN, -10, 5, 7, 11);
-      gui_writenumat(timer_i, COLOUR_WHITE, -10, 5);
+      gui_showtimer(timer_i);
 
       if(timer_i == 0)
          gui_draw();
