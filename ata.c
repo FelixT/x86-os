@@ -167,7 +167,6 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    if(primaryBus) ioPort = ATA_PORT_PRIMARY;
    else ioPort = ATA_PORT_SECONDARY;
 
-
    uint32_t lba = addr/512;
    uint32_t startAddr = lba*512;
 
@@ -178,38 +177,19 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    int reads = (diffAddr + (512-1))/512;
    uint32_t bytesRequired = reads*512;
 
-   uint16_t *buf1 = malloc(bytesRequired);
+   uint16_t *readBuf = malloc(bytesRequired);
    
 
    //int reads = (bytesRequired + (512-1))/512; // bytes
    for(int i = 0; i < reads; i++) {
-      ata_read(primaryBus, masterDrive, lba+i, &buf1[256*i]);
+      ata_read(primaryBus, masterDrive, lba+i, &readBuf[256*i]);
       ata_delay(ioPort);
    }
 
-   /*
-   // debug info
-   gui_writestr("Performed ", 0);
-   gui_writenum(reads, 0);
-   gui_writestr(" reads for ", 0);
-   gui_writenum(bytesRequired, 0);
-   gui_writestr(" bytes at ", 0);
-   gui_writeuint(addr, 0);
-   gui_writestr(" with lba ", 0);
-   gui_writenum(lba, 0);
-   gui_writestr(" and offset", 0);
-   gui_writenum(offset, 0);
-   gui_writestr(" to output ", 0);
-   gui_writenum(bytes, 0);
-   gui_writestr(" bytes\n\n", 0);
-   */
-
-   return (uint8_t *) (&buf1[0]) + offset;
-
    // copy to new buffer
-   uint8_t *buf2 = malloc(bytes);
+   uint8_t *outBuf = malloc(bytes);
    for(uint32_t i = 0; i < bytes; i++) {
-      buf2[i] = (uint8_t *) (&buf1[0]) + (offset + i);
+      outBuf[i] = *((uint8_t *) (&readBuf[0]) + (offset + i));
    }
-   return buf2;
+   return outBuf;
 }

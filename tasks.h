@@ -27,6 +27,8 @@ typedef struct registers_t {
 typedef struct task_state_t {
    bool enabled;
    uint32_t stack_top; // address
+   uint32_t prog_entry;
+   uint32_t prog_size;
    registers_t registers;
    bool privileged; // 0 = user, 1 = kernel
    int window;
@@ -36,7 +38,7 @@ typedef struct task_state_t {
 #define TASK_STACK_SIZE 0x0001000
 #define TOTAL_TASKS 4
 
-void create_task_entry(int index, uint32_t entry, bool privileged);
+void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged);
 void launch_task(int index, registers_t *regs);
 void end_current_task(registers_t *regs);
 void tasks_init(registers_t *regs);

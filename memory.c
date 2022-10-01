@@ -19,26 +19,21 @@ void memory_reserve(uint32_t offset, int bytes) {
 }
 
 void free(uint32_t offset, int bytes) {
-   // fix for case when offset is inbetween memory locations
-   uint32_t baseAddr = ((uint32_t)(offset/MEM_BLOCK_SIZE))*MEM_BLOCK_SIZE;
-   uint32_t diff = offset - baseAddr;
-   offset = baseAddr;
-   bytes += diff;
-   
-   int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;  // rounding up
-   int blockStart = ((int)offset-(int)&heap_kernel)/MEM_BLOCK_SIZE;
+   if(offset == 0) return;
 
-   for(int i = 0; i < noBlocks; i++) {
-      if(blockStart+i >= 0 && blockStart+i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
-         memory_status[blockStart+i].allocated = false;
-      }
-   }
+   int startBlock = ((int)(offset/MEM_BLOCK_SIZE));
+   int endBlock = ((int)((offset+bytes)/MEM_BLOCK_SIZE));
 
    char freeASCII[6] = "FREE ";
-   for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
-      if(blockStart*MEM_BLOCK_SIZE+i >= 0 && blockStart*MEM_BLOCK_SIZE+i < KERNEL_HEAP_SIZE) {
-         char *byte = (char*) ((&heap_kernel) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
-         *byte = freeASCII[i%6];
+
+   for(int i = startBlock; i <= endBlock; i++) {
+      if(i > 0 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
+         memory_status[i].allocated = false;
+
+         for(int x = 0; x < MEM_BLOCK_SIZE; x++) {
+            char *byte = (char*) ((&heap_kernel) + (int)i*MEM_BLOCK_SIZE) + x;
+            *byte = freeASCII[i%6];
+         }
       }
    }
 }

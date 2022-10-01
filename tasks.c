@@ -8,9 +8,11 @@ task_state_t tasks[TOTAL_TASKS];
 int current_task = 0;
 bool switching = false; // preemptive multitasking
 
-void create_task_entry(int index, uint32_t entry, bool privileged) {
+void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
    tasks[index].enabled = false;
    tasks[index].stack_top = (uint32_t)(&tos_program - (TASK_STACK_SIZE * index));
+   tasks[index].prog_entry = entry;
+   tasks[index].prog_size = size;
    tasks[index].privileged = privileged;
    
    tasks[index].registers.esp = tasks[index].stack_top;
@@ -39,6 +41,10 @@ void end_current_task(registers_t *regs) {
    tasks[current_task].enabled = false;
    tasks[current_task].privileged = false;
 
+   // free task memory
+   if(tasks[current_task].prog_size != 0)
+      free(tasks[current_task].prog_entry, tasks[current_task].prog_size);
+
    switch_task(regs);
 }
 
@@ -57,7 +63,7 @@ void tasks_init(registers_t *regs) {
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t idleentry = (uint32_t)prog;
-   create_task_entry(0, idleentry, false);
+   create_task_entry(0, idleentry, entry->fileSize, false);
    launch_task(0, regs);
 
    switching = true;

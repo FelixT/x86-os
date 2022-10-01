@@ -258,9 +258,6 @@ void gui_window_scroll(int windowIndex) {
 void gui_window_drawchar(char c, uint16_t colour, int windowIndex) {
 
    gui_window_t *selected = &gui_windows[windowIndex];
-      
-   //if(selected->minimised || !selected->active)
-   //   return;
 
    if(c == '\n') {
       selected->text_x = FONT_PADDING;
@@ -330,8 +327,8 @@ void gui_window_clearbuffer(gui_window_t *window) {
 
 bool gui_window_init(gui_window_t *window) {
    strcpy(window->title, " TERMINAL");
-   window->x = 8;
-   window->y = 8;
+   window->x = NUM_WINDOWS*8;
+   window->y = NUM_WINDOWS*8;
    window->width = 360;
    window->height = 240;
    window->text_buffer[0] = '\0';
@@ -340,7 +337,8 @@ bool gui_window_init(gui_window_t *window) {
    window->text_y = FONT_PADDING;
    window->needs_redraw = true;
    window->active = false;
-   window->minimised = true;
+   window->minimised = false;
+   window->hidden = false;
    window->dragged = false;
 
    // default TERMINAL functions
@@ -435,17 +433,12 @@ void gui_init(void) {
    
    gui_clear(gui_bg);
 
-   // init windows
-   NUM_WINDOWS = 2;
-   gui_windows = malloc(sizeof(NUM_WINDOWS * sizeof(gui_window_t)));
-   for(int i = 0; i < NUM_WINDOWS; i++) {
-      gui_window_init(&gui_windows[i]);
-      gui_windows[i].title[0] = i+'0';
-   }
-
+   // init with one terminal window
+   NUM_WINDOWS = 1;
+   gui_windows = malloc(sizeof(gui_window_t));
+   gui_window_init(&gui_windows[0]);
+   gui_windows[0].title[0] = '0';
    gui_selected_window = 0;
-   gui_windows[0].active = true;
-   gui_windows[0].minimised = false;
 }
 
 void gui_desktop_draw();
@@ -572,7 +565,7 @@ void gui_checkcmd(void *regs) {
       }
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
       uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(1, progAddr, false);
+      create_task_entry(1, progAddr, entry->fileSize, false);
       launch_task(1, regs);
    }
    else if(strcmp(command, "PROG2")) {
@@ -583,7 +576,7 @@ void gui_checkcmd(void *regs) {
       }
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
       uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(2, progAddr, false);
+      create_task_entry(2, progAddr, entry->fileSize, false);
       launch_task(2, regs);
    }
    else if(strcmp(command, "PROG3")) {
@@ -594,7 +587,7 @@ void gui_checkcmd(void *regs) {
       }
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
       uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(3, progAddr, false);
+      create_task_entry(3, progAddr, entry->fileSize, false);
       launch_task(3, regs);
    }
    else if(strcmp(command, "TEST")) {
@@ -651,7 +644,7 @@ void gui_checkcmd(void *regs) {
       if(strsplit(arg, arg, command, ' ')) {
          int addr = stoi((char*)arg);
          gui_writeuint_hex(addr, 0);
-         create_task_entry(3, addr, false);
+         create_task_entry(3, addr, 0, false);
          launch_task(3, regs);
       }
    }
@@ -824,7 +817,7 @@ void gui_downarrow() {
 
 void gui_window_draw(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
-   if(window->minimised || window->dragged)
+   if(window->hidden || window->minimised || window->dragged)
       return;
 
    uint16_t bg = COLOUR_WHITE;
@@ -911,6 +904,25 @@ int gui_window_add() {
       }
    }
    return 0;
+}
+
+void gui_window_close(int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
+   if(window->hidden) return;
+
+   window->hidden = true;
+
+   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
+      free((uint32_t)&(window->cmd_history[i]), TEXT_BUFFER_LENGTH);
+      window->cmd_history[i] = NULL;
+   }
+   free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
+   window->framebuffer = NULL;
+
+   if(windowIndex == gui_selected_window)
+      gui_selected_window = -1;
+
+   gui_redrawall();
 }
 
 void gui_desktop_draw() {
@@ -1016,17 +1028,15 @@ bool mouse_clicked_on_window(int index) {
    gui_window_t *window = &gui_windows[index];
    // clicked on window's icon in toolbar
    if(window->minimised) {
-         if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
-            && gui_mouse_y >= (int)gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)gui_height-TOOLBAR_PADDING) {
-               window->minimised = false;
-               window->active = true;
-               window->needs_redraw = true;
-               gui_selected_window = index;
-               return true;
-            }
+      if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
+         && gui_mouse_y >= (int)gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)gui_height-TOOLBAR_PADDING) {
+            window->minimised = false;
+            window->active = true;
+            window->needs_redraw = true;
+            gui_selected_window = index;
+            return true;
       }
-
-   else if(gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
+   } else if(!window->hidden && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
       && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
 
          int relX = gui_mouse_x - window->x;
@@ -1035,6 +1045,10 @@ bool mouse_clicked_on_window(int index) {
          // minimise
          if(relY < 10 && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3))
             window->minimised = true;
+
+         // close
+         if(relY < 10 && relX > window->width - (FONT_WIDTH+3))
+            gui_window_close(gui_selected_window);
 
          window->active = true;
          window->needs_redraw = true;

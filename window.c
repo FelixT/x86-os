@@ -6,6 +6,8 @@
 
 extern int strlen(char* str);
 
+// default terminal behaviour
+
 void window_term_keypress(char key, int windowIndex) {
    if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')
    || (key == '/') || (key == '.')) {

@@ -201,6 +201,8 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
 
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
+   bool readEntireFile = (size == 0); // read entry entry as stored on disk or the size supplied
+
    uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t firstDataSector = rootSector + rootSize;
@@ -228,31 +230,33 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    gui_writeuint(clusterCount, 0);
    gui_writestr(" clusters ", 0);
 
-   uint32_t fileSize = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector;
+   uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
 
-   gui_writestr("ADDR ", 0);
+   gui_writestr("Addr ", 0);
    gui_writeuint((uint32_t)(fileFirstSector*fat_bpb->bytesPerSector + baseAddr), 0);
    gui_drawchar('\n', 0);
-   gui_writestr("SIZE ", 0);
-   gui_writeuint(fileSize, 0);
-   gui_drawchar('\n', 0);
-   //return;
-
-   uint8_t *fileContents = malloc(fileSize);
-
-   gui_writeuint(fileSize, 0);
+   gui_writestr("size on disk ", 0);
+   gui_writeuint(fileSizeDisk, 0);
+   gui_writestr("\nreading ", 0);
+   gui_writeuint(size, 0);
    gui_writestr(" bytes\n", 0);
 
+   uint8_t *fileContents = malloc(size);
+
+   uint32_t byte = 0;
    int cluster = 0;
-   while(true) { // until we reach the end of the cluster chain
+   while(true) { // until we reach the end of the cluster chain or byte >= size
       // read each sector of cluster
       for(int i = 0; i < fat_bpb->sectorsPerCluster; i++) {
          uint32_t sectorAddr = (fileFirstSector+cluster*fat_bpb->sectorsPerCluster+i)*fat_bpb->bytesPerSector + baseAddr;
          uint8_t *buf = ata_read_exact(true, true, sectorAddr, fat_bpb->bytesPerSector);
          uint32_t memOffset = fat_bpb->bytesPerSector * (cluster*fat_bpb->sectorsPerCluster + i);
          // copy to master buffer
-         for(int b = 0; b < fat_bpb->bytesPerSector; b++)
+         for(int b = 0; b < fat_bpb->bytesPerSector; b++) {
+            if(!readEntireFile && byte >= size) break;
             fileContents[memOffset + b] = buf[b];
+            byte++;
+         }
 
          free((uint32_t)buf, fat_bpb->bytesPerSector);
       }
@@ -271,7 +275,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
    }
 
-   gui_writestr("Loaded into ", 0);
+   gui_writestr("Loaded into 0x", 0);
    gui_writeuint_hex((uint32_t)fileContents, 0);
    gui_writestr(" / ", 0);
    gui_writeuint((uint32_t)fileContents, 0);
