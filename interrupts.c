@@ -140,6 +140,10 @@ char scan_to_char(int scan_code) {
 }
 
 void software_handler(registers_t *regs) {
+   /*gui_window_writestr("SINT", 0, 0);
+   gui_window_writeuint(regs->eax, 0, 0);
+   gui_window_writestr(" ", 0, 0);*/
+
    if(regs->eax == 1) {
       // WRITE STRING...
       // ebx contains string address

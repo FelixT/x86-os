@@ -342,6 +342,13 @@ bool gui_window_init(gui_window_t *window) {
    window->active = false;
    window->minimised = true;
    window->dragged = false;
+
+   // default TERMINAL functions
+   window->return_func = &window_term_return;
+   window->keypress_func = &window_term_keypress;
+   window->backspace_func = &window_term_backspace;
+   window->uparrow_func = &window_term_uparrow;
+   window->downarrow_func = &window_term_downarrow;
    
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
       window->cmd_history[i] = malloc(TEXT_BUFFER_LENGTH);
@@ -481,26 +488,6 @@ void gui_redrawall() {
    gui_draw();
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
-}
-
-void gui_keypress(char key) {
-   if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')
-   || (key == '/') || (key == '.')) {
-
-      // write to current window
-      if(gui_selected_window >= 0) {
-         gui_window_t *selected = &gui_windows[gui_selected_window];
-         if(selected->text_index < TEXT_BUFFER_LENGTH-1) {
-            selected->text_buffer[selected->text_index] = key;
-            selected->text_buffer[selected->text_index+1] = '\0';
-            selected->text_index++;
-            selected->text_x = (selected->text_index)*(FONT_WIDTH+FONT_PADDING);
-         }
-
-         gui_window_draw(gui_selected_window);
-      }
-
-   }
 }
 
 void mouse_enable();
@@ -795,50 +782,45 @@ void gui_checkcmd(void *regs) {
    gui_drawchar('\n', 0);
 }
 
+void gui_keypress(char key) {
+
+   if(gui_selected_window >= 0) {
+      gui_window_t *selected = &gui_windows[gui_selected_window];
+      if(selected->keypress_func != NULL)
+         (*(selected->keypress_func))(key, gui_selected_window);
+   }
+}
+
 void gui_return(void *regs) {
    if(gui_selected_window >= 0) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
-
-      // write cmd to window framebuffer
-      gui_window_drawcharat('>', 8, 1, selected->text_y, gui_selected_window);
-      gui_window_writestrat(selected->text_buffer, 0, 1 + FONT_WIDTH + FONT_PADDING, selected->text_y, gui_selected_window);
-      // write prompt to framebuffer
-      //gui_window_drawcharat('_', 0, window->text_x + 1, window->text_y, windowIndex);
-      
-      // write cmd to cmdbuffer
-      // shift all entries up
-      for(int i = CMD_HISTORY_LENGTH-1; i > 0; i--)
-         strcpy(selected->cmd_history[i], selected->cmd_history[i-1]);
-      // add new entry
-      strcpy_fixed(selected->cmd_history[0], selected->text_buffer, selected->text_index);
-      selected->cmd_history[0][selected->text_index] = '\0';
-      selected->cmd_history_pos = -1;
-
-      gui_drawchar('\n', 0);
-      
-      gui_checkcmd(regs);
-      selected = &gui_windows[gui_selected_window]; // in case the buffer has changed during the cmd 
-
-      selected->text_index = 0;
-      selected->text_buffer[selected->text_index] = '\0';
-      selected->needs_redraw = true;
-
-      gui_window_draw(gui_selected_window);
+      if(selected->return_func != NULL)
+         (*(selected->return_func))(regs, gui_selected_window);
    }
 }
 
 void gui_backspace() {
    if(gui_selected_window >= 0) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
-      if(selected->text_index > 0) {
-         selected->text_index--;
-         selected->text_x-=FONT_WIDTH+FONT_PADDING;
-         selected->text_buffer[selected->text_index] = '\0';
-      }
-
-      gui_window_draw(gui_selected_window);
+      if(selected->backspace_func != NULL)
+         (*(selected->backspace_func))(gui_selected_window);
    }
 }
+
+void gui_uparrow() {
+   if(gui_selected_window >= 0) {
+      gui_window_t *selected = &gui_windows[gui_selected_window];
+      if(selected->uparrow_func != NULL)
+         (*(selected->uparrow_func))(gui_selected_window);
+   }
+}
+
+void gui_downarrow() {
+   if(gui_selected_window >= 0) {
+      gui_window_t *selected = &gui_windows[gui_selected_window];
+      if(selected->downarrow_func != NULL)
+         (*(selected->downarrow_func))(gui_selected_window);
+   }}
 
 void gui_window_draw(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
@@ -1002,39 +984,6 @@ void gui_cursor_draw() {
    gui_drawcharat(27, 0, gui_mouse_x, gui_mouse_y); // outline
    gui_drawcharat(28, COLOUR_WHITE, gui_mouse_x, gui_mouse_y); // fill
 
-}
-
-void gui_uparrow() {
-   gui_window_t *selected = &gui_windows[gui_selected_window];
-
-   selected->cmd_history_pos++;
-   if(selected->cmd_history_pos == CMD_HISTORY_LENGTH)
-      selected->cmd_history_pos = CMD_HISTORY_LENGTH - 1;
-
-   int len = strlen(selected->cmd_history[selected->cmd_history_pos]);
-   strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
-   selected->text_index = len;
-   selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
-   gui_window_draw(gui_selected_window);
-}
-
-void gui_downarrow() {
-   gui_window_t *selected = &gui_windows[gui_selected_window];
-
-   selected->cmd_history_pos--;
-
-   if(selected->cmd_history_pos <= -1) {
-      selected->cmd_history_pos = -1;
-      selected->text_index = 0;
-      selected->text_x = FONT_PADDING;
-      selected->text_buffer[0] = '\0';
-   } else {
-      int len = strlen(selected->cmd_history[selected->cmd_history_pos]);
-      strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
-      selected->text_index = len;
-      selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
-   }
-   gui_window_draw(gui_selected_window);
 }
 
 void mouse_update(int relX, int relY) {
