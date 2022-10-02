@@ -909,7 +909,7 @@ void gui_desktop_init() {
    icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
 
    // load background
-   entry = fat_parse_path("/bmp/bg.bmp");
+   entry = fat_parse_path("/bmp/bg16.bmp");
    if(entry == NULL) {
       gui_writestr("BG not found\n", 0);
       return;
