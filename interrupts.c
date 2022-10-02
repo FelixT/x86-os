@@ -137,18 +137,20 @@ char scan_to_char(int scan_code) {
 
 void software_handler(registers_t *regs) {
 
+   uint32_t offset = gettasks()[get_current_task()].prog_entry;
+
    if(regs->eax == 1) {
       // WRITE STRING...
       // ebx contains string address
       //gui_writestr((char*)regs->ebx, 0);
-      gui_window_writestr((char*)regs->ebx, 0, get_current_task_window());
+      gui_window_writestr((char*)(offset+regs->ebx), 0, get_current_task_window());
    }
 
    if(regs->eax == 2) {
       // WRITE NUMBER...
       // ebx contains int
-      gui_writenum(regs->ebx, 0);
-      gui_writenumat(regs->ebx, 14, 60, 20);
+      gui_window_writenum(regs->ebx, 0, get_current_task_window());
+      //gui_writenum(regs->ebx, 0);
    }
 
    if(regs->eax == 3) {
@@ -179,7 +181,6 @@ void software_handler(registers_t *regs) {
    if(regs->eax == 6) {
       // print uint ebx to current window
       gui_window_writeuint(regs->ebx, 0, get_current_task_window());
-      //gui_window_draw(regs->ecx);
    }
 
    if(regs->eax == 7) {

@@ -34,7 +34,7 @@ cat o/boot.bin o/main.bin > hd.bin
 nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
-$GCC -ffreestanding -nostartfiles -nostdlib -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
