@@ -1,4 +1,4 @@
-// handles 8 bit bmps and 16 bit bmps stored as R5G6B5
+// handles 8 bit bmps and 16 bit R5G6B5 bmps
 
 #include <stdint.h>
 #include <stdbool.h>
