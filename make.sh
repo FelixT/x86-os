@@ -1,3 +1,5 @@
+export linux=1
+
 export CROSS="$HOME/opt/cross/bin"
 export GCC="$CROSS/i686-elf-gcc"
 export GAS="$CROSS/i686-elf-as"
@@ -46,13 +48,25 @@ dd if=./hd.bin of=hd2.bin bs=64000 count=1 conv=notrunc
 
 # create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
-rm fs.img
-/usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
-# copy files from fs_root dir
-hdiutil mount fs.img
-cp -R fs_root/ /Volumes/FATFS
-# unmount
-hdiutil unmount /Volumes/FATFS
+rm -f fs.img
+
+# if linux
+if [ $linux==1 ]
+then
+   mkfs.fat -F 16 -n FATFS -C fs.img 12000
+   sudo mkdir -p /mnt/fatfs
+   sudo mount fs.img /mnt/fatfs
+   sudo cp -R fs_root/* /mnt/fatfs
+   sudo umount /mnt/fatfs
+# if mac
+else
+   /usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
+   # mount drive & copy files from fs_root dir
+   hdiutil mount fs.img
+   cp -R fs_root/ /Volumes/FATFS
+   # unmount
+   hdiutil unmount /Volumes/FATFS
+fi
 
 # add fs at 64000
 cat hd2.bin fs.img > hd3.bin
