@@ -2,7 +2,7 @@
 
 #include "prog.h"
 
-uint32_t num;
+volatile uint32_t num;
 
 void test(int windowIndex) {
 
@@ -13,7 +13,7 @@ void test(int windowIndex) {
 
   for(int i = 0; i < 10; i++)
   //while(1==1)
-    write_num(num);
+    write_num(5);
     
   write_newline();
 
