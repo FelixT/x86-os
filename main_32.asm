@@ -51,6 +51,9 @@ extern tos_kernel
    ; main code
    extern gui_init
    call gui_init
+   
+   extern tasks_alloc
+   call tasks_alloc
 
    ; setup tss
    extern tss_init

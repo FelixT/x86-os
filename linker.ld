@@ -33,6 +33,7 @@ SECTIONS {
 
     . = 0x00100000;
     heap_kernel = .;
-    . = . + 0x0200000;
+    . = . + 0x2000000;
+    heap_kernel_end = .;
      
 }

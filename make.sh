@@ -25,8 +25,10 @@ $GCC -c ata.c -o o/ata.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-c
 $GCC -c memory.c -o o/memory.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c fat.c -o o/fat.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c bmp.c -o o/bmp.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
+$GCC -c elf.c -o o/elf.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
+$GCC -c paging.c -o o/paging.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c window.c -o o/window.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/window.o o/font.o
+$LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o
 
 cat o/boot.bin o/main.bin > hd.bin
 
@@ -35,11 +37,13 @@ nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra prog3.c -o o/prog3.elf 
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
 cp o/prog2.bin fs_root/sys/prog2.bin
 cp o/prog3.bin fs_root/sys/prog3.bin
+cp o/prog3.elf fs_root/sys/prog3.elf
 cp o/progidle.bin fs_root/sys/progidle.bin
 
 dd if=/dev/zero of=hd2.bin bs=64000 count=1
@@ -71,4 +75,14 @@ fi
 # add fs at 64000
 cat hd2.bin fs.img > hd3.bin
 
-qemu-system-i386 -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio
+   #qemu-system-i386 -s -S -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio
+
+   # gdb:
+   # set disassembly-flavor intel
+   #target remote localhost:1234 
+   #continue
+   #stepi
+   #b
+   #s
+
+   qemu-system-i386 -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio

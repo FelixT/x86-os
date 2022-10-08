@@ -137,13 +137,11 @@ char scan_to_char(int scan_code) {
 
 void software_handler(registers_t *regs) {
 
-   uint32_t offset = gettasks()[get_current_task()].prog_entry;
-
    if(regs->eax == 1) {
       // WRITE STRING...
       // ebx contains string address
       //gui_writestr((char*)regs->ebx, 0);
-      gui_window_writestr((char*)(offset+regs->ebx), 0, get_current_task_window());
+      gui_window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
    }
 
    if(regs->eax == 2) {
@@ -186,11 +184,6 @@ void software_handler(registers_t *regs) {
    if(regs->eax == 7) {
       // returns framebuffer address in ebx
       regs->ecx = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
-      gui_window_writeuint(regs->ecx, 0, 0);
-
-      //for(int i = 0; i < 10000; i++)
-      //   ((uint16_t*) regs->ecx)[i] = 0;
-      gui_window_drawchar('\n', 0, 0);
    }
 
    if(regs->eax == 8) {
@@ -212,10 +205,30 @@ void software_handler(registers_t *regs) {
 
       end_task(get_current_task(), regs);
    }
+
+   if(regs->eax == 11) {
+      // override uparrow window function
+
+      uint32_t addr = regs->ebx;
+
+      gui_window_writeuint(get_current_task_window(), 0, get_current_task_window());
+      gui_window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
+
+      gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
+   }
+
+   if(regs->eax == 12) {
+      // end subroutine i.e. an uparrow function call
+      gui_window_writestr("Ending subroutine\n", 0, 0);
+
+      task_subroutine_end(regs) ;
+   }
 }  
 
 void keyboard_handler(registers_t *regs) {
    unsigned char scan_code = inb(0x60);
+
+   if(videomode == 1) gui_keypress_switchtask(regs);
 
    if(scan_code == 28)  { // return
 
@@ -233,7 +246,7 @@ void keyboard_handler(registers_t *regs) {
 
    } else if(scan_code == 72) { // up arrow
       if(videomode == 1)
-         gui_uparrow();
+         gui_uparrow(regs);
    } else if(scan_code == 80) { // up arrow
       if(videomode == 1)
          gui_downarrow();
@@ -304,17 +317,38 @@ void exception_handler(int int_no, registers_t *regs) {
 
       // https://wiki.osdev.org/Exceptions
       if(videomode == 1) {
+
+         gui_window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
+         gui_window_writeuint(int_no, 0, 0);
+         gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+         gui_window_writeuint(regs->eip, 0, 0);  
+         gui_window_writestr("\n", gui_rgb16(255, 100, 100), 0);
+
+         if(int_no == 14) {
+            // page error
+            uint32_t addr;
+	         asm volatile("mov %%cr2, %0" : "=r" (addr));
+            gui_window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
+            gui_window_writeuint(addr, 0, 0);
+            gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+            gui_window_writeuint(regs->eip, 0, 0);
+
+            gui_window_writestr("\n", 0, 0);
+         }
+
          gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);
          gui_writenumat(int_no, gui_rgb16(255, 200, 200), 60, 0);
 
          gui_drawrect(gui_rgb16(255, 0, 0), 200, 0, 8*8, 11);
          gui_writenumat(regs->eip, gui_rgb16(255, 200, 200), 200, 0);
+      
+         gui_window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
+         gui_window_writenum(get_current_task(), 0, 0);
+         gui_window_writestr(" ended due to exception ", gui_rgb16(255, 100, 100), 0);
+         gui_window_writenum(int_no, 0, 0);
+         gui_window_writestr("\n", 0, 0);
 
-         /*gui_window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
-         gui_window_writeuint(int_no, 0, 0);
-         gui_window_writestr(" at ", gui_rgb16(255, 100, 100), 0);
-         gui_window_writeuint(regs->eip, 0, 0);
-         gui_window_writestr("\n", gui_rgb16(255, 100, 100), 0);*/
+         end_task(get_current_task(), regs);
       }
          
    } else {
@@ -362,8 +396,9 @@ void exception_handler(int int_no, registers_t *regs) {
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
-   gui_window_writenum(regs->err_code, 0, 0);
-   gui_window_writestr(" ", 0, 0);
+   gui_window_writestr("Exception err code ", gui_rgb16(255, 100, 100), 0);
+   gui_window_writeuint(regs->err_code, 0, 0);
+   gui_window_writestr("\n", 0, 0);
 
    exception_handler(int_no, regs);
 }

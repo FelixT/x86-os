@@ -4,16 +4,20 @@ extern uint32_t tos_program;
 uint32_t USR_CODE_SEG = 8*3;
 uint32_t USR_DATA_SEG = 8*4;
 
-task_state_t tasks[TOTAL_TASKS];
+task_state_t *tasks;
 int current_task = 0;
 bool switching = false; // preemptive multitasking
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
    tasks[index].enabled = false;
    tasks[index].stack_top = (uint32_t)(&tos_program - (TASK_STACK_SIZE * index));
+   tasks[index].prog_start = entry;
    tasks[index].prog_entry = entry;
    tasks[index].prog_size = size;
    tasks[index].privileged = privileged;
+   tasks[index].vmem_start = 0;
+   tasks[index].vmem_end = 0;
+   tasks[index].in_routine = false;
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.eax = USR_DATA_SEG | 3;
@@ -41,7 +45,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
 void end_task(int index, registers_t *regs) {
    if(index < 0 || index >= TOTAL_TASKS) return;
-   //if(!tasks[index].enabled) return;
+   if(!tasks[index].enabled) return; // already ended
 
    gui_window_writestr("Ending task ", 0, 0);
    gui_window_writenum(index, 0, 0);
@@ -56,6 +60,10 @@ void end_task(int index, registers_t *regs) {
 
    if(index == get_current_task())
       switch_task(regs);
+}
+
+void tasks_alloc() {
+   tasks = malloc(sizeof(task_state_t) * TOTAL_TASKS);
 }
 
 void tasks_init(registers_t *regs) {
@@ -106,6 +114,21 @@ void switch_task(registers_t *regs) {
    }
 }
 
+void switch_to_task(int index, registers_t *regs) {
+   if(!tasks[index].enabled) {
+      gui_window_writestr("Task switch failed: task is unavaliable\n", 0, 0);
+      return;
+   }
+
+   // save registers
+   tasks[current_task].registers = *regs;
+
+   current_task = index;
+
+   // restore registers
+   *regs = tasks[current_task].registers;
+}
+
 task_state_t *gettasks() {
    return &tasks[0];
 }
@@ -120,8 +143,55 @@ int get_current_task() {
 
 int get_task_from_window(int windowIndex) {
    for(int i = 0; i < TOTAL_TASKS; i++) {
-      if(tasks[i].window == windowIndex)
+      if(tasks[i].window == windowIndex && tasks[i].enabled)
          return i;
    }
    return -1;
+}
+
+void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t arg) {
+
+   if(tasks[current_task].in_routine) {
+      gui_window_writestr("Already in a subroutine, returning.\n", 0, 0);
+      return;
+   }
+
+   // save registers
+
+   tasks[current_task].routine_return_regs = *regs;
+
+   // push argument to stack
+   regs->useresp -= 4;
+   ((uint32_t*)regs->useresp)[0] = arg;
+
+   // push unused return address to stack
+   regs->useresp -= 4;
+   ((uint32_t*)regs->useresp)[0] = regs->eip;
+
+   // simulate JMP
+
+   gui_window_writestr("Return addr is ", 0, 0);
+   gui_window_writenum(regs->eip, 0, 0);
+   gui_window_writestr(" fn addr is ", 0, 0);
+   gui_window_writenum(addr, 0, 0);
+   gui_window_writestr("\n", 0, 0);
+
+   // update eip to func addr
+   regs->eip = addr;
+
+   tasks[current_task].in_routine = true;
+}
+
+void task_subroutine_end(registers_t *regs) {
+   gui_window_writestr("Return addr: ", 0, 0);
+   gui_window_writeuint(tasks[current_task].routine_return_regs.eip, 0, 0);
+   gui_window_writestr(" EIP: ", 0, 0);
+   gui_window_writeuint(regs->eip, 0, 0);
+   gui_window_writestr("\n", 0, 0);
+   // restore registers
+   *regs = tasks[current_task].routine_return_regs;
+
+   tasks[current_task].in_routine = false;
+
+   
 }

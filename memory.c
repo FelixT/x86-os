@@ -19,7 +19,7 @@ void memory_reserve(uint32_t offset, int bytes) {
 }
 
 void free(uint32_t offset, int bytes) {
-   if(offset == 0) return;
+   if(offset == 0 || bytes == 0) return;
 
    int blockStart = ((int)offset-(int)&heap_kernel)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;

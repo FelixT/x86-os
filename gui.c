@@ -30,6 +30,14 @@ uint8_t *gui_bgimage;
 extern bool strcmp(char* str1, char* str2);
 extern int strlen(char* str);
 
+static inline void set_framebuffer(int index, uint16_t colour) {
+   if(index < 0 || index >= (int)gui_width*(int)gui_height) {
+      //gui_window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
+   } else {
+      ((uint16_t*)framebuffer)[index] = colour;
+   }
+}
+
 void strtoupper(char* dest, char* src) {
    int i = 0;
 
@@ -115,69 +123,62 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void gui_drawrect(uint16_t colour, int x, int y, int width, int height) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
    for(int yi = y; yi < y+height; yi++) {
       for(int xi = x; xi < x+width; xi++) {
-         terminal_buffer[yi*(int)gui_width+xi] = colour;
+         set_framebuffer(yi*(int)gui_width+xi, colour);
       }
    }
    return;
 }
 
 void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
-
    for(int xi = x; xi < x+width; xi++) // top
-      terminal_buffer[y*(int)gui_width+xi] = colour;
+      set_framebuffer(y*(int)gui_width+xi, colour);
 
    for(int xi = x; xi < x+width; xi++) // bottom
-      terminal_buffer[(y+height-1)*(int)gui_width+xi] = colour;
+      set_framebuffer((y+height-1)*(int)gui_width+xi, colour);
 
    for(int yi = y; yi < y+height; yi++) // left
-      terminal_buffer[(yi)*(int)gui_width+x] = colour;
+      set_framebuffer((yi)*(int)gui_width+x, colour);
 
    for(int yi = y; yi < y+height; yi++) // right
-      terminal_buffer[(yi)*(int)gui_width+x+width-1] = colour;
+      set_framebuffer((yi)*(int)gui_width+x+width-1, colour);
 }
 
 void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
-
    for(int xi = x; xi < x+width; xi++) // top
       if((xi%2) == 0)
-         terminal_buffer[y*(int)gui_width+xi] = colour;
+         set_framebuffer(y*(int)gui_width+xi, colour);
 
    for(int xi = x; xi < x+width; xi++) // bottom
       if((xi%2) == 0)
-         terminal_buffer[(y+height-1)*(int)gui_width+xi] = colour;
+         set_framebuffer((y+height-1)*(int)gui_width+xi, colour);
 
    for(int yi = y; yi < y+height; yi++) // left
       if((yi%2) == 0)
-      terminal_buffer[(yi)*(int)gui_width+x] = colour;
+      set_framebuffer((yi)*(int)gui_width+x, colour);
 
    for(int yi = y; yi < y+height; yi++) // right
       if((yi%2) == 0)
-      terminal_buffer[(yi)*(int)gui_width+x+width-1] = colour;
+      set_framebuffer((yi)*(int)gui_width+x+width-1, colour);
 }
 
 void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
    if(vertical) {
       for(int yi = y; yi < y+length; yi++) {
-         terminal_buffer[yi*(int)gui_width+x] = colour;
+         set_framebuffer(yi*(int)gui_width+x, colour);
       }
    } else {
       for(int xi = x; xi < x+length; xi++) {
-         terminal_buffer[y*(int)gui_width+xi] = colour;
+         set_framebuffer(y*(int)gui_width+xi, colour);
       }
    }
 }
 
 void gui_clear(uint16_t colour) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
    for(int y = 0; y < (int)gui_height; y++) {
       for(int x = 0; x < (int)gui_width; x++) {
-         terminal_buffer[y*(int)gui_width+x] = colour;
+         set_framebuffer(y*(int)gui_width+x, colour);
       }
    }
    return;
@@ -188,15 +189,13 @@ extern void getFontLetter(char c, int* dest);
 int font_letter[FONT_WIDTH*FONT_HEIGHT];
 
 void gui_drawcharat(char c, uint16_t colour, int x, int y) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
-
    getFontLetter(c, font_letter);
 
    int i = 0;      
    for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
       for(int xi = x; xi < x+FONT_WIDTH; xi++) {
          if(font_letter[i] == 1)
-            terminal_buffer[yi*(int)gui_width+xi] = colour;
+            set_framebuffer(yi*(int)gui_width+xi, colour);
          i++;
       }
    }
@@ -213,8 +212,11 @@ void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowInde
    int i = 0;      
    for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
       for(int xi = x; xi < x+FONT_WIDTH; xi++) {
-         if(font_letter[i] == 1)
-            terminal_buffer[yi*(int)window->width+xi] = colour;
+         if(font_letter[i] == 1) {
+            int index = yi*(int)window->width+xi;
+            if(index >= 0 && index < window->width*(window->height-TITLEBAR_HEIGHT))
+               terminal_buffer[index] = colour;
+         }
          i++;
       }
    }
@@ -225,7 +227,9 @@ void gui_window_drawrect(uint16_t colour, int x, int y, int width, int height, i
    uint16_t *terminal_buffer = (uint16_t*)window->framebuffer;
    for(int yi = y; yi < y+height; yi++) {
       for(int xi = x; xi < x+width; xi++) {
-         terminal_buffer[yi*(int)window->width+xi] = colour;
+         int index = yi*(int)window->width+xi;
+         if(index >= 0 && index < window->width*(window->height-TITLEBAR_HEIGHT))
+            terminal_buffer[index] = colour;
       }
    }
    return;
@@ -246,7 +250,11 @@ void gui_window_scroll(int windowIndex) {
    int scrollY = FONT_HEIGHT+FONT_PADDING;
    for(int y = scrollY; y < window->height - TITLEBAR_HEIGHT; y++) {
       for(int x = window->x; x < window->x + window->width; x++) {
-         terminal_buffer[(y-scrollY)*window->width+x] = terminal_buffer[y*(int)window->width+x];
+         int srcIndex = y*(int)window->width+x;
+         int outIndex = (y-scrollY)*window->width+x;
+         if(srcIndex >= 0 && srcIndex < (int)gui_width*(int)gui_height
+         && outIndex >= 0 && outIndex < window->width*(window->height-TITLEBAR_HEIGHT))
+            terminal_buffer[outIndex] = terminal_buffer[srcIndex];
       }
    }
    // clear bottom
@@ -321,7 +329,7 @@ void gui_window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
 }
 
 void gui_window_clearbuffer(gui_window_t *window) {
-   for(int i = 0; i < window->width*window->height; i++) {
+   for(int i = 0; i < window->width*(window->height-TITLEBAR_HEIGHT); i++) {
       window->framebuffer[i] = COLOUR_WHITE;
    }
 }
@@ -349,8 +357,10 @@ bool gui_window_init(gui_window_t *window) {
    window->uparrow_func = &window_term_uparrow;
    window->downarrow_func = &window_term_downarrow;
    
+   window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
-      window->cmd_history[i] = malloc(TEXT_BUFFER_LENGTH);
+      if(i > 0)
+         window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH;
       window->cmd_history[i][0] = '\0';
    }
    window->cmd_history_pos = -1;
@@ -445,8 +455,7 @@ void gui_init(void) {
 void gui_desktop_draw();
 void gui_window_draw(int windowIndex);
 void gui_draw(void) {
-   //gui_clear(3);
-   
+   //gui_clear(3);   
    // make sure to draw selected last
    for(int i = NUM_WINDOWS-1; i >= 0; i--) {
       if(i != gui_selected_window)
@@ -503,13 +512,15 @@ extern void fat_test();
 extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, bool whiteIsTransparent);
 extern uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 
+extern void elf_run(void *regs, uint8_t *prog);
+
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
    char *command = selected->text_buffer;
 
    
    if(strcmp(command, "HELP")) {
-      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
+      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, ELF addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
    }
    else if(strcmp(command, "INIT")) {
       gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
@@ -526,6 +537,9 @@ void gui_checkcmd(void *regs) {
 
       gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
       gui_desktop_init();
+
+      gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
+      page_init();
    }
    else if(strcmp(command, "CLEAR")) {
       gui_window_clearbuffer(selected);
@@ -594,44 +608,63 @@ void gui_checkcmd(void *regs) {
       launch_task(2, regs, true);
    }
    else if(strcmp(command, "PROG3")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog3.bin");
+      fat_dir_t *entry = fat_parse_path("/sys/prog3.elf");
       if(entry == NULL) {
          gui_writestr("Not found\n", 0);
          return;
       }
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(3, progAddr, entry->fileSize, false);
-      launch_task(3, regs, true);
+      elf_run(regs, prog);
+      free((uint32_t)prog, entry->fileSize);
+   }
+   else if(strcmp(command, "PAGE")) {
+      page_init();
    }
    else if(strcmp(command, "TEST")) {
       extern uint32_t tos_kernel;
       extern uint32_t tos_program;
       extern uint8_t heap_kernel;
+      extern uint8_t heap_kernel_end;
       
-      gui_drawchar('\n', 0);
-      gui_writestr("TOS KERNEL ", 4);
+      gui_writestr("\nKERNEL ", 4);
+      gui_writeuint(0x7e00, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)0x7e00, 0);
+
+      gui_writestr("\nKERNEL END ", 4);
+      gui_writeuint(0x7e00 + 0x17e00, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)0x7e00 + 0x17e00, 0);
+
+      gui_writestr("\nTOS KERNEL ", 4);
       gui_writeuint((uint32_t)&tos_kernel, 0);
       gui_writestr(" 0x", 0);
       gui_writeuint_hex((uint32_t)&tos_kernel, 0);
 
-      gui_drawchar('\n', 0);
-      gui_writestr("TOS PROGRAM ", 4);
+      gui_writestr("\nTOS PROGRAM ", 4);
       gui_writeuint((uint32_t)&tos_program, 0);
       gui_writestr(" 0x", 0);
       gui_writeuint_hex((uint32_t)&tos_program, 0);
 
-      gui_drawchar('\n', 0);
-      gui_writestr("HEAP KERNEL ", 4);
+      gui_writestr("\nHEAP KERNEL ", 4);
       gui_writeuint((uint32_t)&heap_kernel, 0);
       gui_writestr(" 0x", 0);
       gui_writeuint_hex((uint32_t)&heap_kernel, 0);
 
-      gui_drawchar('\n', 0);
-      gui_writestr("HEAP KERNEL END ", 4);
-      gui_writeuint((uint32_t)&heap_kernel+0x0100000, 0);
+      gui_writestr("\nHEAP KERNEL END ", 4);
+      gui_writeuint((uint32_t)&heap_kernel_end, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&heap_kernel+0x0100000, 0);
+      gui_writeuint_hex((uint32_t)&heap_kernel_end, 0);
+
+      gui_writestr("\nFRAMEBUFFER ", 4);
+      gui_writeuint(framebuffer, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex(framebuffer, 0);
+
+      gui_writestr("\nFRAMEBUFFER END ", 4);
+      gui_writeuint(framebuffer + gui_get_framebuffer_size(), 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex(framebuffer + gui_get_framebuffer_size(), 0);
 
    }
    else if(strcmp(command, "ATA")) {
@@ -671,6 +704,14 @@ void gui_checkcmd(void *regs) {
          bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, false);
          selected->needs_redraw = true;
          gui_draw();
+      }
+   }
+   else if(strstartswith(command, "ELF")) {
+      char arg[10];
+      if(strsplit(arg, arg, command, ' ')) {
+         int addr = stoi((char*)arg);
+         uint8_t *prog = (uint8_t*)addr;
+         elf_run(regs, prog);
       }
    }
    else if(strstartswith(command, "FATDIR")) {
@@ -789,6 +830,21 @@ void gui_checkcmd(void *regs) {
    gui_drawchar('\n', 0);
 }
 
+void gui_keypress_switchtask(void *regs) {
+   int newtask = get_task_from_window(gui_selected_window);
+
+   if(newtask == get_current_task() || newtask == -1) return;
+
+   gui_window_writestr("Switching from task ", 0, 0);
+   gui_window_writenum(get_current_task(), 0, 0);
+   gui_window_writestr(" to task ", 0, 0);
+   gui_window_writenum(newtask, 0, 0);
+   gui_window_drawchar('\n', 0, 0);
+
+   switch_to_task(newtask, regs);
+
+}
+
 void gui_keypress(char key) {
 
    if(gui_selected_window >= 0) {
@@ -814,12 +870,29 @@ void gui_backspace() {
    }
 }
 
-void gui_uparrow() {
+void gui_uparrow(registers_t *regs) {
+
    if(gui_selected_window >= 0) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
-      if(selected->uparrow_func != NULL)
-         (*(selected->uparrow_func))(gui_selected_window);
+      if(selected->uparrow_func != NULL) {
+         int taskIndex = get_current_task();
+         task_state_t *task = &gettasks()[taskIndex];
+
+         if(taskIndex == -1 || !task->enabled || get_current_task_window() != gui_selected_window || selected->uparrow_func == (void *)window_term_uparrow) {
+            // launch into function directly as kernel
+            gui_window_writestr("\nCalling function as kernel\n", 0, gui_selected_window);
+
+            (*(selected->uparrow_func))(gui_selected_window);
+         } else {
+            // run as task
+            gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+
+            task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), gui_selected_window);
+         }
+      }
    }
+   
+   
 }
 
 void gui_downarrow() {
@@ -851,8 +924,6 @@ void gui_window_draw(int windowIndex) {
       gui_drawcharat('x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
       gui_drawcharat('-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
 
-      uint16_t *terminal_buffer = (uint16_t*)framebuffer;
-
       if(window->framebuffer != NULL) {
          // draw window content/framebuffer
          for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
@@ -860,7 +931,7 @@ void gui_window_draw(int windowIndex) {
                // ignore pixels covered by the currently selected window
                int screenY = (window->y + y + TITLEBAR_HEIGHT);
                int screenX = (window->x + x);
-               if(windowIndex != gui_selected_window
+               if(windowIndex != gui_selected_window && gui_selected_window >= 0
                && screenX >= gui_windows[gui_selected_window].x
                && screenX < gui_windows[gui_selected_window].x + gui_windows[gui_selected_window].width
                && screenY >= gui_windows[gui_selected_window].y
@@ -869,7 +940,7 @@ void gui_window_draw(int windowIndex) {
 
                int index = screenY*gui_width + screenX;
                int w_index = y*window->width + x;
-               terminal_buffer[index] = window->framebuffer[w_index];
+               set_framebuffer(index, window->framebuffer[w_index]);
             }
          }
       }
@@ -1037,16 +1108,16 @@ void gui_cursor_save_bg() {
    uint16_t *terminal_buffer = (uint16_t*) framebuffer;
    for(int y = gui_mouse_y; y < gui_mouse_y + FONT_HEIGHT; y++) {
       for(int x = gui_mouse_x; x < gui_mouse_x + FONT_WIDTH; x++) {
-         cursor_buffer[(y-gui_mouse_y)*FONT_WIDTH+(x-gui_mouse_x)] = terminal_buffer[y*(int)gui_width+x];
+         if(x >= 0 && x < (int)gui_width && y >=0 && y < (int)gui_height)
+            cursor_buffer[(y-gui_mouse_y)*FONT_WIDTH+(x-gui_mouse_x)] = terminal_buffer[y*(int)gui_width+x];
       }
    }
 }
 
 void gui_cursor_restore_bg(int old_x, int old_y) {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
    for(int y = old_y; y < old_y + FONT_HEIGHT; y++) {
       for(int x = old_x; x < old_x + FONT_WIDTH; x++) {
-         terminal_buffer[y*(int)gui_width+x] = cursor_buffer[(y-old_y)*FONT_WIDTH+(x-old_x)];
+         set_framebuffer(y*(int)gui_width+x, cursor_buffer[(y-old_y)*FONT_WIDTH+(x-old_x)]);
       }
    }
 }
@@ -1064,17 +1135,23 @@ void mouse_update(int relX, int relY) {
    gui_mouse_x += relX;
    gui_mouse_y -= relY;
 
-   if(gui_mouse_x > (int)gui_width)
+   if(gui_mouse_x >= (int)gui_width)
       gui_mouse_x %= gui_width;
 
-   if(gui_mouse_y > (int)gui_height)
+   if(gui_mouse_y >= (int)gui_height)
       gui_mouse_y %= gui_height;
 
    if(gui_mouse_x < 0)
-      gui_mouse_x = gui_width - gui_mouse_x;
+      gui_mouse_x = gui_width + gui_mouse_x;
 
    if(gui_mouse_y < 0)
-      gui_mouse_y = gui_height - gui_mouse_y;
+      gui_mouse_y = gui_height + gui_mouse_y;
+
+   // just in case
+   if(gui_mouse_x < 0 || gui_mouse_x >= (int)gui_width)
+      gui_mouse_x = 0;
+   if(gui_mouse_y < 0 || gui_mouse_y >= (int)gui_height)
+      gui_mouse_y = 0;
 
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
 
@@ -1191,6 +1268,10 @@ void mouse_leftrelease() {
 
 uint16_t *gui_get_framebuffer() {
    return (uint16_t*)framebuffer;
+}
+
+uint32_t gui_get_framebuffer_size() {
+   return gui_width*gui_height*2;
 }
 
 gui_window_t *gui_get_windows() {

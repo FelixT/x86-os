@@ -9,6 +9,7 @@
 #include "tasks.h"
 #include "fat.h"
 #include "window.h"
+#include "paging.h"
 
 #define FONT_WIDTH 7
 #define FONT_HEIGHT 11
@@ -89,6 +90,7 @@ void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height);
 void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height);
 void gui_drawcharat(char c, uint16_t colour, int x, int y);
 
+void gui_keypress_switchtask(void *regs);
 void gui_keypress(char key);
 void gui_return(void *regs);
 void gui_backspace();
@@ -107,6 +109,7 @@ void gui_window_writestrat(char *c, uint16_t colour, int x, int y, int windowInd
 void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex);
 
 uint16_t *gui_get_framebuffer();
+uint32_t gui_get_framebuffer_size();
 gui_window_t *gui_get_windows();
 int gui_get_selected_window();
 void gui_set_selected_window(int windowIndex);

@@ -64,3 +64,10 @@ static inline void exit(int status) {
       "b" (status)
    );
 }
+
+static inline void end_subroutine() {
+   asm volatile(
+      "int $0x30"
+      :: "a" (12)
+   );
+}
