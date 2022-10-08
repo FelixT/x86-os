@@ -34,6 +34,7 @@ typedef struct gui_window_t {
    void (*backspace_func)(int windowIndex);
    void (*uparrow_func)(int windowIndex);
    void (*downarrow_func)(int windowIndex);
+   void (*click_func)(int windowIndex, int x, int y);
 
 } gui_window_t;
 

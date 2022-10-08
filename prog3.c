@@ -2,44 +2,48 @@
 
 #include "prog.h"
 
-volatile uint32_t num;
+volatile uint16_t *framebuffer;
+volatile uint32_t width;
+volatile uint32_t height;
 
-void test(int windowIndex) {
+void uparrow(int windowIndex) {
 
-  write_num(windowIndex);
+  write_uint(width);
   write_newline();
 
-  num = 4;
-
-  for(int i = 0; i < 10; i++)
-  //while(1==1)
-    write_num(5);
-    
+  write_uint(height);
   write_newline();
 
   end_subroutine();
 
 }
 
+void click(int windowIndex, int x, int y) {
+
+  if(y >= 0) {
+    framebuffer[y*width+x] = 0;
+  } // otherwise we clicked on the titlebar
+
+  end_subroutine();
+
+}
+
 void _start() {
-  num = 9;
+  // init
+  //width = malloc();
+  //height = malloc();
 
-  asm volatile(
-    "int $0x30"
-    :: "a" (11),
-    "b" ((uint32_t)&test)
-  );
-    
-  uint16_t *buf = (uint16_t*)get_framebuffer();
+  framebuffer = (uint16_t*)get_framebuffer();
 
-  for(int i = 0; i < 1000; i++)
-    buf[i] = 0;
-
-  write_newline();
-  redraw();
-
+  override_uparrow((uint32_t)&uparrow);
+  override_click((uint32_t)&click);
+  width = get_width();
+  height = get_height();
+  
+  // main program loop
   while(1 == 1) {
-      write_num(num);
+    for(int i = 0; i < width; i++)
+      framebuffer[i] = 0;
   }
 
   exit(0);

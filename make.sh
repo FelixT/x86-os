@@ -37,7 +37,7 @@ nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
-$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra prog3.c -o o/prog3.elf 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra prog3.c -o o/prog3.elf 
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin

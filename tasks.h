@@ -37,6 +37,8 @@ typedef struct task_state_t {
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;
    registers_t routine_return_regs;
+   uint32_t *routine_args;
+   int routine_argc;
    bool in_routine;
 } task_state_t;
 
@@ -58,7 +60,7 @@ int get_current_task_window();
 int get_current_task();
 int get_task_from_window(int windowIndex);
 
-void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t arg);
+void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc);
 void task_subroutine_end(registers_t *regs);
 
 #endif

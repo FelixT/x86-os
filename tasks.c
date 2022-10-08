@@ -149,7 +149,7 @@ int get_task_from_window(int windowIndex) {
    return -1;
 }
 
-void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t arg) {
+void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine) {
       gui_window_writestr("Already in a subroutine, returning.\n", 0, 0);
@@ -160,9 +160,14 @@ void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t arg) {
 
    tasks[current_task].routine_return_regs = *regs;
 
-   // push argument to stack
-   regs->useresp -= 4;
-   ((uint32_t*)regs->useresp)[0] = arg;
+   tasks[current_task].routine_args = args;
+   tasks[current_task].routine_argc = argc;
+
+   // push arguments to stack
+   for(int i = 0; i < argc; i++) {
+      regs->useresp -= 4;
+      ((uint32_t*)regs->useresp)[0] = args[i];
+   }
 
    // push unused return address to stack
    regs->useresp -= 4;
@@ -191,7 +196,7 @@ void task_subroutine_end(registers_t *regs) {
    // restore registers
    *regs = tasks[current_task].routine_return_regs;
 
-   tasks[current_task].in_routine = false;
+   free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t));
 
-   
+   tasks[current_task].in_routine = false;
 }

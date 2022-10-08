@@ -35,7 +35,7 @@ static inline uint32_t get_framebuffer() {
    uint32_t output;
 
    asm volatile (
-      "int $0x30;movl %%ecx, %0;"
+      "int $0x30;movl %%ebx, %0;"
       : "=r" (output)
       : "a" (7)
    );
@@ -65,9 +65,61 @@ static inline void exit(int status) {
    );
 }
 
+static inline void override_uparrow(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (11),
+      "b" (addr)
+   );
+}
+
 static inline void end_subroutine() {
    asm volatile(
       "int $0x30"
       :: "a" (12)
    );
+}
+
+static inline void override_click(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (13),
+      "b" (addr)
+   );
+}
+
+static inline int get_width() {
+   uint32_t output;
+
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (output)
+      : "a" (14)
+   );
+
+   return output;
+}
+
+static inline int get_height() {
+   uint32_t output;
+
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (output)
+      : "a" (15)
+   );
+
+   return output;
+}
+
+static inline uint32_t *malloc() {
+   uint32_t addr;
+
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (addr)
+      : "a" (16)
+   );
+
+   return (uint32_t*)addr;
 }

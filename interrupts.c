@@ -139,14 +139,15 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 1) {
       // WRITE STRING...
-      // ebx contains string address
-      //gui_writestr((char*)regs->ebx, 0);
+      // IN: ebx = string address
+
       gui_window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
    }
 
    if(regs->eax == 2) {
       // WRITE NUMBER...
-      // ebx contains int
+      // IN: ebx = int
+
       gui_window_writenum(regs->ebx, 0, get_current_task_window());
       //gui_writenum(regs->ebx, 0);
    }
@@ -159,8 +160,9 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 4) {
       // show program stack contents
+
       for(int i = 0; i < 64; i++) {
-         gui_writenum(((int*)regs->esp)[i], 0);
+         gui_writenum(((int*)regs->esp)[i], get_current_task_window());
          gui_writestr(" ", 0);
       }
    }
@@ -183,7 +185,7 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 7) {
       // returns framebuffer address in ebx
-      regs->ecx = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
+      regs->ebx = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
    }
 
    if(regs->eax == 8) {
@@ -211,7 +213,7 @@ void software_handler(registers_t *regs) {
 
       uint32_t addr = regs->ebx;
 
-      gui_window_writeuint(get_current_task_window(), 0, get_current_task_window());
+      gui_window_writeuint(addr, 0, get_current_task_window());
       gui_window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
@@ -223,12 +225,51 @@ void software_handler(registers_t *regs) {
 
       task_subroutine_end(regs) ;
    }
+
+   if(regs->eax == 13) {
+      // override mouse click function
+
+      uint32_t addr = regs->ebx;
+
+      gui_window_writeuint(addr, 0, get_current_task_window());
+      gui_window_writestr("Overriding click function\n", 0, get_current_task_window());
+
+      gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
+   }
+
+   if(regs->eax == 14) {
+      // get window width
+      regs->ebx = gui_get_windows()[get_current_task_window()].width;
+   }
+
+   if(regs->eax == 15) {
+      // get window (framebuffer) height
+      regs->ebx = gui_get_windows()[get_current_task_window()].height - TITLEBAR_HEIGHT;
+   }
+
+   if(regs->eax == 16) {
+      // malloc
+      // OUT: ebx = addr
+      uint32_t *mem = malloc(1); // 4K
+      regs->ebx = (uint32_t)mem;
+
+      // TODO: use special usermode malloc rather than the kernel malloc
+   }
+
+   if(regs->eax == 16) {
+      // malloc
+      // OUT: ebx = addr
+      uint32_t *mem = malloc(1); // 4K
+      regs->ebx = (uint32_t)mem;
+
+      // TODO: use special usermode malloc rather than the kernel malloc
+   }
 }  
 
 void keyboard_handler(registers_t *regs) {
    unsigned char scan_code = inb(0x60);
 
-   if(videomode == 1) gui_keypress_switchtask(regs);
+   if(videomode == 1) gui_interrupt_switchtask(regs);
 
    if(scan_code == 28)  { // return
 

@@ -356,6 +356,9 @@ bool gui_window_init(gui_window_t *window) {
    window->backspace_func = &window_term_backspace;
    window->uparrow_func = &window_term_uparrow;
    window->downarrow_func = &window_term_downarrow;
+
+   // other functions without default behaviour
+   window->click_func = NULL;
    
    window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
@@ -830,7 +833,9 @@ void gui_checkcmd(void *regs) {
    gui_drawchar('\n', 0);
 }
 
-void gui_keypress_switchtask(void *regs) {
+void gui_interrupt_switchtask(void *regs) {
+   // switch to task of selected window to handle interrupt
+
    int newtask = get_task_from_window(gui_selected_window);
 
    if(newtask == get_current_task() || newtask == -1) return;
@@ -887,7 +892,10 @@ void gui_uparrow(registers_t *regs) {
             // run as task
             gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
 
-            task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), gui_selected_window);
+
+            uint32_t *args = malloc(sizeof(uint32_t) * 1);
+            args[0] = gui_selected_window;
+            task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), args, 1);
          }
       }
    }
@@ -900,7 +908,8 @@ void gui_downarrow() {
       gui_window_t *selected = &gui_windows[gui_selected_window];
       if(selected->downarrow_func != NULL)
          (*(selected->downarrow_func))(gui_selected_window);
-   }}
+   }
+}
 
 void gui_window_draw(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
@@ -1179,14 +1188,18 @@ bool mouse_clicked_on_window(void *regs, int index) {
          int relY = gui_mouse_y - window->y;
 
          // minimise
-         if(relY < 10 && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3))
+         if(relY < 10 && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3)) {
             window->minimised = true;
+            gui_selected_window = -1;
+            return false;
+         }
 
          // close
          if(relY < 10 && relX > window->width - (FONT_WIDTH+3)) {
             gui_window_close(regs, index);
             return false;
          }
+
 
          window->active = true;
          window->needs_redraw = true;
@@ -1225,18 +1238,22 @@ void mouse_leftclick(void *regs, int relX, int relY) {
    
    mouse_held = true;
 
+   bool clickedOnWindow = false;
+
    // check if clicked on current window
    if(mouse_clicked_on_window(regs, gui_selected_window)) {
       // 
+      clickedOnWindow = true;
    } else {
       // check other windows
 
       gui_selected_window = -1;
       for(int i = 0; i < NUM_WINDOWS; i++) {
-         if(mouse_clicked_on_window(regs, i))
+         if(mouse_clicked_on_window(regs, i)) {
+            clickedOnWindow = true;
             break;
+         }
       }
-   
    }
 
    // make all other windows inactive
@@ -1248,8 +1265,27 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       }
    }
 
-   if(desktop_enabled)
-      gui_desktop_click();
+   if(clickedOnWindow) {
+      gui_interrupt_switchtask(regs);
+      gui_window_t *window = &gui_windows[gui_selected_window];
+
+      if(get_current_task_window() == gui_selected_window && window->click_func != NULL) {
+         gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+
+         uint32_t *args = malloc(sizeof(uint32_t) * 3);
+         args[2] = gui_selected_window;
+         args[1] = gui_mouse_x - window->x;
+         args[0] = gui_mouse_y - (window->y + TITLEBAR_HEIGHT);
+
+         task_call_subroutine(regs, (uint32_t)(window->click_func), args, 3);
+      }
+
+   } else {
+
+      if(desktop_enabled)
+         gui_desktop_click();
+   
+   }
 
    gui_draw();
 
