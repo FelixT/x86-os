@@ -1,8 +1,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
 #include "tasks.h"
 #include "gui.h"
+#include "fat.h"
 
 typedef struct {
    uint16_t    isr_low;      // lower 16 bits of isr address/offset

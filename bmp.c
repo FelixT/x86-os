@@ -69,7 +69,7 @@ uint16_t bmp_get_colour(uint8_t *bmp, int x, int y) {
       return pixels16bit[index];
 }
 
-void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, bool whiteIsTransparent) {
+void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent) {
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    
@@ -85,10 +85,10 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHe
    uint32_t rowSize = ((info->bpp * info->width+(32-1))/32)*4; // has to be multiple of 4 bytes, bytes per row
 
    // pixels starts at bottom, works up left to right
-   for(int y = 0; y < info->height; y++) {
-      for(int x = 0; x < info->width; x++) {
-         int index = (info->height-(y+1))*rowSize+x;
-         int index16 = ((info->height-(y+1))*rowSize)/2+x;
+   for(int yi = 0; yi < info->height; yi++) {
+      for(int xi = 0; xi < info->width; xi++) {
+         int index = (info->height-(yi+1))*rowSize+xi;
+         int index16 = ((info->height-(yi+1))*rowSize)/2+xi;
 
          // 8bit
          uint16_t colour = gui_rgb16(colours[pixels8bit[index]].red, colours[pixels8bit[index]].green, colours[pixels8bit[index]].blue);
@@ -97,8 +97,9 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHe
             colour = pixels16bit[index16];
 
          if(!whiteIsTransparent || colour != COLOUR_WHITE) {
-            if(x >= 0 && y >= 0 && x < screenWidth && y < screenHeight) {
-               framebuffer[y*screenWidth+x] = colour;
+            int i = (yi+y)*screenWidth+(xi+x);
+            if(i >= 0 && i < screenWidth * screenHeight) {
+               framebuffer[i] = colour;
             }
          }
       }

@@ -29,6 +29,8 @@ uint8_t *gui_bgimage;
 
 extern bool strcmp(char* str1, char* str2);
 extern int strlen(char* str);
+extern void terminal_numtostr(int num, char *out);
+extern void terminal_uinttostr(uint32_t num, char *out);
 
 static inline void set_framebuffer(int index, uint16_t colour) {
    if(index < 0 || index >= (int)gui_width*(int)gui_height) {
@@ -243,6 +245,15 @@ void gui_window_writestrat(char *c, uint16_t colour, int x, int y, int windowInd
    }
 }
 
+void gui_window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex) {
+   if(num < 0)
+      gui_window_drawcharat('-', colour, x+=(FONT_WIDTH+FONT_PADDING), y, windowIndex);
+
+   char out[20];
+   terminal_numtostr(num, out);
+   gui_window_writestrat(out, colour, x, y, windowIndex);
+}
+
 void gui_window_scroll(int windowIndex) {
    gui_window_t *window = &gui_windows[windowIndex];
    uint16_t *terminal_buffer = window->framebuffer;
@@ -311,8 +322,6 @@ void gui_window_writestr(char *c, uint16_t colour, int windowIndex) {
       gui_window_drawchar(c[i++], colour, windowIndex);
 }
 
-extern void terminal_numtostr(int num, char *out);
-extern void terminal_uinttostr(uint32_t num, char *out);
 void gui_window_writenum(int num, uint16_t colour, int windowIndex) {
    if(num < 0)
       gui_window_drawchar('-', colour, windowIndex);
@@ -328,9 +337,9 @@ void gui_window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
    gui_window_writestr(out, colour, windowIndex);
 }
 
-void gui_window_clearbuffer(gui_window_t *window) {
+void gui_window_clearbuffer(gui_window_t *window, uint16_t colour) {
    for(int i = 0; i < window->width*(window->height-TITLEBAR_HEIGHT); i++) {
-      window->framebuffer[i] = COLOUR_WHITE;
+      window->framebuffer[i] = colour;
    }
 }
 
@@ -370,7 +379,7 @@ bool gui_window_init(gui_window_t *window) {
 
    window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
    if(window->framebuffer == NULL) return false;
-   gui_window_clearbuffer(window);
+   gui_window_clearbuffer(window, COLOUR_WHITE);
    return true;
 }
 
@@ -507,12 +516,7 @@ void mouse_enable();
 extern void ata_identify(bool primaryBus, bool masterDrive);
 extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
 
-extern void fat_setup();
-extern void fat_read_dir(uint16_t clusterNo);
-extern uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
-extern void fat_test();
-
-extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, bool whiteIsTransparent);
+extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
 extern uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 
 extern void elf_run(void *regs, uint8_t *prog);
@@ -545,7 +549,7 @@ void gui_checkcmd(void *regs) {
       page_init();
    }
    else if(strcmp(command, "CLEAR")) {
-      gui_window_clearbuffer(selected);
+      gui_window_clearbuffer(selected, COLOUR_WHITE);
       selected->text_x = FONT_PADDING;
       selected->text_y = FONT_PADDING;
       selected->text_index = 0;
@@ -704,7 +708,7 @@ void gui_checkcmd(void *regs) {
          int addr = stoi((char*)arg);
          uint8_t *bmp = (uint8_t*)addr;
          uint16_t *buffer = selected->framebuffer;
-         bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, false);
+         bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, 0, 0, false);
          selected->needs_redraw = true;
          gui_draw();
       }
@@ -721,7 +725,17 @@ void gui_checkcmd(void *regs) {
       char arg[5];
       if(strsplit(arg, arg, command, ' ')) {
          int cluster = stoi((char*)arg);
-         fat_read_dir((uint16_t)cluster);
+         int size = fat_get_dir_size((uint16_t) cluster);
+
+         fat_dir_t *items = malloc(32 * size);
+         fat_read_dir((uint16_t)cluster, items);
+
+         for(int i = 0; i < size; i++) {
+            if(items[i].filename[0] == 0) break;
+            fat_parse_dir_entry(&items[i]);
+         }
+
+         free((uint32_t)items, 32 * size);
       }
    }
    else if(strstartswith(command, "FATFILE")) {
@@ -885,30 +899,42 @@ void gui_uparrow(registers_t *regs) {
 
          if(taskIndex == -1 || !task->enabled || get_current_task_window() != gui_selected_window || selected->uparrow_func == (void *)window_term_uparrow) {
             // launch into function directly as kernel
-            gui_window_writestr("\nCalling function as kernel\n", 0, gui_selected_window);
+            //gui_window_writestr("\nCalling function as kernel\n", 0, gui_selected_window);
 
             (*(selected->uparrow_func))(gui_selected_window);
          } else {
             // run as task
-            gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+            //gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
 
-
-            uint32_t *args = malloc(sizeof(uint32_t) * 1);
-            args[0] = gui_selected_window;
-            task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), args, 1);
+            task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), NULL, 0);
          }
       }
    }
    
-   
 }
 
-void gui_downarrow() {
+void gui_downarrow(registers_t *regs) {
+
    if(gui_selected_window >= 0) {
       gui_window_t *selected = &gui_windows[gui_selected_window];
-      if(selected->downarrow_func != NULL)
-         (*(selected->downarrow_func))(gui_selected_window);
+      if(selected->downarrow_func != NULL) {
+         int taskIndex = get_current_task();
+         task_state_t *task = &gettasks()[taskIndex];
+
+         if(taskIndex == -1 || !task->enabled || get_current_task_window() != gui_selected_window || selected->downarrow_func == (void *)window_term_downarrow) {
+            // launch into function directly as kernel
+            //gui_window_writestr("\nCalling function as kernel\n", 0, gui_selected_window);
+
+            (*(selected->downarrow_func))(gui_selected_window);
+         } else {
+            // run as task
+            //gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+
+            task_call_subroutine(regs, (uint32_t)(selected->downarrow_func), NULL, 0);
+         }
+      }
    }
+   
 }
 
 void gui_window_draw(int windowIndex) {
@@ -1065,8 +1091,8 @@ void gui_window_close(void *regs, int windowIndex) {
 
 void gui_desktop_draw() {
    //gui_writeuint((uint32_t)icon_window, 0);
-   bmp_draw(gui_bgimage, (uint16_t *)framebuffer, gui_width, gui_height, 0);
-   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, gui_height, 1);
+   bmp_draw(gui_bgimage, (uint16_t *)framebuffer, gui_width, gui_height, 0, 0, 0);
+   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, gui_height, 0, 0, 1);
 }
 
 void gui_desktop_click() {
@@ -1270,14 +1296,13 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       gui_window_t *window = &gui_windows[gui_selected_window];
 
       if(get_current_task_window() == gui_selected_window && window->click_func != NULL) {
-         gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+         //gui_window_writestr("\nCalling function as task\n", 0, gui_selected_window);
 
-         uint32_t *args = malloc(sizeof(uint32_t) * 3);
-         args[2] = gui_selected_window;
+         uint32_t *args = malloc(sizeof(uint32_t) * 2);
          args[1] = gui_mouse_x - window->x;
          args[0] = gui_mouse_y - (window->y + TITLEBAR_HEIGHT);
 
-         task_call_subroutine(regs, (uint32_t)(window->click_func), args, 3);
+         task_call_subroutine(regs, (uint32_t)(window->click_func), args, 2);
       }
 
    } else {

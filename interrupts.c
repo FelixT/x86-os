@@ -135,13 +135,17 @@ char scan_to_char(int scan_code) {
    return '\0';
 }
 
+extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
+
 void software_handler(registers_t *regs) {
 
    if(regs->eax == 1) {
       // WRITE STRING...
       // IN: ebx = string address
-
-      gui_window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
+      if(gettasks()[get_current_task()].vmem_start == 0) // not elf
+         gui_window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
+      else // elf
+         gui_window_writestr((char*)regs->ebx, 0, get_current_task_window());
    }
 
    if(regs->eax == 2) {
@@ -264,6 +268,117 @@ void software_handler(registers_t *regs) {
 
       // TODO: use special usermode malloc rather than the kernel malloc
    }
+
+   if(regs->eax == 17) {
+      // fat get bpb
+
+      fat_bpb_t *bpb = malloc(sizeof(fat_bpb_t));
+      *bpb = fat_get_bpb(); // refresh fat tables
+
+      regs->ebx = (uint32_t)bpb;
+
+   }
+
+   if(regs->eax == 18) {
+      // fat get root
+
+      fat_dir_t *items = malloc(32 * fat_get_bpb().noRootEntries);
+      fat_read_root(items);
+
+      regs->ebx = (uint32_t)items;
+
+   }
+
+   if(regs->eax == 19) {
+      // fat parse path
+      // IN: ebx = addr of char* path
+      // OUT: ebx = addr of fat_dir_t entry for path or 0 if doesn't exist
+
+      fat_dir_t *entry = fat_parse_path((char*)regs->ebx);
+      regs->ebx = (uint32_t)entry;
+
+   }
+
+   if(regs->eax == 20) {
+      // fat read file
+      // IN: ebx = first cluster no
+      // IN: ecx = file size
+      // OUT: ebx = addr of file content buffer
+
+      uint8_t *content = fat_read_file(regs->ebx, regs->ecx);
+
+      regs->ebx = (uint32_t)content;
+
+   }
+
+   if(regs->eax == 21) {
+      // draw bmp
+      // IN: ebx = bmp address
+      // IN: ecx = x
+      // IN: edx = y
+      gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+
+      bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, false);
+
+   }
+
+   if(regs->eax == 22) {
+      // write str at
+      // IN: ebx = string address
+      // IN: ecx = x
+      // IN: edx = y
+      gui_window_writestrat((char*)regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
+
+   }
+
+   if(regs->eax == 23) {
+      // clear window
+      // IN: ebx = colour
+      gui_window_clearbuffer(&gui_get_windows()[get_current_task_window()], (uint16_t)regs->ebx);
+
+   }
+
+   if(regs->eax == 24) {
+      // fat get directory size
+      // IN: ebx = directory firstClusterNo
+      // OUT: ebx = directory size
+      regs->ebx = (uint32_t)fat_get_dir_size(regs->ebx);
+   }
+
+   if(regs->eax == 25) {
+      // fat get directory size
+      // IN: ebx = directory firstClusterNo
+      // OUT: ebx
+      fat_dir_t *items = malloc(32 * fat_get_dir_size(regs->ebx));
+      fat_read_dir((uint16_t)regs->ebx, items);
+      regs->ebx = (uint32_t)items;
+   }
+
+   if(regs->eax == 26) {
+      // print uint ebx to window 0
+      gui_window_writeuint(regs->ebx, 0, 0);
+      gui_window_writestr("\n", 0, 0);
+   }
+
+   if(regs->eax == 27) {
+      // override downarrow window function
+      uint32_t addr = regs->ebx;
+
+      gui_window_writeuint(addr, 0, get_current_task_window());
+      gui_window_writestr("Overriding downarrow function\n", 0, get_current_task_window());
+
+      gui_get_windows()[get_current_task_window()].downarrow_func = (void *)(addr);
+   }
+
+   if(regs->eax == 28) {
+      // write num at
+      // IN: ebx = num
+      // IN: ecx = x
+      // IN: edx = y
+      gui_window_writenumat(regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
+
+   }
+
 }  
 
 void keyboard_handler(registers_t *regs) {

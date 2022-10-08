@@ -107,6 +107,8 @@ void gui_window_writenum(int num, uint16_t colour, int windowIndex);
 void gui_window_draw(int windowIndex);
 void gui_window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex);
 void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex);
+void gui_window_clearbuffer(gui_window_t *window, uint16_t colour);
+void gui_window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
 
 uint16_t *gui_get_framebuffer();
 uint32_t gui_get_framebuffer_size();

@@ -9,7 +9,7 @@
 
 uint32_t baseAddr = 64000;
 
-fat_bpb_t *fat_bpb;
+fat_bpb_t *fat_bpb = NULL;
 fat_ebr_t *fat_ebr;
 uint32_t noSectors;
 uint32_t noClusters;
@@ -17,10 +17,10 @@ uint32_t noClusters;
 extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
 extern uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
 
-void fat_read_dir(uint16_t clusterNo);
-
 void fat_get_info() {
    // get drive formatting info
+   free((uint32_t)fat_bpb, sizeof(fat_bpb_t) + sizeof(fat_ebr_t));
+
    uint8_t *buf = ata_read_exact(true, true, baseAddr, sizeof(fat_bpb_t) + sizeof(fat_ebr_t));
 
    fat_bpb = (fat_bpb_t*)(&buf[0]);
@@ -88,7 +88,7 @@ bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension)
    return true;
 }
 
-void fat_read_root() {
+void fat_read_root(fat_dir_t *items) {
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t rootDirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
 
@@ -96,16 +96,21 @@ void fat_read_root() {
    gui_writestr("\n", 0);
 
    uint32_t offset = 0;
+
    // get each file/dir in root
    for(int i = 0; i < fat_bpb->noRootEntries; i++) {
-      uint8_t *buf2 = ata_read_exact(true, true, rootDirAddr + offset, sizeof(fat_dir_t));
-      fat_dir_t *fat_dir = (fat_dir_t*)buf2;
-      if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
+      fat_dir_t *dir = (fat_dir_t*)ata_read_exact(true, true, rootDirAddr + offset, sizeof(fat_dir_t));
+      items[i] = *dir;
 
-      fat_parse_dir_entry(fat_dir);
+      if(dir->filename[0] == 0) {
+         // no more files/dirs in directory
+         free((uint32_t)dir, sizeof(fat_dir_t));
+         break;
+      }
 
       offset+=32; // each entry is 32 bytes
-      free((uint32_t)buf2, sizeof(fat_dir_t));
+
+      free((uint32_t)dir, sizeof(fat_dir_t));
    }
 
 }
@@ -114,16 +119,40 @@ void fat_setup() {
    
    fat_get_info();
 
-   fat_read_root();
+   fat_dir_t *items = malloc(32 * fat_bpb->noRootEntries);
+   fat_read_root(items);
+   for(int i = 0; i < fat_bpb->noRootEntries; i++) {
+      if(items[i].filename[0] == 0) break;
+      fat_parse_dir_entry(&items[i]);
+   }
+   free((uint32_t)items, 32 * fat_bpb->noRootEntries);
 
-   //gui_drawchar('\n', 0);
-
-   //fat_read_dir(3);
-
-   //fat_read_file(7, 0);
 }
 
-void fat_read_dir(uint16_t clusterNo) {
+int fat_get_dir_size(uint16_t clusterNo) {
+uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
+   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
+   uint32_t firstDataSector = rootSector + rootSize;
+   uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+
+   uint32_t offset = 0;
+
+   uint32_t dirAddr = baseAddr + dirFirstSector*fat_bpb->bytesPerSector;
+
+   bool loop = true;
+   // get each file/dir in dir
+   while(loop) {
+      fat_dir_t *dir = (fat_dir_t*)ata_read_exact(true, true, dirAddr + offset, sizeof(fat_dir_t));
+      
+      if(dir->filename[0] == 0) loop = false; // no more files/dirs in directory
+
+      offset+=32; // each entry is 32 bytes
+      free((uint32_t)dir, sizeof(fat_dir_t));
+   }
+   return offset/32;
+}
+
+void fat_read_dir(uint16_t clusterNo, fat_dir_t *items) {
    uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t firstDataSector = rootSector + rootSize;
@@ -132,21 +161,20 @@ void fat_read_dir(uint16_t clusterNo) {
    uint32_t offset = 0;
 
    uint32_t dirAddr = baseAddr + dirFirstSector*fat_bpb->bytesPerSector;
-   gui_drawchar('\n', 0);
-   gui_writeuint(dirAddr, 0);
-   gui_drawchar('\n', 0);
-   //return;
 
+   int i = 0;
+   bool loop = true;
    // get each file/dir in dir
-   while(true) {
-      uint8_t *buf2 = ata_read_exact(true, true, dirAddr + offset, sizeof(fat_dir_t));
-      fat_dir_t *fat_dir = (fat_dir_t*)buf2;
-      if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
+   while(loop) {
+      fat_dir_t *dir = (fat_dir_t*)ata_read_exact(true, true, dirAddr + offset, sizeof(fat_dir_t));
+      items[i] = *dir;
 
-      fat_parse_dir_entry(fat_dir);
-      
+      if(dir->filename[0] == 0) loop = false; // no more files/dirs in directory
+
       offset+=32; // each entry is 32 bytes
-      free((uint32_t)buf2, sizeof(fat_dir_t));
+      free((uint32_t)dir, sizeof(fat_dir_t));
+
+      i++;
    }
 
 }
@@ -389,4 +417,8 @@ void fat_test() {
    //fat_dir_t *bmpDir = fat_find_in_root("bmp", "");
    //fat_dir_t *file = fat_find_in_dir(bmpDir->firstClusterNo, "file", "bmp");
    //fat_read_file(file->firstClusterNo, file->fileSize);
+}
+
+fat_bpb_t fat_get_bpb() {
+   return *fat_bpb;
 }
