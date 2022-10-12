@@ -486,10 +486,15 @@ void exception_handler(int int_no, registers_t *regs) {
 	         asm volatile("mov %%cr2, %0" : "=r" (addr));
             gui_window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
             gui_window_writeuint(addr, 0, 0);
-            gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+            gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+            gui_window_writeuint(page_getphysical(addr), 0, 0);
+            gui_window_writestr("> with eip ", gui_rgb16(255, 100, 100), 0);
             gui_window_writeuint(regs->eip, 0, 0);
+            gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+            gui_window_writeuint(page_getphysical(regs->eip), 0, 0);
+            gui_window_writestr(">\n", 0, 0);
 
-            gui_window_writestr("\n", 0, 0);
+            //while(true);
          }
 
          gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);

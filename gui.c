@@ -347,8 +347,8 @@ bool gui_window_init(gui_window_t *window) {
    strcpy(window->title, " TERMINAL");
    window->x = NUM_WINDOWS*8;
    window->y = NUM_WINDOWS*8;
-   window->width = 360;
-   window->height = 240;
+   window->width = 380;
+   window->height = 280;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = FONT_PADDING;
@@ -519,7 +519,7 @@ extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *
 extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
 extern uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 
-extern void elf_run(void *regs, uint8_t *prog);
+extern void elf_run(void *regs, uint8_t *prog, int index);
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -539,14 +539,15 @@ void gui_checkcmd(void *regs) {
       gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
       fat_setup();
 
+      gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
+      page_init();
+
       gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
       tasks_init(regs);
 
       gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
       gui_desktop_init();
 
-      gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
-      page_init();
    }
    else if(strcmp(command, "CLEAR")) {
       gui_window_clearbuffer(selected, COLOUR_WHITE);
@@ -621,13 +622,15 @@ void gui_checkcmd(void *regs) {
          return;
       }
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      elf_run(regs, prog);
+      elf_run(regs, prog, 3);
       free((uint32_t)prog, entry->fileSize);
    }
    else if(strcmp(command, "PAGE")) {
       page_init();
    }
    else if(strcmp(command, "TEST")) {
+      extern uint32_t kernel_end;
+      extern uint32_t stacks_start;
       extern uint32_t tos_kernel;
       extern uint32_t tos_program;
       extern uint8_t heap_kernel;
@@ -639,9 +642,14 @@ void gui_checkcmd(void *regs) {
       gui_writeuint_hex((uint32_t)0x7e00, 0);
 
       gui_writestr("\nKERNEL END ", 4);
-      gui_writeuint(0x7e00 + 0x17e00, 0);
+      gui_writeuint((uint32_t)&kernel_end + 0x17e00, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)0x7e00 + 0x17e00, 0);
+      gui_writeuint_hex((uint32_t)&kernel_end + 0x17e00, 0);
+
+      gui_writestr("\nKERNEL STACK ", 4);
+      gui_writeuint((uint32_t)&stacks_start + 0x17e00, 0);
+      gui_writestr(" 0x", 0);
+      gui_writeuint_hex((uint32_t)&stacks_start + 0x17e00, 0);
 
       gui_writestr("\nTOS KERNEL ", 4);
       gui_writeuint((uint32_t)&tos_kernel, 0);
@@ -718,7 +726,7 @@ void gui_checkcmd(void *regs) {
       if(strsplit(arg, arg, command, ' ')) {
          int addr = stoi((char*)arg);
          uint8_t *prog = (uint8_t*)addr;
-         elf_run(regs, prog);
+         elf_run(regs, prog, 3);
       }
    }
    else if(strstartswith(command, "FATDIR")) {
@@ -1264,6 +1272,7 @@ void mouse_leftclick(void *regs, int relX, int relY) {
    
    mouse_held = true;
 
+   int prevSelected = gui_selected_window;
    bool clickedOnWindow = false;
 
    // check if clicked on current window
@@ -1291,7 +1300,8 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       }
    }
 
-   if(clickedOnWindow) {
+   // only call routine when already the focused window
+   if(clickedOnWindow && gui_selected_window == prevSelected) {
       gui_interrupt_switchtask(regs);
       gui_window_t *window = &gui_windows[gui_selected_window];
 
@@ -1302,7 +1312,12 @@ void mouse_leftclick(void *regs, int relX, int relY) {
          args[1] = gui_mouse_x - window->x;
          args[0] = gui_mouse_y - (window->y + TITLEBAR_HEIGHT);
 
-         task_call_subroutine(regs, (uint32_t)(window->click_func), args, 2);
+         if((gui_mouse_y - (window->y + TITLEBAR_HEIGHT)) >= 0) {
+            task_call_subroutine(regs, (uint32_t)(window->click_func), args, 2);
+         } else {
+            // clicked titlebar, don't call routine
+            free((uint32_t)args, sizeof(uint32_t) * 2);
+         }
       }
 
    } else {

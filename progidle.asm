@@ -1,5 +1,10 @@
 [bits 32]
 
+;section .text
+;global _start
+
+;_start:
+
 ; display note at program start
 push eax
 push ebx
@@ -12,6 +17,6 @@ pop eax
 loop:
 jmp loop
 
-msg db 'This is the system idle process', 10, 0
+;section .data
 
-times 512-($-$$) db 0
+msg db 'This is the system idle process', 10, 0

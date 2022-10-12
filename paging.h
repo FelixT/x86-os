@@ -1,6 +1,7 @@
 #ifndef PAGING_H
 #define PAGING_H
 
+#include "stdbool.h"
 #include "stdint.h"
 
 // https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.pdf
@@ -37,7 +38,8 @@ typedef struct page_table_entry_t {
    uint32_t address    : 20; // physical address of start of 4KiB page
 } __attribute__((packed, aligned(4))) page_table_entry_t;
 
-void map(uint32_t addr, uint32_t vaddr);
+void map(uint32_t addr, uint32_t vaddr, int user, int rw);
 void page_init();
+uint32_t page_getphysical(uint32_t vaddr);
 
 #endif

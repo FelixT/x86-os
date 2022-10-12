@@ -1,4 +1,4 @@
-#define NULL ((void *)0)
+#define NULL ( (void *) 0)
 
 #include <stdint.h>
 
@@ -143,10 +143,6 @@ void downarrow() {
 
 void click(int x, int y) {
 
-   /*if(y >= 0) {
-      framebuffer[y*width+x] = 0;
-   } // otherwise we clicked on the titlebar*/
-
    // see where we clicked
    int position = (y-5)/25;
    debug_write_uint(no_items);
@@ -172,14 +168,14 @@ void click(int x, int y) {
          cur_items = (fat_dir_t*)fat_read_dir(cur_items[index].firstClusterNo);
       }
 
-      display_items();
-
       // cur_items[index].firstClusterNo;
    } else {
       // file
 
       // cur_items[index].firstClusterNo;
    }
+
+   display_items();
 
    end_subroutine();
 

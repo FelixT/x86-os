@@ -40,9 +40,7 @@ typedef struct elf_prog_header_t {
 
 } __attribute__((packed)) elf_prog_header_t;
 
-// basic elf32 handler which finds the entry point and launches the program
-
-void elf_run(void *regs, uint8_t *prog) {
+void elf_run(void *regs, uint8_t *prog, int index) {
 
    elf_header_t *elf_header = (elf_header_t*)prog;
    elf_prog_header_t *prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
@@ -56,9 +54,17 @@ void elf_run(void *regs, uint8_t *prog) {
    gui_window_writestr("\nCount: ", 0, 0);
    gui_window_writeuint(elf_header->prog_header_entry_count, 0, 0);
 
+   if(elf_header->type != 2) {
+      gui_window_writestr("\nELF Type ", 0, 0);
+      gui_window_writeuint(elf_header->type, 0, 0);
+      gui_window_writestr(" is unsupported\n", 0, 0);
+      return;
+   }
+
    // fail if
    // elf_header->type != 2 i.e. not exec
    // elf_header->prog_header_entry_count == 0
+   // elf signature invalid
 
    // get virtual memory start addr, end address
    uint32_t vmem_start = elf_header->entry; // address in virtual memory where program is loaded in
@@ -70,6 +76,8 @@ void elf_run(void *regs, uint8_t *prog) {
 
       if(prog_header->p_vaddr + prog_header->p_memsz > vmem_end)
          vmem_end = prog_header->p_vaddr + prog_header->p_memsz;
+
+      prog_header++;
    }
 
    gui_window_writestr("\nVmem Start: ", 0, 0);
@@ -86,6 +94,8 @@ void elf_run(void *regs, uint8_t *prog) {
 
    // start of newProg maps to vmem_start  
 
+   prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
+
    // copy program to new location and assign virtual memory for each segment
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {
 
@@ -93,7 +103,7 @@ void elf_run(void *regs, uint8_t *prog) {
       gui_window_writeuint(i, 0, 0);
 
       gui_window_writestr("\nType ", 0, 0);
-      gui_window_writeuint((uint32_t)prog + prog_header->segment_type, 0, 0);
+      gui_window_writeuint(prog_header->segment_type, 0, 0);
 
       if(prog_header->segment_type != 1) {
          // if not LOAD
@@ -112,9 +122,11 @@ void elf_run(void *regs, uint8_t *prog) {
       for(int i = 0; i < (int)prog_header->p_filesz; i++)
          newProg[vmem_offset + i] = prog[file_offset + i];
 
+      int rw = (prog_header->flags & 0x1) == 0x1;
+
       // map vmem
       for(int i = 0; i < (int)prog_header->p_memsz; i++)
-         map((uint32_t)newProg + vmem_offset + i, prog_header->p_vaddr + i);
+         map((uint32_t)newProg + vmem_offset + i, prog_header->p_vaddr + i, 1, rw);
 
       //gui_window_writestr("\nVirtual addr: ", 0, 0);
       //gui_window_writeuint(prog_header->p_vaddr, 0, 0);
@@ -138,13 +150,18 @@ void elf_run(void *regs, uint8_t *prog) {
    gui_window_writestr("\nOffset: ", 0, 0);
    gui_window_writeuint(offset, 0, 0);
 
-   create_task_entry(3, elf_header->entry, vmem_end - vmem_start, false);
-   launch_task(3, regs, true);
-   gettasks()[3].vmem_start = vmem_start;
-   gettasks()[3].vmem_end = vmem_end;
-   gettasks()[3].prog_start = (uint32_t)prog;
+   //gui_draw();
+   //while(true);
+
+
+   create_task_entry(index, elf_header->entry, vmem_end - vmem_start, false);
+   launch_task(index, regs, true);
+   gettasks()[index].vmem_start = vmem_start;
+   gettasks()[index].vmem_end = vmem_end;
+   gettasks()[index].prog_start = (uint32_t)newProg;
 
    gui_window_writestr("\nStarting at: ", 0, 0);
    gui_window_writeuint(elf_header->entry, 0, 0);
    gui_window_writestr("\n", 0, 0);
+
 }

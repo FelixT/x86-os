@@ -5,6 +5,7 @@
 #include "tasks.h"
 #include "gui.h"
 #include "fat.h"
+#include "paging.h"
 
 typedef struct {
    uint16_t    isr_low;      // lower 16 bits of isr address/offset

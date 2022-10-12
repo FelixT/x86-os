@@ -14,9 +14,6 @@ fat_ebr_t *fat_ebr;
 uint32_t noSectors;
 uint32_t noClusters;
 
-extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
-extern uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
-
 void fat_get_info() {
    // get drive formatting info
    free((uint32_t)fat_bpb, sizeof(fat_bpb_t) + sizeof(fat_ebr_t));

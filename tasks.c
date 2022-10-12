@@ -8,6 +8,8 @@ task_state_t *tasks;
 int current_task = 0;
 bool switching = false; // preemptive multitasking
 
+extern void elf_run(void *regs, uint8_t *prog, int index);
+
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
    tasks[index].enabled = false;
    tasks[index].stack_top = (uint32_t)(&tos_program - (TASK_STACK_SIZE * index));
@@ -51,6 +53,8 @@ void end_task(int index, registers_t *regs) {
    gui_window_writenum(index, 0, 0);
    gui_window_writestr("\n", 0, 0);
 
+   gui_window_writestr("Task ended\n", 0, get_current_task_window());
+
    tasks[index].enabled = false;
    tasks[index].privileged = false;
 
@@ -82,6 +86,8 @@ void tasks_init(registers_t *regs) {
    uint32_t idleentry = (uint32_t)prog;
    create_task_entry(0, idleentry, entry->fileSize, false);
    launch_task(0, regs, false);
+   //elf_run(regs, prog, 0);
+   //free((uint32_t)prog, entry->fileSize);
 
    switching = true;
 }
@@ -151,7 +157,7 @@ int get_task_from_window(int windowIndex) {
 
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
 
-   if(tasks[current_task].in_routine) {
+   if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
       gui_window_writestr("Already in a subroutine, returning.\n", 0, 0);
       return;
    }

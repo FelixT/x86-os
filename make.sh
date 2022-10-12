@@ -36,6 +36,8 @@ cat o/boot.bin o/main.bin > hd.bin
 nasm prog1.asm -f bin -o o/prog1.bin
 nasm prog2.asm -f bin -o o/prog2.bin
 nasm progidle.asm -f bin -o o/progidle.bin
+#nasm progidle.asm -f elf32 -o o/progidle.o
+#$LD o/progidle.o -o o/progidle.elf
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra prog3.c -o o/prog3.elf 
 
@@ -45,6 +47,7 @@ cp o/prog2.bin fs_root/sys/prog2.bin
 cp o/prog3.bin fs_root/sys/prog3.bin
 cp o/prog3.elf fs_root/sys/prog3.elf
 cp o/progidle.bin fs_root/sys/progidle.bin
+#cp o/progidle.elf fs_root/sys/progidle.elf
 
 dd if=/dev/zero of=hd2.bin bs=64000 count=1
 dd if=./hd.bin of=hd2.bin bs=64000 count=1 conv=notrunc

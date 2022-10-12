@@ -23,12 +23,15 @@ SECTIONS {
         *(.bss)
     } > ram
 
+    kernel_end = .;
+
     /* allocate stacks */
     . = ALIGN( 8 );
+    stacks_start = .;
     . = . + 0x00001000;  
     tos_kernel = .;
 
-    . = . + 0x00001000;
+    . = . + 0x0010000;
     tos_program = .; /* program stacks */
 
     . = 0x00100000;

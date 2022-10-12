@@ -123,4 +123,6 @@ int gui_gettextwidth(int textlength);
 
 void gui_showtimer(int number);
 
+void mouse_enable();
+
 #endif
