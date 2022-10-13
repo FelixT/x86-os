@@ -180,12 +180,6 @@ void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int 
 
    // simulate JMP
 
-   gui_window_writestr("Return addr is ", 0, 0);
-   gui_window_writenum(regs->eip, 0, 0);
-   gui_window_writestr(" fn addr is ", 0, 0);
-   gui_window_writenum(addr, 0, 0);
-   gui_window_writestr("\n", 0, 0);
-
    // update eip to func addr
    regs->eip = addr;
 
@@ -193,11 +187,6 @@ void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int 
 }
 
 void task_subroutine_end(registers_t *regs) {
-   gui_window_writestr("Return addr: ", 0, 0);
-   gui_window_writeuint(tasks[current_task].routine_return_regs.eip, 0, 0);
-   gui_window_writestr(" EIP: ", 0, 0);
-   gui_window_writeuint(regs->eip, 0, 0);
-   gui_window_writestr("\n", 0, 0);
    // restore registers
    *regs = tasks[current_task].routine_return_regs;
 

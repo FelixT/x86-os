@@ -145,7 +145,7 @@ void click(int x, int y) {
 
    // see where we clicked
    int position = (y-5)/25;
-   debug_write_uint(no_items);
+   //debug_write_uint(no_items);
 
    if(cur_items == NULL) end_subroutine();
 

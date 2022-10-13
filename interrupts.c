@@ -217,7 +217,6 @@ void software_handler(registers_t *regs) {
 
       uint32_t addr = regs->ebx;
 
-      gui_window_writeuint(addr, 0, get_current_task_window());
       gui_window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
@@ -225,7 +224,6 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 12) {
       // end subroutine i.e. an uparrow function call
-      gui_window_writestr("Ending subroutine\n", 0, 0);
 
       task_subroutine_end(regs) ;
    }
@@ -235,7 +233,6 @@ void software_handler(registers_t *regs) {
 
       uint32_t addr = regs->ebx;
 
-      gui_window_writeuint(addr, 0, get_current_task_window());
       gui_window_writestr("Overriding click function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
@@ -364,7 +361,6 @@ void software_handler(registers_t *regs) {
       // override downarrow window function
       uint32_t addr = regs->ebx;
 
-      gui_window_writeuint(addr, 0, get_current_task_window());
       gui_window_writestr("Overriding downarrow function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].downarrow_func = (void *)(addr);

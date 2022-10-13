@@ -854,12 +854,6 @@ void gui_interrupt_switchtask(void *regs) {
 
    if(newtask == get_current_task() || newtask == -1) return;
 
-   gui_window_writestr("Switching from task ", 0, 0);
-   gui_window_writenum(get_current_task(), 0, 0);
-   gui_window_writestr(" to task ", 0, 0);
-   gui_window_writenum(newtask, 0, 0);
-   gui_window_drawchar('\n', 0, 0);
-
    switch_to_task(newtask, regs);
 
 }
