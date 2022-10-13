@@ -3,7 +3,7 @@
 VIDEO_MEMORY equ 0xb8000
 WHITE_ON_BLACK equ 0x0f
 
-extern tos_kernel
+; extern tos_kernel (0x18e00: see memory.h)
 
 .main_32:
    ; setup registers
@@ -13,7 +13,7 @@ extern tos_kernel
    mov fs, ax
    mov gs, ax
    mov ss, ax
-   mov ebp, tos_kernel
+   mov ebp, 0x18e00
    mov esp, ebp
 
    ; setup idt
@@ -38,7 +38,7 @@ extern tos_kernel
    mov fs, ax
    mov gs, ax
    mov ss, ax
-   mov ebp, tos_kernel
+   mov ebp, 0x18e00
    mov esp, ebp
 
    ; setup idt

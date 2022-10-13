@@ -402,20 +402,6 @@ fat_dir_t *fat_parse_path(char *path) {
    return curDir; // note that NULL = file not found or root
 }
 
-void fat_test() {
-   char *path = malloc(40);
-   strcpy(path, "/bmp/file.bmp");
-   fat_dir_t *dir = fat_parse_path(path);
-   gui_writenum(dir->fileSize, 0);
-   gui_drawchar('\n', 0);
-   fat_read_file(dir->firstClusterNo, dir->fileSize);
-
-   // example: find and load file "/bmp/file.bmp"
-   //fat_dir_t *bmpDir = fat_find_in_root("bmp", "");
-   //fat_dir_t *file = fat_find_in_dir(bmpDir->firstClusterNo, "file", "bmp");
-   //fat_read_file(file->firstClusterNo, file->fileSize);
-}
-
 fat_bpb_t fat_get_bpb() {
    return *fat_bpb;
 }

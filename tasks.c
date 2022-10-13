@@ -1,6 +1,5 @@
 #include "tasks.h"
 
-extern uint32_t tos_program;
 uint32_t USR_CODE_SEG = 8*3;
 uint32_t USR_DATA_SEG = 8*4;
 
@@ -12,7 +11,7 @@ extern void elf_run(void *regs, uint8_t *prog, int index);
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
    tasks[index].enabled = false;
-   tasks[index].stack_top = (uint32_t)(&tos_program - (TASK_STACK_SIZE * index));
+   tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
    tasks[index].prog_start = entry;
    tasks[index].prog_entry = entry;
    tasks[index].prog_size = size;

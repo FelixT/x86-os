@@ -630,11 +630,6 @@ void gui_checkcmd(void *regs) {
    }
    else if(strcmp(command, "TEST")) {
       extern uint32_t kernel_end;
-      extern uint32_t stacks_start;
-      extern uint32_t tos_kernel;
-      extern uint32_t tos_program;
-      extern uint8_t heap_kernel;
-      extern uint8_t heap_kernel_end;
       
       gui_writestr("\nKERNEL ", 4);
       gui_writeuint(0x7e00, 0);
@@ -647,29 +642,29 @@ void gui_checkcmd(void *regs) {
       gui_writeuint_hex((uint32_t)&kernel_end + 0x17e00, 0);
 
       gui_writestr("\nKERNEL STACK ", 4);
-      gui_writeuint((uint32_t)&stacks_start + 0x17e00, 0);
+      gui_writeuint(STACKS_START + 0x17e00, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&stacks_start + 0x17e00, 0);
+      gui_writeuint_hex(STACKS_START + 0x17e00, 0);
 
       gui_writestr("\nTOS KERNEL ", 4);
-      gui_writeuint((uint32_t)&tos_kernel, 0);
+      gui_writeuint(TOS_KERNEL, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&tos_kernel, 0);
+      gui_writeuint_hex(TOS_KERNEL, 0);
 
       gui_writestr("\nTOS PROGRAM ", 4);
-      gui_writeuint((uint32_t)&tos_program, 0);
+      gui_writeuint(TOS_PROGRAM, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&tos_program, 0);
+      gui_writeuint_hex(TOS_PROGRAM, 0);
 
       gui_writestr("\nHEAP KERNEL ", 4);
-      gui_writeuint((uint32_t)&heap_kernel, 0);
+      gui_writeuint(HEAP_KERNEL, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&heap_kernel, 0);
+      gui_writeuint_hex(HEAP_KERNEL, 0);
 
       gui_writestr("\nHEAP KERNEL END ", 4);
-      gui_writeuint((uint32_t)&heap_kernel_end, 0);
+      gui_writeuint(HEAP_KERNEL_END, 0);
       gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&heap_kernel_end, 0);
+      gui_writeuint_hex(HEAP_KERNEL_END, 0);
 
       gui_writestr("\nFRAMEBUFFER ", 4);
       gui_writeuint(framebuffer, 0);
@@ -687,9 +682,6 @@ void gui_checkcmd(void *regs) {
    }
    else if(strcmp(command, "FAT")) {
       fat_setup();
-   }
-   else if(strcmp(command, "FATTEST")) {
-      fat_test();
    }
    else if(strcmp(command, "DESKTOP")) {
       gui_desktop_init();

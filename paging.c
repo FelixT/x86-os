@@ -46,11 +46,6 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
 }
 
 extern uint32_t kernel_end;
-extern uint32_t stacks_start;
-extern uint32_t tos_kernel;
-extern uint32_t tos_program;
-extern uint8_t heap_kernel;
-extern uint8_t heap_kernel_end;
 
 void page_init() {
    // we use malloc here as it currently satisfies out 4KiB alignment requirement
@@ -63,18 +58,18 @@ void page_init() {
       entry[i] = 0; // set to 2 for rw = 1, else 0
 
    // identity map kernel
-   for(uint32_t i = 0x7e00; i < (uint32_t)&kernel_end; i++)
+   for(uint32_t i = KERNEL_START; i < (uint32_t)&kernel_end; i++)
       map(i, i, 0, 1);
 
    // identity map stacks
-   for(uint32_t i = (uint32_t)&stacks_start; i < (uint32_t)&tos_kernel; i++)
+   for(uint32_t i = STACKS_START; i < TOS_KERNEL; i++)
       map(i, i, 1, 1); // user so prog1 doesn't break upon push
       
-   for(uint32_t i = (uint32_t)&tos_kernel; i < (uint32_t)&tos_program; i++)
+   for(uint32_t i = TOS_KERNEL; i < TOS_PROGRAM; i++)
       map(i, i, 1, 1);
    
    // identity map heap
-   for(uint32_t i = (uint32_t)&heap_kernel; i < (uint32_t)&heap_kernel_end; i++)
+   for(uint32_t i = HEAP_KERNEL; i < HEAP_KERNEL_END; i++)
       map(i, i, 1, 1);
 
    // identity map framebuffer

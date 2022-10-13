@@ -122,11 +122,11 @@ void elf_run(void *regs, uint8_t *prog, int index) {
       for(int i = 0; i < (int)prog_header->p_filesz; i++)
          newProg[vmem_offset + i] = prog[file_offset + i];
 
-      int rw = (prog_header->flags & 0x1) == 0x1;
+      //int rw = (prog_header->flags & 0x1) == 0x1;
 
       // map vmem
       for(int i = 0; i < (int)prog_header->p_memsz; i++)
-         map((uint32_t)newProg + vmem_offset + i, prog_header->p_vaddr + i, 1, rw);
+         map((uint32_t)newProg + vmem_offset + i, prog_header->p_vaddr + i, 1, 1);
 
       //gui_window_writestr("\nVirtual addr: ", 0, 0);
       //gui_window_writeuint(prog_header->p_vaddr, 0, 0);

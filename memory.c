@@ -3,13 +3,11 @@
 #include "memory.h"
 #include "gui.h"
 
-extern uint8_t heap_kernel;
-
 mem_segment_status_t memory_status[KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE];
 
 void memory_reserve(uint32_t offset, int bytes) {
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;  // rounding up
-   int blockStart = ((int)offset-(int)&heap_kernel)/MEM_BLOCK_SIZE;
+   int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
 
    for(int i = 0; i < noBlocks; i++) {
       if(blockStart+i >= 0 && blockStart+i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
@@ -21,7 +19,7 @@ void memory_reserve(uint32_t offset, int bytes) {
 void free(uint32_t offset, int bytes) {
    if(offset == 0 || bytes == 0) return;
 
-   int blockStart = ((int)offset-(int)&heap_kernel)/MEM_BLOCK_SIZE;
+   int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
 
    /*gui_window_writestr("Freeing ", 0, 0);
@@ -42,7 +40,7 @@ void free(uint32_t offset, int bytes) {
    }
 
    for(int x = 0; x < noBlocks*MEM_BLOCK_SIZE; x++) {
-      char *byte = (char*) ((&heap_kernel) + (int)blockStart*MEM_BLOCK_SIZE) + x;
+      char *byte = (char*) ((HEAP_KERNEL) + (int)blockStart*MEM_BLOCK_SIZE) + x;
       *byte = freeASCII[x%6];
    }
 }
@@ -54,7 +52,7 @@ void memory_init() {
    // fill free memory with 'FREE' in ascii
    char freeASCII[6] = "FREE ";
    for(int i = 0; i < KERNEL_HEAP_SIZE; i++) {
-      char *byte = (char*) ((&heap_kernel) + i);
+      char *byte = (char*) ((HEAP_KERNEL) + i);
       *byte = freeASCII[i%6];
    }
 }
@@ -93,11 +91,11 @@ void *malloc(int bytes) {
    // fill allocated memory with 'ALLC' in ascii
    char allcASCII[6] = "ALLC ";
    for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
-      char *byte = (char*) ((&heap_kernel) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
+      char *byte = (char*) ((HEAP_KERNEL) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
       *byte = allcASCII[i%6];
    }
 
-   return (void*)((int)(&heap_kernel) + (int)(blockStart*MEM_BLOCK_SIZE));
+   return (void*)((int)(HEAP_KERNEL) + (int)(blockStart*MEM_BLOCK_SIZE));
 }
 
 void *resize(uint32_t offset, int oldsize, int newsize) {
