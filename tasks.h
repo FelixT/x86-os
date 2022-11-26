@@ -29,7 +29,7 @@ typedef struct task_state_t {
    bool enabled;
    uint32_t stack_top; // address
    uint32_t prog_start; // physical addr of start of program
-   uint32_t prog_entry; // physical addr of program entry point, may be different from prog_start
+   uint32_t prog_entry; // addr of program entry point, may be different from prog_start
    uint32_t prog_size;
    registers_t registers;
    bool privileged; // 0 = user, 1 = kernel

@@ -470,25 +470,25 @@ void exception_handler(int int_no, registers_t *regs) {
       // https://wiki.osdev.org/Exceptions
       if(videomode == 1) {
 
-         gui_window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
-         gui_window_writeuint(int_no, 0, 0);
-         gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
-         gui_window_writeuint(regs->eip, 0, 0);  
-         gui_window_writestr("\n", gui_rgb16(255, 100, 100), 0);
-
          if(int_no == 14) {
             // page error
             uint32_t addr;
 	         asm volatile("mov %%cr2, %0" : "=r" (addr));
             gui_window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
             gui_window_writeuint(addr, 0, 0);
-            gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-            gui_window_writeuint(page_getphysical(addr), 0, 0);
-            gui_window_writestr("> with eip ", gui_rgb16(255, 100, 100), 0);
+            if(page_getphysical(addr) != (uint32_t)-1) {
+               gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               gui_window_writeuint(page_getphysical(addr), 0, 0);
+               gui_window_writestr(">", gui_rgb16(255, 100, 100), 0);
+            }
+            gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
             gui_window_writeuint(regs->eip, 0, 0);
-            gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-            gui_window_writeuint(page_getphysical(regs->eip), 0, 0);
-            gui_window_writestr(">\n", 0, 0);
+            if(page_getphysical(regs->eip) != (uint32_t)-1) {
+               gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               gui_window_writeuint(page_getphysical(regs->eip), 0, 0);
+               gui_window_writestr(">", gui_rgb16(255, 100, 100), 0);
+            }
+            gui_window_writestr("\n", 0, 0);
 
             //while(true);
          }
@@ -553,9 +553,14 @@ void exception_handler(int int_no, registers_t *regs) {
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
-   gui_window_writestr("Exception err code ", gui_rgb16(255, 100, 100), 0);
+
+   gui_window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
+   gui_window_writeuint(int_no, 0, 0);
+   gui_window_writestr(" with err code ", gui_rgb16(255, 100, 100), 0);
    gui_window_writeuint(regs->err_code, 0, 0);
-   gui_window_writestr("\n", 0, 0);
+   gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+   gui_window_writeuint(regs->eip, 0, 0);  
+   gui_window_writestr("\n", gui_rgb16(255, 100, 100), 0);
 
    exception_handler(int_no, regs);
 }

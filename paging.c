@@ -10,16 +10,41 @@
 
 page_dir_entry_t *page_dir;
 
+int debug = 0;
+
 extern void load_page_dir(uint32_t *page_dir);
 extern void page_enable();
 
+void unmap(uint32_t vaddr) {
+   uint32_t index = vaddr / 0x1000; // 4096 bytes per page
+   uint32_t dir_index = index / 1024; // 1024 table entries/dir
+   uint32_t table_index = index%1024;
+
+   if(page_dir[dir_index].present) {
+
+      page_dir[dir_index].present = 0;
+
+      if(page_dir[dir_index].address) {
+
+         page_table_entry_t *page_table = (page_table_entry_t*) (page_dir[dir_index].address << 12);
+
+         page_table[table_index].present = 0;
+
+      }
+
+   }
+}
+
 void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
+
+   // map 4 KiB aligned vadddr to 4 KiB aligned physical addr
+
    // get page
    uint32_t index = vaddr / 0x1000; // 4096 bytes per page
    uint32_t dir_index = index / 1024; // 1024 table entries/dir
    uint32_t table_index = index%1024;
 
-   if(!page_dir[dir_index].present) {
+   if(!page_dir[dir_index].present && !page_dir[dir_index].address) {
 
       page_table_entry_t *page_table = malloc(sizeof(page_table_entry_t) * 1024);
 
@@ -28,16 +53,21 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
       uint8_t *entry = (uint8_t*)page_table;
       for(int i = 0; i < 1024*(int)sizeof(page_table_entry_t); i++)
          entry[0] = 0; // set to 2 for rw = 1, else 0
-         
-   } else {
-
-      page_table_entry_t *page_table = (page_table_entry_t*) (page_dir[dir_index].address << 12);
-      page_table[table_index].present = 1;
-      page_table[table_index].rw = rw;
-      page_table[table_index].user = user;
-      page_table[table_index].address = addr >> 12;
-
    }
+
+   page_table_entry_t *page_table = (page_table_entry_t*) (page_dir[dir_index].address << 12);
+
+   if(debug == 1) {
+      //if(page_dir[dir_index].present)
+      //   gui_window_writestr("Page dir entry present", 0, 0);
+      if(page_table[table_index].present)
+         gui_window_writestr("Page table entry present", 0, 0);
+   }
+
+   page_table[table_index].present = 1;
+   page_table[table_index].rw = rw;
+   page_table[table_index].user = user;
+   page_table[table_index].address = addr >> 12;
 
    page_dir[dir_index].present = 1;
    page_dir[dir_index].rw = rw;
@@ -59,7 +89,7 @@ void page_init() {
 
    // identity map kernel
    for(uint32_t i = KERNEL_START; i < (uint32_t)&kernel_end; i++)
-      map(i, i, 0, 1);
+      map(i, i, 0, 0);
 
    // identity map stacks
    for(uint32_t i = STACKS_START; i < TOS_KERNEL; i++)
@@ -96,4 +126,8 @@ uint32_t page_getphysical(uint32_t vaddr) {
       return -1;
 
    return (page_table[table_index].address << 12) + (vaddr & 0xFFF);
+}
+
+void page_enable_debug() {
+   debug = 1;
 }

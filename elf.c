@@ -2,6 +2,7 @@
 
 #include "gui.h"
 #include "paging.h"
+#include "tasks.h"
 #include <stdint.h>
 
 // https://wiki.osdev.org/ELF#Header
@@ -40,19 +41,21 @@ typedef struct elf_prog_header_t {
 
 } __attribute__((packed)) elf_prog_header_t;
 
-void elf_run(void *regs, uint8_t *prog, int index) {
+void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args) {
+
+   //page_enable_debug();
 
    elf_header_t *elf_header = (elf_header_t*)prog;
    elf_prog_header_t *prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
 
-   gui_window_writestr("Entry: ", 0, 0);
+   /*gui_window_writestr("Entry: ", 0, 0);
    gui_window_writeuint(elf_header->entry, 0, 0);
 
    gui_window_writestr("\nType: ", 0, 0);
    gui_window_writeuint(elf_header->type, 0, 0);
 
    gui_window_writestr("\nCount: ", 0, 0);
-   gui_window_writeuint(elf_header->prog_header_entry_count, 0, 0);
+   gui_window_writeuint(elf_header->prog_header_entry_count, 0, 0);*/
 
    if(elf_header->type != 2) {
       gui_window_writestr("\nELF Type ", 0, 0);
@@ -102,7 +105,7 @@ void elf_run(void *regs, uint8_t *prog, int index) {
       gui_window_writestr("\nSegment ", 0, 0);
       gui_window_writeuint(i, 0, 0);
 
-      gui_window_writestr("\nType ", 0, 0);
+      gui_window_writestr(" Type ", 0, 0);
       gui_window_writeuint(prog_header->segment_type, 0, 0);
 
       if(prog_header->segment_type != 1) {
@@ -115,7 +118,7 @@ void elf_run(void *regs, uint8_t *prog, int index) {
 
       gui_window_writestr("\nFile offset ", 0, 0);
       gui_window_writeuint(file_offset, 0, 0);
-      gui_window_writestr("\nVmem offset ", 0, 0);
+      gui_window_writestr(" Vmem offset ", 0, 0);
       gui_window_writeuint(vmem_offset, 0, 0);
 
       // copy
@@ -149,16 +152,24 @@ void elf_run(void *regs, uint8_t *prog, int index) {
 
    gui_window_writestr("\nOffset: ", 0, 0);
    gui_window_writeuint(offset, 0, 0);
+   gui_window_writestr("\n", 0, 0);
 
    //gui_draw();
    //while(true);
 
-
-   create_task_entry(index, elf_header->entry, vmem_end - vmem_start, false);
-   launch_task(index, regs, true);
+   create_task_entry(index, elf_header->entry, (vmem_end - vmem_start), false);
    gettasks()[index].vmem_start = vmem_start;
    gettasks()[index].vmem_end = vmem_end;
    gettasks()[index].prog_start = (uint32_t)newProg;
+   launch_task(index, regs, true);
+
+   // push args
+   regs->useresp -= 4;
+   ((uint32_t*)regs->useresp)[0] = (uint32_t)args; // char **args
+   regs->useresp -= 4;
+   ((uint32_t*)regs->useresp)[0] = argc; // int argc
+   regs->useresp -= 4;
+   ((uint32_t*)regs->useresp)[0] = 0; // push dummy return addr
 
    gui_window_writestr("\nStarting at: ", 0, 0);
    gui_window_writeuint(elf_header->entry, 0, 0);

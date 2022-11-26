@@ -50,6 +50,16 @@ bool bmp_check(bmp_info_t *info) {
    return true;
 }
 
+int32_t bmp_get_width(uint8_t *bmp) {
+   bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
+   return info->width;
+}
+
+int32_t bmp_get_height(uint8_t *bmp) {
+   bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
+   return info->height;
+}
+
 uint16_t bmp_get_colour(uint8_t *bmp, int x, int y) {
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);

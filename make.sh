@@ -16,13 +16,13 @@ nasm main.asm -f elf32 -o o/main.o
 nasm irq.asm -f elf32 -o o/irq.o
 
 $GCC -c cmain.cpp -o o/cmain.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-common -mgeneral-regs-only -nostdlib -g -lgcc
-$GCC -c font.c -o o/font.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
+$GCC -c font.c -o o/font.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c gui.c -o o/gui.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c terminal.c -o o/terminal.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c interrupts.c -o o/interrupts.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c tasks.c -o o/tasks.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c ata.c -o o/ata.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c memory.c -o o/memory.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
+$GCC -c memory.c -o o/memory.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c fat.c -o o/fat.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c bmp.c -o o/bmp.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $GCC -c elf.c -o o/elf.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
@@ -33,20 +33,20 @@ $LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o
 cat o/boot.bin o/main.bin > hd.bin
 
 # userland programs
-nasm prog1.asm -f bin -o o/prog1.bin
-nasm prog2.asm -f bin -o o/prog2.bin
-nasm progidle.asm -f bin -o o/progidle.bin
+nasm usr/prog1.asm -f bin -o o/prog1.bin
+nasm usr/prog2.asm -f bin -o o/prog2.bin
+nasm usr/progidle.asm -f bin -o o/progidle.bin
 #nasm progidle.asm -f elf32 -o o/progidle.o
 #$LD o/progidle.o -o o/progidle.elf
-$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -O2 -Wall -Wextra -Wl,--oformat=binary -c prog3.c -o o/prog3.bin 
-$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra prog3.c -o o/prog3.elf 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/bmpview.c -o o/bmpview.elf 
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
 cp o/prog2.bin fs_root/sys/prog2.bin
-cp o/prog3.bin fs_root/sys/prog3.bin
-cp o/prog3.elf fs_root/sys/prog3.elf
 cp o/progidle.bin fs_root/sys/progidle.bin
+cp o/files.elf fs_root/sys/files.elf
+cp o/bmpview.elf fs_root/sys/bmpview.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
 dd if=/dev/zero of=hd2.bin bs=64000 count=1
@@ -58,22 +58,23 @@ dd if=./hd.bin of=hd2.bin bs=64000 count=1 conv=notrunc
 rm -f fs.img
 
 # if linux
-if [ $linux==1 ]
-then
-   mkfs.fat -F 16 -n FATFS -C fs.img 12000
-   sudo mkdir -p /mnt/fatfs
-   sudo mount fs.img /mnt/fatfs
-   sudo cp -R fs_root/* /mnt/fatfs
-   sudo umount /mnt/fatfs
+#if [ $linux==1 ]
+#then
+#   mkfs.fat -F 16 -n FATFS -C fs.img 12000
+#   sudo mkdir -p /mnt/fatfs
+#   sudo mount fs.img /mnt/fatfs
+#   sudo cp -R fs_root/* /mnt/fatfs
+#   sudo umount /mnt/fatfs
 # if mac
-else
+#else
+   find . -name ".DS_Store" -delete
    /usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
    # mount drive & copy files from fs_root dir
    hdiutil mount fs.img
    cp -R fs_root/ /Volumes/FATFS
    # unmount
    hdiutil unmount /Volumes/FATFS
-fi
+#fi
 
 # add fs at 64000
 cat hd2.bin fs.img > hd3.bin

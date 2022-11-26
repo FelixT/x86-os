@@ -38,8 +38,10 @@ typedef struct page_table_entry_t {
    uint32_t address    : 20; // physical address of start of 4KiB page
 } __attribute__((packed, aligned(4))) page_table_entry_t;
 
+void unmap(uint32_t addr);
 void map(uint32_t addr, uint32_t vaddr, int user, int rw);
 void page_init();
 uint32_t page_getphysical(uint32_t vaddr);
+void page_enable_debug();
 
 #endif

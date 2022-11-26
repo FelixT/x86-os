@@ -1,5 +1,7 @@
 #include <stdint.h>
 
+#define NULL ( (void *) 0)
+
 static inline void write_str(char *str) {
    asm volatile(
       "int $0x30"

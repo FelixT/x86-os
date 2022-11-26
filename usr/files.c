@@ -1,6 +1,5 @@
-#define NULL ( (void *) 0)
-
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "prog.h"
 
@@ -60,8 +59,10 @@ void display_items() {
    for(int i = 0; i < no_items; i++) {
       if(cur_items[i].filename[0] == 0) break;
 
-      //if(cur_items[i].firstClusterNo < 2) continue;
-      if((cur_items[i].attributes & 0x02) == 0x02) continue; // hidden
+      bool hidden = (cur_items[i].attributes & 0x02) == 0x02;
+      bool dotentry = cur_items[i].filename[0] == 0x2E;
+
+      if(hidden & !dotentry) continue; // ignore
       
       offsetLeft--;
       if(offsetLeft >= 0) continue;
@@ -182,6 +183,7 @@ void click(int x, int y) {
 }
 
 void _start() {
+
    // init
    cur_items = NULL;
    no_items = 0;

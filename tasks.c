@@ -7,9 +7,11 @@ task_state_t *tasks;
 int current_task = 0;
 bool switching = false; // preemptive multitasking
 
-extern void elf_run(void *regs, uint8_t *prog, int index);
+extern void elf_run(void *regs, uint8_t *prog, int index, int argc, char **args);
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
+   //if(tasks[index].enabled) end_task(index, NULL);
+
    tasks[index].enabled = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
    tasks[index].prog_start = entry;
@@ -40,8 +42,19 @@ void launch_task(int index, registers_t *regs, bool focus) {
    int tmpwindow = gui_get_selected_window();
    tasks[current_task].window = gui_window_add();
    if(!focus) gui_set_selected_window(tmpwindow);
+
+   gui_window_writestr("Launching task ", 0, 0);
+   gui_window_writenum(index, 0, 0);
+   gui_window_writestr("\n", 0, 0);
    
    *regs = tasks[current_task].registers;
+}
+
+bool task_exists() {
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      if(tasks[i].enabled) return true;
+   }
+   return false;
 }
 
 void end_task(int index, registers_t *regs) {
@@ -52,17 +65,41 @@ void end_task(int index, registers_t *regs) {
    gui_window_writenum(index, 0, 0);
    gui_window_writestr("\n", 0, 0);
 
-   gui_window_writestr("Task ended\n", 0, get_current_task_window());
+   if(tasks[index].window >= 0)
+      gui_window_writestr("Task ended\n", 0, tasks[index].window);
 
    tasks[index].enabled = false;
    tasks[index].privileged = false;
 
    // free task memory
-   if(tasks[index].prog_size != 0)
-      free(tasks[index].prog_entry, tasks[index].prog_size);
+   // TODO: free args
 
-   if(index == get_current_task())
-      switch_task(regs);
+   if(tasks[index].vmem_start != 0) {
+      /*gui_window_writestr("Unmapping ", 0, 0);
+      gui_window_writeuint(tasks[index].vmem_start, 0, 0);
+      gui_window_writestr(" to ", 0, 0);
+      gui_window_writeuint(tasks[index].vmem_end, 0, 0);
+      gui_window_writestr("\n", 0, 0);*/
+
+      for(uint32_t i = tasks[index].vmem_start; i < tasks[index].vmem_end; i++) {
+         unmap(i);
+      }
+   }
+
+   /*gui_window_writestr("Freeing ", 0, 0);
+   gui_window_writeuint(tasks[index].prog_size, 0, 0);
+   gui_window_writestr(" at ", 0, 0);
+   gui_window_writeuint(tasks[index].prog_start, 0, 0);
+   gui_window_writestr("\n", 0, 0);*/
+
+   tasks[index].window = -1;
+
+   // TODO: this causes page faults when closing and reopening programs....
+   if(tasks[index].prog_size != 0)
+      //free(tasks[index].prog_start, tasks[index].prog_size);
+
+   if(index == get_current_task() || !task_exists())
+      if(regs != NULL) switch_task(regs);
 }
 
 void tasks_alloc() {
@@ -72,8 +109,12 @@ void tasks_alloc() {
 void tasks_init(registers_t *regs) {
    // enable preemptive multitasking
 
-   for(int i = 0; i < TOTAL_TASKS; i++)
+   gui_set_selected_window(0);
+
+   for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
+      tasks[i].window = -1;
+   }
 
    // launch idle process
    fat_dir_t *entry = fat_parse_path("/sys/progidle.bin");
@@ -83,19 +124,17 @@ void tasks_init(registers_t *regs) {
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t idleentry = (uint32_t)prog;
+
    create_task_entry(0, idleentry, entry->fileSize, false);
    launch_task(0, regs, false);
-   //elf_run(regs, prog, 0);
+   //elf_run(regs, prog, 0, 0, NULL);
    //free((uint32_t)prog, entry->fileSize);
 
    switching = true;
-}
 
-bool task_exists() {
-   for(int i = 0; i < TOTAL_TASKS; i++) {
-      if(tasks[i].enabled) return true;
-   }
-   return false;
+   gui_window_writestr("Entry at ", 0, 0);
+   gui_window_writenum(regs->eip, 0, 0);
+   gui_window_writestr("\n", 0, 0);
 }
 
 void switch_task(registers_t *regs) {

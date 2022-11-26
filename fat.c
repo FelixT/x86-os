@@ -252,19 +252,19 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
    }
 
-   gui_writeuint(clusterCount, 0);
-   gui_writestr(" clusters ", 0);
+   /*gui_writeuint(clusterCount, 0);
+   gui_writestr(" clusters ", 0);*/
 
    uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
 
-   gui_writestr("Addr ", 0);
+   /*gui_writestr("Addr ", 0);
    gui_writeuint((uint32_t)(fileFirstSector*fat_bpb->bytesPerSector + baseAddr), 0);
    gui_drawchar('\n', 0);
    gui_writestr("size on disk ", 0);
    gui_writeuint(fileSizeDisk, 0);
    gui_writestr("\nreading ", 0);
    gui_writeuint(size, 0);
-   gui_writestr(" bytes\n", 0);
+   gui_writestr(" bytes\n", 0);*/
 
    int allocate = (readEntireFile) ? fileSizeDisk : size;
    uint8_t *fileContents = malloc(allocate);

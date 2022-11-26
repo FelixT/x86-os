@@ -519,7 +519,7 @@ extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *
 extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
 extern uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 
-extern void elf_run(void *regs, uint8_t *prog, int index);
+extern void elf_run(void *regs, uint8_t *prog, int index, int argc, char **args);
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -527,7 +527,7 @@ void gui_checkcmd(void *regs) {
 
    
    if(strcmp(command, "HELP")) {
-      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, ELF addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
+      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, FILES, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, ELF addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
    }
    else if(strcmp(command, "INIT")) {
       gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
@@ -615,14 +615,14 @@ void gui_checkcmd(void *regs) {
       create_task_entry(2, progAddr, entry->fileSize, false);
       launch_task(2, regs, true);
    }
-   else if(strcmp(command, "PROG3")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog3.elf");
+   else if(strcmp(command, "FILES")) {
+      fat_dir_t *entry = fat_parse_path("/sys/files.elf");
       if(entry == NULL) {
          gui_writestr("Not found\n", 0);
          return;
       }
       uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      elf_run(regs, prog, 3);
+      elf_run(regs, prog, 3, 0, NULL);
       free((uint32_t)prog, entry->fileSize);
    }
    else if(strcmp(command, "PAGE")) {
@@ -713,12 +713,35 @@ void gui_checkcmd(void *regs) {
          gui_draw();
       }
    }
+   else if(strstartswith(command, "VIEWBMP")) {
+      char arg[20];
+
+      fat_dir_t *entry = fat_parse_path("/sys/bmpview.elf");
+      if(entry == NULL) {
+         gui_writestr("Not found\n", 0);
+         return;
+      }
+      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+
+      int argc = 0;
+      char **args = NULL;
+      if(strsplit(arg, arg, command, ' ')) {
+         args = malloc(sizeof(char*) * 1);
+         char *path = malloc(strlen(arg));
+         strcpy(path, arg);
+         args[0] = path;
+         argc = 1;
+      }
+
+      elf_run(regs, prog, 2, argc, args);
+      free((uint32_t)prog, entry->fileSize);
+   }
    else if(strstartswith(command, "ELF")) {
       char arg[10];
       if(strsplit(arg, arg, command, ' ')) {
          int addr = stoi((char*)arg);
          uint8_t *prog = (uint8_t*)addr;
-         elf_run(regs, prog, 3);
+         elf_run(regs, prog, 3, 0, NULL);
       }
    }
    else if(strstartswith(command, "FATDIR")) {
@@ -1069,6 +1092,10 @@ void gui_window_close(void *regs, int windowIndex) {
    if(windowIndex == gui_selected_window)
       gui_selected_window = -1;
 
+   end_task(get_task_from_window(windowIndex), regs);
+
+   // re-establish pointer as gui_windows may have been resized in end_task
+   window = &gui_windows[windowIndex];
    window->closed = true;
 
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
@@ -1078,20 +1105,26 @@ void gui_window_close(void *regs, int windowIndex) {
    free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
    window->framebuffer = NULL;
 
-   end_task(get_task_from_window(windowIndex), regs);
-
    gui_redrawall();
 }
 
+extern int32_t bmp_get_width(uint8_t *bmp);
+extern int32_t bmp_get_height(uint8_t *bmp);
+
 void gui_desktop_draw() {
    //gui_writeuint((uint32_t)icon_window, 0);
-   bmp_draw(gui_bgimage, (uint16_t *)framebuffer, gui_width, gui_height, 0, 0, 0);
-   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, gui_height, 0, 0, 1);
+   int32_t width = bmp_get_width(gui_bgimage);
+   int32_t height = bmp_get_height(gui_bgimage);
+   int x = (gui_width - width) / 2;
+   int y = ((gui_height - TOOLBAR_HEIGHT) - height) / 2;
+   bmp_draw(gui_bgimage, (uint16_t *)framebuffer, gui_width, gui_height, x, y, 0);
+   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, gui_height, 10, 10, 1);
 }
 
 void gui_desktop_click() {
-   if(gui_mouse_x < 50 && gui_mouse_y < 50)
-      gui_window_add();
+   if(gui_mouse_x >= 10 && gui_mouse_y >= 10)
+      if(gui_mouse_x <= 60 && gui_mouse_y <= 60)
+         gui_window_add();
 }
 
 static inline void outb(uint16_t port, uint8_t val) {
@@ -1208,14 +1241,14 @@ bool mouse_clicked_on_window(void *regs, int index) {
          int relY = gui_mouse_y - window->y;
 
          // minimise
-         if(relY < 10 && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3)) {
+         if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3)) {
             window->minimised = true;
             gui_selected_window = -1;
             return false;
          }
 
          // close
-         if(relY < 10 && relX > window->width - (FONT_WIDTH+3)) {
+         if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)) {
             gui_window_close(regs, index);
             return false;
          }
