@@ -9,9 +9,8 @@ mkdir -p o
 mkdir -p fs_root
 mkdir -p fs_root/sys
 
-nasm boot.asm -f bin -o o/boot.bin
-
-nasm main.asm -f elf32 -o o/main.o
+nasm boot/boot.asm -f bin -o o/boot.bin
+nasm boot/main.asm -f elf32 -o o/main.o
 
 nasm irq.asm -f elf32 -o o/irq.o
 
@@ -30,7 +29,7 @@ $GCC -c paging.c -o o/paging.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions 
 $GCC -c window.c -o o/window.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 $LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o
 
-cat o/boot.bin o/main.bin > hd.bin
+cat o/boot.bin o/main.bin > o/hd1.bin
 
 # userland programs
 nasm usr/prog1.asm -f bin -o o/prog1.bin
@@ -49,9 +48,8 @@ cp o/files.elf fs_root/sys/files.elf
 cp o/bmpview.elf fs_root/sys/bmpview.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
-dd if=/dev/zero of=hd2.bin bs=64000 count=1
-dd if=./hd.bin of=hd2.bin bs=64000 count=1 conv=notrunc
-#cat hd2.bin o/progidle.bin o/prog1.bin o/prog2.bin > hd3.bin
+dd if=/dev/zero of=o/hd2.bin bs=64000 count=1
+dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc
 
 # create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
@@ -60,24 +58,24 @@ rm -f fs.img
 # if linux
 #if [ $linux==1 ]
 #then
-#   mkfs.fat -F 16 -n FATFS -C fs.img 12000
-#   sudo mkdir -p /mnt/fatfs
-#   sudo mount fs.img /mnt/fatfs
-#   sudo cp -R fs_root/* /mnt/fatfs
-#   sudo umount /mnt/fatfs
+   mkfs.fat -F 16 -n FATFS -C fs.img 12000
+   sudo mkdir -p /mnt/fatfs
+   sudo mount fs.img /mnt/fatfs
+   sudo cp -R fs_root/* /mnt/fatfs
+   sudo umount /mnt/fatfs
 # if mac
 #else
-   find . -name ".DS_Store" -delete
-   /usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
-   # mount drive & copy files from fs_root dir
-   hdiutil mount fs.img
-   cp -R fs_root/ /Volumes/FATFS
-   # unmount
-   hdiutil unmount /Volumes/FATFS
+#   find . -name ".DS_Store" -delete
+#   /usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
+#   # mount drive & copy files from fs_root dir
+#   hdiutil mount fs.img
+#   cp -R fs_root/ /Volumes/FATFS
+#   # unmount
+#   hdiutil unmount /Volumes/FATFS
 #fi
 
 # add fs at 64000
-cat hd2.bin fs.img > hd3.bin
+cat o/hd2.bin fs.img > hd.bin
 
    #qemu-system-i386 -s -S -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio
 
@@ -89,4 +87,4 @@ cat hd2.bin fs.img > hd3.bin
    #b
    #s
 
-   qemu-system-i386 -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio
+qemu-system-i386 -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio

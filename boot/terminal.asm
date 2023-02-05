@@ -1,3 +1,4 @@
+%include "boot/print.asm"
 
 terminal_newline:
    mov si, prompt
@@ -154,6 +155,8 @@ compare_strings:
     .true:
         mov ax, 1
         ret
+
+%include "boot/commands.asm"
 
 prompt db '>', 0
 true db 'true', 0

@@ -5,7 +5,7 @@ WHITE_ON_BLACK equ 0x0f
 
 ; extern tos_kernel (0x18e00: see memory.h)
 
-.main_32:
+main_32:
    ; setup registers
    mov ax, DATA_SEG
    mov ds, ax
@@ -30,7 +30,7 @@ WHITE_ON_BLACK equ 0x0f
 
    jmp $ ; infinite loop
 
-.maingui_32:      
+maingui_32:      
    ; setup registers
    mov ax, DATA_SEG
    mov ds, ax
@@ -59,6 +59,15 @@ WHITE_ON_BLACK equ 0x0f
    extern tss_init
    call tss_init
 
+   call gdt_flush
+   call tss_flush
+
+   extern gui_draw
+   call gui_draw
+   
+   jmp $ ; infinite loop
+
+gdt_flush:
    ; flush gdt
    lgdt [gdt_descriptor]
    mov ax, DATA_SEG
@@ -67,12 +76,10 @@ WHITE_ON_BLACK equ 0x0f
    mov fs, ax
    mov gs, ax
    mov ss, ax
+   ret
 
-   ; flush tss
+tss_flush:
    mov ax, TSU_SEG | 0 ; tsu segment OR-ed with RPL 0
 	ltr ax
-
-   extern gui_draw
-   call gui_draw
+   ret
    
-   jmp $ ; infinite loop

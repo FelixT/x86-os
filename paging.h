@@ -23,7 +23,7 @@ typedef struct page_dir_entry_t {
    uint32_t global     : 1; // (unused)
    uint32_t available2 : 3; // (unused/ignored)
    uint32_t address    : 20; // bits 31:12 of physical addr of the page table that manages the 4MiB represented by this dir entry (note due to 4KiB aligment we only need these bits)
-} __attribute__((packed)) page_dir_entry_t;
+} __attribute__((packed, aligned(4))) page_dir_entry_t;
 
 typedef struct page_table_entry_t {
    uint32_t present    : 1;
@@ -36,7 +36,7 @@ typedef struct page_table_entry_t {
    uint32_t pat        : 2; // (unused)
    uint32_t available  : 3;
    uint32_t address    : 20; // physical address of start of 4KiB page
-} __attribute__((packed)) page_table_entry_t;
+}__attribute__((packed, aligned(4))) page_table_entry_t;
 
 void unmap(uint32_t addr);
 void map(uint32_t addr, uint32_t vaddr, int user, int rw);

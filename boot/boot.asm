@@ -1,7 +1,9 @@
+; stage 1 bootloader, load  63.5kb main os into memory at 0x7e00 and jump
+
 [ORG 0x7c00]
    jmp start
 
-   %include "terminal.asm"
+   %include "boot/print.asm"
 
 start:
    mov ax, 0
