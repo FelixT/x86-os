@@ -58,9 +58,9 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
    gui_window_writeuint(elf_header->prog_header_entry_count, 0, 0);*/
 
    if(elf_header->type != 2) {
-      gui_window_writestr("\nELF Type ", 0, 0);
-      gui_window_writeuint(elf_header->type, 0, 0);
-      gui_window_writestr(" is unsupported\n", 0, 0);
+      gui_writestr("\nELF Type ", 0);
+      gui_writeuint(elf_header->type, 0);
+      gui_writestr(" is unsupported\n", 0);
       return;
    }
 
@@ -83,11 +83,13 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
       prog_header++;
    }
 
-   gui_window_writestr("\nVmem Start: ", 0, 0);
+   uint32_t vmem_size = vmem_end - vmem_start;
+
+   /*gui_window_writestr("\nVmem Start: ", 0, 0);
    gui_window_writeuint(vmem_start, 0, 0);
 
    gui_window_writestr("\nVmem End: ", 0, 0);
-   gui_window_writeuint(vmem_end, 0, 0);
+   gui_window_writeuint(vmem_end, 0, 0);*/
 
    // allocate memory
    uint8_t *newProg = malloc(vmem_end - vmem_start);
@@ -99,14 +101,30 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
 
    prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
 
+   gui_writestr("Mapping ", 0);
+   gui_writeuint((uint32_t)newProg, 0);
+   gui_writestr(" - ", 0);
+   gui_writeuint((uint32_t)newProg + vmem_size, 0);
+
+   gui_writestr(" to ", 0);
+
+   gui_writeuint(vmem_start, 0);
+   gui_writestr(" - ", 0);
+   gui_writeuint(vmem_end, 0);
+   gui_writestr("\n", 0);
+
+   // map vmem
+   for(uint32_t i = 0; i < vmem_size; i++)
+      map((uint32_t)newProg + i, vmem_start + i, 1, 1);
+
    // copy program to new location and assign virtual memory for each segment
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {
 
-      gui_window_writestr("\nSegment ", 0, 0);
-      gui_window_writeuint(i, 0, 0);
+      gui_writestr("\nSegment ", 0);
+      gui_writeuint(i, 0);
 
-      gui_window_writestr(" Type ", 0, 0);
-      gui_window_writeuint(prog_header->segment_type, 0, 0);
+      gui_writestr(" Type ", 0);
+      gui_writeuint(prog_header->segment_type, 0);
 
       if(prog_header->segment_type != 1) {
          // if not LOAD
@@ -116,10 +134,14 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
       uint32_t file_offset = prog_header->p_offset;
       uint32_t vmem_offset = prog_header->p_vaddr - vmem_start;
 
-      gui_window_writestr("\nFile offset ", 0, 0);
-      gui_window_writeuint(file_offset, 0, 0);
-      gui_window_writestr(" Vmem offset ", 0, 0);
-      gui_window_writeuint(vmem_offset, 0, 0);
+      gui_writestr("\nFile offset ", 0);
+      gui_writeuint(file_offset, 0);
+      gui_writestr(" size ", 0);
+      gui_writeuint((uint32_t)prog_header->p_filesz, 0);
+      gui_writestr(" Vmem offset ", 0);
+      gui_writeuint(vmem_offset, 0);
+      gui_writestr(" size ", 0);
+      gui_writeuint((uint32_t)prog_header->p_memsz, 0);
 
       // copy
       for(int i = 0; i < (int)prog_header->p_filesz; i++)
@@ -127,32 +149,28 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
 
       //int rw = (prog_header->flags & 0x1) == 0x1;
 
-      // map vmem
-      for(int i = 0; i < (int)prog_header->p_memsz; i++)
-         map((uint32_t)newProg + vmem_offset + i, prog_header->p_vaddr + i, 1, 1);
-
       //gui_window_writestr("\nVirtual addr: ", 0, 0);
       //gui_window_writeuint(prog_header->p_vaddr, 0, 0);
 
       //gui_window_writestr("\nAlignment: ", 0, 0);
       //gui_window_writeuint(prog_header->alignment, 0, 0);
 
-      gui_window_writestr("\nMapping ", 0, 0);
+      /*gui_window_writestr("\nMapping ", 0, 0);
       gui_window_writeuint((uint32_t)newProg + vmem_offset, 0, 0);
       gui_window_writestr(" to ", 0, 0);
       gui_window_writeuint(prog_header->p_vaddr, 0, 0);
       gui_window_writestr(" with size ", 0, 0);
       gui_window_writeuint((uint32_t)prog_header->p_memsz, 0, 0);
-      gui_window_writestr("\n", 0, 0);
+      gui_window_writestr("\n", 0, 0);*/
       
       prog_header++;
    }
 
    uint32_t offset = elf_header->entry - vmem_start;
 
-   gui_window_writestr("\nOffset: ", 0, 0);
-   gui_window_writeuint(offset, 0, 0);
-   gui_window_writestr("\n", 0, 0);
+   gui_writestr("\nOffset: ", 0);
+   gui_writeuint(offset, 0);
+   gui_writestr("\n", 0);
 
    //gui_draw();
    //while(true);
@@ -171,8 +189,8 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
    regs->useresp -= 4;
    ((uint32_t*)regs->useresp)[0] = 0; // push dummy return addr
 
-   gui_window_writestr("\nStarting at: ", 0, 0);
-   gui_window_writeuint(elf_header->entry, 0, 0);
-   gui_window_writestr("\n", 0, 0);
+   gui_writestr("\nStarting at: ", 0);
+   gui_writeuint(elf_header->entry, 0);
+   gui_writestr("\n", 0);
 
 }

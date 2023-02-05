@@ -22,7 +22,7 @@ void unmap(uint32_t vaddr) {
 
    if(page_dir[dir_index].present) {
 
-      page_dir[dir_index].present = 0;
+      //page_dir[dir_index].present = 0;
 
       if(page_dir[dir_index].address) {
 
@@ -44,7 +44,7 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
    uint32_t dir_index = index / 1024; // 1024 table entries/dir
    uint32_t table_index = index%1024;
 
-   if(!page_dir[dir_index].present && !page_dir[dir_index].address) {
+   if(!page_dir[dir_index].present || !page_dir[dir_index].address) {
 
       page_table_entry_t *page_table = malloc(sizeof(page_table_entry_t) * 1024);
 
@@ -52,7 +52,7 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
 
       uint8_t *entry = (uint8_t*)page_table;
       for(int i = 0; i < 1024*(int)sizeof(page_table_entry_t); i++)
-         entry[0] = 0; // set to 2 for rw = 1, else 0
+         entry[i] = 0; // set to 2 for rw = 1, else 0
    }
 
    page_table_entry_t *page_table = (page_table_entry_t*) (page_dir[dir_index].address << 12);
@@ -93,7 +93,7 @@ void page_init() {
 
    // identity map stacks
    for(uint32_t i = STACKS_START; i < TOS_KERNEL; i++)
-      map(i, i, 1, 1); // user so prog1 doesn't break upon push
+      map(i, i, 1, 1); // user so progidle doesn't break upon push
       
    for(uint32_t i = TOS_KERNEL; i < TOS_PROGRAM; i++)
       map(i, i, 1, 1);

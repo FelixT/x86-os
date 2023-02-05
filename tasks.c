@@ -75,11 +75,11 @@ void end_task(int index, registers_t *regs) {
    // TODO: free args
 
    if(tasks[index].vmem_start != 0) {
-      /*gui_window_writestr("Unmapping ", 0, 0);
+      gui_window_writestr("Unmapping ", 0, 0);
       gui_window_writeuint(tasks[index].vmem_start, 0, 0);
-      gui_window_writestr(" to ", 0, 0);
+      gui_window_writestr(" - ", 0, 0);
       gui_window_writeuint(tasks[index].vmem_end, 0, 0);
-      gui_window_writestr("\n", 0, 0);*/
+      gui_window_writestr("\n", 0, 0);
 
       for(uint32_t i = tasks[index].vmem_start; i < tasks[index].vmem_end; i++) {
          unmap(i);
@@ -127,6 +127,7 @@ void tasks_init(registers_t *regs) {
 
    create_task_entry(0, idleentry, entry->fileSize, false);
    launch_task(0, regs, false);
+   gui_get_windows()[tasks[0].window].minimised = true;
    //elf_run(regs, prog, 0, 0, NULL);
    //free((uint32_t)prog, entry->fileSize);
 

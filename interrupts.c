@@ -490,7 +490,7 @@ void exception_handler(int int_no, registers_t *regs) {
             }
             gui_window_writestr("\n", 0, 0);
 
-            //while(true);
+            while(true);
          }
 
          gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);
