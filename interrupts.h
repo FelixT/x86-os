@@ -69,7 +69,9 @@ extern void terminal_writenumat(int num, int at);
 extern void terminal_backspace(void);
 extern void terminal_prompt(void);
 
-
 extern void mouse_update(uint32_t relX, uint32_t relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
 extern void mouse_leftrelease();
+
+void idt_init();
+void tss_init();

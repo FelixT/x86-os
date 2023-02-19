@@ -10,6 +10,9 @@ cmd_cli:
    mov eax, cr0
    or eax, 0x1
    mov cr0, eax
+
+   extern videomode
+   mov byte[videomode], 0
    
    jmp CODE_SEG:main_32
 
@@ -22,8 +25,11 @@ cmd_gui:
    mov eax, cr0
    or eax, 0x1
    mov cr0, eax
+
+   extern videomode
+   mov byte[videomode], 1
    
-   jmp CODE_SEG:maingui_32   
+   jmp CODE_SEG:main_32   
 
 cmd_cli_str db 'cli', 0
 cmd_gui_str db 'gui', 0

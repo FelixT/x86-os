@@ -73,6 +73,7 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 #define COLOUR_CYAN gui_rgb16(0, 183, 235)
 #define COLOUR_ORANGE gui_rgb16(200, 125, 0)
 
+void gui_init();
 void gui_clear(uint16_t colour);
 void gui_drawchar(char c, uint16_t colour);
 void gui_writenumat(int num, uint16_t colour, int x, int y);

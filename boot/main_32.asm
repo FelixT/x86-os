@@ -16,57 +16,12 @@ main_32:
    mov ebp, 0x18e00
    mov esp, ebp
 
-   ; setup idt
-   extern idt_init
-   call idt_init
-
-   ; main code
-
-   extern terminal_clear
-   call terminal_clear
-
-   extern terminal_prompt
-   call terminal_prompt
+   extern cmain
+   call cmain
 
    jmp $ ; infinite loop
 
-maingui_32:      
-   ; setup registers
-   mov ax, DATA_SEG
-   mov ds, ax
-   mov es, ax
-   mov fs, ax
-   mov gs, ax
-   mov ss, ax
-   mov ebp, 0x18e00
-   mov esp, ebp
-
-   ; setup idt
-   extern idt_init
-   call idt_init
-
-   extern memory_init
-   call memory_init
-
-   ; main code
-   extern gui_init
-   call gui_init
-   
-   extern tasks_alloc
-   call tasks_alloc
-
-   ; setup tss
-   extern tss_init
-   call tss_init
-
-   call gdt_flush
-   call tss_flush
-
-   extern gui_draw
-   call gui_draw
-   
-   jmp $ ; infinite loop
-
+global gdt_flush
 gdt_flush:
    ; flush gdt
    lgdt [gdt_descriptor]
@@ -78,8 +33,13 @@ gdt_flush:
    mov ss, ax
    ret
 
+global tss_flush
 tss_flush:
    mov ax, TSU_SEG | 0 ; tsu segment OR-ed with RPL 0
 	ltr ax
    ret
-   
+
+global videomode
+videomode db 0
+; 0 - cli
+; 1 - gui
