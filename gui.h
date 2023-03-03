@@ -112,6 +112,7 @@ void gui_window_writestrat(char *c, uint16_t colour, int x, int y, int windowInd
 void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex);
 void gui_window_clearbuffer(gui_window_t *window, uint16_t colour);
 void gui_window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
+void gui_window_drawrect(uint16_t colour, int x, int y, int width, int height, int windowIndex);
 
 uint16_t *gui_get_framebuffer();
 uint32_t gui_get_framebuffer_size();
@@ -120,7 +121,7 @@ int gui_get_selected_window();
 void gui_set_selected_window(int windowIndex);
 size_t gui_get_width();
 size_t gui_get_height();
-int *gui_get_num_windows();
+int gui_get_num_windows();
 uint32_t gui_get_window_framebuffer(int windowIndex);
 int gui_gettextwidth(int textlength);
 

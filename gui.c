@@ -1,4 +1,5 @@
 #include "gui.h"
+#include "draw.h"
 
 extern int videomode;
 
@@ -7,16 +8,13 @@ int gui_mouse_y = 0;
 
 uint16_t gui_bg;
 
-size_t gui_width = 320;
-size_t gui_height = 200;
-
 bool mouse_enabled = false;
 bool mouse_held = false;
 
 gui_window_t *gui_windows;
 int gui_selected_window = 0;
 
-uint32_t framebuffer;
+surface_t surface;
 
 uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
 
@@ -28,11 +26,20 @@ uint8_t *icon_window;
 uint8_t *gui_bgimage;
 
 static inline void set_framebuffer(int index, uint16_t colour) {
-   if(index < 0 || index >= (int)gui_width*(int)gui_height) {
+   if(index < 0 || index >= (int)surface.width*(int)surface.height) {
       //gui_window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
-      ((uint16_t*)framebuffer)[index] = colour;
+      ((uint16_t*)surface.buffer)[index] = colour;
    }
+}
+
+surface_t getsurfacefromwindow(int windowIndex) {
+   gui_window_t *window = &gui_windows[windowIndex];
+   surface_t surface;
+   surface.width = window->width;
+   surface.height = window->height;
+   surface.buffer = (uint32_t)window->framebuffer;
+   return surface;
 }
 
 uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
@@ -41,114 +48,38 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void gui_drawrect(uint16_t colour, int x, int y, int width, int height) {
-   for(int yi = y; yi < y+height; yi++) {
-      for(int xi = x; xi < x+width; xi++) {
-         set_framebuffer(yi*(int)gui_width+xi, colour);
-      }
-   }
-   return;
+   draw_rect(&surface, colour, x, y, width, height);
 }
 
 void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height) {
-   for(int xi = x; xi < x+width; xi++) // top
-      set_framebuffer(y*(int)gui_width+xi, colour);
-
-   for(int xi = x; xi < x+width; xi++) // bottom
-      set_framebuffer((y+height-1)*(int)gui_width+xi, colour);
-
-   for(int yi = y; yi < y+height; yi++) // left
-      set_framebuffer((yi)*(int)gui_width+x, colour);
-
-   for(int yi = y; yi < y+height; yi++) // right
-      set_framebuffer((yi)*(int)gui_width+x+width-1, colour);
+   draw_unfilledrect(&surface, colour, x, y, width, height);
 }
 
 void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height) {
-   for(int xi = x; xi < x+width; xi++) // top
-      if((xi%2) == 0)
-         set_framebuffer(y*(int)gui_width+xi, colour);
-
-   for(int xi = x; xi < x+width; xi++) // bottom
-      if((xi%2) == 0)
-         set_framebuffer((y+height-1)*(int)gui_width+xi, colour);
-
-   for(int yi = y; yi < y+height; yi++) // left
-      if((yi%2) == 0)
-      set_framebuffer((yi)*(int)gui_width+x, colour);
-
-   for(int yi = y; yi < y+height; yi++) // right
-      if((yi%2) == 0)
-      set_framebuffer((yi)*(int)gui_width+x+width-1, colour);
+   draw_dottedrect(&surface, colour, x, y, width, height);
 }
 
 void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length) {
-   if(vertical) {
-      for(int yi = y; yi < y+length; yi++) {
-         set_framebuffer(yi*(int)gui_width+x, colour);
-      }
-   } else {
-      for(int xi = x; xi < x+length; xi++) {
-         set_framebuffer(y*(int)gui_width+xi, colour);
-      }
-   }
+   draw_line(&surface, colour, x, y, vertical, length);
 }
 
 void gui_clear(uint16_t colour) {
-   for(int y = 0; y < (int)gui_height; y++) {
-      for(int x = 0; x < (int)gui_width; x++) {
-         set_framebuffer(y*(int)gui_width+x, colour);
-      }
-   }
-   return;
+   gui_drawrect(colour, 0, 0, surface.width, surface.height);
 }
 
-int font_letter[FONT_WIDTH*FONT_HEIGHT];
-
 void gui_drawcharat(char c, uint16_t colour, int x, int y) {
-   getFontLetter(c, font_letter);
-
-   int i = 0;      
-   for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
-      for(int xi = x; xi < x+FONT_WIDTH; xi++) {
-         if(font_letter[i] == 1)
-            set_framebuffer(yi*(int)gui_width+xi, colour);
-         i++;
-      }
-   }
+   draw_char(&surface, c, colour, x, y);
 }
 
 void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex) {
-   gui_window_t *window = &gui_windows[windowIndex];
-   uint16_t *terminal_buffer = window->framebuffer;
-   
    if(c >= 'a' && c <= 'z') c = (c - 'a') + 'A'; // convert to uppercase
-
-   getFontLetter(c, font_letter);
-
-   int i = 0;      
-   for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
-      for(int xi = x; xi < x+FONT_WIDTH; xi++) {
-         if(font_letter[i] == 1) {
-            int index = yi*(int)window->width+xi;
-            if(index >= 0 && index < window->width*(window->height-TITLEBAR_HEIGHT))
-               terminal_buffer[index] = colour;
-         }
-         i++;
-      }
-   }
+   surface_t surface = getsurfacefromwindow(windowIndex);
+   draw_char(&surface, c, colour, x, y);
 }
 
 void gui_window_drawrect(uint16_t colour, int x, int y, int width, int height, int windowIndex) {
-   gui_window_t *window = &gui_windows[windowIndex];
-   uint16_t *terminal_buffer = (uint16_t*)window->framebuffer;
-   for(int yi = y; yi < y+height; yi++) {
-      for(int xi = x; xi < x+width; xi++) {
-         int index = yi*(int)window->width+xi;
-         if(index >= 0 && index < window->width*(window->height-TITLEBAR_HEIGHT))
-            terminal_buffer[index] = colour;
-      }
-   }
-   return;
+   surface_t surface = getsurfacefromwindow(windowIndex);
+   draw_rect(&surface, colour, x, y, width, height);
 }
 
 void gui_window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex) {
@@ -168,27 +99,6 @@ void gui_window_writenumat(int num, uint16_t colour, int x, int y, int windowInd
    gui_window_writestrat(out, colour, x, y, windowIndex);
 }
 
-void gui_window_scroll(int windowIndex) {
-   gui_window_t *window = &gui_windows[windowIndex];
-   uint16_t *terminal_buffer = window->framebuffer;
-
-   int scrollY = FONT_HEIGHT+FONT_PADDING;
-   for(int y = scrollY; y < window->height - TITLEBAR_HEIGHT; y++) {
-      for(int x = window->x; x < window->x + window->width; x++) {
-         int srcIndex = y*(int)window->width+x;
-         int outIndex = (y-scrollY)*window->width+x;
-         if(srcIndex >= 0 && srcIndex < (int)gui_width*(int)gui_height
-         && outIndex >= 0 && outIndex < window->width*(window->height-TITLEBAR_HEIGHT))
-            terminal_buffer[outIndex] = terminal_buffer[srcIndex];
-      }
-   }
-   // clear bottom
-   int newY = window->height - (scrollY + TITLEBAR_HEIGHT);
-   gui_window_drawrect(COLOUR_WHITE, 0, newY, window->width, scrollY, windowIndex);
-   window->text_y = newY;
-   window->text_x = FONT_PADDING;
-}
-
 void gui_window_drawchar(char c, uint16_t colour, int windowIndex) {
 
    gui_window_t *selected = &gui_windows[windowIndex];
@@ -198,7 +108,7 @@ void gui_window_drawchar(char c, uint16_t colour, int windowIndex) {
       selected->text_y += FONT_HEIGHT + FONT_PADDING;
 
       if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
-         gui_window_scroll(windowIndex);
+         window_scroll(windowIndex);
       }
 
       // immediately output each line
@@ -215,7 +125,7 @@ void gui_window_drawchar(char c, uint16_t colour, int windowIndex) {
       selected->text_y += FONT_HEIGHT + FONT_PADDING;
 
       if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
-         gui_window_scroll(windowIndex);
+         window_scroll(windowIndex);
       }
    }
 
@@ -223,7 +133,7 @@ void gui_window_drawchar(char c, uint16_t colour, int windowIndex) {
    selected->text_x+=FONT_WIDTH+FONT_PADDING;
 
    if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
-      gui_window_scroll(windowIndex);
+      window_scroll(windowIndex);
    }
 
    selected->needs_redraw = true;
@@ -255,46 +165,6 @@ void gui_window_clearbuffer(gui_window_t *window, uint16_t colour) {
    for(int i = 0; i < window->width*(window->height-TITLEBAR_HEIGHT); i++) {
       window->framebuffer[i] = colour;
    }
-}
-
-bool gui_window_init(gui_window_t *window) {
-   strcpy(window->title, " TERMINAL");
-   window->x = NUM_WINDOWS*8;
-   window->y = NUM_WINDOWS*8;
-   window->width = 380;
-   window->height = 280;
-   window->text_buffer[0] = '\0';
-   window->text_index = 0;
-   window->text_x = FONT_PADDING;
-   window->text_y = FONT_PADDING;
-   window->needs_redraw = true;
-   window->active = false;
-   window->minimised = false;
-   window->closed = false;
-   window->dragged = false;
-
-   // default TERMINAL functions
-   window->return_func = &window_term_return;
-   window->keypress_func = &window_term_keypress;
-   window->backspace_func = &window_term_backspace;
-   window->uparrow_func = &window_term_uparrow;
-   window->downarrow_func = &window_term_downarrow;
-
-   // other functions without default behaviour
-   window->click_func = NULL;
-   
-   window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
-   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
-      if(i > 0)
-         window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH;
-      window->cmd_history[i][0] = '\0';
-   }
-   window->cmd_history_pos = -1;
-
-   window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
-   if(window->framebuffer == NULL) return false;
-   gui_window_clearbuffer(window, COLOUR_WHITE);
-   return true;
 }
 
 void gui_redrawall();
@@ -360,19 +230,19 @@ void gui_init(void) {
 
    gui_bg = COLOUR_CYAN;
 
-   gui_width = vbe_mode_info_structure.width;
-   gui_height = vbe_mode_info_structure.height;
-   framebuffer = vbe_mode_info_structure.framebuffer;
+   surface.width = vbe_mode_info_structure.width;
+   surface.height = vbe_mode_info_structure.height;
+   surface.buffer = vbe_mode_info_structure.framebuffer;
 
    // reserve framebuffer memory so malloc can't assign it
-   memory_reserve(framebuffer, (int)gui_width*(int)gui_height);
+   memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
    
    gui_clear(gui_bg);
 
    // init with one terminal window
    NUM_WINDOWS = 1;
    gui_windows = malloc(sizeof(gui_window_t));
-   gui_window_init(&gui_windows[0]);
+   window_init(&gui_windows[0]);
    gui_windows[0].title[0] = '0';
    gui_selected_window = 0;
 }
@@ -390,7 +260,7 @@ void gui_draw(void) {
       gui_window_draw(gui_selected_window);
 
    // draw toolbar
-   gui_drawrect(COLOUR_TOOLBAR, 0, gui_height-TOOLBAR_HEIGHT, gui_width, TOOLBAR_HEIGHT);
+   gui_drawrect(COLOUR_TOOLBAR, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT);
 
    int toolbarPos = 0;
    // padding = 2px
@@ -401,7 +271,7 @@ void gui_draw(void) {
          char text[4] = "   ";
          strcpy_fixed(text, gui_windows[i].title, 3);
          int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
-         int itemY = gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
+         int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
          gui_drawrect(COLOUR_TASKBAR_ENTRY, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
          gui_writestrat(text, COLOUR_WHITE, itemX+textX, itemY+1);
          gui_windows[i].toolbar_pos = toolbarPos;
@@ -425,355 +295,6 @@ void gui_redrawall() {
 }
 
 void mouse_enable();
-
-void gui_checkcmd(void *regs) {
-   gui_window_t *selected = &gui_windows[gui_selected_window];
-   char *command = selected->text_buffer;
-
-   
-   if(strcmp(command, "HELP")) {
-      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, FILES, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, ELF addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
-   }
-   else if(strcmp(command, "INIT")) {
-      gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
-      mouse_enable();
-
-      gui_writestr("\nEnabling ATA\n", COLOUR_ORANGE);
-      ata_identify(true, true);
-
-      gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
-      fat_setup();
-
-      gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
-      page_init();
-
-      gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
-      tasks_init(regs);
-
-      gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
-      gui_desktop_init();
-
-   }
-   else if(strcmp(command, "CLEAR")) {
-      gui_window_clearbuffer(selected, COLOUR_WHITE);
-      selected->text_x = FONT_PADDING;
-      selected->text_y = FONT_PADDING;
-      selected->text_index = 0;
-      command[0] = '\0';
-      gui_redrawall();
-      selected->needs_redraw = true;
-      return;
-   }
-   else if(strcmp(command, "MOUSE")) {
-      mouse_enable();
-      gui_writestr("Enabled", 0);
-   }
-   else if(strcmp(command, "TASKS")) {
-      tasks_init(regs);
-   }
-   else if(strcmp(command, "VIEWTASKS")) {
-      task_state_t *tasks = gettasks();
-
-      extern bool switching;
-      gui_writestr("Scheduling ", 0);
-      if(switching) gui_writestr("enabled\n", 0);
-      else gui_writestr("disabled\n", 0);
-      
-      for(int i = 0; i < TOTAL_TASKS; i++) {
-         gui_drawchar('\n', 0);
-
-         gui_writenum(i, 0);
-         gui_writestr(": ", 0);
-
-         if(tasks[i].enabled)
-            gui_writestr("ENABLED", 0);
-         else
-            gui_writestr("DISABLED", 0);
-
-         gui_writestr(" <", 0);
-         gui_writenum(tasks[i].window, 0);
-         gui_writestr(">", 0);
-
-         if(tasks[i].privileged)
-            gui_writestr(" privileged", 0);
-      }
-   }
-   else if(strcmp(command, "PROG1")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog1.bin");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(1, progAddr, entry->fileSize, false);
-      launch_task(1, regs, true);
-   }
-   else if(strcmp(command, "PROG2")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog2.bin");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(2, progAddr, entry->fileSize, false);
-      launch_task(2, regs, true);
-   }
-   else if(strcmp(command, "FILES")) {
-      fat_dir_t *entry = fat_parse_path("/sys/files.elf");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      elf_run(regs, prog, 3, 0, NULL);
-      free((uint32_t)prog, entry->fileSize);
-   }
-   else if(strcmp(command, "PAGE")) {
-      page_init();
-   }
-   else if(strcmp(command, "TEST")) {
-      extern uint32_t kernel_end;
-      
-      gui_writestr("\nKERNEL ", 4);
-      gui_writeuint(0x7e00, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)0x7e00, 0);
-
-      gui_writestr("\nKERNEL END ", 4);
-      gui_writeuint((uint32_t)&kernel_end + 0x17e00, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&kernel_end + 0x17e00, 0);
-
-      gui_writestr("\nKERNEL STACK ", 4);
-      gui_writeuint(STACKS_START + 0x17e00, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(STACKS_START + 0x17e00, 0);
-
-      gui_writestr("\nTOS KERNEL ", 4);
-      gui_writeuint(TOS_KERNEL, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(TOS_KERNEL, 0);
-
-      gui_writestr("\nTOS PROGRAM ", 4);
-      gui_writeuint(TOS_PROGRAM, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(TOS_PROGRAM, 0);
-
-      gui_writestr("\nHEAP KERNEL ", 4);
-      gui_writeuint(HEAP_KERNEL, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(HEAP_KERNEL, 0);
-
-      gui_writestr("\nHEAP KERNEL END ", 4);
-      gui_writeuint(HEAP_KERNEL_END, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(HEAP_KERNEL_END, 0);
-
-      gui_writestr("\nFRAMEBUFFER ", 4);
-      gui_writeuint(framebuffer, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(framebuffer, 0);
-
-      gui_writestr("\nFRAMEBUFFER END ", 4);
-      gui_writeuint(framebuffer + gui_get_framebuffer_size(), 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(framebuffer + gui_get_framebuffer_size(), 0);
-
-   }
-   else if(strcmp(command, "ATA")) {
-      ata_identify(true, true); 
-   }
-   else if(strcmp(command, "FAT")) {
-      fat_setup();
-   }
-   else if(strcmp(command, "DESKTOP")) {
-      gui_desktop_init();
-   }
-   else if(strstartswith(command, "FATPATH")) {
-      char arg[40];
-      if(strsplit(arg, arg, command, ' ')) {
-         if(fat_parse_path(arg) == NULL)
-            gui_writestr("File not found\n", 0);
-      }
-   }
-   else if(strstartswith(command, "PROGC")) {
-      char arg[10];
-      if(strsplit(arg, arg, command, ' ')) {
-         int addr = stoi((char*)arg);
-         gui_writeuint_hex(addr, 0);
-         create_task_entry(3, addr, 0, false);
-         launch_task(3, regs, true);
-      }
-   }
-   else if(strstartswith(command, "BMP")) {
-      char arg[10];
-      if(strsplit(arg, arg, command, ' ')) {
-         int addr = stoi((char*)arg);
-         uint8_t *bmp = (uint8_t*)addr;
-         uint16_t *buffer = selected->framebuffer;
-         bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, 0, 0, false);
-         selected->needs_redraw = true;
-         gui_draw();
-      }
-   }
-   else if(strstartswith(command, "VIEWBMP")) {
-      char arg[20];
-
-      fat_dir_t *entry = fat_parse_path("/sys/bmpview.elf");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-
-      int argc = 0;
-      char **args = NULL;
-      if(strsplit(arg, arg, command, ' ')) {
-         args = malloc(sizeof(char*) * 1);
-         char *path = malloc(strlen(arg));
-         strcpy(path, arg);
-         args[0] = path;
-         argc = 1;
-      }
-
-      elf_run(regs, prog, 2, argc, args);
-      free((uint32_t)prog, entry->fileSize);
-   }
-   else if(strstartswith(command, "ELF")) {
-      char arg[10];
-      if(strsplit(arg, arg, command, ' ')) {
-         int addr = stoi((char*)arg);
-         uint8_t *prog = (uint8_t*)addr;
-         elf_run(regs, prog, 3, 0, NULL);
-      }
-   }
-   else if(strstartswith(command, "FATDIR")) {
-      char arg[5];
-      if(strsplit(arg, arg, command, ' ')) {
-         int cluster = stoi((char*)arg);
-         int size = fat_get_dir_size((uint16_t) cluster);
-
-         fat_dir_t *items = malloc(32 * size);
-         fat_read_dir((uint16_t)cluster, items);
-
-         for(int i = 0; i < size; i++) {
-            if(items[i].filename[0] == 0) break;
-            fat_parse_dir_entry(&items[i]);
-         }
-
-         free((uint32_t)items, 32 * size);
-      }
-   }
-   else if(strstartswith(command, "FATFILE")) {
-      char arg[5];
-      if(strsplit(arg, arg, command, ' ')) {
-         int cluster = stoi((char*)arg);
-         fat_read_file((uint16_t)cluster, 0);
-      }
-   }
-   else if(strstartswith(command, "READ")) {
-      char arg[8];
-      if(strsplit(arg, arg, command, ' ')) {
-         // convert str to int
-         uint32_t lba = 0;
-         int power = 1;
-         for(int i = strlen(arg) - 1; i >= 0 ; i--) {
-            if(arg[i] >= '0' && arg[i] <= '9') {
-               lba += power*(arg[i]-'0');
-               power *= 10;
-            }
-         }
-         gui_writeuint(lba, 0);
-         gui_writestr("\n", 0);
-         uint16_t *buf = malloc(512);
-         ata_read(true, true, lba, buf);
-         for(int i = 0; i < 256; i++) {
-            gui_writeuint_hex(buf[i], 0);
-            gui_drawchar(' ', 0);
-         }
-         free((uint32_t)buf, 512);
-
-      }
-   }
-   else if(strstartswith(command, "BG")) {
-      char arg[5];
-      if(strsplit(arg, arg, command, ' ')) {
-         int bg = stoi((char*)arg);
-         gui_writenum(bg, 0);
-         gui_bg = bg;
-         gui_redrawall();
-      }
-   }
-   else if(strstartswith(command, "MEM")) {
-      char arg[5];
-      mem_segment_status_t *status = memory_get_table();
-      
-      if(strsplit(arg, arg, command, ' ')) {
-         int offset = (arg[0]-'0')*400;
-
-         for(int i = offset; i < offset+400 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-            if(status[i].allocated)
-               gui_writenum(1, 0);
-            else
-               gui_writenum(0, 0);
-         }
-      } else {
-         int used = 0;
-         for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-            if(status[i].allocated) used++;
-         }
-         gui_writenum(used, 0);
-         gui_drawchar('/', 0);
-         gui_writenum(KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, 0);
-         gui_writestr(" ALLOCATED", 0);
-      }
-   }
-   else if(strstartswith(command, "DMPMEM")) {
-      char arg[20];
-      if(strsplit(arg, arg, command, ' ')) {
-         int bytes = 32;
-         int rowlen = 8;
-         char arg2[10];
-         if(strsplit(arg, arg2, arg, ' ')) {
-            bytes = stoi((char*)arg2);
-         }
-         int addr = stoi((char*)arg);
-         gui_writeuint_hex(addr, 0);
-         gui_drawchar(':', 0);
-         gui_writenum(bytes, 0);
-         gui_drawchar('\n', 0);
-
-         char *buf = malloc(rowlen);
-         buf[rowlen] = '\0';
-         for(int i = 0; i < bytes; i++) {
-            uint8_t *mem = (uint8_t*)addr;
-            if(mem[i] <= 0x0F)
-               gui_drawchar('0', 0);
-            gui_writeuint_hex(mem[i], 0);
-            gui_drawchar(' ', 0);
-            buf[i%rowlen] = mem[i];
-
-            if((i%rowlen) == (rowlen-1) || i==(bytes-1)) {
-               for(int x = 0; x < rowlen; x++) {
-                  if(buf[x] != '\n')
-                     gui_drawchar(buf[x], 0x2F);
-               }
-               gui_drawchar('\n', 0);
-            } 
-         }
-         free((uint32_t)buf, rowlen);
-      }
-   }
-   else {
-      gui_drawchar('\'', 1);
-      gui_writestr(selected->text_buffer, 1);
-      gui_drawchar('\'', 1);
-      gui_writestr(": UNRECOGNISED", 4);
-   }
-   gui_drawchar('\n', 0);
-}
 
 void gui_interrupt_switchtask(void *regs) {
    // switch to task of selected window to handle interrupt
@@ -895,7 +416,7 @@ void gui_window_draw(int windowIndex) {
                && screenY < gui_windows[gui_selected_window].y + gui_windows[gui_selected_window].height)
                   continue;
 
-               int index = screenY*gui_width + screenX;
+               int index = screenY*surface.width + screenX;
                int w_index = y*window->width + x;
                set_framebuffer(index, window->framebuffer[w_index]);
             }
@@ -976,7 +497,7 @@ int gui_window_add() {
       }
    }
 
-   if(gui_window_init(&gui_windows[newIndex])) {
+   if(window_init(&gui_windows[newIndex])) {
       gui_windows[newIndex].title[0] = newIndex+'0';
       gui_selected_window = newIndex;
 
@@ -1017,10 +538,10 @@ void gui_desktop_draw() {
    //gui_writeuint((uint32_t)icon_window, 0);
    int32_t width = bmp_get_width(gui_bgimage);
    int32_t height = bmp_get_height(gui_bgimage);
-   int x = (gui_width - width) / 2;
-   int y = ((gui_height - TOOLBAR_HEIGHT) - height) / 2;
-   bmp_draw(gui_bgimage, (uint16_t *)framebuffer, gui_width, gui_height, x, y, 0);
-   bmp_draw(icon_window, (uint16_t *)framebuffer, gui_width, gui_height, 10, 10, 1);
+   int x = (surface.width - width) / 2;
+   int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
+   bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0);
+   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, 10, 10, 1);
 }
 
 void gui_desktop_click() {
@@ -1059,11 +580,11 @@ void mouse_enable() {
 }
 
 void gui_cursor_save_bg() {
-   uint16_t *terminal_buffer = (uint16_t*) framebuffer;
+   uint16_t *terminal_buffer = (uint16_t*) surface.buffer;
    for(int y = gui_mouse_y; y < gui_mouse_y + FONT_HEIGHT; y++) {
       for(int x = gui_mouse_x; x < gui_mouse_x + FONT_WIDTH; x++) {
-         if(x >= 0 && x < (int)gui_width && y >=0 && y < (int)gui_height)
-            cursor_buffer[(y-gui_mouse_y)*FONT_WIDTH+(x-gui_mouse_x)] = terminal_buffer[y*(int)gui_width+x];
+         if(x >= 0 && x < (int)surface.width && y >=0 && y < (int)surface.height)
+            cursor_buffer[(y-gui_mouse_y)*FONT_WIDTH+(x-gui_mouse_x)] = terminal_buffer[y*(int)surface.width+x];
       }
    }
 }
@@ -1071,7 +592,7 @@ void gui_cursor_save_bg() {
 void gui_cursor_restore_bg(int old_x, int old_y) {
    for(int y = old_y; y < old_y + FONT_HEIGHT; y++) {
       for(int x = old_x; x < old_x + FONT_WIDTH; x++) {
-         set_framebuffer(y*(int)gui_width+x, cursor_buffer[(y-old_y)*FONT_WIDTH+(x-old_x)]);
+         set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-old_y)*FONT_WIDTH+(x-old_x)]);
       }
    }
 }
@@ -1089,22 +610,22 @@ void mouse_update(int relX, int relY) {
    gui_mouse_x += relX;
    gui_mouse_y -= relY;
 
-   if(gui_mouse_x >= (int)gui_width)
-      gui_mouse_x %= gui_width;
+   if(gui_mouse_x >= (int)surface.width)
+      gui_mouse_x %= surface.width;
 
-   if(gui_mouse_y >= (int)gui_height)
-      gui_mouse_y %= gui_height;
+   if(gui_mouse_y >= (int)surface.height)
+      gui_mouse_y %= surface.height;
 
    if(gui_mouse_x < 0)
-      gui_mouse_x = gui_width + gui_mouse_x;
+      gui_mouse_x = surface.width + gui_mouse_x;
 
    if(gui_mouse_y < 0)
-      gui_mouse_y = gui_height + gui_mouse_y;
+      gui_mouse_y = surface.height + gui_mouse_y;
 
    // just in case
-   if(gui_mouse_x < 0 || gui_mouse_x >= (int)gui_width)
+   if(gui_mouse_x < 0 || gui_mouse_x >= (int)surface.width)
       gui_mouse_x = 0;
-   if(gui_mouse_y < 0 || gui_mouse_y >= (int)gui_height)
+   if(gui_mouse_y < 0 || gui_mouse_y >= (int)surface.height)
       gui_mouse_y = 0;
 
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
@@ -1119,7 +640,7 @@ bool mouse_clicked_on_window(void *regs, int index) {
    // clicked on window's icon in toolbar
    if(window->minimised) {
       if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
-         && gui_mouse_y >= (int)gui_height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)gui_height-TOOLBAR_PADDING) {
+         && gui_mouse_y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)surface.height-TOOLBAR_PADDING) {
             window->minimised = false;
             window->active = true;
             window->needs_redraw = true;
@@ -1165,12 +686,12 @@ void mouse_leftclick(void *regs, int relX, int relY) {
             window->y -= relY;
             if(window->x < 0)
                window->x = 0;
-            if(window->x + window->width > (int)gui_width)
-               window->x = gui_width - window->width;
+            if(window->x + window->width > (int)surface.width)
+               window->x = surface.width - window->width;
             if(window->y < 0)
                window->y = 0;
-            if(window->y + window->height > (int)gui_height - TOOLBAR_HEIGHT)
-               window->y = gui_height - window->height - TOOLBAR_HEIGHT;
+            if(window->y + window->height > (int)surface.height - TOOLBAR_HEIGHT)
+               window->y = surface.height - window->height - TOOLBAR_HEIGHT;
 
             window->dragged = true;
             window->needs_redraw = true;
@@ -1254,11 +775,11 @@ void mouse_leftrelease() {
 }
 
 uint16_t *gui_get_framebuffer() {
-   return (uint16_t*)framebuffer;
+   return (uint16_t*)surface.buffer;
 }
 
 uint32_t gui_get_framebuffer_size() {
-   return gui_width*gui_height*2;
+   return surface.width*surface.height*2;
 }
 
 gui_window_t *gui_get_windows() {
@@ -1274,15 +795,15 @@ void gui_set_selected_window(int windowIndex) {
 }
 
 size_t gui_get_width() {
-   return gui_width;
+   return surface.width;
 }
 
 size_t gui_get_height() {
-   return gui_height;
+   return surface.height;
 }
 
-int *gui_get_num_windows() {
-   return &NUM_WINDOWS;
+int gui_get_num_windows() {
+   return NUM_WINDOWS;
 }
 
 uint32_t gui_get_window_framebuffer(int windowIndex) {

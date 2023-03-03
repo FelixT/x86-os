@@ -7,8 +7,8 @@ export GCC="$CROSS/i686-elf-gcc"
 export GAS="$CROSS/i686-elf-as"
 export LD="$CROSS/i686-elf-ld"
 
-c_files="font gui terminal interrupts tasks ata memory fat bmp elf paging window string"
-o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o o/string.o"
+c_files="font gui terminal interrupts tasks ata memory fat bmp elf paging window draw string"
+o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o o/draw.o o/string.o"
 
 mkdir -p o
 mkdir -p fs_root
