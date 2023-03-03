@@ -27,10 +27,6 @@ bool desktop_enabled = false;
 uint8_t *icon_window;
 uint8_t *gui_bgimage;
 
-extern bool strcmp(char* str1, char* str2);
-extern void terminal_numtostr(int num, char *out);
-extern void terminal_uinttostr(uint32_t num, char *out);
-
 static inline void set_framebuffer(int index, uint16_t colour) {
    if(index < 0 || index >= (int)gui_width*(int)gui_height) {
       //gui_window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
@@ -168,7 +164,7 @@ void gui_window_writenumat(int num, uint16_t colour, int x, int y, int windowInd
       gui_window_drawcharat('-', colour, x+=(FONT_WIDTH+FONT_PADDING), y, windowIndex);
 
    char out[20];
-   terminal_numtostr(num, out);
+   inttostr(num, out);
    gui_window_writestrat(out, colour, x, y, windowIndex);
 }
 
@@ -245,13 +241,13 @@ void gui_window_writenum(int num, uint16_t colour, int windowIndex) {
       gui_window_drawchar('-', colour, windowIndex);
 
    char out[20];
-   terminal_numtostr(num, out);
+   inttostr(num, out);
    gui_window_writestr(out, colour, windowIndex);
 }
 
 void gui_window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
    char out[20];
-   terminal_uinttostr(num, out);
+   uinttostr(num, out);
    gui_window_writestr(out, colour, windowIndex);
 }
 
@@ -330,32 +326,31 @@ void gui_writenum(int num, uint16_t colour) {
       gui_drawchar('-', colour);
 
    char out[20];
-   terminal_numtostr(num, out);
+   inttostr(num, out);
    gui_writestr(out, colour);
 }
 
-extern void terminal_uinttohex(uint32_t num, char* out);
 void gui_writeuint_hex(uint32_t num, uint16_t colour) {
    char out[20];
-   terminal_uinttohex(num, out);
+   uinttohexstr(num, out);
    gui_writestr(out, colour);
 }
 
 void gui_writeuint(uint32_t num, uint16_t colour) {
    char out[20];
-   terminal_uinttostr(num, out);
+   uinttostr(num, out);
    gui_writestr(out, colour);
 }
 
 void gui_writenumat(int num, uint16_t colour, int x, int y) {
    char out[20];
-   terminal_numtostr(num, out);
+   inttostr(num, out);
    gui_writestrat(out, colour, x, y);
 }
 
 void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
    char out[20];
-   terminal_uinttostr(num, out);
+   uinttostr(num, out);
    gui_writestrat(out, colour, x, y);
 }
 
@@ -430,14 +425,6 @@ void gui_redrawall() {
 }
 
 void mouse_enable();
-
-extern void ata_identify(bool primaryBus, bool masterDrive);
-extern void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
-
-extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
-extern uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
-
-extern void elf_run(void *regs, uint8_t *prog, int index, int argc, char **args);
 
 void gui_checkcmd(void *regs) {
    gui_window_t *selected = &gui_windows[gui_selected_window];
@@ -1025,9 +1012,6 @@ void gui_window_close(void *regs, int windowIndex) {
 
    gui_redrawall();
 }
-
-extern int32_t bmp_get_width(uint8_t *bmp);
-extern int32_t bmp_get_height(uint8_t *bmp);
 
 void gui_desktop_draw() {
    //gui_writeuint((uint32_t)icon_window, 0);

@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "ata.h"
 #include "memory.h"
 #include "tasks.h"
 #include "fat.h"
@@ -12,6 +13,8 @@
 #include "paging.h"
 #include "string.h"
 #include "font.h"
+#include "bmp.h"
+#include "elf.h"
 
 #define TITLEBAR_HEIGHT 17
 #define TOOLBAR_HEIGHT 22

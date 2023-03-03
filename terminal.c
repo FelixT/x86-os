@@ -95,89 +95,10 @@ void terminal_backspace(void) {
    }
 }
 
-void terminal_numtostr(int num, char* out) {
-   if(num == 0) {
-      out[0] = '0';
-      out[1] = '\0';
-      return;
-   }
-
-   bool negative = num < 0;
-   if(negative)
-      num = -num;
-
-   // get number length in digits
-   int tmp = num;
-   int length = 0;
-   while(tmp > 0) {
-      length++;
-      tmp/=10;
-   }
-   
-   out[length] = '\0';
-
-   for(int i = 0; i < length; i++) {
-      out[length-i-1] = '0' + num%10;
-      num/=10;
-   }
-}
-
-void terminal_uinttostr(uint32_t num, char* out) {
-   if(num == 0) {
-      out[0] = '0';
-      out[1] = '\0';
-      return;
-   }
-
-   // get number length in digits
-   uint32_t tmp = num;
-   int length = 0;
-   while(tmp > 0) {
-      length++;
-      tmp/=10;
-   }
-   
-   out[length] = '\0';
-
-   for(int i = 0; i < length; i++) {
-      out[length-i-1] = '0' + num%10;
-      num/=10;
-   }
-}
-
-void terminal_uinttohex(uint32_t num, char* out) {
-   if(num == 0) {
-      out[0] = '0';
-      out[1] = '\0';
-      return;
-   }
-
-   // get number length in digits
-   uint32_t tmp = num;
-   int length = 0;
-   while(tmp > 0) {
-      length++;
-      tmp/=16;
-   }
-   
-   out[length] = '\0';
-
-   for(int i = 0; i < length; i++) {
-      if(num%16 == 10) out[length-i-1] = 'A';
-      else if(num%16 == 11) out[length-i-1] = 'B';
-      else if(num%16 == 12) out[length-i-1] = 'C';
-      else if(num%16 == 13) out[length-i-1] = 'D';
-      else if(num%16 == 14) out[length-i-1] = 'E';
-      else if(num%16 == 15) out[length-i-1] = 'F';
-      else out[length-i-1] = '0' + num%16;
-      num/=16;
-   }
-}
-
 void terminal_writenumat(int num, int at) {
    char out[20]; // allocate more memory than required for int's maxvalue
    
-   terminal_numtostr(num, out);
+   inttostr(num, out);
 
    terminal_writeat(out, at);
 }

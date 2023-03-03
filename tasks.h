@@ -11,6 +11,7 @@
 #include "gdt.h"
 #include "interrupts.h"
 #include "registers_t.h"
+#include "elf.h"
 
 typedef struct task_state_t {
    bool enabled;

@@ -4,6 +4,7 @@
 // http://www.c-jump.com/CIS24/Slides/FAT/FAT.html
 
 #include "fat.h"
+#include "string.h"
 
 // 8.3 directory structure
 
@@ -63,7 +64,6 @@ void fat_parse_dir_entry(fat_dir_t *fat_dir) {
    gui_writestr(">\n", 0);
 }
 
-extern bool strcmp(char* str1, char* str2);
 // return clusterNo from filename and extension in a specific directory
 bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension) {
    if(fat_dir->firstClusterNo < 2) return false;

@@ -7,8 +7,6 @@ task_state_t *tasks;
 int current_task = 0;
 bool switching = false; // preemptive multitasking
 
-extern void elf_run(void *regs, uint8_t *prog, int index, int argc, char **args);
-
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
    //if(tasks[index].enabled) end_task(index, NULL);
 
