@@ -1,9 +1,8 @@
 #include <stdint.h>
 
-// defines 5*7 gui font
+#include "font.h"
 
-#define FONT_WIDTH 7
-#define FONT_HEIGHT 11
+// defines 5*7 gui font
 
 extern uint8_t font_null[FONT_HEIGHT];
 

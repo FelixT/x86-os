@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "string.h"
+
 #define TEXT_BUFFER_LENGTH 40
 #define CMD_HISTORY_LENGTH 10
 

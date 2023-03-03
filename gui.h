@@ -10,10 +10,9 @@
 #include "fat.h"
 #include "window.h"
 #include "paging.h"
+#include "string.h"
+#include "font.h"
 
-#define FONT_WIDTH 7
-#define FONT_HEIGHT 11
-#define FONT_PADDING 2
 #define TITLEBAR_HEIGHT 17
 #define TOOLBAR_HEIGHT 22
 #define TOOLBAR_ITEM_WIDTH 50

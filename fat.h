@@ -7,6 +7,7 @@
 #include "memory.h"
 #include "gui.h"
 #include "ata.h"
+#include "string.h"
 
 // https://www.freebsd.org/cgi/man.cgi?query=newfs_msdos&apropos=0&sektion=0&manpath=FreeBSD+5.2-RELEASE&format=html
 // BPB / bios parameter block

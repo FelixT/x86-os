@@ -2,6 +2,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "terminal.h"
+
 size_t terminal_index;
 
 extern int videomode;
@@ -20,25 +22,6 @@ uint16_t entry(char c, uint8_t colour) {
 
 static inline void outb(uint16_t port, uint8_t val) {
    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-
-int strlen(char* str) {
-   int len = 0;
-   while(str[len] != '\0')
-      len++;
-   return len;
-}
-
-bool strcmp(char* str1, char* str2) {
-   int len = strlen(str1);
-   if(len != strlen(str2))
-      return false;
-
-   for(int i = 0; i < len; i++)
-      if(str1[i] != str2[i])
-         return false;
-
-   return true;
 }
 
 void terminal_setcursor(int offset) {

@@ -313,8 +313,6 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
 }
 
-extern int strlen(char* str);
-
 fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
    if(strlen(pathElement) == 0)
       return dir;

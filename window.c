@@ -1,10 +1,7 @@
 // default window behaviour
 
 #include "window.h"
-
 #include "gui.h"
-
-extern int strlen(char* str);
 
 // default terminal behaviour
 

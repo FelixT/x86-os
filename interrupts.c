@@ -3,21 +3,23 @@
 
 #include "interrupts.h"
 
+extern void* isr_stub_table[];
+extern void* irq_stub_table[];
+extern void* software_interrupt_routine;
+
+extern int videomode;
+extern bool switching; // preemptive multitasking enabled
+
+extern void mouse_update(uint32_t relX, uint32_t relY);
+extern void mouse_leftclick(registers_t *regs, int relX, int relY);
+extern void mouse_leftrelease();
+
 __attribute__((aligned(0x10))) 
 static idt_entry_t idt[256];
 
 static idtr_t idtr;
 
-// https://wiki.osdev.org/Inline_Assembly/Examples
-static inline void outb(uint16_t port, uint8_t val) {
-   asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port) {
-   uint8_t ret;
-   asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-   return ret;
-}
+void (*irqs[32])(registers_t *regs);
 
 void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
    idt_entry_t* descriptor = &idt[vector];
@@ -28,13 +30,6 @@ void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
    descriptor->attributes = flags;
    descriptor->isr_high = (uint32_t)isr >> 16;
 }
-
-extern void* isr_stub_table[];
-extern void* irq_stub_table[];
-extern void* software_interrupt_routine;
-
-extern int videomode;
-extern bool switching; // preemptive multitasking enabled
 
 void pic_remap() {
 
@@ -67,13 +62,14 @@ void idt_init() {
    // https://wiki.osdev.org/IDT#Gate_Types
 
    // exceptions
-   for (uint8_t vector = 0; vector < 32; vector++) {
+   for(uint8_t vector = 0; vector < 32; vector++)
       idt_set_descriptor(vector, isr_stub_table[vector], 0x8F);
-   }
 
-   for (uint8_t vector = 32; vector < 49; vector++) {
+   for(uint8_t vector = 32; vector < 49; vector++)
       idt_set_descriptor(vector, irq_stub_table[vector-32], 0x8E);
-   }
+
+   for(uint8_t irq = 0; irq < 32; irq++)
+      irqs[irq] = NULL;
 
    idt_set_descriptor(48, irq_stub_table[48-32], 0xEE); // software interrupt 0x30, can be called from ring 3
  
@@ -82,30 +78,6 @@ void idt_init() {
    pic_remap();
 
    __asm__ volatile("sti"); // set the interrupt flag (enable interrupts)
-
-}
-
-void tss_init() {
-   // setup tss entry in gdt
-   extern gdt_entry_t gdt_tss;
-   extern uint32_t tss_start;
-   extern uint32_t tss_end;
-   //extern tss_t tss_start;
-
-   uint32_t base = (uint32_t)&tss_start;
-   uint32_t limit = (uint32_t)&tss_end;
-   
-   //uint32_t tss_size = &tss_end - &tss_start;
-
-   uint8_t gran = 0x00;
-
-   gdt_tss.base_low = (base & 0xFFFF);
-	gdt_tss.base_middle = (base >> 16) & 0xFF;
-	gdt_tss.base_high = (base >> 24) & 0xFF;
-
-   gdt_tss.limit_low = (limit & 0xFFFF);
-	gdt_tss.granularity = ((limit >> 16) & 0x0F);
-   gdt_tss.granularity |= (gran & 0xF0);
 
 }
 
@@ -136,6 +108,10 @@ char scan_to_char(int scan_code) {
 }
 
 extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
+
+void register_irq(int index, void (*handler)(registers_t *regs)) {
+   irqs[index] = handler;
+}
 
 void software_handler(registers_t *regs) {
 
@@ -246,15 +222,6 @@ void software_handler(registers_t *regs) {
    if(regs->eax == 15) {
       // get window (framebuffer) height
       regs->ebx = gui_get_windows()[get_current_task_window()].height - TITLEBAR_HEIGHT;
-   }
-
-   if(regs->eax == 16) {
-      // malloc
-      // OUT: ebx = addr
-      uint32_t *mem = malloc(1); // 4K
-      regs->ebx = (uint32_t)mem;
-
-      // TODO: use special usermode malloc rather than the kernel malloc
    }
 
    if(regs->eax == 16) {
@@ -513,7 +480,7 @@ void exception_handler(int int_no, registers_t *regs) {
 
       int irq_no = int_no - 32;
 
-      if(irq_no == 0) {
+         if(irq_no == 0) {
          // system timer
          
          timer_handler(regs);         
@@ -531,7 +498,6 @@ void exception_handler(int int_no, registers_t *regs) {
 
          software_handler(regs);
       } else {
-
          // other interrupt no
          if(videomode == 0) {
             terminal_writeat("  ", 0);
@@ -540,7 +506,6 @@ void exception_handler(int int_no, registers_t *regs) {
             gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
             gui_writenumat(int_no, 0, 0, 0);
          }
-
       }
 
    }

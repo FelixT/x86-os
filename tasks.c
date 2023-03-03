@@ -234,3 +234,27 @@ void task_subroutine_end(registers_t *regs) {
 
    tasks[current_task].in_routine = false;
 }
+
+void tss_init() {
+   // setup tss entry in gdt
+   extern gdt_entry_t gdt_tss;
+   extern uint32_t tss_start;
+   extern uint32_t tss_end;
+   //extern tss_t tss_start;
+
+   uint32_t base = (uint32_t)&tss_start;
+   uint32_t limit = (uint32_t)&tss_end;
+   
+   //uint32_t tss_size = &tss_end - &tss_start;
+
+   uint8_t gran = 0x00;
+
+   gdt_tss.base_low = (base & 0xFFFF);
+	gdt_tss.base_middle = (base >> 16) & 0xFF;
+	gdt_tss.base_high = (base >> 24) & 0xFF;
+
+   gdt_tss.limit_low = (limit & 0xFFFF);
+	gdt_tss.granularity = ((limit >> 16) & 0x0F);
+   gdt_tss.granularity |= (gran & 0xF0);
+
+}

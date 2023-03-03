@@ -1,9 +1,14 @@
+#!/bin/bash
+
 export linux=1
 
 export CROSS="$HOME/opt/cross/bin"
 export GCC="$CROSS/i686-elf-gcc"
 export GAS="$CROSS/i686-elf-as"
 export LD="$CROSS/i686-elf-ld"
+
+c_files="font gui terminal interrupts tasks ata memory fat bmp elf paging window string"
+o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o o/string.o"
 
 mkdir -p o
 mkdir -p fs_root
@@ -14,20 +19,12 @@ nasm boot/main.asm -f elf32 -o o/main.o
 
 nasm irq.asm -f elf32 -o o/irq.o
 
+for file in $c_files; do
+   $GCC -c $file.c -o o/$file.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
+done
+
 $GCC -c cmain.cpp -o o/cmain.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-common -mgeneral-regs-only -nostdlib -g -lgcc
-$GCC -c font.c -o o/font.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c gui.c -o o/gui.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c terminal.c -o o/terminal.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c interrupts.c -o o/interrupts.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c tasks.c -o o/tasks.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c ata.c -o o/ata.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c memory.c -o o/memory.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c fat.c -o o/fat.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c bmp.c -o o/bmp.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c elf.c -o o/elf.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c paging.c -o o/paging.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$GCC -c window.c -o o/window.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
-$LD -o o/main.bin -T linker.ld o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o
+$LD -o o/main.bin -T linker.ld $o_files
 
 cat o/boot.bin o/main.bin > o/hd1.bin
 

@@ -28,7 +28,6 @@ uint8_t *icon_window;
 uint8_t *gui_bgimage;
 
 extern bool strcmp(char* str1, char* str2);
-extern int strlen(char* str);
 extern void terminal_numtostr(int num, char *out);
 extern void terminal_uinttostr(uint32_t num, char *out);
 
@@ -38,85 +37,6 @@ static inline void set_framebuffer(int index, uint16_t colour) {
    } else {
       ((uint16_t*)framebuffer)[index] = colour;
    }
-}
-
-void strtoupper(char* dest, char* src) {
-   int i = 0;
-
-   while(src[i] != '\0') {
-      if(src[i] >= 'a' && src[i] <= 'z')
-         dest[i] = src[i] + ('A' - 'a');
-      else
-         dest[i] = src[i];
-      i++;
-   }
-   dest[i] = '\0';
-}
-
-void strcpy(char* dest, char* src) {
-   int i = 0;
-
-   while(src[i] != '\0') {
-      dest[i] = src[i];
-      i++;
-   }
-   dest[i] = '\0';
-}
-
-void strcpy_fixed(char* dest, char* src, int length) {
-   for(int i = 0; i < length; i++)
-      dest[i] = src[i];
-   dest[length] = '\0';
-}
-
-int stoi(char* str) {
-   // convert str to int
-   int out = 0;
-   int power = 1;
-   for(int i = strlen(str) - 1; i >= 0 ; i--) {
-      if(str[i] >= '0' && str[i] <= '9') {
-         out += power*(str[i]-'0');
-         power *= 10;
-      }
-   }
-   return out;
-}
-
-// split at first of char
-bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
-   int i = 0;
-
-   while(src[i] != splitat) {
-      if(src[i] == '\0')
-         return false;
-
-      if(dest1 != NULL)
-         dest1[i] = src[i];
-      i++;
-   }
-   dest1[i] = '\0';
-   i++;
-
-   int start = i;
-   while(src[i] != '\0') {
-      if(dest2 != NULL)
-         dest2[i - start] = src[i];
-      i++;
-   }
-   if(dest2 != NULL)
-      dest2[i - start] = '\0';
-
-   return true;
-}
-
-bool strstartswith(char* src, char* startswith) {
-   int i = 0;
-   while(startswith[i] != '\0') {
-      if(src[i] != startswith[i])
-         return false;
-      i++;
-   }
-   return true;
 }
 
 uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
@@ -185,8 +105,6 @@ void gui_clear(uint16_t colour) {
    }
    return;
 }
-
-extern void getFontLetter(char c, int* dest);
 
 int font_letter[FONT_WIDTH*FONT_HEIGHT];
 
@@ -1125,16 +1043,6 @@ void gui_desktop_click() {
    if(gui_mouse_x >= 10 && gui_mouse_y >= 10)
       if(gui_mouse_x <= 60 && gui_mouse_y <= 60)
          gui_window_add();
-}
-
-static inline void outb(uint16_t port, uint8_t val) {
-   asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port) {
-   uint8_t ret;
-   asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-   return ret;
 }
 
 void mouse_enable() {
