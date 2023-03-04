@@ -22,19 +22,19 @@ void free(uint32_t offset, int bytes) {
    int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
 
-   /*gui_window_writestr("Freeing ", 0, 0);
-   gui_window_writenum(blockStart, 0, 0);
-   gui_window_writestr(" <", 0, 0);
-   gui_window_writenum(noBlocks, 0, 0);
-   gui_window_writestr(">\n", 0, 0);*/
+   /*window_writestr("Freeing ", 0, 0);
+   window_writenum(blockStart, 0, 0);
+   window_writestr(" <", 0, 0);
+   window_writenum(noBlocks, 0, 0);
+   window_writestr(">\n", 0, 0);*/
 
    char freeASCII[6] = "FREE ";
 
    for(int i = 0; i < noBlocks; i++) {
       int block = blockStart+i;
       if(block >= 0 && block < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
-         //gui_window_writenum(block, 0, 0);
-         //gui_window_writestr(" ", 0, 0);
+         //window_writenum(block, 0, 0);
+         //window_writestr(" ", 0, 0);
          memory_status[block].allocated = false;
       }
    }

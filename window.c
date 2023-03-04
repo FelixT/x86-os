@@ -6,11 +6,12 @@
 #include "memory.h"
 #include "tasks.h"
 #include "fat.h"
-#include "window.h"
 #include "paging.h"
 #include "font.h"
 #include "bmp.h"
 #include "elf.h"
+
+#include "draw.h"
 
 // default terminal behaviour
 
@@ -27,7 +28,7 @@ void window_term_keypress(char key, int windowIndex) {
          selected->text_x = (selected->text_index)*(FONT_WIDTH+FONT_PADDING);
       }
 
-      gui_window_draw(windowIndex);
+      gui_draw_window(windowIndex);
 
    }
 }
@@ -36,8 +37,8 @@ void window_term_return(void *regs, int windowIndex) {
    gui_window_t *selected = &(gui_get_windows()[windowIndex]);
 
    // write cmd to window framebuffer
-   gui_window_drawcharat('>', 8, 1, selected->text_y, windowIndex);
-   gui_window_writestrat(selected->text_buffer, 0, 1 + FONT_WIDTH + FONT_PADDING, selected->text_y, windowIndex);
+   window_drawcharat('>', 8, 1, selected->text_y, windowIndex);
+   window_writestrat(selected->text_buffer, 0, 1 + FONT_WIDTH + FONT_PADDING, selected->text_y, windowIndex);
    
    // write cmd to cmdbuffer
    // shift all entries up
@@ -48,7 +49,7 @@ void window_term_return(void *regs, int windowIndex) {
    selected->cmd_history[0][selected->text_index] = '\0';
    selected->cmd_history_pos = -1;
 
-   gui_window_drawchar('\n', 0, windowIndex);
+   window_drawchar('\n', 0, windowIndex);
    
    window_checkcmd(regs);
    selected = &(gui_get_windows()[windowIndex]); // in case the buffer has changed during the cmd 
@@ -57,7 +58,7 @@ void window_term_return(void *regs, int windowIndex) {
    selected->text_buffer[selected->text_index] = '\0';
    selected->needs_redraw = true;
 
-   gui_window_draw(windowIndex);
+   gui_draw_window(windowIndex);
 }
 
 void window_term_backspace(int windowIndex) {
@@ -68,7 +69,7 @@ void window_term_backspace(int windowIndex) {
       selected->text_buffer[selected->text_index] = '\0';
    }
 
-   gui_window_draw(windowIndex);
+   gui_draw_window(windowIndex);
 }
 
 void window_term_uparrow(int windowIndex) {
@@ -82,7 +83,7 @@ void window_term_uparrow(int windowIndex) {
    strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
    selected->text_index = len;
    selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
-   gui_window_draw(windowIndex);
+   gui_draw_window(windowIndex);
 }
 
 void window_term_downarrow(int windowIndex) {
@@ -101,11 +102,12 @@ void window_term_downarrow(int windowIndex) {
       selected->text_index = len;
       selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
    }
-   gui_window_draw(windowIndex);
+   gui_draw_window(windowIndex);
 }
 
 
 // === window actions ===
+
 extern void gui_redrawall();
 
 void window_checkcmd(void *regs) {
@@ -137,7 +139,7 @@ void window_checkcmd(void *regs) {
 
    }
    else if(strcmp(command, "CLEAR")) {
-      gui_window_clearbuffer(selected, COLOUR_WHITE);
+      window_clearbuffer(selected, COLOUR_WHITE);
       selected->text_x = FONT_PADDING;
       selected->text_y = FONT_PADDING;
       selected->text_index = 0;
@@ -475,7 +477,7 @@ void window_scroll(int windowIndex) {
    }
    // clear bottom
    int newY = window->height - (scrollY + TITLEBAR_HEIGHT);
-   gui_window_drawrect(COLOUR_WHITE, 0, newY, window->width, scrollY, windowIndex);
+   window_drawrect(COLOUR_WHITE, 0, newY, window->width, scrollY, windowIndex);
    window->text_y = newY;
    window->text_x = FONT_PADDING;
 }
@@ -516,6 +518,111 @@ bool window_init(gui_window_t *window) {
 
    window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
    if(window->framebuffer == NULL) return false;
-   gui_window_clearbuffer(window, COLOUR_WHITE);
+   window_clearbuffer(window, COLOUR_WHITE);
    return true;
+}
+
+surface_t window_getsurface(int windowIndex) {
+   gui_window_t *window = &(gui_get_windows()[windowIndex]);
+   surface_t surface;
+   surface.width = window->width;
+   surface.height = window->height;
+   surface.buffer = (uint32_t)window->framebuffer;
+   return surface;
+}
+
+void window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex) {
+   if(c >= 'a' && c <= 'z') c = (c - 'a') + 'A'; // convert to uppercase
+   surface_t surface = window_getsurface(windowIndex);
+   draw_char(&surface, c, colour, x, y);
+}
+
+void window_drawrect(uint16_t colour, int x, int y, int width, int height, int windowIndex) {
+   surface_t surface = window_getsurface(windowIndex);
+   draw_rect(&surface, colour, x, y, width, height);
+}
+
+void window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex) {
+   int i = 0;
+   while(c[i] != '\0') {
+      window_drawcharat(c[i++], colour, x, y, windowIndex);
+      x+=FONT_WIDTH+FONT_PADDING;
+   }
+}
+
+void window_clearbuffer(gui_window_t *window, uint16_t colour) {
+   for(int i = 0; i < window->width*(window->height-TITLEBAR_HEIGHT); i++) {
+      window->framebuffer[i] = colour;
+   }
+}
+
+void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex) {
+   if(num < 0)
+      window_drawcharat('-', colour, x+=(FONT_WIDTH+FONT_PADDING), y, windowIndex);
+
+   char out[20];
+   inttostr(num, out);
+   window_writestrat(out, colour, x, y, windowIndex);
+}
+
+void window_drawchar(char c, uint16_t colour, int windowIndex) {
+
+   gui_window_t *selected = &(gui_get_windows()[windowIndex]);
+
+   if(c == '\n') {
+      selected->text_x = FONT_PADDING;
+      selected->text_y += FONT_HEIGHT + FONT_PADDING;
+
+      if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
+         window_scroll(windowIndex);
+      }
+
+      // immediately output each line
+      selected->needs_redraw=true;
+      gui_draw_window(windowIndex);
+
+      return;
+   }
+
+   // x overflow
+   if(selected->text_x + FONT_WIDTH + FONT_PADDING >= selected->width) {
+      window_drawcharat('-', colour, selected->text_x-2, selected->text_y, windowIndex);
+      selected->text_x = FONT_PADDING;
+      selected->text_y += FONT_HEIGHT + FONT_PADDING;
+
+      if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
+         window_scroll(windowIndex);
+      }
+   }
+
+   window_drawcharat(c, colour, selected->text_x, selected->text_y, windowIndex);
+   selected->text_x+=FONT_WIDTH+FONT_PADDING;
+
+   if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (FONT_HEIGHT+FONT_PADDING))) {
+      window_scroll(windowIndex);
+   }
+
+   selected->needs_redraw = true;
+
+}
+
+void window_writestr(char *c, uint16_t colour, int windowIndex) {
+   int i = 0;
+   while(c[i] != '\0')
+      window_drawchar(c[i++], colour, windowIndex);
+}
+
+void window_writenum(int num, uint16_t colour, int windowIndex) {
+   if(num < 0)
+      window_drawchar('-', colour, windowIndex);
+
+   char out[20];
+   inttostr(num, out);
+   window_writestr(out, colour, windowIndex);
+}
+
+void window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
+   char out[20];
+   uinttostr(num, out);
+   window_writestr(out, colour, windowIndex);
 }

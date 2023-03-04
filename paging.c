@@ -1,4 +1,5 @@
 #include "paging.h"
+#include "window.h"
 
 #include "gui.h"
 #include "memory.h"
@@ -59,9 +60,9 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
 
    if(debug == 1) {
       //if(page_dir[dir_index].present)
-      //   gui_window_writestr("Page dir entry present", 0, 0);
+      //   window_writestr("Page dir entry present", 0, 0);
       if(page_table[table_index].present)
-         gui_window_writestr("Page table entry present", 0, 0);
+         window_writestr("Page table entry present", 0, 0);
    }
 
    page_table[table_index].present = 1;
@@ -109,7 +110,7 @@ void page_init() {
    load_page_dir((uint32_t*)&page_dir[0]);
    page_enable();
 
-   gui_window_writestr("\nPaging enabled\n", 0, 0);
+   window_writestr("\nPaging enabled\n", 0, 0);
 
 }
 

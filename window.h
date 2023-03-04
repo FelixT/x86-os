@@ -7,39 +7,7 @@
 
 #include "string.h"
 #include "registers_t.h"
-
-#define TEXT_BUFFER_LENGTH 40
-#define CMD_HISTORY_LENGTH 10
-
-typedef struct gui_window_t {
-   char title[20];
-   int x;
-   int y;
-   int width;
-   int height; // includes 10px titlebar
-   char text_buffer[TEXT_BUFFER_LENGTH];
-   char *cmd_history[CMD_HISTORY_LENGTH];
-   int cmd_history_pos;
-   int text_index;
-   int text_x;
-   int text_y;
-   bool needs_redraw;
-   bool active;
-   bool minimised;
-   bool closed;
-	bool dragged;
-   int toolbar_pos; // index in toolbar
-   uint16_t *framebuffer; // width*(height-titlebar_height)
-
-	// function pointers
-	void (*return_func)(void *regs, int windowIndex);
-	void (*keypress_func)(char key, int windowIndex);
-   void (*backspace_func)(int windowIndex);
-   void (*uparrow_func)(int windowIndex);
-   void (*downarrow_func)(int windowIndex);
-   void (*click_func)(int windowIndex, int x, int y);
-
-} gui_window_t;
+#include "window_t.h"
 
 // default, terminal style window behaviour
 void window_term_return(void *regs, int windowIndex);
@@ -51,5 +19,16 @@ void window_term_downarrow(int windowIndex);
 bool window_init(gui_window_t *window);
 void window_checkcmd(void *regs);
 void window_scroll();
+
+void window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex);
+void window_drawrect(uint16_t colour, int x, int y, int width, int height, int windowIndex);
+void window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex);
+void window_clearbuffer(gui_window_t *window, uint16_t colour);
+void window_writeuint(uint32_t num, uint16_t colour, int windowIndex);
+void window_writestr(char *c, uint16_t colour, int windowIndex);
+void window_drawchar(char c, uint16_t colour, int windowIndex);
+void window_writenum(int num, uint16_t colour, int windowIndex);
+void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
+
 
 #endif

@@ -11,14 +11,14 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
    elf_header_t *elf_header = (elf_header_t*)prog;
    elf_prog_header_t *prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
 
-   /*gui_window_writestr("Entry: ", 0, 0);
-   gui_window_writeuint(elf_header->entry, 0, 0);
+   /*window_writestr("Entry: ", 0, 0);
+   window_writeuint(elf_header->entry, 0, 0);
 
-   gui_window_writestr("\nType: ", 0, 0);
-   gui_window_writeuint(elf_header->type, 0, 0);
+   window_writestr("\nType: ", 0, 0);
+   window_writeuint(elf_header->type, 0, 0);
 
-   gui_window_writestr("\nCount: ", 0, 0);
-   gui_window_writeuint(elf_header->prog_header_entry_count, 0, 0);*/
+   window_writestr("\nCount: ", 0, 0);
+   window_writeuint(elf_header->prog_header_entry_count, 0, 0);*/
 
    if(elf_header->type != 2) {
       gui_writestr("\nELF Type ", 0);
@@ -48,11 +48,11 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
 
    uint32_t vmem_size = vmem_end - vmem_start;
 
-   /*gui_window_writestr("\nVmem Start: ", 0, 0);
-   gui_window_writeuint(vmem_start, 0, 0);
+   /*window_writestr("\nVmem Start: ", 0, 0);
+   window_writeuint(vmem_start, 0, 0);
 
-   gui_window_writestr("\nVmem End: ", 0, 0);
-   gui_window_writeuint(vmem_end, 0, 0);*/
+   window_writestr("\nVmem End: ", 0, 0);
+   window_writeuint(vmem_end, 0, 0);*/
 
    // allocate memory
    uint8_t *newProg = malloc(vmem_end - vmem_start);
@@ -112,19 +112,19 @@ void elf_run(registers_t *regs, uint8_t *prog, int index, int argc, char **args)
 
       //int rw = (prog_header->flags & 0x1) == 0x1;
 
-      //gui_window_writestr("\nVirtual addr: ", 0, 0);
-      //gui_window_writeuint(prog_header->p_vaddr, 0, 0);
+      //window_writestr("\nVirtual addr: ", 0, 0);
+      //window_writeuint(prog_header->p_vaddr, 0, 0);
 
-      //gui_window_writestr("\nAlignment: ", 0, 0);
-      //gui_window_writeuint(prog_header->alignment, 0, 0);
+      //window_writestr("\nAlignment: ", 0, 0);
+      //window_writeuint(prog_header->alignment, 0, 0);
 
-      /*gui_window_writestr("\nMapping ", 0, 0);
-      gui_window_writeuint((uint32_t)newProg + vmem_offset, 0, 0);
-      gui_window_writestr(" to ", 0, 0);
-      gui_window_writeuint(prog_header->p_vaddr, 0, 0);
-      gui_window_writestr(" with size ", 0, 0);
-      gui_window_writeuint((uint32_t)prog_header->p_memsz, 0, 0);
-      gui_window_writestr("\n", 0, 0);*/
+      /*window_writestr("\nMapping ", 0, 0);
+      window_writeuint((uint32_t)newProg + vmem_offset, 0, 0);
+      window_writestr(" to ", 0, 0);
+      window_writeuint(prog_header->p_vaddr, 0, 0);
+      window_writestr(" with size ", 0, 0);
+      window_writeuint((uint32_t)prog_header->p_memsz, 0, 0);
+      window_writestr("\n", 0, 0);*/
       
       prog_header++;
    }

@@ -9,12 +9,13 @@
 #include "memory.h"
 #include "tasks.h"
 #include "fat.h"
-#include "window.h"
 #include "paging.h"
 #include "string.h"
 #include "font.h"
 #include "bmp.h"
 #include "elf.h"
+
+#include "window_t.h"
 
 #define TITLEBAR_HEIGHT 17
 #define TOOLBAR_HEIGHT 22
@@ -103,16 +104,7 @@ void gui_downarrow();
 void gui_checkcmd(void *regs);
 
 int gui_window_add();
-void gui_window_writeuint(uint32_t num, uint16_t colour, int windowIndex);
-void gui_window_writestr(char *c, uint16_t colour, int windowIndex);
-void gui_window_drawchar(char c, uint16_t colour, int windowIndex);
-void gui_window_writenum(int num, uint16_t colour, int windowIndex);
-void gui_window_draw(int windowIndex);
-void gui_window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex);
-void gui_window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex);
-void gui_window_clearbuffer(gui_window_t *window, uint16_t colour);
-void gui_window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
-void gui_window_drawrect(uint16_t colour, int x, int y, int width, int height, int windowIndex);
+void gui_draw_window(int windowIndex);
 
 uint16_t *gui_get_framebuffer();
 uint32_t gui_get_framebuffer_size();

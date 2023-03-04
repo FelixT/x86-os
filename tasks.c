@@ -1,4 +1,5 @@
 #include "tasks.h"
+#include "window.h"
 
 uint32_t USR_CODE_SEG = 8*3;
 uint32_t USR_DATA_SEG = 8*4;
@@ -41,9 +42,9 @@ void launch_task(int index, registers_t *regs, bool focus) {
    tasks[current_task].window = gui_window_add();
    if(!focus) gui_set_selected_window(tmpwindow);
 
-   gui_window_writestr("Launching task ", 0, 0);
-   gui_window_writenum(index, 0, 0);
-   gui_window_writestr("\n", 0, 0);
+   window_writestr("Launching task ", 0, 0);
+   window_writenum(index, 0, 0);
+   window_writestr("\n", 0, 0);
    
    *regs = tasks[current_task].registers;
 }
@@ -59,12 +60,12 @@ void end_task(int index, registers_t *regs) {
    if(index < 0 || index >= TOTAL_TASKS) return;
    if(!tasks[index].enabled) return; // already ended
 
-   gui_window_writestr("Ending task ", 0, 0);
-   gui_window_writenum(index, 0, 0);
-   gui_window_writestr("\n", 0, 0);
+   window_writestr("Ending task ", 0, 0);
+   window_writenum(index, 0, 0);
+   window_writestr("\n", 0, 0);
 
    if(tasks[index].window >= 0)
-      gui_window_writestr("Task ended\n", 0, tasks[index].window);
+      window_writestr("Task ended\n", 0, tasks[index].window);
 
    tasks[index].enabled = false;
    tasks[index].privileged = false;
@@ -73,22 +74,22 @@ void end_task(int index, registers_t *regs) {
    // TODO: free args
 
    if(tasks[index].vmem_start != 0) {
-      gui_window_writestr("Unmapping ", 0, 0);
-      gui_window_writeuint(tasks[index].vmem_start, 0, 0);
-      gui_window_writestr(" - ", 0, 0);
-      gui_window_writeuint(tasks[index].vmem_end, 0, 0);
-      gui_window_writestr("\n", 0, 0);
+      window_writestr("Unmapping ", 0, 0);
+      window_writeuint(tasks[index].vmem_start, 0, 0);
+      window_writestr(" - ", 0, 0);
+      window_writeuint(tasks[index].vmem_end, 0, 0);
+      window_writestr("\n", 0, 0);
 
       for(uint32_t i = tasks[index].vmem_start; i < tasks[index].vmem_end; i++) {
          unmap(i);
       }
    }
 
-   /*gui_window_writestr("Freeing ", 0, 0);
-   gui_window_writeuint(tasks[index].prog_size, 0, 0);
-   gui_window_writestr(" at ", 0, 0);
-   gui_window_writeuint(tasks[index].prog_start, 0, 0);
-   gui_window_writestr("\n", 0, 0);*/
+   /*window_writestr("Freeing ", 0, 0);
+   window_writeuint(tasks[index].prog_size, 0, 0);
+   window_writestr(" at ", 0, 0);
+   window_writeuint(tasks[index].prog_start, 0, 0);
+   window_writestr("\n", 0, 0);*/
 
    tasks[index].window = -1;
 
@@ -131,9 +132,9 @@ void tasks_init(registers_t *regs) {
 
    switching = true;
 
-   gui_window_writestr("Entry at ", 0, 0);
-   gui_window_writenum(regs->eip, 0, 0);
-   gui_window_writestr("\n", 0, 0);
+   window_writestr("Entry at ", 0, 0);
+   window_writenum(regs->eip, 0, 0);
+   window_writestr("\n", 0, 0);
 }
 
 void switch_task(registers_t *regs) {
@@ -159,7 +160,7 @@ void switch_task(registers_t *regs) {
 
 void switch_to_task(int index, registers_t *regs) {
    if(!tasks[index].enabled) {
-      gui_window_writestr("Task switch failed: task is unavaliable\n", 0, 0);
+      window_writestr("Task switch failed: task is unavaliable\n", 0, 0);
       return;
    }
 
@@ -195,7 +196,7 @@ int get_task_from_window(int windowIndex) {
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
-      gui_window_writestr("Already in a subroutine, returning.\n", 0, 0);
+      window_writestr("Already in a subroutine, returning.\n", 0, 0);
       return;
    }
 

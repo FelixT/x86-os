@@ -5,7 +5,7 @@ int font_letter[FONT_WIDTH*FONT_HEIGHT];
 
 void setpixel_safe(surface_t *surface, int index, int colour) {
    if(index < 0 || index >= surface->width*surface->height) {
-      //gui_window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
+      //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
       ((uint16_t*)surface->buffer)[index] = colour;
    }
@@ -13,7 +13,7 @@ void setpixel_safe(surface_t *surface, int index, int colour) {
 
 void setpixelcoord_safe(surface_t *surface, int x, int y, int colour) {
    if(x < 0 || y < 0 || x >= surface->width || y >= surface->height) {
-      //gui_window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
+      //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
       ((uint16_t*)surface->buffer)[x+y*surface->width] = colour;
    }

@@ -2,6 +2,7 @@
 // https://wiki.osdev.org/Interrupt_Descriptor_Table
 
 #include "interrupts.h"
+#include "window.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -119,16 +120,16 @@ void software_handler(registers_t *regs) {
       // WRITE STRING...
       // IN: ebx = string address
       if(gettasks()[get_current_task()].vmem_start == 0) // not elf
-         gui_window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
+         window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
       else // elf
-         gui_window_writestr((char*)regs->ebx, 0, get_current_task_window());
+         window_writestr((char*)regs->ebx, 0, get_current_task_window());
    }
 
    if(regs->eax == 2) {
       // WRITE NUMBER...
       // IN: ebx = int
 
-      gui_window_writenum(regs->ebx, 0, get_current_task_window());
+      window_writenum(regs->ebx, 0, get_current_task_window());
       //gui_writenum(regs->ebx, 0);
    }
 
@@ -160,7 +161,7 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 6) {
       // print uint ebx to current window
-      gui_window_writeuint(regs->ebx, 0, get_current_task_window());
+      window_writeuint(regs->ebx, 0, get_current_task_window());
    }
 
    if(regs->eax == 7) {
@@ -170,20 +171,20 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 8) {
       // draw newline char
-      gui_window_drawchar('\n', 0, get_current_task_window());
+      window_drawchar('\n', 0, get_current_task_window());
    }
 
    if(regs->eax == 9) {
       // draw
       gui_get_windows()[get_current_task_window()].needs_redraw = true;
-      gui_window_draw(get_current_task_window());
+      gui_draw_window(get_current_task_window());
    }
 
    if(regs->eax == 10) {
       // end task/return
-      gui_window_writestr("Task ended with status ", 0, get_current_task_window());
-      gui_window_writenum(regs->ebx, 0, get_current_task_window());
-      gui_window_drawchar('\n', 0, get_current_task_window());
+      window_writestr("Task ended with status ", 0, get_current_task_window());
+      window_writenum(regs->ebx, 0, get_current_task_window());
+      window_drawchar('\n', 0, get_current_task_window());
 
       end_task(get_current_task(), regs);
    }
@@ -193,7 +194,7 @@ void software_handler(registers_t *regs) {
 
       uint32_t addr = regs->ebx;
 
-      gui_window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
+      window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
    }
@@ -209,7 +210,7 @@ void software_handler(registers_t *regs) {
 
       uint32_t addr = regs->ebx;
 
-      gui_window_writestr("Overriding click function\n", 0, get_current_task_window());
+      window_writestr("Overriding click function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
    }
@@ -291,14 +292,14 @@ void software_handler(registers_t *regs) {
       // IN: ebx = string address
       // IN: ecx = x
       // IN: edx = y
-      gui_window_writestrat((char*)regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
+      window_writestrat((char*)regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
 
    }
 
    if(regs->eax == 23) {
       // clear window
       // IN: ebx = colour
-      gui_window_clearbuffer(&gui_get_windows()[get_current_task_window()], (uint16_t)regs->ebx);
+      window_clearbuffer(&gui_get_windows()[get_current_task_window()], (uint16_t)regs->ebx);
 
    }
 
@@ -320,15 +321,15 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 26) {
       // print uint ebx to window 0
-      gui_window_writeuint(regs->ebx, 0, 0);
-      gui_window_writestr("\n", 0, 0);
+      window_writeuint(regs->ebx, 0, 0);
+      window_writestr("\n", 0, 0);
    }
 
    if(regs->eax == 27) {
       // override downarrow window function
       uint32_t addr = regs->ebx;
 
-      gui_window_writestr("Overriding downarrow function\n", 0, get_current_task_window());
+      window_writestr("Overriding downarrow function\n", 0, get_current_task_window());
 
       gui_get_windows()[get_current_task_window()].downarrow_func = (void *)(addr);
    }
@@ -338,7 +339,7 @@ void software_handler(registers_t *regs) {
       // IN: ebx = num
       // IN: ecx = x
       // IN: edx = y
-      gui_window_writenumat(regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
+      window_writenumat(regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
 
    }
 
@@ -441,21 +442,21 @@ void exception_handler(int int_no, registers_t *regs) {
             // page error
             uint32_t addr;
 	         asm volatile("mov %%cr2, %0" : "=r" (addr));
-            gui_window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
-            gui_window_writeuint(addr, 0, 0);
+            window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
+            window_writeuint(addr, 0, 0);
             if(page_getphysical(addr) != (uint32_t)-1) {
-               gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               gui_window_writeuint(page_getphysical(addr), 0, 0);
-               gui_window_writestr(">", gui_rgb16(255, 100, 100), 0);
+               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               window_writeuint(page_getphysical(addr), 0, 0);
+               window_writestr(">", gui_rgb16(255, 100, 100), 0);
             }
-            gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
-            gui_window_writeuint(regs->eip, 0, 0);
+            window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+            window_writeuint(regs->eip, 0, 0);
             if(page_getphysical(regs->eip) != (uint32_t)-1) {
-               gui_window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               gui_window_writeuint(page_getphysical(regs->eip), 0, 0);
-               gui_window_writestr(">", gui_rgb16(255, 100, 100), 0);
+               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               window_writeuint(page_getphysical(regs->eip), 0, 0);
+               window_writestr(">", gui_rgb16(255, 100, 100), 0);
             }
-            gui_window_writestr("\n", 0, 0);
+            window_writestr("\n", 0, 0);
 
             while(true);
          }
@@ -466,11 +467,11 @@ void exception_handler(int int_no, registers_t *regs) {
          gui_drawrect(gui_rgb16(255, 0, 0), 200, 0, 8*8, 11);
          gui_writenumat(regs->eip, gui_rgb16(255, 200, 200), 200, 0);
       
-         gui_window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
-         gui_window_writenum(get_current_task(), 0, 0);
-         gui_window_writestr(" ended due to exception ", gui_rgb16(255, 100, 100), 0);
-         gui_window_writenum(int_no, 0, 0);
-         gui_window_writestr("\n", 0, 0);
+         window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
+         window_writenum(get_current_task(), 0, 0);
+         window_writestr(" ended due to exception ", gui_rgb16(255, 100, 100), 0);
+         window_writenum(int_no, 0, 0);
+         window_writestr("\n", 0, 0);
 
          end_task(get_current_task(), regs);
       }
@@ -519,13 +520,13 @@ void exception_handler(int int_no, registers_t *regs) {
 
 void err_exception_handler(int int_no, registers_t *regs) {
 
-   gui_window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
-   gui_window_writeuint(int_no, 0, 0);
-   gui_window_writestr(" with err code ", gui_rgb16(255, 100, 100), 0);
-   gui_window_writeuint(regs->err_code, 0, 0);
-   gui_window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
-   gui_window_writeuint(regs->eip, 0, 0);  
-   gui_window_writestr("\n", gui_rgb16(255, 100, 100), 0);
+   window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
+   window_writeuint(int_no, 0, 0);
+   window_writestr(" with err code ", gui_rgb16(255, 100, 100), 0);
+   window_writeuint(regs->err_code, 0, 0);
+   window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+   window_writeuint(regs->eip, 0, 0);  
+   window_writestr("\n", gui_rgb16(255, 100, 100), 0);
 
    exception_handler(int_no, regs);
 }
