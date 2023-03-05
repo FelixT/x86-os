@@ -3,6 +3,7 @@
 
 #include "interrupts.h"
 #include "window.h"
+#include "api.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -116,232 +117,89 @@ void register_irq(int index, void (*handler)(registers_t *regs)) {
 
 void software_handler(registers_t *regs) {
 
-   if(regs->eax == 1) {
-      // WRITE STRING...
-      // IN: ebx = string address
-      if(gettasks()[get_current_task()].vmem_start == 0) // not elf
-         window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
-      else // elf
-         window_writestr((char*)regs->ebx, 0, get_current_task_window());
-   }
+   if(regs->eax == 1)
+      api_write_string(regs);
 
-   if(regs->eax == 2) {
-      // WRITE NUMBER...
-      // IN: ebx = int
+   if(regs->eax == 2)
+      api_write_number(regs);
 
-      window_writenum(regs->ebx, 0, get_current_task_window());
-      //gui_writenum(regs->ebx, 0);
-   }
+   if(regs->eax == 3)
+      api_yield(regs);
 
-   if(regs->eax == 3) {
-      // yield
+   if(regs->eax == 4)
+      api_print_program_stack(regs);
 
-      switch_task(regs);
-   }
+   if(regs->eax == 5)
+      api_print_stack(regs);
 
-   if(regs->eax == 4) {
-      // show program stack contents
+   if(regs->eax == 6)
+      api_write_uint(regs);
 
-      for(int i = 0; i < 64; i++) {
-         gui_writenum(((int*)regs->esp)[i], get_current_task_window());
-         gui_writestr(" ", 0);
-      }
-   }
+   if(regs->eax == 7)
+      api_return_framebuffer(regs);
 
-   if(regs->eax == 5) {
-      // show current stack contents
-      int esp;
-      asm("movl %%esp, %0" : "=r"(esp));
+   if(regs->eax == 8)
+      api_write_newline(regs);
 
-      for(int i = 0; i < 64; i++) {
-         gui_writenum(((int*)esp)[i], 0);
-         gui_writestr(" ", 0);
-      }
-   }
+   if(regs->eax == 9)
+      api_redraw_window(regs);
 
-   if(regs->eax == 6) {
-      // print uint ebx to current window
-      window_writeuint(regs->ebx, 0, get_current_task_window());
-   }
+   if(regs->eax == 10)
+      api_end_task(regs);
 
-   if(regs->eax == 7) {
-      // returns framebuffer address in ebx
-      regs->ebx = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
-   }
+   if(regs->eax == 11)
+      api_override_uparrow(regs);
 
-   if(regs->eax == 8) {
-      // draw newline char
-      window_drawchar('\n', 0, get_current_task_window());
-   }
+   if(regs->eax == 12)
+      api_end_subroutine(regs);
 
-   if(regs->eax == 9) {
-      // draw
-      gui_get_windows()[get_current_task_window()].needs_redraw = true;
-      gui_draw_window(get_current_task_window());
-   }
+   if(regs->eax == 13)
+      api_override_mouseclick(regs);
 
-   if(regs->eax == 10) {
-      // end task/return
-      window_writestr("Task ended with status ", 0, get_current_task_window());
-      window_writenum(regs->ebx, 0, get_current_task_window());
-      window_drawchar('\n', 0, get_current_task_window());
+   if(regs->eax == 14)
+      api_return_window_width(regs);
 
-      end_task(get_current_task(), regs);
-   }
+   if(regs->eax == 15)
+      api_return_window_height(regs);
 
-   if(regs->eax == 11) {
-      // override uparrow window function
+   if(regs->eax == 16)
+      api_malloc(regs);
 
-      uint32_t addr = regs->ebx;
+   if(regs->eax == 17)
+      api_fat_get_bpb(regs);
 
-      window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
+   if(regs->eax == 18)
+      api_fat_get_bpb(regs);
 
-      gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
-   }
+   if(regs->eax == 19)
+      api_fat_parse_path(regs);
 
-   if(regs->eax == 12) {
-      // end subroutine i.e. an uparrow function call
+   if(regs->eax == 20)
+      api_fat_read_file(regs);
 
-      task_subroutine_end(regs) ;
-   }
+   if(regs->eax == 21)
+      api_draw_bmp(regs);
 
-   if(regs->eax == 13) {
-      // override mouse click function
+   if(regs->eax == 22)
+      api_write_string_at(regs);
 
-      uint32_t addr = regs->ebx;
+   if(regs->eax == 23)
+      api_clear_window(regs);
 
-      window_writestr("Overriding click function\n", 0, get_current_task_window());
+   if(regs->eax == 24)
+      api_get_get_dir_size(regs);
 
-      gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
-   }
+   if(regs->eax == 25)
+      api_read_dir(regs);
 
-   if(regs->eax == 14) {
-      // get window width
-      regs->ebx = gui_get_windows()[get_current_task_window()].width;
-   }
+   if(regs->eax == 26)
+      api_get_get_dir_size(regs);
+   
+   if(regs->eax == 27) 
+      api_override_downarrow(regs);
 
-   if(regs->eax == 15) {
-      // get window (framebuffer) height
-      regs->ebx = gui_get_windows()[get_current_task_window()].height - TITLEBAR_HEIGHT;
-   }
-
-   if(regs->eax == 16) {
-      // malloc
-      // OUT: ebx = addr
-      uint32_t *mem = malloc(1); // 4K
-      regs->ebx = (uint32_t)mem;
-
-      // TODO: use special usermode malloc rather than the kernel malloc
-   }
-
-   if(regs->eax == 17) {
-      // fat get bpb
-
-      fat_bpb_t *bpb = malloc(sizeof(fat_bpb_t));
-      *bpb = fat_get_bpb(); // refresh fat tables
-
-      regs->ebx = (uint32_t)bpb;
-
-   }
-
-   if(regs->eax == 18) {
-      // fat get root
-
-      fat_dir_t *items = malloc(32 * fat_get_bpb().noRootEntries);
-      fat_read_root(items);
-
-      regs->ebx = (uint32_t)items;
-
-   }
-
-   if(regs->eax == 19) {
-      // fat parse path
-      // IN: ebx = addr of char* path
-      // OUT: ebx = addr of fat_dir_t entry for path or 0 if doesn't exist
-
-      fat_dir_t *entry = fat_parse_path((char*)regs->ebx);
-      regs->ebx = (uint32_t)entry;
-
-   }
-
-   if(regs->eax == 20) {
-      // fat read file
-      // IN: ebx = first cluster no
-      // IN: ecx = file size
-      // OUT: ebx = addr of file content buffer
-
-      uint8_t *content = fat_read_file(regs->ebx, regs->ecx);
-
-      regs->ebx = (uint32_t)content;
-
-   }
-
-   if(regs->eax == 21) {
-      // draw bmp
-      // IN: ebx = bmp address
-      // IN: ecx = x
-      // IN: edx = y
-      gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-
-      bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, false);
-
-   }
-
-   if(regs->eax == 22) {
-      // write str at
-      // IN: ebx = string address
-      // IN: ecx = x
-      // IN: edx = y
-      window_writestrat((char*)regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
-
-   }
-
-   if(regs->eax == 23) {
-      // clear window
-      // IN: ebx = colour
-      window_clearbuffer(&gui_get_windows()[get_current_task_window()], (uint16_t)regs->ebx);
-
-   }
-
-   if(regs->eax == 24) {
-      // fat get directory size
-      // IN: ebx = directory firstClusterNo
-      // OUT: ebx = directory size
-      regs->ebx = (uint32_t)fat_get_dir_size(regs->ebx);
-   }
-
-   if(regs->eax == 25) {
-      // fat get directory size
-      // IN: ebx = directory firstClusterNo
-      // OUT: ebx
-      fat_dir_t *items = malloc(32 * fat_get_dir_size(regs->ebx));
-      fat_read_dir((uint16_t)regs->ebx, items);
-      regs->ebx = (uint32_t)items;
-   }
-
-   if(regs->eax == 26) {
-      // print uint ebx to window 0
-      window_writeuint(regs->ebx, 0, 0);
-      window_writestr("\n", 0, 0);
-   }
-
-   if(regs->eax == 27) {
-      // override downarrow window function
-      uint32_t addr = regs->ebx;
-
-      window_writestr("Overriding downarrow function\n", 0, get_current_task_window());
-
-      gui_get_windows()[get_current_task_window()].downarrow_func = (void *)(addr);
-   }
-
-   if(regs->eax == 28) {
-      // write num at
-      // IN: ebx = num
-      // IN: ecx = x
-      // IN: edx = y
-      window_writenumat(regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
-
-   }
+   if(regs->eax == 28)
+      api_write_number_at(regs);
 
 }  
 

@@ -1,6 +1,8 @@
 #ifndef REGISTERS_T_H
 #define REGISTERS_T_H
 
+#include <stdint.h>
+
 // general registers in order they are pushed onto stack
 // https://faydoc.tripod.com/cpu/pusha.htm
 typedef struct registers_t {
