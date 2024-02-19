@@ -51,7 +51,7 @@ void window_term_return(void *regs, int windowIndex) {
 
    window_drawchar('\n', 0, windowIndex);
    
-   window_checkcmd(regs);
+   window_checkcmd(regs, windowIndex);
    selected = &(gui_get_windows()[windowIndex]); // in case the buffer has changed during the cmd 
 
    selected->text_index = 0;
@@ -110,8 +110,8 @@ void window_term_downarrow(int windowIndex) {
 
 extern void gui_redrawall();
 
-void window_checkcmd(void *regs) {
-   gui_window_t *selected = &(gui_get_windows()[gui_get_selected_window()]);
+void window_checkcmd(void *regs, int windowIndex) {
+   gui_window_t *selected = &(gui_get_windows()[windowIndex]);
    char *command = selected->text_buffer;
 
    
@@ -484,8 +484,8 @@ void window_scroll(int windowIndex) {
 
 bool window_init(gui_window_t *window) {
    strcpy(window->title, " TERMINAL");
-   window->x = gui_get_num_windows()*8;
-   window->y = gui_get_num_windows()*8;
+   window->x = 0;
+   window->y = 0;
    window->width = 380;
    window->height = 280;
    window->text_buffer[0] = '\0';

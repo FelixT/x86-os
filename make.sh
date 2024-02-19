@@ -3,12 +3,12 @@
 export linux=1
 
 export CROSS="$HOME/opt/cross/bin"
-export GCC="$CROSS/i686-elf-gcc"
-export GAS="$CROSS/i686-elf-as"
-export LD="$CROSS/i686-elf-ld"
+export GCC="i686-elf-gcc"
+export GAS="i686-elf-as"
+export LD="i686-elf-ld"
 
-c_files="font gui terminal interrupts tasks ata memory fat bmp elf paging window draw string api"
-o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/window.o o/font.o o/draw.o o/string.o o/api.o"
+c_files="font gui terminal interrupts tasks ata memory fat bmp elf paging windowmgr window draw string api"
+o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/string.o o/api.o"
 
 mkdir -p o
 mkdir -p fs_root
@@ -52,23 +52,13 @@ dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc
 # mkfs.fat from (brew install dosfstools)
 rm -f fs.img
 
-# if linux
-#if [ $linux==1 ]
-#then
+   find . -name ".DS_Store" -delete
    mkfs.fat -F 16 -n FATFS -C fs.img 12000
-   sudo mkdir -p /mnt/fatfs
-   sudo mount fs.img /mnt/fatfs
-   sudo cp -R fs_root/* /mnt/fatfs
-   sudo umount /mnt/fatfs
-# if mac
-#else
-#   find . -name ".DS_Store" -delete
-#   /usr/local/sbin/mkfs.fat -F 16 -n FATFS -C fs.img 12000
-#   # mount drive & copy files from fs_root dir
-#   hdiutil mount fs.img
-#   cp -R fs_root/ /Volumes/FATFS
-#   # unmount
-#   hdiutil unmount /Volumes/FATFS
+   # mount drive & copy files from fs_root dir
+   hdiutil mount fs.img
+   cp -R fs_root/ /Volumes/FATFS
+   # unmount
+   hdiutil unmount /Volumes/FATFS
 #fi
 
 # add fs at 64000

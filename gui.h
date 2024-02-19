@@ -109,11 +109,8 @@ void gui_draw_window(int windowIndex);
 uint16_t *gui_get_framebuffer();
 uint32_t gui_get_framebuffer_size();
 gui_window_t *gui_get_windows();
-int gui_get_selected_window();
-void gui_set_selected_window(int windowIndex);
 size_t gui_get_width();
 size_t gui_get_height();
-int gui_get_num_windows();
 uint32_t gui_get_window_framebuffer(int windowIndex);
 int gui_gettextwidth(int textlength);
 

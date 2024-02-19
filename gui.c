@@ -1,6 +1,7 @@
 #include "gui.h"
 #include "draw.h"
 #include "window.h"
+#include "windowmgr.h"
 
 extern int videomode;
 
@@ -12,15 +13,9 @@ uint16_t gui_bg;
 bool mouse_enabled = false;
 bool mouse_held = false;
 
-gui_window_t *gui_windows;
-int gui_selected_window = 0;
-
 surface_t surface;
 
 uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
-
-gui_window_t *gui_windows;
-int NUM_WINDOWS;
 
 bool desktop_enabled = false;
 uint8_t *icon_window;
@@ -66,10 +61,10 @@ void gui_drawcharat(char c, uint16_t colour, int x, int y) {
 void gui_redrawall();
 void gui_drawchar(char c, uint16_t colour) {
 
-   if(gui_selected_window < 0)
+   if(getSelectedWindowIndex() < 0)
       return;
 
-   window_drawchar(c, colour, gui_selected_window);
+   window_drawchar(c, colour, getSelectedWindowIndex());
 
 }
 
@@ -134,13 +129,7 @@ void gui_init(void) {
    memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
    
    gui_clear(gui_bg);
-
-   // init with one terminal window
-   NUM_WINDOWS = 1;
-   gui_windows = malloc(sizeof(gui_window_t));
-   window_init(&gui_windows[0]);
-   gui_windows[0].title[0] = '0';
-   gui_selected_window = 0;
+   windowmgr_init();
 }
 
 void gui_desktop_draw();
@@ -148,29 +137,29 @@ void gui_draw_window(int windowIndex);
 void gui_draw(void) {
    //gui_clear(3);   
    // make sure to draw selected last
-   for(int i = NUM_WINDOWS-1; i >= 0; i--) {
-      if(i != gui_selected_window)
+   for(int i = getWindowCount()-1; i >= 0; i--) {
+      if(i != getSelectedWindowIndex())
          gui_draw_window(i);
    }
-   if(gui_selected_window >= 0)
-      gui_draw_window(gui_selected_window);
+   if(getSelectedWindowIndex() >= 0)
+      gui_draw_window(getSelectedWindowIndex());
 
    // draw toolbar
    gui_drawrect(COLOUR_TOOLBAR, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT);
 
    int toolbarPos = 0;
    // padding = 2px
-   for(int i = 0; i < NUM_WINDOWS; i++) {
-      if(gui_windows[i].minimised) {
+   for(int i = 0; i < getWindowCount(); i++) {
+      if(getWindow(i)->minimised) {
          int textWidth = gui_gettextwidth(3);
          int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
          char text[4] = "   ";
-         strcpy_fixed(text, gui_windows[i].title, 3);
+         strcpy_fixed(text, getWindow(i)->title, 3);
          int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
          int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
          gui_drawrect(COLOUR_TASKBAR_ENTRY, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
          gui_writestrat(text, COLOUR_WHITE, itemX+textX, itemY+1);
-         gui_windows[i].toolbar_pos = toolbarPos;
+         getWindow(i)->toolbar_pos = toolbarPos;
          toolbarPos++;
       }
    }
@@ -179,8 +168,8 @@ void gui_draw(void) {
 void gui_cursor_draw();
 void gui_cursor_save_bg();
 void gui_redrawall() {
-   for(int i = 0; i < NUM_WINDOWS; i++) {
-      gui_window_t *window = &gui_windows[i];
+   for(int i = 0; i < getWindowCount(); i++) {
+      gui_window_t *window = getWindow(i);
       window->needs_redraw = true;
    }
    gui_clear(gui_bg);
@@ -195,7 +184,7 @@ void mouse_enable();
 void gui_interrupt_switchtask(void *regs) {
    // switch to task of selected window to handle interrupt
 
-   int newtask = get_task_from_window(gui_selected_window);
+   int newtask = get_task_from_window(getSelectedWindowIndex());
 
    if(newtask == get_current_task() || newtask == -1) return;
 
@@ -205,45 +194,45 @@ void gui_interrupt_switchtask(void *regs) {
 
 void gui_keypress(char key) {
 
-   if(gui_selected_window >= 0) {
-      gui_window_t *selected = &gui_windows[gui_selected_window];
+   if(getSelectedWindowIndex() >= 0) {
+      gui_window_t *selected = getSelectedWindow();
       if(selected->keypress_func != NULL)
-         (*(selected->keypress_func))(key, gui_selected_window);
+         (*(selected->keypress_func))(key, getSelectedWindowIndex());
    }
 }
 
 void gui_return(void *regs) {
-   if(gui_selected_window >= 0) {
-      gui_window_t *selected = &gui_windows[gui_selected_window];
+   if(getSelectedWindowIndex() >= 0) {
+      gui_window_t *selected = getSelectedWindow();
       if(selected->return_func != NULL)
-         (*(selected->return_func))(regs, gui_selected_window);
+         (*(selected->return_func))(regs, getSelectedWindowIndex());
    }
 }
 
 void gui_backspace() {
-   if(gui_selected_window >= 0) {
-      gui_window_t *selected = &gui_windows[gui_selected_window];
+   if(getSelectedWindowIndex() >= 0) {
+      gui_window_t *selected = getSelectedWindow();
       if(selected->backspace_func != NULL)
-         (*(selected->backspace_func))(gui_selected_window);
+         (*(selected->backspace_func))(getSelectedWindowIndex());
    }
 }
 
 void gui_uparrow(registers_t *regs) {
 
-   if(gui_selected_window >= 0) {
-      gui_window_t *selected = &gui_windows[gui_selected_window];
+   if(getSelectedWindowIndex() >= 0) {
+      gui_window_t *selected = getSelectedWindow();
       if(selected->uparrow_func != NULL) {
          int taskIndex = get_current_task();
          task_state_t *task = &gettasks()[taskIndex];
 
-         if(taskIndex == -1 || !task->enabled || get_current_task_window() != gui_selected_window || selected->uparrow_func == (void *)window_term_uparrow) {
+         if(taskIndex == -1 || !task->enabled || get_current_task_window() != getSelectedWindowIndex() || selected->uparrow_func == (void *)window_term_uparrow) {
             // launch into function directly as kernel
-            //window_writestr("\nCalling function as kernel\n", 0, gui_selected_window);
+            //window_writestr("\nCalling function as kernel\n", 0, getSelectedWindowIndex());
 
-            (*(selected->uparrow_func))(gui_selected_window);
+            (*(selected->uparrow_func))(getSelectedWindowIndex());
          } else {
             // run as task
-            //window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+            //window_writestr("\nCalling function as task\n", 0, getSelectedWindowIndex());
 
             task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), NULL, 0);
          }
@@ -254,20 +243,20 @@ void gui_uparrow(registers_t *regs) {
 
 void gui_downarrow(registers_t *regs) {
 
-   if(gui_selected_window >= 0) {
-      gui_window_t *selected = &gui_windows[gui_selected_window];
+   if(getSelectedWindowIndex() >= 0) {
+      gui_window_t *selected = getSelectedWindow();
       if(selected->downarrow_func != NULL) {
          int taskIndex = get_current_task();
          task_state_t *task = &gettasks()[taskIndex];
 
-         if(taskIndex == -1 || !task->enabled || get_current_task_window() != gui_selected_window || selected->downarrow_func == (void *)window_term_downarrow) {
+         if(taskIndex == -1 || !task->enabled || get_current_task_window() != getSelectedWindowIndex() || selected->downarrow_func == (void *)window_term_downarrow) {
             // launch into function directly as kernel
-            //window_writestr("\nCalling function as kernel\n", 0, gui_selected_window);
+            //window_writestr("\nCalling function as kernel\n", 0, getSelectedWindowIndex());
 
-            (*(selected->downarrow_func))(gui_selected_window);
+            (*(selected->downarrow_func))(getSelectedWindowIndex());
          } else {
             // run as task
-            //window_writestr("\nCalling function as task\n", 0, gui_selected_window);
+            //window_writestr("\nCalling function as task\n", 0, getSelectedWindowIndex());
 
             task_call_subroutine(regs, (uint32_t)(selected->downarrow_func), NULL, 0);
          }
@@ -277,13 +266,13 @@ void gui_downarrow(registers_t *regs) {
 }
 
 void gui_draw_window(int windowIndex) {
-   gui_window_t *window = &gui_windows[windowIndex];
+   gui_window_t *window = getWindow(windowIndex);
    if(window->closed || window->minimised || window->dragged)
       return;
 
    uint16_t bg = COLOUR_WHITE;
 
-   if(window->needs_redraw || windowIndex == gui_selected_window) {
+   if(window->needs_redraw || windowIndex == getSelectedWindowIndex()) {
       // background
       //gui_drawrect(bg, window->x, window->y, window->width, window->height);
 
@@ -305,11 +294,11 @@ void gui_draw_window(int windowIndex) {
                // ignore pixels covered by the currently selected window
                int screenY = (window->y + y + TITLEBAR_HEIGHT);
                int screenX = (window->x + x);
-               if(windowIndex != gui_selected_window && gui_selected_window >= 0
-               && screenX >= gui_windows[gui_selected_window].x
-               && screenX < gui_windows[gui_selected_window].x + gui_windows[gui_selected_window].width
-               && screenY >= gui_windows[gui_selected_window].y
-               && screenY < gui_windows[gui_selected_window].y + gui_windows[gui_selected_window].height)
+               if(windowIndex != getSelectedWindowIndex() && getSelectedWindowIndex() >= 0
+               && screenX >= getSelectedWindow()->x
+               && screenX < getSelectedWindow()->x + getSelectedWindow()->width
+               && screenY >= getSelectedWindow()->y
+               && screenY < getSelectedWindow()->y + getSelectedWindow()->height)
                   continue;
 
                int index = screenY*surface.width + screenX;
@@ -319,13 +308,13 @@ void gui_draw_window(int windowIndex) {
          }
       }
       
-      if(windowIndex != gui_selected_window) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
+      if(windowIndex != getSelectedWindowIndex()) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
 
       window->needs_redraw = false;
    }
 
 
-   if(windowIndex == gui_selected_window) {
+   if(windowIndex == getSelectedWindowIndex()) {
 
       // current text content/buffer
       gui_drawrect(bg, window->x+1, window->y+window->text_y+TITLEBAR_HEIGHT, window->width-2, FONT_HEIGHT);
@@ -367,57 +356,17 @@ void gui_desktop_init() {
    gui_redrawall();
 }
 
-int gui_window_add() {
-
-   int newIndex = -1;
-
-   // find first closed window
-   for(int i = 0; i < NUM_WINDOWS; i++) {
-      if(gui_windows[i].closed) {
-         newIndex = i;
-         break;
-      }
-   }
-
-   // otherwise resize array
-   if(newIndex == -1) {
-      newIndex = NUM_WINDOWS;
-      gui_window_t *windows_new = resize((uint32_t)gui_windows, NUM_WINDOWS*sizeof(gui_window_t), (NUM_WINDOWS+1)*sizeof(gui_window_t));
-   
-      if(windows_new != NULL) {
-         NUM_WINDOWS++;
-         gui_windows = windows_new;
-      } else {
-         window_writestr("Couldn't create window\n", 0, 0);
-         return -1;
-      }
-   }
-
-   if(window_init(&gui_windows[newIndex])) {
-      gui_windows[newIndex].title[0] = newIndex+'0';
-      gui_selected_window = newIndex;
-
-      return newIndex;
-   } else {
-      strcpy((char*)gui_windows[newIndex].title, "ERROR");
-      gui_windows[newIndex].closed = true;
-      window_writestr("Couldn't create window\n", 0, 0);
-   }
-
-   return -1;
-}
-
 void gui_window_close(void *regs, int windowIndex) {
-   gui_window_t *window = &gui_windows[windowIndex];
+   gui_window_t *window = getWindow(windowIndex);
    if(window->closed) return;
 
-   if(windowIndex == gui_selected_window)
-      gui_selected_window = -1;
+   if(windowIndex == getSelectedWindowIndex())
+      setSelectedWindowIndex(-1);
 
    end_task(get_task_from_window(windowIndex), regs);
 
    // re-establish pointer as gui_windows may have been resized in end_task
-   window = &gui_windows[windowIndex];
+   window = getWindow(windowIndex);
    window->closed = true;
 
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
@@ -532,7 +481,7 @@ void mouse_update(int relX, int relY) {
 }
 
 bool mouse_clicked_on_window(void *regs, int index) {
-   gui_window_t *window = &gui_windows[index];
+   gui_window_t *window = getWindow(index);
    // clicked on window's icon in toolbar
    if(window->minimised) {
       if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
@@ -540,7 +489,7 @@ bool mouse_clicked_on_window(void *regs, int index) {
             window->minimised = false;
             window->active = true;
             window->needs_redraw = true;
-            gui_selected_window = index;
+            setSelectedWindowIndex(index);
             return true;
       }
    } else if(!window->closed && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
@@ -552,7 +501,7 @@ bool mouse_clicked_on_window(void *regs, int index) {
          // minimise
          if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3)) {
             window->minimised = true;
-            gui_selected_window = -1;
+            setSelectedWindowIndex(-1);
             return false;
          }
 
@@ -565,7 +514,7 @@ bool mouse_clicked_on_window(void *regs, int index) {
 
          window->active = true;
          window->needs_redraw = true;
-         gui_selected_window = index;
+         setSelectedWindowIndex(index);
          return true;
    }
 
@@ -575,8 +524,8 @@ bool mouse_clicked_on_window(void *regs, int index) {
 void mouse_leftclick(void *regs, int relX, int relY) {
    // dragging windows
    if(mouse_held) {
-      if(gui_selected_window >= 0) {
-         gui_window_t *window = &gui_windows[gui_selected_window];
+      if(getSelectedWindowIndex() >= 0) {
+         gui_window_t *window = getSelectedWindow();
          if(window->active) {
             window->x += relX;
             window->y -= relY;
@@ -600,18 +549,18 @@ void mouse_leftclick(void *regs, int relX, int relY) {
    
    mouse_held = true;
 
-   int prevSelected = gui_selected_window;
+   int prevSelected = getSelectedWindowIndex();
    bool clickedOnWindow = false;
 
    // check if clicked on current window
-   if(mouse_clicked_on_window(regs, gui_selected_window)) {
+   if(mouse_clicked_on_window(regs, getSelectedWindowIndex())) {
       // 
       clickedOnWindow = true;
    } else {
       // check other windows
 
-      gui_selected_window = -1;
-      for(int i = 0; i < NUM_WINDOWS; i++) {
+      setSelectedWindowIndex(-1);
+      for(int i = 0; i < getWindowCount(); i++) {
          if(mouse_clicked_on_window(regs, i)) {
             clickedOnWindow = true;
             break;
@@ -620,20 +569,20 @@ void mouse_leftclick(void *regs, int relX, int relY) {
    }
 
    // make all other windows inactive
-   for(int i = 0; i < NUM_WINDOWS; i++) {
-      if(i != gui_selected_window) {
-         gui_window_t *window = &gui_windows[i];
+   for(int i = 0; i < getWindowCount(); i++) {
+      if(i != getSelectedWindowIndex()) {
+         gui_window_t *window = getWindow(i);
          window->active = false;
          window->needs_redraw = true;
       }
    }
 
    // only call routine when already the focused window
-   if(clickedOnWindow && gui_selected_window == prevSelected) {
+   if(clickedOnWindow && getSelectedWindowIndex() == prevSelected) {
       gui_interrupt_switchtask(regs);
-      gui_window_t *window = &gui_windows[gui_selected_window];
+      gui_window_t *window = getSelectedWindow();
 
-      if(get_current_task_window() == gui_selected_window && window->click_func != NULL) {
+      if(get_current_task_window() == getSelectedWindowIndex() && window->click_func != NULL) {
          //window_writestr("\nCalling function as task\n", 0, gui_selected_window);
 
          uint32_t *args = malloc(sizeof(uint32_t) * 2);
@@ -661,8 +610,8 @@ void mouse_leftclick(void *regs, int relX, int relY) {
 
 void mouse_leftrelease() {
    if(mouse_held) {
-      if(gui_selected_window >= 0)
-         gui_windows[gui_selected_window].dragged = false;
+      if(getSelectedWindowIndex() >= 0)
+         getSelectedWindow()->dragged = false;
 
       gui_redrawall();
    }
@@ -679,15 +628,7 @@ uint32_t gui_get_framebuffer_size() {
 }
 
 gui_window_t *gui_get_windows() {
-   return (void*)gui_windows;
-}
-
-int gui_get_selected_window() {
-   return gui_selected_window;
-}
-
-void gui_set_selected_window(int windowIndex) {
-   gui_selected_window = windowIndex;
+   return (void*)getWindow(0);
 }
 
 size_t gui_get_width() {
@@ -698,12 +639,8 @@ size_t gui_get_height() {
    return surface.height;
 }
 
-int gui_get_num_windows() {
-   return NUM_WINDOWS;
-}
-
 uint32_t gui_get_window_framebuffer(int windowIndex) {
-   gui_window_t *window = &gui_windows[windowIndex];
+   gui_window_t *window = getWindow(windowIndex);
    return (uint32_t)window->framebuffer;
 }
 

@@ -1,5 +1,6 @@
 #include "tasks.h"
 #include "window.h"
+#include "windowmgr.h"
 
 uint32_t USR_CODE_SEG = 8*3;
 uint32_t USR_DATA_SEG = 8*4;
@@ -38,9 +39,9 @@ void launch_task(int index, registers_t *regs, bool focus) {
    tasks[current_task].registers.useresp = tasks[current_task].stack_top; // stack_top
    tasks[current_task].registers.ss = USR_DATA_SEG | 3;
 
-   int tmpwindow = gui_get_selected_window();
+   int tmpwindow = getSelectedWindowIndex();
    tasks[current_task].window = gui_window_add();
-   if(!focus) gui_set_selected_window(tmpwindow);
+   if(!focus) setSelectedWindowIndex(tmpwindow);
 
    window_writestr("Launching task ", 0, 0);
    window_writenum(index, 0, 0);
@@ -108,7 +109,7 @@ void tasks_alloc() {
 void tasks_init(registers_t *regs) {
    // enable preemptive multitasking
 
-   gui_set_selected_window(0);
+   setSelectedWindowIndex(0);
 
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
