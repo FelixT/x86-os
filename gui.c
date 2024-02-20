@@ -192,77 +192,8 @@ void gui_interrupt_switchtask(void *regs) {
 
 }
 
-void gui_keypress(char key) {
-
-   if(getSelectedWindowIndex() >= 0) {
-      gui_window_t *selected = getSelectedWindow();
-      if(selected->keypress_func != NULL)
-         (*(selected->keypress_func))(key, getSelectedWindowIndex());
-   }
-}
-
-void gui_return(void *regs) {
-   if(getSelectedWindowIndex() >= 0) {
-      gui_window_t *selected = getSelectedWindow();
-      if(selected->return_func != NULL)
-         (*(selected->return_func))(regs, getSelectedWindowIndex());
-   }
-}
-
-void gui_backspace() {
-   if(getSelectedWindowIndex() >= 0) {
-      gui_window_t *selected = getSelectedWindow();
-      if(selected->backspace_func != NULL)
-         (*(selected->backspace_func))(getSelectedWindowIndex());
-   }
-}
-
-void gui_uparrow(registers_t *regs) {
-
-   if(getSelectedWindowIndex() >= 0) {
-      gui_window_t *selected = getSelectedWindow();
-      if(selected->uparrow_func != NULL) {
-         int taskIndex = get_current_task();
-         task_state_t *task = &gettasks()[taskIndex];
-
-         if(taskIndex == -1 || !task->enabled || get_current_task_window() != getSelectedWindowIndex() || selected->uparrow_func == (void *)window_term_uparrow) {
-            // launch into function directly as kernel
-            //window_writestr("\nCalling function as kernel\n", 0, getSelectedWindowIndex());
-
-            (*(selected->uparrow_func))(getSelectedWindowIndex());
-         } else {
-            // run as task
-            //window_writestr("\nCalling function as task\n", 0, getSelectedWindowIndex());
-
-            task_call_subroutine(regs, (uint32_t)(selected->uparrow_func), NULL, 0);
-         }
-      }
-   }
-   
-}
-
-void gui_downarrow(registers_t *regs) {
-
-   if(getSelectedWindowIndex() >= 0) {
-      gui_window_t *selected = getSelectedWindow();
-      if(selected->downarrow_func != NULL) {
-         int taskIndex = get_current_task();
-         task_state_t *task = &gettasks()[taskIndex];
-
-         if(taskIndex == -1 || !task->enabled || get_current_task_window() != getSelectedWindowIndex() || selected->downarrow_func == (void *)window_term_downarrow) {
-            // launch into function directly as kernel
-            //window_writestr("\nCalling function as kernel\n", 0, getSelectedWindowIndex());
-
-            (*(selected->downarrow_func))(getSelectedWindowIndex());
-         } else {
-            // run as task
-            //window_writestr("\nCalling function as task\n", 0, getSelectedWindowIndex());
-
-            task_call_subroutine(regs, (uint32_t)(selected->downarrow_func), NULL, 0);
-         }
-      }
-   }
-   
+void gui_keypress(void *regs, char scan_code) {
+   windowmgr_keypress(regs, scan_code);
 }
 
 void gui_draw_window(int windowIndex) {

@@ -1,8 +1,5 @@
 #!/bin/bash
 
-export linux=1
-
-export CROSS="$HOME/opt/cross/bin"
 export GCC="i686-elf-gcc"
 export GAS="i686-elf-as"
 export LD="i686-elf-ld"
@@ -52,14 +49,13 @@ dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc
 # mkfs.fat from (brew install dosfstools)
 rm -f fs.img
 
-   find . -name ".DS_Store" -delete
-   mkfs.fat -F 16 -n FATFS -C fs.img 12000
-   # mount drive & copy files from fs_root dir
-   hdiutil mount fs.img
-   cp -R fs_root/ /Volumes/FATFS
-   # unmount
-   hdiutil unmount /Volumes/FATFS
-#fi
+find . -name ".DS_Store" -delete
+mkfs.fat -F 16 -n FATFS -C fs.img 12000
+# mount drive & copy files from fs_root dir
+hdiutil mount fs.img
+cp -R fs_root/ /Volumes/FATFS
+# unmount
+hdiutil unmount /Volumes/FATFS
 
 # add fs at 64000
 cat o/hd2.bin fs.img > hd.bin

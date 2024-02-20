@@ -486,8 +486,8 @@ bool window_init(gui_window_t *window) {
    strcpy(window->title, " TERMINAL");
    window->x = 0;
    window->y = 0;
-   window->width = 380;
-   window->height = 280;
+   window->width = 440;
+   window->height = 320;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = FONT_PADDING;

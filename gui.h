@@ -95,7 +95,7 @@ void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height);
 void gui_drawcharat(char c, uint16_t colour, int x, int y);
 
 void gui_interrupt_switchtask(void *regs);
-void gui_keypress(char key);
+void gui_keypress(void *regs, char scan_code);
 void gui_return(void *regs);
 void gui_backspace();
 void gui_uparrow();

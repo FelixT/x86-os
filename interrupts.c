@@ -208,36 +208,19 @@ void keyboard_handler(registers_t *regs) {
 
    if(videomode == 1) gui_interrupt_switchtask(regs);
 
-   if(scan_code == 28)  { // return
+   if(videomode == 0) {
 
-      if(videomode == 0)
+      if(scan_code == 28)
          terminal_return();
-      else
-         gui_return(regs);
-
-   } else if(scan_code == 14) { // backspace
-      
-      if(videomode == 0)
+      else if(scan_code == 14)
          terminal_backspace();
       else
-         gui_backspace();
+         terminal_keypress(scan_to_char(scan_code));
 
-   } else if(scan_code == 72) { // up arrow
-      if(videomode == 1)
-         gui_uparrow(regs);
-   } else if(scan_code == 80) { // up arrow
-      if(videomode == 1)
-         gui_downarrow();
    } else {
-      // other key pressed
-
-      char c = scan_to_char(scan_code);
-
-      if(videomode == 1)
-         gui_keypress(c);
-      else
-         terminal_keypress(c);
+      gui_keypress(regs, scan_code);
    }
+
 }
 
 int mouse_cycle = 0;
