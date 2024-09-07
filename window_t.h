@@ -24,6 +24,8 @@ typedef struct gui_window_t {
    int toolbar_pos; // index in toolbar
    uint16_t *framebuffer; // width*(height-titlebar_height)
 
+   uint16_t colour_bg;
+
 	// function pointers
 	void (*return_func)(void *regs, int windowIndex);
 	void (*keypress_func)(char key, int windowIndex);
@@ -31,6 +33,9 @@ typedef struct gui_window_t {
    void (*uparrow_func)(int windowIndex);
    void (*downarrow_func)(int windowIndex);
    void (*click_func)(int windowIndex, int x, int y);
+
+   void (*draw_func)(int windowIndex);
+   void (*write_func)(int windowIndex, char *string);
 
 } gui_window_t;
 

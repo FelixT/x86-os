@@ -2,11 +2,14 @@
 #include "memory.h"
 #include "window.h"
 #include "tasks.h"
+#include "draw.h"
 
 int windowCount = 0;
 int gui_selected_window = 0;
 
 gui_window_t *gui_windows;
+
+extern surface_t surface;
 
 void debug_writestr(char *str) {
    if(windowCount == 0) return;
@@ -43,6 +46,49 @@ gui_window_t *getSelectedWindow() {
    return &gui_windows[gui_selected_window];
 }
 
+bool window_init(gui_window_t *window) {
+   strcpy(window->title, " TERMINAL");
+   window->x = 0;
+   window->y = 0;
+   window->width = 440;
+   window->height = 320;
+   window->text_buffer[0] = '\0';
+   window->text_index = 0;
+   window->text_x = FONT_PADDING;
+   window->text_y = FONT_PADDING;
+   window->needs_redraw = true;
+   window->active = false;
+   window->minimised = false;
+   window->closed = false;
+   window->dragged = false;
+   window->colour_bg = COLOUR_WHITE;
+
+   // default TERMINAL functions
+   window->return_func = &window_term_return;
+   window->keypress_func = &window_term_keypress;
+   window->backspace_func = &window_term_backspace;
+   window->uparrow_func = &window_term_uparrow;
+   window->downarrow_func = &window_term_downarrow;
+
+   window->draw_func = &window_term_draw;
+
+   // other functions without default behaviour
+   window->click_func = NULL;
+   
+   window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
+   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
+      if(i > 0)
+         window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH;
+      window->cmd_history[i][0] = '\0';
+   }
+   window->cmd_history_pos = -1;
+
+   window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
+   if(window->framebuffer == NULL) return false;
+   window_clearbuffer(window, COLOUR_WHITE);
+   return true;
+}
+
 int gui_window_add() {
    int index = getFirstFreeIndex();
 
@@ -71,6 +117,61 @@ int gui_window_add() {
    }
 
    return -1;
+}
+
+void window_draw(int index) {
+   gui_window_t *window = getWindow(index);
+   if(window->closed || window->minimised || window->dragged)
+      return;
+
+   if(window->needs_redraw || index == getSelectedWindowIndex()) {
+      // background
+      //gui_drawrect(bg, window->x, window->y, window->width, window->height);
+
+      // titlebar
+      draw_rect(&surface, COLOUR_TITLEBAR, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
+      // titlebar text, centred
+      int titleWidth = gui_gettextwidth(strlen(window->title));
+      int titleX = window->x + window->width/2 - titleWidth/2;
+      draw_rect(&surface, COLOUR_WHITE, titleX-4, window->y+1, titleWidth+8, TITLEBAR_HEIGHT);
+      draw_string(&surface, window->title, 0, titleX, window->y+3);
+      // titlebar buttons
+      draw_char(&surface, 'x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
+      draw_char(&surface, '-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
+
+      if(window->framebuffer != NULL) {
+         // draw window content/framebuffer
+         for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
+            for(int x = 0; x < window->width; x++) {
+               // ignore pixels covered by the currently selected window
+               int screenY = (window->y + y + TITLEBAR_HEIGHT);
+               int screenX = (window->x + x);
+               if(index != getSelectedWindowIndex() && getSelectedWindowIndex() >= 0
+               && screenX >= getSelectedWindow()->x
+               && screenX < getSelectedWindow()->x + getSelectedWindow()->width
+               && screenY >= getSelectedWindow()->y
+               && screenY < getSelectedWindow()->y + getSelectedWindow()->height)
+                  continue;
+
+               int index = screenY*surface.width + screenX;
+               int w_index = y*window->width + x;
+               setpixel_safe(&surface, index, window->framebuffer[w_index]);
+            }
+         }
+      }
+      
+      if(index != getSelectedWindowIndex()) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
+
+      window->needs_redraw = false;
+   }
+
+
+   if(index == getSelectedWindowIndex()) {
+
+      if(window->draw_func != NULL)
+         (*(window->draw_func))(getSelectedWindowIndex());
+
+   }
 }
 
 void windowmgr_init() {

@@ -13,6 +13,15 @@
 
 #include "draw.h"
 
+surface_t window_getsurface(int windowIndex) {
+   gui_window_t *window = &(gui_get_windows()[windowIndex]);
+   surface_t surface;
+   surface.width = window->width;
+   surface.height = window->height;
+   surface.buffer = (uint32_t)window->framebuffer;
+   return surface;
+}
+
 // default terminal behaviour
 
 void window_term_keypress(char key, int windowIndex) {
@@ -105,6 +114,23 @@ void window_term_downarrow(int windowIndex) {
    gui_draw_window(windowIndex);
 }
 
+void window_term_draw(int windowIndex) {
+   gui_window_t *window = &(gui_get_windows()[windowIndex]);
+   surface_t *surface = gui_get_surface();
+
+   // current text content/buffer
+   draw_rect(surface, window->colour_bg, window->x+1, window->y+window->text_y+TITLEBAR_HEIGHT, window->width-2, FONT_HEIGHT);
+   draw_char(surface, '>', 8, window->x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
+   draw_string(surface, window->text_buffer, 0, window->x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
+   // prompt
+   draw_char(surface, '_', 0, window->x + window->text_x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
+
+   // drop shadow if selected
+   draw_line(surface, COLOUR_DARK_GREY, window->x+window->width, window->y+2, true, window->height-1);
+   draw_line(surface, COLOUR_DARK_GREY, window->x+2, window->y+window->height, false, window->width-1);
+
+   draw_unfilledrect(surface, gui_rgb16(80,80,80), window->x, window->y, window->width, window->height);
+}
 
 // === window actions ===
 
@@ -480,55 +506,6 @@ void window_scroll(int windowIndex) {
    window_drawrect(COLOUR_WHITE, 0, newY, window->width, scrollY, windowIndex);
    window->text_y = newY;
    window->text_x = FONT_PADDING;
-}
-
-bool window_init(gui_window_t *window) {
-   strcpy(window->title, " TERMINAL");
-   window->x = 0;
-   window->y = 0;
-   window->width = 440;
-   window->height = 320;
-   window->text_buffer[0] = '\0';
-   window->text_index = 0;
-   window->text_x = FONT_PADDING;
-   window->text_y = FONT_PADDING;
-   window->needs_redraw = true;
-   window->active = false;
-   window->minimised = false;
-   window->closed = false;
-   window->dragged = false;
-
-   // default TERMINAL functions
-   window->return_func = &window_term_return;
-   window->keypress_func = &window_term_keypress;
-   window->backspace_func = &window_term_backspace;
-   window->uparrow_func = &window_term_uparrow;
-   window->downarrow_func = &window_term_downarrow;
-
-   // other functions without default behaviour
-   window->click_func = NULL;
-   
-   window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
-   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
-      if(i > 0)
-         window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH;
-      window->cmd_history[i][0] = '\0';
-   }
-   window->cmd_history_pos = -1;
-
-   window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
-   if(window->framebuffer == NULL) return false;
-   window_clearbuffer(window, COLOUR_WHITE);
-   return true;
-}
-
-surface_t window_getsurface(int windowIndex) {
-   gui_window_t *window = &(gui_get_windows()[windowIndex]);
-   surface_t surface;
-   surface.width = window->width;
-   surface.height = window->height;
-   surface.buffer = (uint32_t)window->framebuffer;
-   return surface;
 }
 
 void window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex) {

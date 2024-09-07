@@ -1,5 +1,4 @@
 #include "gui.h"
-#include "draw.h"
 #include "window.h"
 #include "windowmgr.h"
 
@@ -197,70 +196,7 @@ void gui_keypress(void *regs, char scan_code) {
 }
 
 void gui_draw_window(int windowIndex) {
-   gui_window_t *window = getWindow(windowIndex);
-   if(window->closed || window->minimised || window->dragged)
-      return;
-
-   uint16_t bg = COLOUR_WHITE;
-
-   if(window->needs_redraw || windowIndex == getSelectedWindowIndex()) {
-      // background
-      //gui_drawrect(bg, window->x, window->y, window->width, window->height);
-
-      // titlebar
-      gui_drawrect(COLOUR_TITLEBAR, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
-      // titlebar text, centred
-      int titleWidth = gui_gettextwidth(strlen(window->title));
-      int titleX = window->x + window->width/2 - titleWidth/2;
-      gui_drawrect(COLOUR_WHITE, titleX-4, window->y+1, titleWidth+8, TITLEBAR_HEIGHT);
-      gui_writestrat(window->title, 0, titleX, window->y+3);
-      // titlebar buttons
-      gui_drawcharat('x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
-      gui_drawcharat('-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
-
-      if(window->framebuffer != NULL) {
-         // draw window content/framebuffer
-         for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
-            for(int x = 0; x < window->width; x++) {
-               // ignore pixels covered by the currently selected window
-               int screenY = (window->y + y + TITLEBAR_HEIGHT);
-               int screenX = (window->x + x);
-               if(windowIndex != getSelectedWindowIndex() && getSelectedWindowIndex() >= 0
-               && screenX >= getSelectedWindow()->x
-               && screenX < getSelectedWindow()->x + getSelectedWindow()->width
-               && screenY >= getSelectedWindow()->y
-               && screenY < getSelectedWindow()->y + getSelectedWindow()->height)
-                  continue;
-
-               int index = screenY*surface.width + screenX;
-               int w_index = y*window->width + x;
-               set_framebuffer(index, window->framebuffer[w_index]);
-            }
-         }
-      }
-      
-      if(windowIndex != getSelectedWindowIndex()) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
-
-      window->needs_redraw = false;
-   }
-
-
-   if(windowIndex == getSelectedWindowIndex()) {
-
-      // current text content/buffer
-      gui_drawrect(bg, window->x+1, window->y+window->text_y+TITLEBAR_HEIGHT, window->width-2, FONT_HEIGHT);
-      gui_drawcharat('>', 8, window->x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
-      gui_writestrat(window->text_buffer, 0, window->x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
-      // prompt
-      gui_drawcharat('_', 0, window->x + window->text_x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
-
-      // drop shadow if selected
-      gui_drawline(COLOUR_DARK_GREY, window->x+window->width, window->y+2, true, window->height-1);
-      gui_drawline(COLOUR_DARK_GREY, window->x+2, window->y+window->height, false, window->width-1);
-
-      gui_drawunfilledrect(gui_rgb16(80,80,80), window->x, window->y, window->width, window->height);
-   } else {
-   }
+   window_draw(windowIndex);
 }
 
 void gui_desktop_init() {
@@ -568,6 +504,10 @@ size_t gui_get_width() {
 
 size_t gui_get_height() {
    return surface.height;
+}
+
+surface_t *gui_get_surface() {
+   return &surface;
 }
 
 uint32_t gui_get_window_framebuffer(int windowIndex) {

@@ -15,8 +15,8 @@ void window_term_keypress(char key, int windowIndex);
 void window_term_backspace(int windowIndex);
 void window_term_uparrow(int windowIndex);
 void window_term_downarrow(int windowIndex);
+void window_term_draw(int windowIndex);
 
-bool window_init(gui_window_t *window);
 void window_checkcmd(void *regs, int windowIndex);
 void window_scroll();
 
