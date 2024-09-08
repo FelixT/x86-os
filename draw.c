@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "draw.h"
 #include "font.h"
 
@@ -7,6 +8,20 @@ void setpixel_safe(surface_t *surface, int index, int colour) {
    if(index < 0 || index >= surface->width*surface->height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
+      ((uint16_t*)surface->buffer)[index] = colour;
+   }
+}
+
+void setpixel_safeb(surface_t *surface, int index, int colour, int *buffer, int count, bool restore) {
+   if(index < 0 || index >= surface->width*surface->height) {
+      //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
+   } else {
+      if(buffer != NULL) {
+         if(restore)
+            colour = buffer[count];
+         else
+            buffer[count] = ((uint16_t*)(surface->buffer))[index];
+      }
       ((uint16_t*)surface->buffer)[index] = colour;
    }
 }
@@ -39,22 +54,24 @@ void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int wi
       setpixel_safe(surface, (yi)*(int)surface->width+x+width-1, colour);
 }
 
-void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height) {
+void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height, int *buffer, bool restore) {
+   int count = 0;
+
    for(int xi = x; xi < x+width; xi++) // top
       if((xi%2) == 0)
-         setpixel_safe(surface, y*(int)surface->width+xi, colour);
+         setpixel_safeb(surface, y*(int)surface->width+xi, colour, buffer, count++, restore);
 
    for(int xi = x; xi < x+width; xi++) // bottom
       if((xi%2) == 0)
-         setpixel_safe(surface, (y+height-1)*(int)surface->width+xi, colour);
+         setpixel_safeb(surface, (y+height-1)*(int)surface->width+xi, colour, buffer, count++, restore);
 
    for(int yi = y; yi < y+height; yi++) // left
       if((yi%2) == 0)
-         setpixel_safe(surface, (yi)*(int)surface->width+x, colour);
+         setpixel_safeb(surface, (yi)*(int)surface->width+x, colour, buffer, count++, restore);
 
    for(int yi = y; yi < y+height; yi++) // right
       if((yi%2) == 0)
-         setpixel_safe(surface, (yi)*(int)surface->width+x+width-1, colour);
+         setpixel_safeb(surface, (yi)*(int)surface->width+x+width-1, colour, buffer, count++, restore);
 }
 
 void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length) {

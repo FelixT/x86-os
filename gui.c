@@ -16,6 +16,8 @@ surface_t surface;
 
 uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
 
+uint16_t *draw_buffer;
+
 bool desktop_enabled = false;
 uint8_t *icon_window;
 uint8_t *gui_bgimage;
@@ -41,8 +43,8 @@ void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height) 
    draw_unfilledrect(&surface, colour, x, y, width, height);
 }
 
-void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height) {
-   draw_dottedrect(&surface, colour, x, y, width, height);
+void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height, bool restore) {
+   draw_dottedrect(&surface, colour, x, y, width, height, (int*)draw_buffer, restore);
 }
 
 void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length) {
@@ -123,6 +125,8 @@ void gui_init(void) {
    surface.width = vbe_mode_info_structure.width;
    surface.height = vbe_mode_info_structure.height;
    surface.buffer = vbe_mode_info_structure.framebuffer;
+
+   draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
 
    // reserve framebuffer memory so malloc can't assign it
    memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
@@ -332,6 +336,7 @@ void mouse_update(int relX, int relY) {
 
 bool mouse_clicked_on_window(void *regs, int index) {
    gui_window_t *window = getWindow(index);
+   if(window->closed) return false;
    // clicked on window's icon in toolbar
    if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
       && gui_mouse_y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)surface.height-TOOLBAR_PADDING) {
@@ -340,7 +345,7 @@ bool mouse_clicked_on_window(void *regs, int index) {
          window->needs_redraw = true;
          setSelectedWindowIndex(index);
          return true;
-   } else if(!window->minimised && !window->closed && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
+   } else if(!window->minimised && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
       && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
 
          int relX = gui_mouse_x - window->x;
@@ -375,6 +380,9 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       if(getSelectedWindowIndex() >= 0) {
          gui_window_t *window = getSelectedWindow();
          if(window->active) {
+            // restore dotted outline
+            gui_drawdottedrect(COLOUR_WHITE, window->x, window->y, window->width, window->height, true);
+
             window->x += relX;
             window->y -= relY;
             if(window->x < 0)
@@ -388,7 +396,9 @@ void mouse_leftclick(void *regs, int relX, int relY) {
 
             window->dragged = true;
             window->needs_redraw = true;
-            gui_drawdottedrect(COLOUR_WHITE, window->x, window->y, window->width, window->height);
+
+            // draw dotted outline
+            gui_drawdottedrect(COLOUR_WHITE, window->x, window->y, window->width, window->height, false);
             //gui_draw();
          }
       }

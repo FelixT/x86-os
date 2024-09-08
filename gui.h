@@ -94,7 +94,7 @@ void gui_writeuint_hex(uint32_t num, uint16_t colour);
 void gui_desktop_init();
 void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length);
 void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height);
-void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height);
+void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height, bool restore);
 void gui_drawcharat(char c, uint16_t colour, int x, int y);
 
 void gui_interrupt_switchtask(void *regs);

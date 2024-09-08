@@ -126,10 +126,10 @@ void window_term_draw(int windowIndex) {
    draw_char(surface, '_', 0, window->x + window->text_x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
 
    // drop shadow if selected
-   draw_line(surface, COLOUR_DARK_GREY, window->x+window->width, window->y+2, true, window->height-1);
-   draw_line(surface, COLOUR_DARK_GREY, window->x+2, window->y+window->height, false, window->width-1);
+   draw_line(surface, COLOUR_DARK_GREY, window->x+window->width+1, window->y+3, true, window->height-1);
+   draw_line(surface, COLOUR_DARK_GREY, window->x+3, window->y+window->height+1, false, window->width-1);
 
-   draw_unfilledrect(surface, gui_rgb16(80,80,80), window->x, window->y, window->width, window->height);
+   draw_unfilledrect(surface, gui_rgb16(80,80,80), window->x - 1, window->y - 1, window->width + 2, window->height + 2);
 }
 
 // === window actions ===

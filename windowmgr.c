@@ -121,6 +121,9 @@ int gui_window_add() {
 
 void window_draw(int index) {
    gui_window_t *window = getWindow(index);
+   if(window->dragged)
+      draw_dottedrect(&surface, COLOUR_WHITE, window->x, window->y, window->width, window->height, NULL, false);
+
    if(window->closed || window->minimised || window->dragged)
       return;
 
@@ -129,7 +132,7 @@ void window_draw(int index) {
       //gui_drawrect(bg, window->x, window->y, window->width, window->height);
 
       // titlebar
-      draw_rect(&surface, COLOUR_TITLEBAR, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
+      draw_rect(&surface, COLOUR_TITLEBAR, window->x, window->y, window->width, TITLEBAR_HEIGHT);
       // shading
       for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
          draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-24);
@@ -164,7 +167,7 @@ void window_draw(int index) {
          }
       }
       
-      if(index != getSelectedWindowIndex()) gui_drawdottedrect(0, window->x, window->y, window->width, window->height);
+      if(index != getSelectedWindowIndex()) draw_dottedrect(&surface, 0, window->x-1, window->y-1, window->width+2, window->height+2, NULL, false);
 
       window->needs_redraw = false;
    }
@@ -184,6 +187,8 @@ void windowmgr_init() {
    window_init(&gui_windows[0]);
    strcpy(gui_windows[0].title, "0DEBUG WINDOW");
    gui_windows[0].active = true;
+   gui_windows[0].x = 5;
+   gui_windows[0].y = 5;
    gui_selected_window = 0;
    windowCount++;
 }
@@ -194,6 +199,7 @@ void toolbar_draw() {
    int toolbarPos = 0;
    // padding = 2px
    for(int i = 0; i < getWindowCount(); i++) {
+      if(getWindow(i)->closed) continue;
       int bg = COLOUR_TASKBAR_ENTRY;
       if(getWindow(i)->minimised)
          bg = COLOUR_LIGHT_GREY;
