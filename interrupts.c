@@ -4,6 +4,7 @@
 #include "interrupts.h"
 #include "window.h"
 #include "api.h"
+#include "events.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -204,7 +205,8 @@ void software_handler(registers_t *regs) {
    if(regs->eax == 29)
       api_override_draw(regs);
 
-
+   if(regs->eax == 30)
+      api_queue_event(regs);
 }  
 
 void keyboard_handler(registers_t *regs) {
@@ -260,19 +262,21 @@ int timer_i = 0;
 
 void timer_handler(registers_t *regs) {
    if(videomode == 0) {
-      terminal_writenumat(timer_i, 79);
+      terminal_writenumat(timer_i%10, 79);
    } else {
-      gui_showtimer(timer_i);
+      gui_showtimer(timer_i%10);
 
-      if(timer_i == 0)
+      if(timer_i%10 == 0)
          gui_draw();
 
       if(switching)
          switch_task(regs);
    }
 
+   events_check(regs);
+
    timer_i++;
-   timer_i%=10;
+   timer_i%=10000000;
 
 }
 
@@ -303,7 +307,11 @@ void exception_handler(int int_no, registers_t *regs) {
             }
             window_writestr("\n", 0, 0);
 
-            while(true);
+
+            window_writestr("Task running was ", gui_rgb16(255, 100, 100), 0);
+            window_writeuint(get_current_task(), 0, 0);
+            window_writestr("\n", 0, 0);
+            //while(true);
          }
 
          gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);

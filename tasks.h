@@ -40,7 +40,7 @@ void end_task(int index, registers_t *regs);
 void tasks_alloc();
 void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs);
-void switch_to_task(int index, registers_t *regs);
+bool switch_to_task(int index, registers_t *regs);
 
 task_state_t *gettasks();
 

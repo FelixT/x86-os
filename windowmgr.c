@@ -16,6 +16,11 @@ void debug_writestr(char *str) {
    window_writestr(str, 0, 0);
 }
 
+void debug_writeuint(uint32_t num) {
+   if(windowCount == 0) return;
+   window_writeuint(num, 0, 0);
+}
+
 int getFirstFreeIndex() {
    for(int i = 0; i < windowCount; i++) {
       if(gui_windows[i].closed)

@@ -174,7 +174,13 @@ void gui_interrupt_switchtask(void *regs) {
 
    if(newtask == get_current_task() || newtask == -1) return;
 
-   switch_to_task(newtask, regs);
+   if(!switch_to_task(newtask, regs)) {
+      debug_writestr("Task ");
+      debug_writeuint(newtask);
+      debug_writestr("for window ");
+      debug_writeuint(getSelectedWindowIndex());
+      debug_writestr(" is stopped\n");
+   }
 
 }
 

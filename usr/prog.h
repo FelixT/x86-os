@@ -264,3 +264,12 @@ static inline void write_numat(int num, int x, int y) {
       "d" ((uint32_t)y)
    );
 }
+
+static inline void queue_event(uint32_t callback, int delta) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (30),
+      "b" ((uint32_t)callback),
+      "c" ((uint32_t)delta)
+   );
+}

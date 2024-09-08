@@ -64,6 +64,9 @@ void end_task(int index, registers_t *regs) {
    window_writestr("Ending task ", 0, 0);
    window_writenum(index, 0, 0);
    window_writestr("\n", 0, 0);
+   window_writestr("Current task is ", 0, 0);
+   window_writenum(get_current_task(), 0, 0);
+   window_writestr("\n", 0, 0);
 
    if(tasks[index].window >= 0)
       window_writestr("Task ended\n", 0, tasks[index].window);
@@ -95,7 +98,7 @@ void end_task(int index, registers_t *regs) {
    tasks[index].window = -1;
 
    // TODO: this causes page faults when closing and reopening programs....
-   if(tasks[index].prog_size != 0)
+   //if(tasks[index].prog_size != 0)
       //free(tasks[index].prog_start, tasks[index].prog_size);
 
    if(index == get_current_task() || !task_exists())
@@ -117,6 +120,8 @@ void tasks_init(registers_t *regs) {
    }
 
    // launch idle process
+   window_writestr("Launching idle process\n", 0, 0);
+
    fat_dir_t *entry = fat_parse_path("/sys/progidle.bin");
    if(entry == NULL) {
       gui_writestr("Not found\n", 0);
@@ -128,6 +133,8 @@ void tasks_init(registers_t *regs) {
    create_task_entry(0, idleentry, entry->fileSize, false);
    launch_task(0, regs, false);
    gui_get_windows()[tasks[0].window].minimised = true;
+   gui_get_windows()[tasks[0].window].draw_func = NULL;
+   strcpy(gui_get_windows()[tasks[0].window].title+1, "IDLE");
    //elf_run(regs, prog, 0, 0, NULL);
    //free((uint32_t)prog, entry->fileSize);
 
@@ -142,6 +149,9 @@ void switch_task(registers_t *regs) {
    if(!switching)
       return;
    
+   window_writestr("TS", 0, 0);
+   window_writenum(current_task, 0, 0);
+   window_writestr(":", 0, 0);
    // save registers
    tasks[current_task].registers = *regs;
 
@@ -151,6 +161,7 @@ void switch_task(registers_t *regs) {
          current_task++;
          current_task%=TOTAL_TASKS;
       } while(!tasks[current_task].enabled);
+      window_writenum(current_task, 0, 0);
 
       // restore registers
       *regs = tasks[current_task].registers;
@@ -159,10 +170,16 @@ void switch_task(registers_t *regs) {
    }
 }
 
-void switch_to_task(int index, registers_t *regs) {
+bool switch_to_task(int index, registers_t *regs) {
+   window_writestr("Switching from task ", 0, 0);
+   window_writenum(current_task, 0, 0);
+   window_writestr(" to ", 0, 0);
+   window_writenum(index, 0, 0);
+   window_writestr("\n", 0, 0);
+
    if(!tasks[index].enabled) {
       window_writestr("Task switch failed: task is unavaliable\n", 0, 0);
-      return;
+      return false;
    }
 
    // save registers
@@ -172,6 +189,8 @@ void switch_to_task(int index, registers_t *regs) {
 
    // restore registers
    *regs = tasks[current_task].registers;
+
+   return true;
 }
 
 task_state_t *gettasks() {
@@ -197,7 +216,7 @@ int get_task_from_window(int windowIndex) {
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
-      window_writestr("Already in a subroutine, returning.\n", 0, 0);
+      debug_writestr("Already in a subroutine, returning.\n");
       return;
    }
 
@@ -228,6 +247,8 @@ void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int 
 
 void task_subroutine_end(registers_t *regs) {
    // restore registers
+   debug_writestr("Ending subrouting\n");
+
    *regs = tasks[current_task].routine_return_regs;
 
    free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t));

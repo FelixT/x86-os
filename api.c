@@ -5,6 +5,7 @@
 #include "fat.h"
 #include "api.h"
 #include "bmp.h"
+#include "events.h"
 
 void api_write_string(registers_t *regs) {
    // write ebx
@@ -205,4 +206,13 @@ void api_draw_bmp(registers_t *regs) {
 
 void api_clear_window(registers_t *regs) {
    window_clearbuffer(&gui_get_windows()[get_current_task_window()], (uint16_t)regs->ebx);
+}
+
+void api_queue_event(registers_t *regs) {
+   // IN: ebx = callback function
+   // IN: ecx = how long to wait
+   uint32_t callback = regs->ebx;
+   uint32_t delta = regs->ecx;
+
+   events_add(delta, (void *)callback, get_current_task());
 }

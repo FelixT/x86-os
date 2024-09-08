@@ -10,7 +10,7 @@
 #include "font.h"
 #include "bmp.h"
 #include "elf.h"
-
+#include "events.h"
 #include "draw.h"
 
 surface_t window_getsurface(int windowIndex) {
@@ -163,6 +163,9 @@ void window_checkcmd(void *regs, int windowIndex) {
       gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
       gui_desktop_init();
 
+      gui_writestr("\nEnabling events\n", COLOUR_ORANGE);
+      events_add(40, NULL, -1);
+
    }
    else if(strcmp(command, "CLEAR")) {
       window_clearbuffer(selected, COLOUR_WHITE);
@@ -229,6 +232,16 @@ void window_checkcmd(void *regs, int windowIndex) {
       uint32_t progAddr = (uint32_t)prog;
       create_task_entry(2, progAddr, entry->fileSize, false);
       launch_task(2, regs, true);
+   }
+   else if(strcmp(command, "PROG3")) {
+      fat_dir_t *entry = fat_parse_path("/sys/prog3.elf");
+      if(entry == NULL) {
+         gui_writestr("Not found\n", 0);
+         return;
+      }
+      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+      elf_run(regs, prog, 3, 0, NULL);
+      free((uint32_t)prog, entry->fileSize);
    }
    else if(strcmp(command, "FILES")) {
       fat_dir_t *entry = fat_parse_path("/sys/files.elf");

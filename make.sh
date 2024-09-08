@@ -4,8 +4,8 @@ export GCC="i686-elf-gcc"
 export GAS="i686-elf-as"
 export LD="i686-elf-ld"
 
-c_files="font gui terminal interrupts tasks ata memory fat bmp elf paging windowmgr window draw string api"
-o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/string.o o/api.o"
+c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging windowmgr window draw string api"
+o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/string.o o/api.o"
 
 mkdir -p o
 mkdir -p fs_root
@@ -31,6 +31,7 @@ nasm usr/prog2.asm -f bin -o o/prog2.bin
 nasm usr/progidle.asm -f bin -o o/progidle.bin
 #nasm progidle.asm -f elf32 -o o/progidle.o
 #$LD o/progidle.o -o o/progidle.elf
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/prog3.c -o o/prog3.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/bmpview.c -o o/bmpview.elf 
 
@@ -38,6 +39,7 @@ $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra us
 cp o/prog1.bin fs_root/sys/prog1.bin
 cp o/prog2.bin fs_root/sys/prog2.bin
 cp o/progidle.bin fs_root/sys/progidle.bin
+cp o/prog3.elf fs_root/sys/prog3.elf
 cp o/files.elf fs_root/sys/files.elf
 cp o/bmpview.elf fs_root/sys/bmpview.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
