@@ -130,11 +130,15 @@ void window_draw(int index) {
 
       // titlebar
       draw_rect(&surface, COLOUR_TITLEBAR, window->x+1, window->y+1, window->width-2, TITLEBAR_HEIGHT);
+      // shading
+      for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
+         draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-24);
       // titlebar text, centred
       int titleWidth = gui_gettextwidth(strlen(window->title));
       int titleX = window->x + window->width/2 - titleWidth/2;
-      draw_rect(&surface, COLOUR_WHITE, titleX-4, window->y+1, titleWidth+8, TITLEBAR_HEIGHT);
-      draw_string(&surface, window->title, 0, titleX, window->y+3);
+      draw_rect(&surface, COLOUR_TITLEBAR, titleX-4, window->y+3, titleWidth+8, FONT_HEIGHT+FONT_PADDING*2+2);
+      draw_string(&surface, window->title, 0, titleX, window->y+5);
+
       // titlebar buttons
       draw_char(&surface, 'x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
       draw_char(&surface, '-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
@@ -182,6 +186,32 @@ void windowmgr_init() {
    gui_windows[0].active = true;
    gui_selected_window = 0;
    windowCount++;
+}
+
+void toolbar_draw() {
+   gui_drawrect(COLOUR_TOOLBAR, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT);
+
+   int toolbarPos = 0;
+   // padding = 2px
+   for(int i = 0; i < getWindowCount(); i++) {
+      int bg = COLOUR_TASKBAR_ENTRY;
+      if(getWindow(i)->minimised)
+         bg = COLOUR_LIGHT_GREY;
+      if(getWindow(i)->active)
+         bg = COLOUR_DARK_GREY;
+      int textWidth = gui_gettextwidth(3);
+      int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
+      char text[4] = "   ";
+      strcpy_fixed(text, getWindow(i)->title, 3);
+      int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
+      int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
+      gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
+      gui_writestrat(text, COLOUR_WHITE, itemX+textX, itemY+TOOLBAR_PADDING/2);
+      draw_line(&surface, 0, itemX, itemY+TOOLBAR_ITEM_HEIGHT,false,TOOLBAR_ITEM_WIDTH);
+      getWindow(i)->toolbar_pos = toolbarPos;
+      toolbarPos++;
+   }
+
 }
 
 extern char scan_to_char(int scan_code);

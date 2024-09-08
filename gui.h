@@ -20,10 +20,10 @@
 #include "draw.h"
 
 #define TITLEBAR_HEIGHT 17
-#define TOOLBAR_HEIGHT 22
 #define TOOLBAR_ITEM_WIDTH 50
-#define TOOLBAR_ITEM_HEIGHT 15
 #define TOOLBAR_PADDING 4
+#define TOOLBAR_ITEM_HEIGHT 13
+#define TOOLBAR_HEIGHT 20
 
 // https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
 typedef struct vbe_mode_info_t {
@@ -70,12 +70,13 @@ void strtoupper(char* dest, char* src);
 uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 
 #define COLOUR_WINDOW_OUTLINE gui_rgb16(230, 230, 230)
-#define COLOUR_DARK_GREY gui_rgb16(140, 140, 140) 
+#define COLOUR_DARK_GREY gui_rgb16(65, 65, 65) 
+#define COLOUR_LIGHT_GREY gui_rgb16(180, 180, 180) 
 #define COLOUR_TASKBAR_ENTRY gui_rgb16(100, 100, 100)
 #define COLOUR_TOOLBAR gui_rgb16(200, 200, 200)
 #define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)
 #define COLOUR_WHITE gui_rgb16(255, 255, 255)
-#define COLOUR_CYAN gui_rgb16(0, 183, 235)
+#define COLOUR_CYAN gui_rgb16(0, 128, 138)
 #define COLOUR_ORANGE gui_rgb16(200, 125, 0)
 
 void gui_init();

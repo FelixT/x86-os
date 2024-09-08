@@ -143,25 +143,8 @@ void gui_draw(void) {
    if(getSelectedWindowIndex() >= 0)
       gui_draw_window(getSelectedWindowIndex());
 
-   // draw toolbar
-   gui_drawrect(COLOUR_TOOLBAR, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT);
-
-   int toolbarPos = 0;
-   // padding = 2px
-   for(int i = 0; i < getWindowCount(); i++) {
-      if(getWindow(i)->minimised) {
-         int textWidth = gui_gettextwidth(3);
-         int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
-         char text[4] = "   ";
-         strcpy_fixed(text, getWindow(i)->title, 3);
-         int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
-         int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
-         gui_drawrect(COLOUR_TASKBAR_ENTRY, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
-         gui_writestrat(text, COLOUR_WHITE, itemX+textX, itemY+1);
-         getWindow(i)->toolbar_pos = toolbarPos;
-         toolbarPos++;
-      }
-   }
+   // draw taskbar/toolbar
+   toolbar_draw();
 }
 
 void gui_cursor_draw();
@@ -350,15 +333,13 @@ void mouse_update(int relX, int relY) {
 bool mouse_clicked_on_window(void *regs, int index) {
    gui_window_t *window = getWindow(index);
    // clicked on window's icon in toolbar
-   if(window->minimised) {
-      if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
-         && gui_mouse_y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)surface.height-TOOLBAR_PADDING) {
-            window->minimised = false;
-            window->active = true;
-            window->needs_redraw = true;
-            setSelectedWindowIndex(index);
-            return true;
-      }
+   if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
+      && gui_mouse_y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)surface.height-TOOLBAR_PADDING) {
+         window->minimised = false;
+         window->active = true;
+         window->needs_redraw = true;
+         setSelectedWindowIndex(index);
+         return true;
    } else if(!window->closed && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
       && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
 
