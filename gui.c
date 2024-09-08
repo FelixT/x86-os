@@ -340,7 +340,7 @@ bool mouse_clicked_on_window(void *regs, int index) {
          window->needs_redraw = true;
          setSelectedWindowIndex(index);
          return true;
-   } else if(!window->closed && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
+   } else if(!window->minimised && !window->closed && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
       && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
 
          int relX = gui_mouse_x - window->x;
