@@ -179,7 +179,9 @@ void windowmgr_init() {
    gui_windows = malloc(sizeof(gui_window_t));
    window_init(&gui_windows[0]);
    strcpy(gui_windows[0].title, "0DEBUG WINDOW");
+   gui_windows[0].active = true;
    gui_selected_window = 0;
+   windowCount++;
 }
 
 extern char scan_to_char(int scan_code);
