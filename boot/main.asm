@@ -31,7 +31,7 @@ kmain:
 ; may located after 0xFFFF hence usable only in protected mode
 section .data
 
-%include "font.asm"
+%include "font7.asm"
 
 [bits 32]
 %include "boot/tss.asm"
