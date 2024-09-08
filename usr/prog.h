@@ -90,6 +90,14 @@ static inline void override_click(uint32_t addr) {
    );
 }
 
+static inline void override_draw(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (29),
+      "b" (addr)
+   );
+}
+
 static inline int get_width() {
    uint32_t output;
 

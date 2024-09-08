@@ -126,6 +126,15 @@ void api_override_mouseclick(registers_t *regs) {
    gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
 }
 
+void api_override_draw(registers_t *regs) {
+   // override draw function with ebx
+   uint32_t addr = regs->ebx;
+
+   window_writestr("Overriding draw function\n", 0, get_current_task_window());
+
+   gui_get_windows()[get_current_task_window()].draw_func = (void *)(addr);
+}
+
 void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }

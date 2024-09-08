@@ -207,6 +207,7 @@ void _start() {
    override_uparrow((uint32_t)&uparrow);
    override_downarrow((uint32_t)&downarrow);
    override_click((uint32_t)&click);
+   override_draw((uint32_t)NULL);
    width = get_width();
    height = get_height();
 

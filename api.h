@@ -21,6 +21,7 @@ void api_end_task(registers_t *regs);
 void api_override_uparrow(registers_t *regs);
 void api_override_downarrow(registers_t *regs);
 void api_override_mouseclick(registers_t *regs);
+void api_override_draw(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_fat_get_root(registers_t *regs);
