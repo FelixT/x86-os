@@ -201,6 +201,10 @@ void software_handler(registers_t *regs) {
    if(regs->eax == 28)
       api_write_number_at(regs);
 
+   if(regs->eax == 29)
+      api_override_draw(regs);
+
+
 }  
 
 void keyboard_handler(registers_t *regs) {
