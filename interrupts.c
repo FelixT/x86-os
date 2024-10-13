@@ -301,25 +301,21 @@ void exception_handler(int int_no, registers_t *regs) {
             uint32_t addr;
 	         asm volatile("mov %%cr2, %0" : "=r" (addr));
             window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
-            window_writeuint(addr, 0, 0);
+            debug_writehex(addr);
             if(page_getphysical(addr) != (uint32_t)-1) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               window_writeuint(page_getphysical(addr), 0, 0);
+               debug_writehex(page_getphysical(addr));
                window_writestr(">", gui_rgb16(255, 100, 100), 0);
             }
             window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
-            window_writeuint(regs->eip, 0, 0);
+            debug_writehex(regs->eip);
             if(page_getphysical(regs->eip) != (uint32_t)-1) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               window_writeuint(page_getphysical(regs->eip), 0, 0);
+               debug_writehex(page_getphysical(regs->eip));
                window_writestr(">", gui_rgb16(255, 100, 100), 0);
             }
             window_writestr("\n", 0, 0);
 
-
-            window_writestr("Task running was ", gui_rgb16(255, 100, 100), 0);
-            window_writeuint(get_current_task(), 0, 0);
-            window_writestr("\n", 0, 0);
             //while(true);
          }
 

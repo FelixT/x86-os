@@ -3,6 +3,8 @@
 #include "memory.h"
 #include "gui.h"
 
+int malloc_debug = 0;
+
 mem_segment_status_t memory_status[KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE];
 
 void memory_reserve(uint32_t offset, int bytes) {
@@ -16,17 +18,24 @@ void memory_reserve(uint32_t offset, int bytes) {
    }
 }
 
+extern void debug_writestr(char* str);
+extern void debug_writeuint(uint32_t num);
+
 void free(uint32_t offset, int bytes) {
    if(offset == 0 || bytes == 0) return;
 
    int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
 
-   /*window_writestr("Freeing ", 0, 0);
-   window_writenum(blockStart, 0, 0);
-   window_writestr(" <", 0, 0);
-   window_writenum(noBlocks, 0, 0);
-   window_writestr(">\n", 0, 0);*/
+   if(malloc_debug) {
+      debug_writestr("Free ");
+      debug_writeuint(offset);
+      debug_writestr(" <");
+      debug_writeuint(blockStart);
+      debug_writestr(",");
+      debug_writeuint(noBlocks);
+      debug_writestr(">\n");
+   }
 
    char freeASCII[6] = "FREE ";
 
@@ -85,8 +94,10 @@ void *malloc(int bytes) {
    }
 
    // we've found a block, update memory_status
-   for(int i = blockStart; i < blockStart+noBlocks; i++)
+   for(int i = blockStart; i < blockStart+noBlocks; i++) {
+      if(memory_status[i].allocated) debug_writestr("Already allocated\n");
       memory_status[i].allocated = true;
+   }
 
    // fill allocated memory with 'ALLC' in ascii
    char allcASCII[6] = "ALLC ";
@@ -95,7 +106,19 @@ void *malloc(int bytes) {
       *byte = allcASCII[i%6];
    }
 
-   return (void*)((int)(HEAP_KERNEL) + (int)(blockStart*MEM_BLOCK_SIZE));
+   int addr = (int)(HEAP_KERNEL) + (int)(blockStart*MEM_BLOCK_SIZE);
+
+   if(malloc_debug) {
+      debug_writestr("Malloc ");
+      debug_writeuint(addr);
+      debug_writestr(" <");
+      debug_writeuint(blockStart);
+      debug_writestr(",");
+      debug_writeuint(noBlocks);
+      debug_writestr(">\n");
+   }
+
+   return (void*)addr;
 }
 
 void *resize(uint32_t offset, int oldsize, int newsize) {

@@ -3,6 +3,7 @@
 #include "window.h"
 #include "tasks.h"
 #include "draw.h"
+#include "string.h"
 
 int windowCount = 0;
 int gui_selected_window = 0;
@@ -19,6 +20,14 @@ void debug_writestr(char *str) {
 void debug_writeuint(uint32_t num) {
    if(windowCount == 0) return;
    window_writeuint(num, 0, 0);
+}
+
+void debug_writehex(uint32_t num) {
+   if(windowCount == 0) return;
+   char out[20];
+   uinttohexstr(num, out);
+   window_writestr("0x", 0, 0);
+   window_writestr(out, 0, 0);
 }
 
 int getFirstFreeIndex() {

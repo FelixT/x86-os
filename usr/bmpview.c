@@ -35,6 +35,8 @@ void _start(int argc, char **args) {
    uint8_t *bmp = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
    bmp_draw((uint8_t*)bmp, 0, 0);
 
+   while(1==1) asm volatile("nop");
+
    exit(0);
 
 }

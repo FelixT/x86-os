@@ -366,6 +366,7 @@ fat_dir_t *fat_parse_path(char *path) {
       }
 
       // relative to current directory
+      /*
       if(curDir == NULL)
          gui_writenum(0, 0);
       else
@@ -373,7 +374,7 @@ fat_dir_t *fat_parse_path(char *path) {
       
       gui_writestr(":", 0);
       gui_writestr(pathElement, 0);
-      gui_drawchar('\n', 0);
+      gui_drawchar('\n', 0);*/
 
       i++;
    }
@@ -381,14 +382,15 @@ fat_dir_t *fat_parse_path(char *path) {
    // if(strlen(pathRemaining) == 0) // ends with trailing slash
    fat_dir_t *lastDir = curDir;
    curDir = fat_follow_path_chain(pathRemaining, curDir);
-   if(curDir == NULL)
+   
+   /*if(curDir == NULL)
          gui_writenum(0, 0);
       else
          gui_writenum(curDir->firstClusterNo, 0);
       
    gui_writestr(":", 0);
    gui_writestr(pathRemaining, 0);
-   gui_drawchar('\n', 0);
+   gui_drawchar('\n', 0);*/
 
    free((uint32_t)tmp, strlen(path));
    free((uint32_t)pathRemaining, strlen(path));

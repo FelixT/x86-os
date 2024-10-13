@@ -16,12 +16,15 @@ void _start() {
     write_str("Timer test program\n");
 
     queue_event((uint32_t)(&timer_callback), 50);
+    queue_event((uint32_t)(&timer_callback), 100);
 
     write_str("Test123\n");
 
 
     // main program loop
-   while(1 == 1);
+   while(1 == 1) {
+    asm volatile("nop");
+   }
    exit(0);
 
 }
