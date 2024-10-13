@@ -5,6 +5,8 @@
 #include "window.h"
 #include "api.h"
 #include "events.h"
+#include "ata.h"
+#include "windowmgr.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -12,6 +14,7 @@ extern void* software_interrupt_routine;
 
 extern int videomode;
 extern bool switching; // preemptive multitasking enabled
+bool switching_paused = false;
 
 extern void mouse_update(uint32_t relX, uint32_t relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
@@ -261,16 +264,22 @@ void mouse_handler(registers_t *regs) {
 int timer_i = 0;
 
 void timer_handler(registers_t *regs) {
+
    if(videomode == 0) {
       terminal_writenumat(timer_i%10, 79);
    } else {
       gui_showtimer(timer_i%10);
 
-      if(timer_i%10 == 0)
+      if(timer_i%20 == 0)
          gui_draw();
 
-      if(switching)
-         switch_task(regs);
+      if(timer_i%40 == 0) {
+         if(switching_paused) {
+            if(switching) window_writestr(" SP", 0, 0);
+         } else {
+            switch_task(regs);
+         }
+      }
    }
 
    events_check(regs);
@@ -334,32 +343,33 @@ void exception_handler(int int_no, registers_t *regs) {
 
       int irq_no = int_no - 32;
 
-         if(irq_no == 0) {
-         // system timer
-         
-         timer_handler(regs);         
-      } else if(irq_no == 1) {
-         // keyboard
-         keyboard_handler(regs);
-      } else if(irq_no == 12) {
-
-         mouse_handler(regs);
-
-      } else if(irq_no == 16) {
-
-         // 0x30: software interrupt
-         // uses eax, ebx, ecx as potential arguments
-
-         software_handler(regs);
-      } else {
-         // other interrupt no
-         if(videomode == 0) {
-            terminal_writeat("  ", 0);
-            terminal_writenumat(int_no, 0);
-         } else {
-            gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
-            gui_writenumat(int_no, 0, 0, 0);
-         }
+      switch(irq_no) {
+         case 0:
+            timer_handler(regs);
+            break;
+         case 1:
+            keyboard_handler(regs);
+            break;
+         case 12:
+            mouse_handler(regs);
+            break;
+         case 14:
+            ata_interrupt(); // acknowledge, that's it
+            break;
+         case 16:
+            // 0x30: software interrupt
+            // uses eax, ebx, ecx as potential arguments
+            software_handler(regs);
+            break;
+         default:
+            // other interrupt no, print it
+            if(videomode == 0) {
+               terminal_writeat("  ", 0);
+               terminal_writenumat(int_no, 0);
+            } else {
+               gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
+               gui_writenumat(int_no, 0, 0, 0);
+            }
       }
 
    }
@@ -369,17 +379,23 @@ void exception_handler(int int_no, registers_t *regs) {
       outb(0xA0, 0x20); // slave command
 
    outb(0x20, 0x20); // master command
+
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
+
+   switching_paused = true;
 
    window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
    window_writeuint(int_no, 0, 0);
    window_writestr(" with err code ", gui_rgb16(255, 100, 100), 0);
    window_writeuint(regs->err_code, 0, 0);
    window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
-   window_writeuint(regs->eip, 0, 0);  
+   debug_writehex(regs->eip);  
    window_writestr("\n", gui_rgb16(255, 100, 100), 0);
 
    exception_handler(int_no, regs);
+
+   switching_paused = false;
+
 }

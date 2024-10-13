@@ -42,5 +42,6 @@
 void ata_identify(bool primaryBus, bool masterDrive);
 void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf);
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
+void ata_interrupt();
 
 #endif
