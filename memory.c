@@ -117,4 +117,10 @@ mem_segment_status_t *memory_get_table() {
    return &memory_status[0];
 }
 
-// TODO: memset, memcpy, memmove and memcmp 
+void memset(void *dest, uint8_t ch, int bytes) {
+   uint8_t *mem = (uint8_t*)dest;
+   for(int i = 0; i < bytes; i++)
+      mem[i] = ch;
+}
+
+// TODO: memcpy, memmove and memcmp 

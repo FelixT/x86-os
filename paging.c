@@ -46,24 +46,15 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
    uint32_t table_index = index%1024;
 
    if(!page_dir[dir_index].present || !page_dir[dir_index].address) {
-
-      page_table_entry_t *page_table = malloc(sizeof(page_table_entry_t) * 1024);
+      page_table_entry_t *page_table = malloc(sizeof(page_table_entry_t) * 1024); // dir
 
       page_dir[dir_index].address = (uint32_t)page_table >> 12;
 
-      uint8_t *entry = (uint8_t*)page_table;
-      for(int i = 0; i < 1024*(int)sizeof(page_table_entry_t); i++)
-         entry[i] = 0; // set to 2 for rw = 1, else 0
+      // default everything to 0
+      memset(page_table, 0, 1024*(int)sizeof(page_table_entry_t)); // set to 2 for rw = 1, else 0
    }
 
    page_table_entry_t *page_table = (page_table_entry_t*) (page_dir[dir_index].address << 12);
-
-   if(debug == 1) {
-      //if(page_dir[dir_index].present)
-      //   window_writestr("Page dir entry present", 0, 0);
-      if(page_table[table_index].present)
-         window_writestr("Page table entry present", 0, 0);
-   }
 
    page_table[table_index].present = 1;
    page_table[table_index].rw = rw;
@@ -89,7 +80,7 @@ void page_init() {
       entry[i] = 0; // set to 2 for rw = 1, else 0
 
    // identity map kernel
-   for(uint32_t i = KERNEL_START; i < (uint32_t)&kernel_end; i++)
+   for(uint32_t i = KERNEL_START; i < KERNEL_END; i++)
       map(i, i, 0, 0);
 
    // identity map stacks
