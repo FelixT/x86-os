@@ -1,14 +1,9 @@
 #ifndef DRAW_H
 #define DRAW_H
 
-#include <stdint.h>
 #include <stdbool.h>
 
-typedef struct {
-   uint32_t buffer;
-   int width;
-   int height;
-} surface_t;
+#include "surface_t.h"
 
 void draw_rect(surface_t *surface, uint16_t colour, int x, int y, int width, int height);
 void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height);

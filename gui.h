@@ -16,6 +16,7 @@
 #include "elf.h"
 
 #include "window_t.h"
+#include "surface_t.h"
 
 #include "draw.h"
 
@@ -101,8 +102,6 @@ void gui_interrupt_switchtask(void *regs);
 void gui_keypress(void *regs, char scan_code);
 void gui_return(void *regs);
 void gui_backspace();
-void gui_uparrow();
-void gui_downarrow();
 
 void gui_checkcmd(void *regs);
 

@@ -19,5 +19,8 @@ gui_window_t *getSelectedWindow();
 void windowmgr_keypress();
 void window_draw(int index);
 void toolbar_draw();
+void gui_uparrow();
+void gui_downarrow();
+void window_draw_content(gui_window_t *window);
 
 #endif
