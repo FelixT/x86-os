@@ -65,6 +65,7 @@ void events_check(registers_t *regs) {
                 debug_writestr("Event is from an ended task\n");
                 event_t *next = first_event->next;
                 free((uint32_t)first_event, sizeof(event_t));
+                first_event = next;
                 continue;
             }
 

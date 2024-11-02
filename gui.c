@@ -18,10 +18,6 @@ uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so 
 
 uint16_t *draw_buffer;
 
-bool desktop_enabled = false;
-uint8_t *icon_window;
-uint8_t *gui_bgimage;
-
 static inline void set_framebuffer(int index, uint16_t colour) {
    if(index < 0 || index >= (int)surface.width*(int)surface.height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
@@ -37,14 +33,6 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
 
 void gui_drawrect(uint16_t colour, int x, int y, int width, int height) {
    draw_rect(&surface, colour, x, y, width, height);
-}
-
-void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height) {
-   draw_unfilledrect(&surface, colour, x, y, width, height);
-}
-
-void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height, bool restore) {
-   draw_dottedrect(&surface, colour, x, y, width, height, (int*)draw_buffer, restore);
 }
 
 void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length) {
@@ -135,32 +123,16 @@ void gui_init(void) {
    windowmgr_init();
 }
 
-void gui_desktop_draw();
 void gui_draw_window(int windowIndex);
 void gui_draw(void) {
-   //gui_clear(3);   
-   // make sure to draw selected last
-   for(int i = getWindowCount()-1; i >= 0; i--) {
-      if(i != getSelectedWindowIndex())
-         gui_draw_window(i);
-   }
-   if(getSelectedWindowIndex() >= 0)
-      gui_draw_window(getSelectedWindowIndex());
-
-   // draw taskbar/toolbar
-   toolbar_draw();
+   windowmgr_draw();
 }
 
-void gui_cursor_draw();
-void gui_cursor_save_bg();
 void gui_redrawall() {
-   for(int i = 0; i < getWindowCount(); i++) {
-      gui_window_t *window = getWindow(i);
-      window->needs_redraw = true;
-   }
    gui_clear(gui_bg);
-   if(desktop_enabled) gui_desktop_draw();
-   gui_draw();
+   desktop_draw();
+   windowmgr_redrawall();
+
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
 }
@@ -189,70 +161,7 @@ void gui_keypress(void *regs, char scan_code) {
 }
 
 void gui_draw_window(int windowIndex) {
-   window_draw(windowIndex);
-}
-
-void gui_desktop_init() {
-   // load add window icon
-   fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
-   if(entry == NULL) {
-      gui_writestr("ICON not found\n", 0);
-      return;
-   }
-
-   icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
-
-   // load background
-   entry = fat_parse_path("/bmp/bg16.bmp");
-   if(entry == NULL) {
-      gui_writestr("BG not found\n", 0);
-      return;
-   }
-
-   gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
-
-   desktop_enabled = true;
-   gui_redrawall();
-}
-
-void gui_window_close(void *regs, int windowIndex) {
-   gui_window_t *window = getWindow(windowIndex);
-   if(window->closed) return;
-
-   if(windowIndex == getSelectedWindowIndex())
-      setSelectedWindowIndex(-1);
-
-   end_task(get_task_from_window(windowIndex), regs);
-
-   // re-establish pointer as gui_windows may have been resized in end_task
-   window = getWindow(windowIndex);
-   window->closed = true;
-
-   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
-      //free((uint32_t)&window->cmd_history[i][0], TEXT_BUFFER_LENGTH); // broken
-      window->cmd_history[i] = NULL;
-   }
-   free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
-   window->framebuffer = NULL;
-
-   gui_redrawall();
-}
-
-void gui_desktop_draw() {
-   //gui_writeuint((uint32_t)icon_window, 0);
-   int32_t width = bmp_get_width(gui_bgimage);
-   int32_t height = bmp_get_height(gui_bgimage);
-   int x = (surface.width - width) / 2;
-   int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
-   bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0);
-   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, 10, 10, 1);
-}
-
-void gui_desktop_click() {
-   if(gui_mouse_x >= 10 && gui_mouse_y >= 10)
-      if(gui_mouse_x <= 60 && gui_mouse_y <= 60)
-         gui_window_add();
+   window_draw(getWindow(windowIndex));
 }
 
 void mouse_enable() {
@@ -327,12 +236,6 @@ void mouse_update(int relX, int relY) {
    if(gui_mouse_y < 0)
       gui_mouse_y = surface.height + gui_mouse_y;
 
-   // just in case
-   if(gui_mouse_x < 0 || gui_mouse_x >= (int)surface.width)
-      gui_mouse_x = 0;
-   if(gui_mouse_y < 0 || gui_mouse_y >= (int)surface.height)
-      gui_mouse_y = 0;
-
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
 
    gui_cursor_save_bg(); // save pixels at new cursor location
@@ -340,135 +243,19 @@ void mouse_update(int relX, int relY) {
    gui_cursor_draw();
 }
 
-bool mouse_clicked_on_window(void *regs, int index) {
-   gui_window_t *window = getWindow(index);
-   if(window->closed) return false;
-   // clicked on window's icon in toolbar
-   if(gui_mouse_x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && gui_mouse_x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
-      && gui_mouse_y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && gui_mouse_y <= (int)surface.height-TOOLBAR_PADDING) {
-         window->minimised = false;
-         window->active = true;
-         window->needs_redraw = true;
-         setSelectedWindowIndex(index);
-         return true;
-   } else if(!window->minimised && gui_mouse_x >= window->x && gui_mouse_x <= window->x + window->width
-      && gui_mouse_y >= window->y && gui_mouse_y <= window->y + window->height) {
-
-         int relX = gui_mouse_x - window->x;
-         int relY = gui_mouse_y - window->y;
-
-         // minimise
-         if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3)) {
-            window->minimised = true;
-            setSelectedWindowIndex(-1);
-            return false;
-         }
-
-         // close
-         if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)) {
-            gui_window_close(regs, index);
-            return false;
-         }
-
-
-         window->active = true;
-         window->needs_redraw = true;
-         setSelectedWindowIndex(index);
-         return true;
-   }
-
-   return false;
-}
-
 void mouse_leftclick(void *regs, int relX, int relY) {
    // dragging windows
    if(mouse_held) {
-      if(getSelectedWindowIndex() >= 0) {
-         gui_window_t *window = getSelectedWindow();
-         if(window->active) {
-            // restore dotted outline
-            gui_drawdottedrect(COLOUR_WHITE, window->x, window->y, window->width, window->height, true);
-
-            window->x += relX;
-            window->y -= relY;
-            if(window->x < 0)
-               window->x = 0;
-            if(window->x + window->width > (int)surface.width)
-               window->x = surface.width - window->width;
-            if(window->y < 0)
-               window->y = 0;
-            if(window->y + window->height > (int)surface.height - TOOLBAR_HEIGHT)
-               window->y = surface.height - window->height - TOOLBAR_HEIGHT;
-
-            window->dragged = true;
-            window->needs_redraw = true;
-
-            // draw dotted outline
-            gui_drawdottedrect(COLOUR_WHITE, window->x, window->y, window->width, window->height, false);
-            //gui_draw();
-         }
-      }
-      return;
-   }
-   
-   mouse_held = true;
-
-   int prevSelected = getSelectedWindowIndex();
-   bool clickedOnWindow = false;
-
-   // check if clicked on current window
-   if(mouse_clicked_on_window(regs, getSelectedWindowIndex())) {
-      // 
-      clickedOnWindow = true;
+      windowmgr_dragged(relX, relY);
    } else {
-      // check other windows
+      if(relX > 0 || relY > 0)
+         mouse_held = true;
 
-      setSelectedWindowIndex(-1);
-      for(int i = 0; i < getWindowCount(); i++) {
-         if(mouse_clicked_on_window(regs, i)) {
-            clickedOnWindow = true;
-            break;
-         }
-      }
+      if(!windowmgr_click(regs, gui_mouse_x, gui_mouse_y))
+         desktop_click(gui_mouse_x, gui_mouse_y);
+
+      gui_draw();
    }
-
-   // make all other windows inactive
-   for(int i = 0; i < getWindowCount(); i++) {
-      if(i != getSelectedWindowIndex()) {
-         gui_window_t *window = getWindow(i);
-         window->active = false;
-         window->needs_redraw = true;
-      }
-   }
-
-   // only call routine when already the focused window
-   if(clickedOnWindow && getSelectedWindowIndex() == prevSelected) {
-      gui_interrupt_switchtask(regs);
-      gui_window_t *window = getSelectedWindow();
-
-      if(get_current_task_window() == getSelectedWindowIndex() && window->click_func != NULL) {
-         //window_writestr("\nCalling function as task\n", 0, gui_selected_window);
-
-         uint32_t *args = malloc(sizeof(uint32_t) * 2);
-         args[1] = gui_mouse_x - window->x;
-         args[0] = gui_mouse_y - (window->y + TITLEBAR_HEIGHT);
-
-         if((gui_mouse_y - (window->y + TITLEBAR_HEIGHT)) >= 0) {
-            task_call_subroutine(regs, (uint32_t)(window->click_func), args, 2);
-         } else {
-            // clicked titlebar, don't call routine
-            free((uint32_t)args, sizeof(uint32_t) * 2);
-         }
-      }
-
-   } else {
-
-      if(desktop_enabled)
-         gui_desktop_click();
-   
-   }
-
-   gui_draw();
 
 }
 

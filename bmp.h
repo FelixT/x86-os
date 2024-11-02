@@ -33,6 +33,5 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHe
 uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 int32_t bmp_get_width(uint8_t *bmp);
 int32_t bmp_get_height(uint8_t *bmp);
-uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 
 #endif

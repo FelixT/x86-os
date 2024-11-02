@@ -13,12 +13,12 @@
 
 // default terminal behaviour
 
-void window_term_keypress(char key, int windowIndex) {
+void window_term_keypress(char key, void *window) {
    if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')
    || (key == '/') || (key == '.')) {
 
       // write to current window
-      gui_window_t *selected = &(gui_get_windows()[windowIndex]);
+      gui_window_t *selected = (gui_window_t*)window;
       if(selected->text_index < TEXT_BUFFER_LENGTH-1) {
          selected->text_buffer[selected->text_index] = key;
          selected->text_buffer[selected->text_index+1] = '\0';
@@ -26,7 +26,7 @@ void window_term_keypress(char key, int windowIndex) {
          selected->text_x = (selected->text_index)*(FONT_WIDTH+FONT_PADDING);
       }
 
-      gui_draw_window(windowIndex);
+      window_draw(selected);
 
    }
 }
@@ -66,19 +66,19 @@ void window_term_return(void *regs, void *window) {
    window_draw_content(selected);
 }
 
-void window_term_backspace(int windowIndex) {
-   gui_window_t *selected = &(gui_get_windows()[windowIndex]);
+void window_term_backspace(void *window) {
+   gui_window_t *selected = (gui_window_t*)window;
    if(selected->text_index > 0) {
       selected->text_index--;
       selected->text_x-=FONT_WIDTH+FONT_PADDING;
       selected->text_buffer[selected->text_index] = '\0';
    }
 
-   gui_draw_window(windowIndex);
+   window_draw(window);
 }
 
-void window_term_uparrow(int windowIndex) {
-   gui_window_t *selected = &(gui_get_windows()[windowIndex]);
+void window_term_uparrow(void *window) {
+   gui_window_t *selected = (gui_window_t*)window;
 
    selected->cmd_history_pos++;
    if(selected->cmd_history_pos == CMD_HISTORY_LENGTH)
@@ -88,11 +88,11 @@ void window_term_uparrow(int windowIndex) {
    strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
    selected->text_index = len;
    selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
-   gui_draw_window(windowIndex);
+   window_draw(window);
 }
 
-void window_term_downarrow(int windowIndex) {
-   gui_window_t *selected = &(gui_get_windows()[windowIndex]);
+void window_term_downarrow(void *window) {
+   gui_window_t *selected = (gui_window_t*)window;
 
    selected->cmd_history_pos--;
 
@@ -107,25 +107,25 @@ void window_term_downarrow(int windowIndex) {
       selected->text_index = len;
       selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
    }
-   gui_draw_window(windowIndex);
+   window_draw(window);
 }
 
-void window_term_draw(int windowIndex) {
-   gui_window_t *window = &(gui_get_windows()[windowIndex]);
+void window_term_draw(void *window) {
+   gui_window_t *selected = (gui_window_t*)window;
    surface_t *surface = gui_get_surface();
 
    // current text content/buffer
-   draw_rect(surface, window->colour_bg, window->x+1, window->y+window->text_y+TITLEBAR_HEIGHT, window->width-2, FONT_HEIGHT);
-   draw_char(surface, '>', 8, window->x + 1, window->y + window->text_y+TITLEBAR_HEIGHT);
-   draw_string(surface, window->text_buffer, 0, window->x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
+   draw_rect(surface, selected->colour_bg, selected->x+1, selected->y+selected->text_y+TITLEBAR_HEIGHT, selected->width-2, FONT_HEIGHT);
+   draw_char(surface, '>', 8, selected->x + 1, selected->y + selected->text_y+TITLEBAR_HEIGHT);
+   draw_string(surface, selected->text_buffer, 0, selected->x + 1 + FONT_WIDTH + FONT_PADDING, selected->y + selected->text_y+TITLEBAR_HEIGHT);
    // prompt
-   draw_char(surface, '_', 0, window->x + window->text_x + 1 + FONT_WIDTH + FONT_PADDING, window->y + window->text_y+TITLEBAR_HEIGHT);
+   draw_char(surface, '_', 0, selected->x + selected->text_x + 1 + FONT_WIDTH + FONT_PADDING, selected->y + selected->text_y+TITLEBAR_HEIGHT);
 
    // drop shadow if selected
-   draw_line(surface, COLOUR_DARK_GREY, window->x+window->width+1, window->y+3, true, window->height-1);
-   draw_line(surface, COLOUR_DARK_GREY, window->x+3, window->y+window->height+1, false, window->width-1);
+   draw_line(surface, COLOUR_DARK_GREY, selected->x+selected->width+1, selected->y+3, true, selected->height-1);
+   draw_line(surface, COLOUR_DARK_GREY, selected->x+3, selected->y+selected->height+1, false, selected->width-1);
 
-   draw_unfilledrect(surface, gui_rgb16(80,80,80), window->x - 1, window->y - 1, window->width + 2, window->height + 2);
+   draw_unfilledrect(surface, gui_rgb16(80,80,80), selected->x - 1, selected->y - 1, selected->width + 2, selected->height + 2);
 }
 
 extern void gui_redrawall();
@@ -153,10 +153,12 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       tasks_init(regs);
 
       gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
-      gui_desktop_init();
+      desktop_init();
 
       gui_writestr("\nEnabling events\n", COLOUR_ORANGE);
       events_add(40, NULL, -1);
+
+      gui_redrawall();
 
    }
    else if(strcmp(command, "CLEAR")) {
@@ -305,7 +307,7 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       fat_setup();
    }
    else if(strcmp(command, "DESKTOP")) {
-      gui_desktop_init();
+      desktop_init();
    }
    else if(strstartswith(command, "FATPATH")) {
       char arg[40];

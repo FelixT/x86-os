@@ -47,6 +47,7 @@ task_state_t *gettasks();
 int get_current_task_window();
 int get_current_task();
 int get_task_from_window(int windowIndex);
+int get_free_task_index();
 
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc);
 void task_subroutine_end(registers_t *regs);

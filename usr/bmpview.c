@@ -24,6 +24,8 @@ void _start(int argc, char **args) {
       exit(0);
    }
 
+   override_draw((uint32_t)NULL);
+
    char *path = (char*)args[0];
 
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path);

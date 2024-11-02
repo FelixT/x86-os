@@ -89,23 +89,21 @@ void gui_writestr(char *c, uint16_t colour);
 void gui_drawrect(uint16_t colour, int x, int y, int width, int height);
 void gui_writestrat(char *c, uint16_t colour, int x, int y);
 void gui_draw();
+void gui_redrawall();
 void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y);
 void gui_writeuint(uint32_t num, uint16_t colour);
 void gui_writeuint_hex(uint32_t num, uint16_t colour);
-void gui_desktop_init();
 void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length);
-void gui_drawunfilledrect(uint16_t colour, int x, int y, int width, int height);
-void gui_drawdottedrect(uint16_t colour, int x, int y, int width, int height, bool restore);
 void gui_drawcharat(char c, uint16_t colour, int x, int y);
+void gui_cursor_draw();
+void gui_cursor_save_bg();
+void gui_desktop_draw();
 
 void gui_interrupt_switchtask(void *regs);
 void gui_keypress(void *regs, char scan_code);
 void gui_return(void *regs);
 void gui_backspace();
 
-void gui_checkcmd(void *regs);
-
-int gui_window_add();
 void gui_draw_window(int windowIndex);
 
 uint16_t *gui_get_framebuffer();

@@ -4,8 +4,8 @@ export GCC="i686-elf-gcc"
 export GAS="i686-elf-as"
 export LD="i686-elf-ld"
 
-c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging windowmgr window draw string api"
-o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/string.o o/api.o"
+c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging windowmgr window draw string api window_term"
+o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/string.o o/api.o o/window_term.o"
 
 mkdir -p o
 mkdir -p fs_root
@@ -44,8 +44,8 @@ cp o/files.elf fs_root/sys/files.elf
 cp o/bmpview.elf fs_root/sys/bmpview.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
-dd if=/dev/zero of=o/hd2.bin bs=64000 count=1
-dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc
+dd if=/dev/zero of=o/hd2.bin bs=64000 count=1 status=none
+dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc status=none
 
 # create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
@@ -62,14 +62,26 @@ hdiutil unmount /Volumes/FATFS
 # add fs at 64000
 cat o/hd2.bin fs.img > hd.bin
 
-   #qemu-system-i386 -s -S -drive file=hd3.bin,format=raw,index=0,media=disk -monitor stdio
+if [[ $# -eq 0 ]]; then
+   qemu-system-i386 -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio
+else
 
-   # gdb:
-   # set disassembly-flavor intel
-   #target remote localhost:1234 
-   #continue
-   #stepi
-   #b
-   #s
+   # Debug with LLDB
 
-qemu-system-i386 -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio
+   #gdb-remote localhost:1234
+
+
+   #w s e -- 0x123456
+   osascript -e 'tell app "Terminal" to do script "echo gdb-remote localhost:1234;echo br s -a addr;lldb;"'
+
+   qemu-system-i386 -s -S -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio
+
+fi
+
+# gdb:
+# set disassembly-flavor intel
+#target remote localhost:1234 
+#continue
+#stepi
+#b
+#s

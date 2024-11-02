@@ -144,6 +144,8 @@ void downarrow() {
 
 void click(int x, int y) {
 
+   (void)(x);
+
    // see where we clicked
    int position = (y-5)/25;
    //debug_write_uint(no_items);

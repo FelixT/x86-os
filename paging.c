@@ -60,10 +60,12 @@ void map(uint32_t addr, uint32_t vaddr, int user, int rw) {
    page_table[table_index].rw = rw;
    page_table[table_index].user = user;
    page_table[table_index].address = addr >> 12;
+   //page_table[table_index].no_cache = 1;
 
    page_dir[dir_index].present = 1;
    page_dir[dir_index].rw = rw;
    page_dir[dir_index].user = user;
+   //page_dir[dir_index].no_cache = 1;
 
 }
 

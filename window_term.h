@@ -5,11 +5,11 @@
 
 // default, terminal style window behaviour
 void window_term_return(void *regs, void *window);
-void window_term_keypress(char key, int windowIndex);
-void window_term_backspace(int windowIndex);
-void window_term_uparrow(int windowIndex);
-void window_term_downarrow(int windowIndex);
-void window_term_draw(int windowIndex);
+void window_term_keypress(char key, void *window);
+void window_term_backspace(void *window);
+void window_term_uparrow(void *window);
+void window_term_downarrow(void *window);
+void window_term_draw(void *window);
 void window_checkcmd(void *regs, gui_window_t *window);
 
 #endif

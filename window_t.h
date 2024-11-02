@@ -33,14 +33,14 @@ typedef struct gui_window_t {
 
 	// function pointers, window is type *gui_window_t
 	void (*return_func)(void *regs, void *window);
-	void (*keypress_func)(char key, int windowIndex);
-   void (*backspace_func)(int windowIndex);
-   void (*uparrow_func)(int windowIndex);
-   void (*downarrow_func)(int windowIndex);
-   void (*click_func)(int windowIndex, int x, int y);
+	void (*keypress_func)(char key, void *window);
+   void (*backspace_func)(void *window);
+   void (*uparrow_func)(void *window);
+   void (*downarrow_func)(void *window);
+   void (*click_func)(void *window, int x, int y);
 
-   void (*draw_func)(int windowIndex);
-   void (*write_func)(int windowIndex, char *string);
+   void (*draw_func)(void *window);
+   void (*write_func)(void *window, char *string);
 
 } gui_window_t;
 

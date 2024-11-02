@@ -61,15 +61,15 @@ void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int widt
       if((xi%2) == 0)
          setpixel_safeb(surface, y*(int)surface->width+xi, colour, buffer, count++, restore);
 
-   for(int xi = x; xi < x+width; xi++) // bottom
+   for(int xi = x+1; xi < x+width-1; xi++) // bottom
       if((xi%2) == 0)
          setpixel_safeb(surface, (y+height-1)*(int)surface->width+xi, colour, buffer, count++, restore);
 
-   for(int yi = y; yi < y+height; yi++) // left
+   for(int yi = y+1; yi < y+height; yi++) // left
       if((yi%2) == 0)
          setpixel_safeb(surface, (yi)*(int)surface->width+x, colour, buffer, count++, restore);
 
-   for(int yi = y; yi < y+height; yi++) // right
+   for(int yi = y+1; yi < y+height; yi++) // right
       if((yi%2) == 0)
          setpixel_safeb(surface, (yi)*(int)surface->width+x+width-1, colour, buffer, count++, restore);
 }
