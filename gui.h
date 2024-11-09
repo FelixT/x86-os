@@ -65,7 +65,6 @@ typedef struct vbe_mode_info_t {
 
 void strcpy(char* dest, char* src);
 void strcpy_fixed(char* dest, char* src, int length);
-bool strsplit(char* dest1, char* dest2, char* src, char splitat);
 void strtoupper(char* dest, char* src);
 
 uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);

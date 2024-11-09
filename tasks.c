@@ -82,6 +82,9 @@ void end_task(int index, registers_t *regs) {
    debug_writeuint(get_current_task());
    debug_writestr("\n");
 
+   if(tasks[index].in_routine)
+      debug_writestr("Task was in routine\n");
+
    if(tasks[index].window >= 0)
       window_writestr("Task ended\n", 0, tasks[index].window);
 
@@ -107,17 +110,7 @@ void end_task(int index, registers_t *regs) {
       }
    }
 
-   /*window_writestr("Freeing ", 0, 0);
-   window_writeuint(tasks[index].prog_size, 0, 0);
-   window_writestr(" at ", 0, 0);
-   window_writeuint(tasks[index].prog_start, 0, 0);
-   window_writestr("\n", 0, 0);*/
-
    tasks[index].window = -1;
-
-   // TODO: this causes page faults when closing and reopening programs....
-   //if(tasks[index].prog_size != 0)
-      //free(tasks[index].prog_start, tasks[index].prog_size);
 
    if(index == get_current_task() || !task_exists())
       if(regs != NULL) switch_task(regs);
@@ -125,6 +118,29 @@ void end_task(int index, registers_t *regs) {
 
 void tasks_alloc() {
    tasks = malloc(sizeof(task_state_t) * TOTAL_TASKS);
+}
+
+void tasks_launch_binary(registers_t *regs, char *path) {
+   fat_dir_t *entry = fat_parse_path(path);
+   if(entry == NULL) {
+      gui_writestr("Program not found\n", 0);
+      return;
+   }
+   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   uint32_t progAddr = (uint32_t)prog;
+   create_task_entry(get_free_task_index(), progAddr, entry->fileSize, false);
+   launch_task(get_free_task_index(), regs, false);
+}
+
+void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args) {
+   fat_dir_t *entry = fat_parse_path(path);
+   if(entry == NULL) {
+      gui_writestr("Not found\n", 0);
+      return;
+   }
+   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   elf_run(regs, prog, argc, args);
+   free((uint32_t)prog, entry->fileSize);
 }
 
 void tasks_init(registers_t *regs) {
@@ -139,17 +155,8 @@ void tasks_init(registers_t *regs) {
 
    // launch idle process
    window_writestr("Launching idle process\n", 0, 0);
-
-   fat_dir_t *entry = fat_parse_path("/sys/progidle.bin");
-   if(entry == NULL) {
-      gui_writestr("Not found\n", 0);
-      return;
-   }
-   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   uint32_t idleentry = (uint32_t)prog;
-
-   create_task_entry(0, idleentry, entry->fileSize, false);
-   launch_task(0, regs, false);
+   tasks_launch_binary(regs, "/sys/progidle.bin");
+   
    gui_get_windows()[tasks[0].window].minimised = true;
    gui_get_windows()[tasks[0].window].draw_func = NULL;
    strcpy(gui_get_windows()[tasks[0].window].title+1, "IDLE");
@@ -232,11 +239,12 @@ int get_task_from_window(int windowIndex) {
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
+      debug_writestr("Task ");
+      debug_writeuint(current_task);
       if(tasks[current_task].in_routine)
-         debug_writestr("Already in a subroutine, returning.\n");
-      if(tasks[current_task].enabled)
-         debug_writestr("Task not enabled.\n");
-      free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t));
+         debug_writestr(" is already in a subroutine, returning.\n");
+      if(!tasks[current_task].enabled)
+         debug_writestr(" not enabled.\n");
       return;
    }
 

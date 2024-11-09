@@ -48,14 +48,20 @@ bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
    int i = 0;
 
    while(src[i] != splitat) {
-      if(src[i] == '\0')
+      if(src[i] == '\0') {
+         if(dest1 != NULL)
+            dest1[i] = '\0';
+         if(dest2 != NULL)
+            dest2[0] = '\0';
          return false;
+      }
 
       if(dest1 != NULL)
          dest1[i] = src[i];
       i++;
    }
-   dest1[i] = '\0';
+   if(dest1 != NULL)
+      dest1[i] = '\0';
    i++;
 
    int start = i;

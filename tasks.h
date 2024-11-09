@@ -41,6 +41,8 @@ void tasks_alloc();
 void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs);
 bool switch_to_task(int index, registers_t *regs);
+void tasks_launch_binary(registers_t *regs, char *path);
+void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args);
 
 task_state_t *gettasks();
 

@@ -128,368 +128,391 @@ void window_term_draw(void *window) {
    draw_unfilledrect(surface, gui_rgb16(80,80,80), selected->x - 1, selected->y - 1, selected->width + 2, selected->height + 2);
 }
 
-extern void gui_redrawall();
+void term_cmd_help() {
+   gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3,\n", 0);
+   gui_writestr("FILES, PAGE, TEST, ATA, FAT, DESKTOP, FATPATH path, PROGC addr, BMP addr,\n", 0);
+   gui_writestr("VIEWBMP path, ELF addr, FATDIR clusterno, FATFILE clusterno, READ addr,\n", 0);
+   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>", 0);
+}
+
+void term_cmd_init(void *regs) {
+   gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
+   mouse_enable();
+
+   gui_writestr("\nEnabling ATA\n", COLOUR_ORANGE);
+   ata_identify(true, true);
+
+   gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
+   fat_setup();
+
+   gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
+   page_init();
+
+   gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
+   tasks_init(regs);
+
+   gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
+   desktop_init();
+
+   gui_writestr("\nEnabling events\n", COLOUR_ORANGE);
+   events_add(40, NULL, -1);
+
+   gui_redrawall();
+}
+
+void term_cmd_clear(gui_window_t *selected) {
+   window_clearbuffer(selected, COLOUR_WHITE);
+   selected->text_x = FONT_PADDING;
+   selected->text_y = FONT_PADDING;
+   selected->text_index = 0;
+   selected->text_buffer[0] = '\0';
+   selected->needs_redraw = true;
+   window_draw_content(selected);
+}
+
+void term_cmd_mouse() {
+   mouse_enable();
+   gui_writestr("Enabled\n", 0);
+}
+
+void term_cmd_tasks(void *regs) {
+   tasks_init(regs);
+}
+
+void term_cmd_viewtasks() {
+   task_state_t *tasks = gettasks();
+
+   extern bool switching;
+   gui_writestr("Scheduling ", 0);
+   if(switching) gui_writestr("enabled\n", 0);
+   else gui_writestr("disabled\n", 0);
+   
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      gui_drawchar('\n', 0);
+
+      gui_writenum(i, 0);
+      gui_writestr(": ", 0);
+
+      if(tasks[i].enabled)
+         gui_writestr("ENABLED", 0);
+      else
+         gui_writestr("DISABLED", 0);
+
+      gui_writestr(" <", 0);
+      gui_writenum(tasks[i].window, 0);
+      gui_writestr(">", 0);
+
+      if(tasks[i].privileged)
+         gui_writestr(" privileged", 0);
+   }
+}
+
+void term_cmd_prog1(void *regs) {
+   tasks_launch_binary(regs, "/sys/prog1.bin");
+}
+
+void term_cmd_prog2(void *regs) {
+   tasks_launch_binary(regs, "/sys/prog2.bin");
+}
+
+void term_cmd_prog3(void *regs) {
+   tasks_launch_elf(regs, "/sys/prog3.elf", 0, NULL);
+}
+
+void term_cmd_files(void *regs) {
+   tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
+}
+
+void term_cmd_viewbmp(void *regs, char *arg) {
+   gui_writestr(arg, 0);
+   gui_writestr("\n", 0);
+
+   int argc = 1;
+   char **args = NULL;
+   args = malloc(sizeof(char*) * 1);
+   char *path = malloc(strlen(arg));
+   strcpy(path, arg);
+   args[0] = path;
+   tasks_launch_elf(regs, "/sys/bmpview.elf", argc, args);
+}
+
+void term_cmd_page() {
+   page_init();
+}
+
+void term_cmd_test() {
+   extern uint32_t kernel_end;
+   uint32_t framebuffer = (uint32_t)gui_get_framebuffer();
+   
+   gui_writestr("\nKERNEL ", 4);
+   gui_writeuint(0x7e00, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex((uint32_t)0x7e00, 0);
+
+   gui_writestr("\nKERNEL END ", 4);
+   gui_writeuint((uint32_t)&kernel_end + 0x17e00, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex((uint32_t)&kernel_end + 0x17e00, 0);
+
+   gui_writestr("\nKERNEL STACK ", 4);
+   gui_writeuint(STACKS_START + 0x17e00, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(STACKS_START + 0x17e00, 0);
+
+   gui_writestr("\nTOS KERNEL ", 4);
+   gui_writeuint(TOS_KERNEL, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(TOS_KERNEL, 0);
+
+   gui_writestr("\nTOS PROGRAM ", 4);
+   gui_writeuint(TOS_PROGRAM, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(TOS_PROGRAM, 0);
+
+   gui_writestr("\nHEAP KERNEL ", 4);
+   gui_writeuint(HEAP_KERNEL, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(HEAP_KERNEL, 0);
+
+   gui_writestr("\nHEAP KERNEL END ", 4);
+   gui_writeuint(HEAP_KERNEL_END, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(HEAP_KERNEL_END, 0);
+
+   gui_writestr("\nframebuffer ", 4);
+   gui_writeuint(framebuffer, 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(framebuffer, 0);
+
+   gui_writestr("\nframebuffer END ", 4);
+   gui_writeuint(framebuffer + gui_get_framebuffer_size(), 0);
+   gui_writestr(" 0x", 0);
+   gui_writeuint_hex(framebuffer + gui_get_framebuffer_size(), 0);
+
+}
+
+void term_cmd_ata() {
+   ata_identify(true, true); 
+}
+
+void term_cmd_fat() {
+   fat_setup();
+}
+
+void term_cmd_desktop() {
+   desktop_init();
+}
+
+void term_cmd_fatpath(char *arg) {
+   if(fat_parse_path(arg) == NULL) {
+      gui_writestr("File not found\n", 0);
+   }
+}
+
+void term_cmd_progc(void *regs, char *arg) {
+   int addr = stoi(arg);
+   gui_writeuint_hex(addr, 0);
+   create_task_entry(3, addr, 0, false);
+   launch_task(3, regs, true);
+}
+
+void term_cmd_bmp(gui_window_t *selected, char *arg) {
+   int addr = stoi(arg);
+   uint8_t *bmp = (uint8_t*)addr;
+   uint16_t *buffer = selected->framebuffer;
+   bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, 0, 0, false);
+   selected->needs_redraw = true;
+   gui_draw();
+}
+
+void term_cmd_elf(registers_t *regs, char *arg) {
+      int addr = stoi(arg);
+      uint8_t *prog = (uint8_t*)addr;
+      elf_run(regs, prog, 0, NULL);
+}
+
+void term_cmd_fatdir(char *arg) {
+   int cluster = stoi(arg);
+   int size = fat_get_dir_size((uint16_t) cluster);
+
+   fat_dir_t *items = malloc(32 * size);
+   fat_read_dir((uint16_t)cluster, items);
+
+   for(int i = 0; i < size; i++) {
+      if(items[i].filename[0] == 0) break;
+      fat_parse_dir_entry(&items[i]);
+   }
+
+   free((uint32_t)items, 32 * size);
+}
+
+void term_cmd_fatfile(char *arg) {
+   int cluster = stoi(arg);
+   fat_read_file((uint16_t)cluster, 0);
+}
+
+void term_cmd_read(char *arg) {
+   // convert str to int
+   uint32_t lba = 0;
+   int power = 1;
+   for(int i = strlen(arg) - 1; i >= 0 ; i--) {
+      if(arg[i] >= '0' && arg[i] <= '9') {
+         lba += power*(arg[i]-'0');
+         power *= 10;
+      }
+   }
+   gui_writeuint(lba, 0);
+   gui_writestr("\n", 0);
+   uint16_t *buf = malloc(512);
+   ata_read(true, true, lba, buf);
+   for(int i = 0; i < 256; i++) {
+      gui_writeuint_hex(buf[i], 0);
+      gui_drawchar(' ', 0);
+   }
+   free((uint32_t)buf, 512);
+}
+
+void term_cmd_bg(char *arg) {
+   int bg = stoi(arg);
+   gui_writenum(bg, 0);
+   extern int gui_bg;
+   gui_bg = bg;
+   gui_redrawall();
+}
+
+void term_cmd_mem(char *arg) {
+   mem_segment_status_t *status = memory_get_table();
+
+   if(strlen(arg) > 0) {
+      int offset = (arg[0]-'0')*400;
+
+      for(int i = offset; i < offset+400 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
+         if(status[i].allocated)
+            gui_writenum(1, 0);
+         else
+            gui_writenum(0, 0);
+      }
+   } else {
+      int used = 0;
+      for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
+         if(status[i].allocated) used++;
+      }
+      gui_writenum(used, 0);
+      gui_drawchar('/', 0);
+      gui_writenum(KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, 0);
+      gui_writestr(" ALLOCATED", 0);
+   }
+}
+
+void term_cmd_dmpmem(char *arg) {
+   //arg1 = addr
+   //arg2 = bytes
+
+   int bytes = 32;
+   int rowlen = 8;
+   char arg2[10];
+   gui_writestr(arg, 0);
+   gui_writestr("\n", 0);
+
+   if(strsplit(arg, arg2, arg, ' ')) {
+      bytes = stoi((char*)arg2);
+   }
+   int addr = stoi((char*)arg);
+   gui_writeuint_hex(addr, 0);
+   gui_drawchar(':', 0);
+   gui_writenum(bytes, 0);
+   gui_drawchar('\n', 0);
+
+   char *buf = malloc(rowlen);
+   buf[rowlen] = '\0';
+   for(int i = 0; i < bytes; i++) {
+      uint8_t *mem = (uint8_t*)addr;
+      if(mem[i] <= 0x0F)
+         gui_drawchar('0', 0);
+      gui_writeuint_hex(mem[i], 0);
+      gui_drawchar(' ', 0);
+      buf[i%rowlen] = mem[i];
+
+      if((i%rowlen) == (rowlen-1) || i==(bytes-1)) {
+         for(int x = 0; x < rowlen; x++) {
+            if(buf[x] != '\n')
+               gui_drawchar(buf[x], 0x2F);
+         }
+         gui_drawchar('\n', 0);
+      }
+   }
+   free((uint32_t)buf, rowlen);
+}
+
+void term_cmd_default(char *command) {
+   gui_drawchar('\'', 1);
+   gui_writestr(command, 1);
+   gui_drawchar('\'', 1);
+   gui_writestr(": UNRECOGNISED", 4);
+}
 
 void window_checkcmd(void *regs, gui_window_t *selected) {
-   char *command = selected->text_buffer;
+   //char *command = selected->text_buffer;
+   selected->text_buffer[selected->text_index] = '\0';
+
+   char command[10];
+   char arg[30];
+   strsplit((char*)command, (char*)arg, selected->text_buffer, ' ');
+
+   if(strcmp(command, "HELP"))
+      term_cmd_help();
+   else if(strcmp(command, "INIT"))
+      term_cmd_init(regs);
+   else if(strcmp(command, "CLEAR"))
+      term_cmd_clear(selected);
+   else if(strcmp(command, "MOUSE"))
+      term_cmd_mouse();
+   else if(strcmp(command, "TASKS"))
+      term_cmd_tasks(regs);
+   else if(strcmp(command, "VIEWTASKS"))
+      term_cmd_viewtasks();
+   else if(strcmp(command, "PROG1"))
+      term_cmd_prog1(regs);
+   else if(strcmp(command, "PROG2"))
+      term_cmd_prog2(regs);
+   else if(strcmp(command, "PROG3"))
+      term_cmd_prog3(regs);
+   else if(strcmp(command, "FILES"))
+      term_cmd_files(regs);
+   else if(strcmp(command, "PAGE"))
+      term_cmd_page();
+   else if(strcmp(command, "TEST"))
+      term_cmd_test();
+   else if(strcmp(command, "ATA"))
+      term_cmd_ata();
+   else if(strcmp(command, "FAT"))
+      term_cmd_fat();
+   else if(strcmp(command, "DESKTOP"))
+      term_cmd_desktop();
+   else if(strcmp(command, "FATPATH"))
+      term_cmd_fatpath((char*)arg);
+   else if(strstartswith(command, "PROGC"))
+      term_cmd_progc(regs, (char*)arg);
+   else if(strstartswith(command, "BMP"))
+      term_cmd_bmp(selected, (char*)arg);
+   else if(strstartswith(command, "VIEWBMP"))
+      term_cmd_viewbmp(regs, (char*)arg);
+   else if(strstartswith(command, "ELF"))
+      term_cmd_elf(regs, (char*)arg);
+   else if(strstartswith(command, "FATDIR"))
+      term_cmd_fatdir((char*)arg);
+   else if(strstartswith(command, "FATFILE"))
+      term_cmd_fatfile((char*)arg);
+   else if(strstartswith(command, "READ"))
+      term_cmd_read((char*)arg);
+   else if(strstartswith(command, "BG"))
+      term_cmd_bg((char*)arg);
+   else if(strstartswith(command, "MEM"))
+      term_cmd_mem((char*)arg);
+   else if(strstartswith(command, "DMPMEM"))
+      term_cmd_dmpmem((char*)arg);
+   else
+      term_cmd_default((char*)command);
    
-   if(strcmp(command, "HELP")) {
-      gui_writestr("INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, FILES, TEST, ATA, FAT, FATTEST, DESKTOP, FATPATH path, PROGC addr, BMP addr, FATDIR clusterno, FATFILE clusterno, READ addr, ELF addr, BG colour, MEM <x>, DMPMEM x <y>", 0);
-   }
-   else if(strcmp(command, "INIT")) {
-      gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
-      mouse_enable();
-
-      gui_writestr("\nEnabling ATA\n", COLOUR_ORANGE);
-      ata_identify(true, true);
-
-      gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
-      fat_setup();
-
-      gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
-      page_init();
-
-      gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
-      tasks_init(regs);
-
-      gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
-      desktop_init();
-
-      gui_writestr("\nEnabling events\n", COLOUR_ORANGE);
-      events_add(40, NULL, -1);
-
-      gui_redrawall();
-
-   }
-   else if(strcmp(command, "CLEAR")) {
-      window_clearbuffer(selected, COLOUR_WHITE);
-      selected->text_x = FONT_PADDING;
-      selected->text_y = FONT_PADDING;
-      selected->text_index = 0;
-      command[0] = '\0';
-      window_draw_content(selected);
-      selected->needs_redraw = true;
-      return;
-   }
-   else if(strcmp(command, "MOUSE")) {
-      mouse_enable();
-      gui_writestr("Enabled", 0);
-   }
-   else if(strcmp(command, "TASKS")) {
-      tasks_init(regs);
-   }
-   else if(strcmp(command, "VIEWTASKS")) {
-      task_state_t *tasks = gettasks();
-
-      extern bool switching;
-      gui_writestr("Scheduling ", 0);
-      if(switching) gui_writestr("enabled\n", 0);
-      else gui_writestr("disabled\n", 0);
-      
-      for(int i = 0; i < TOTAL_TASKS; i++) {
-         gui_drawchar('\n', 0);
-
-         gui_writenum(i, 0);
-         gui_writestr(": ", 0);
-
-         if(tasks[i].enabled)
-            gui_writestr("ENABLED", 0);
-         else
-            gui_writestr("DISABLED", 0);
-
-         gui_writestr(" <", 0);
-         gui_writenum(tasks[i].window, 0);
-         gui_writestr(">", 0);
-
-         if(tasks[i].privileged)
-            gui_writestr(" privileged", 0);
-      }
-   }
-   else if(strcmp(command, "PROG1")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog1.bin");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(1, progAddr, entry->fileSize, false);
-      launch_task(1, regs, true);
-   }
-   else if(strcmp(command, "PROG2")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog2.bin");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      uint32_t progAddr = (uint32_t)prog;
-      create_task_entry(2, progAddr, entry->fileSize, false);
-      launch_task(2, regs, true);
-   }
-   else if(strcmp(command, "PROG3")) {
-      fat_dir_t *entry = fat_parse_path("/sys/prog3.elf");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      elf_run(regs, prog, 0, NULL);
-      free((uint32_t)prog, entry->fileSize);
-   }
-   else if(strcmp(command, "FILES")) {
-      fat_dir_t *entry = fat_parse_path("/sys/files.elf");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-      elf_run(regs, prog, 0, NULL);
-      free((uint32_t)prog, entry->fileSize);
-   }
-   else if(strcmp(command, "PAGE")) {
-      page_init();
-   }
-   else if(strcmp(command, "TEST")) {
-      extern uint32_t kernel_end;
-      uint32_t framebuffer = (uint32_t)gui_get_framebuffer();
-      
-      gui_writestr("\nKERNEL ", 4);
-      gui_writeuint(0x7e00, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)0x7e00, 0);
-
-      gui_writestr("\nKERNEL END ", 4);
-      gui_writeuint((uint32_t)&kernel_end + 0x17e00, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex((uint32_t)&kernel_end + 0x17e00, 0);
-
-      gui_writestr("\nKERNEL STACK ", 4);
-      gui_writeuint(STACKS_START + 0x17e00, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(STACKS_START + 0x17e00, 0);
-
-      gui_writestr("\nTOS KERNEL ", 4);
-      gui_writeuint(TOS_KERNEL, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(TOS_KERNEL, 0);
-
-      gui_writestr("\nTOS PROGRAM ", 4);
-      gui_writeuint(TOS_PROGRAM, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(TOS_PROGRAM, 0);
-
-      gui_writestr("\nHEAP KERNEL ", 4);
-      gui_writeuint(HEAP_KERNEL, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(HEAP_KERNEL, 0);
-
-      gui_writestr("\nHEAP KERNEL END ", 4);
-      gui_writeuint(HEAP_KERNEL_END, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(HEAP_KERNEL_END, 0);
-
-      gui_writestr("\nframebuffer ", 4);
-      gui_writeuint(framebuffer, 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(framebuffer, 0);
-
-      gui_writestr("\nframebuffer END ", 4);
-      gui_writeuint(framebuffer + gui_get_framebuffer_size(), 0);
-      gui_writestr(" 0x", 0);
-      gui_writeuint_hex(framebuffer + gui_get_framebuffer_size(), 0);
-
-   }
-   else if(strcmp(command, "ATA")) {
-      ata_identify(true, true); 
-   }
-   else if(strcmp(command, "FAT")) {
-      fat_setup();
-   }
-   else if(strcmp(command, "DESKTOP")) {
-      desktop_init();
-   }
-   else if(strstartswith(command, "FATPATH")) {
-      char arg[40];
-      if(strsplit(arg, arg, command, ' ')) {
-         if(fat_parse_path(arg) == NULL)
-            gui_writestr("File not found\n", 0);
-      }
-   }
-   else if(strstartswith(command, "PROGC")) {
-      char arg[10];
-      if(strsplit(arg, arg, command, ' ')) {
-         int addr = stoi((char*)arg);
-         gui_writeuint_hex(addr, 0);
-         create_task_entry(3, addr, 0, false);
-         launch_task(3, regs, true);
-      }
-   }
-   else if(strstartswith(command, "BMP")) {
-      char arg[10];
-      if(strsplit(arg, arg, command, ' ')) {
-         int addr = stoi((char*)arg);
-         uint8_t *bmp = (uint8_t*)addr;
-         uint16_t *buffer = selected->framebuffer;
-         bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, 0, 0, false);
-         selected->needs_redraw = true;
-         gui_draw();
-      }
-   }
-   else if(strstartswith(command, "VIEWBMP")) {
-      char arg[20];
-
-      fat_dir_t *entry = fat_parse_path("/sys/bmpview.elf");
-      if(entry == NULL) {
-         gui_writestr("Not found\n", 0);
-         return;
-      }
-      uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-
-      int argc = 0;
-      char **args = NULL;
-      if(strsplit(arg, arg, command, ' ')) {
-         args = malloc(sizeof(char*) * 1);
-         char *path = malloc(strlen(arg));
-         strcpy(path, arg);
-         args[0] = path;
-         argc = 1;
-      }
-
-      elf_run(regs, prog, argc, args);
-      free((uint32_t)prog, entry->fileSize);
-   }
-   else if(strstartswith(command, "ELF")) {
-      char arg[10];
-      if(strsplit(arg, arg, command, ' ')) {
-         int addr = stoi((char*)arg);
-         uint8_t *prog = (uint8_t*)addr;
-         elf_run(regs, prog, 0, NULL);
-      }
-   }
-   else if(strstartswith(command, "FATDIR")) {
-      char arg[5];
-      if(strsplit(arg, arg, command, ' ')) {
-         int cluster = stoi((char*)arg);
-         int size = fat_get_dir_size((uint16_t) cluster);
-
-         fat_dir_t *items = malloc(32 * size);
-         fat_read_dir((uint16_t)cluster, items);
-
-         for(int i = 0; i < size; i++) {
-            if(items[i].filename[0] == 0) break;
-            fat_parse_dir_entry(&items[i]);
-         }
-
-         free((uint32_t)items, 32 * size);
-      }
-   }
-   else if(strstartswith(command, "FATFILE")) {
-      char arg[5];
-      if(strsplit(arg, arg, command, ' ')) {
-         int cluster = stoi((char*)arg);
-         fat_read_file((uint16_t)cluster, 0);
-      }
-   }
-   else if(strstartswith(command, "READ")) {
-      char arg[8];
-      if(strsplit(arg, arg, command, ' ')) {
-         // convert str to int
-         uint32_t lba = 0;
-         int power = 1;
-         for(int i = strlen(arg) - 1; i >= 0 ; i--) {
-            if(arg[i] >= '0' && arg[i] <= '9') {
-               lba += power*(arg[i]-'0');
-               power *= 10;
-            }
-         }
-         gui_writeuint(lba, 0);
-         gui_writestr("\n", 0);
-         uint16_t *buf = malloc(512);
-         ata_read(true, true, lba, buf);
-         for(int i = 0; i < 256; i++) {
-            gui_writeuint_hex(buf[i], 0);
-            gui_drawchar(' ', 0);
-         }
-         free((uint32_t)buf, 512);
-
-      }
-   }
-   else if(strstartswith(command, "BG")) {
-      char arg[5];
-      if(strsplit(arg, arg, command, ' ')) {
-         int bg = stoi((char*)arg);
-         gui_writenum(bg, 0);
-         extern int gui_bg;
-         gui_bg = bg;
-         gui_redrawall();
-      }
-   }
-   else if(strstartswith(command, "MEM")) {
-      char arg[5];
-      mem_segment_status_t *status = memory_get_table();
-      
-      if(strsplit(arg, arg, command, ' ')) {
-         int offset = (arg[0]-'0')*400;
-
-         for(int i = offset; i < offset+400 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-            if(status[i].allocated)
-               gui_writenum(1, 0);
-            else
-               gui_writenum(0, 0);
-         }
-      } else {
-         int used = 0;
-         for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-            if(status[i].allocated) used++;
-         }
-         gui_writenum(used, 0);
-         gui_drawchar('/', 0);
-         gui_writenum(KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, 0);
-         gui_writestr(" ALLOCATED", 0);
-      }
-   }
-   else if(strstartswith(command, "DMPMEM")) {
-      char arg[20];
-      if(strsplit(arg, arg, command, ' ')) {
-         int bytes = 32;
-         int rowlen = 8;
-         char arg2[10];
-         if(strsplit(arg, arg2, arg, ' ')) {
-            bytes = stoi((char*)arg2);
-         }
-         int addr = stoi((char*)arg);
-         gui_writeuint_hex(addr, 0);
-         gui_drawchar(':', 0);
-         gui_writenum(bytes, 0);
-         gui_drawchar('\n', 0);
-
-         char *buf = malloc(rowlen);
-         buf[rowlen] = '\0';
-         for(int i = 0; i < bytes; i++) {
-            uint8_t *mem = (uint8_t*)addr;
-            if(mem[i] <= 0x0F)
-               gui_drawchar('0', 0);
-            gui_writeuint_hex(mem[i], 0);
-            gui_drawchar(' ', 0);
-            buf[i%rowlen] = mem[i];
-
-            if((i%rowlen) == (rowlen-1) || i==(bytes-1)) {
-               for(int x = 0; x < rowlen; x++) {
-                  if(buf[x] != '\n')
-                     gui_drawchar(buf[x], 0x2F);
-               }
-               gui_drawchar('\n', 0);
-            } 
-         }
-         free((uint32_t)buf, rowlen);
-      }
-   }
-   else {
-      gui_drawchar('\'', 1);
-      gui_writestr(selected->text_buffer, 1);
-      gui_drawchar('\'', 1);
-      gui_writestr(": UNRECOGNISED", 4);
-   }
    gui_drawchar('\n', 0);
 }

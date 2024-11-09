@@ -10,7 +10,7 @@
 void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
 
    //page_enable_debug();
-   debug_writestr("elf_run called with prog at 0x");
+   debug_writestr("elf_run called with prog at ");
    debug_writehex((uint32_t)prog);
    debug_writestr("\n");
 
@@ -55,15 +55,15 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
 
    prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
 
-   debug_writestr("Mapping 0x");
+   debug_writestr("Mapping ");
    debug_writehex((uint32_t)newProg);
-   debug_writestr(" - 0x");
+   debug_writestr(" - ");
    debug_writehex((uint32_t)newProg + vmem_size);
 
-   debug_writestr(" to 0x");
+   debug_writestr(" to ");
 
    debug_writehex(vmem_start);
-   debug_writestr(" - 0x");
+   debug_writestr(" - ");
    debug_writehex(vmem_end);
    debug_writestr("\n");
 
@@ -71,7 +71,7 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    for(uint32_t i = 0; i < vmem_size; i++)
       map((uint32_t)newProg + i, vmem_start + i, 1, 1);
 
-   debug_writestr("Start: 0x");
+   debug_writestr("Start: ");
    debug_writehex(page_getphysical(elf_header->entry));
    debug_writestr("\n");
 
@@ -124,7 +124,7 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    gettasks()[task_index].vmem_start = vmem_start;
    gettasks()[task_index].vmem_end = vmem_end;
    gettasks()[task_index].prog_start = (uint32_t)newProg;
-   launch_task(task_index, regs, true);
+   launch_task(task_index, regs, false);
 
    // push args
    regs->useresp -= 4;
@@ -132,7 +132,7 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    regs->useresp -= 4;
    ((uint32_t*)regs->useresp)[0] = argc; // int argc
    regs->useresp -= 4;
-   ((uint32_t*)regs->useresp)[0] = 0; // push dummy return addr
+   ((uint32_t*)regs->useresp)[0] = vmem_start; // push dummy (mapped) return addr
 
    debug_writestr("\nStarting at: ");
    debug_writehex(elf_header->entry);
