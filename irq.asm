@@ -5,6 +5,7 @@
 
 %macro isr_err_stub 1
 isr_stub_%+%1:
+   cli ; disable interrupts
    pusha
 
    mov ax, ds ; save data segment in lower 16 bits of eax
@@ -27,11 +28,13 @@ isr_stub_%+%1:
 
    popa
    add esp, 4 ; extra pop for err code
+   sti ; restore interrupts
    iret
 %endmacro
 
 %macro isr_no_err_stub 1
 isr_stub_%+%1:
+   cli ; disable interrupts
    push dword 0 ; dummy err code
    pusha
 
@@ -55,11 +58,13 @@ isr_stub_%+%1:
 
    popa
    add esp, 4 ; extra pop for err code
+   sti ; restore interrupts
    iret
 %endmacro
 
 %macro irq_stub 1
 irq_stub_%+%1:
+   cli ; disable interrupts
    push dword 0 ; dummy err code
    pusha
 
@@ -83,6 +88,7 @@ irq_stub_%+%1:
 
    popa
    add esp, 4 ; extra pop for err code
+   sti ; restore interrupts
    iret
 %endmacro
 

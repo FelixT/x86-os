@@ -1,6 +1,7 @@
 #include "tasks.h"
 #include "window.h"
 #include "windowmgr.h"
+#include "paging.h"
 
 uint32_t USR_CODE_SEG = 8*3;
 uint32_t USR_DATA_SEG = 8*4;
@@ -12,6 +13,8 @@ bool switching = false; // preemptive multitasking
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
    //if(tasks[index].enabled) end_task(index, NULL);
 
+   // clear stack
+
    tasks[index].enabled = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
    tasks[index].prog_start = entry;
@@ -21,6 +24,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].vmem_start = 0;
    tasks[index].vmem_end = 0;
    tasks[index].in_routine = false;
+   tasks[index].page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
@@ -46,8 +50,13 @@ void launch_task(int index, registers_t *regs, bool focus) {
    debug_writestr("Launching task ");
    debug_writeuint(index);
    debug_writestr("\n");
+   debug_writestr("esp ");
+   debug_writehex(tasks[current_task].registers.esp);
+   debug_writestr("\n");
 
    tasks[current_task].enabled = true;
+
+   swap_pagedir(tasks[current_task].page_dir);
    
    *regs = tasks[current_task].registers;
 }
@@ -106,7 +115,7 @@ void end_task(int index, registers_t *regs) {
       debug_writestr("\n");
 
       for(uint32_t i = tasks[index].vmem_start; i < tasks[index].vmem_end; i++) {
-         unmap(i);
+         unmap(tasks[index].page_dir, i);
       }
    }
 
@@ -128,8 +137,9 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t progAddr = (uint32_t)prog;
-   create_task_entry(get_free_task_index(), progAddr, entry->fileSize, false);
-   launch_task(get_free_task_index(), regs, false);
+   int index = get_free_task_index();
+   create_task_entry(index, progAddr, entry->fileSize, false);
+   launch_task(index, regs, false);
 }
 
 void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args) {
@@ -186,6 +196,9 @@ void switch_task(registers_t *regs) {
       if(!tasks[current_task].enabled)
          debug_writestr("Task isn't enabled!\n");
 
+      // swap page
+      swap_pagedir(tasks[current_task].page_dir);
+
       // restore registers
       *regs = tasks[current_task].registers;
    } else {
@@ -209,6 +222,9 @@ bool switch_to_task(int index, registers_t *regs) {
    tasks[current_task].registers = *regs;
 
    current_task = index;
+
+   // swap page
+   swap_pagedir(tasks[current_task].page_dir);
 
    // restore registers
    *regs = tasks[current_task].registers;

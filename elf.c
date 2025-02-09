@@ -45,6 +45,9 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
 
    uint32_t vmem_size = vmem_end - vmem_start;
 
+   // create page directory
+   page_dir_entry_t *dir = new_page();
+
    // allocate memory
    uint8_t *newProg = malloc(vmem_size);
    // fill with 0s
@@ -69,10 +72,10 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
 
    // map vmem
    for(uint32_t i = 0; i < vmem_size; i++)
-      map((uint32_t)newProg + i, vmem_start + i, 1, 1);
+      map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1);
 
    debug_writestr("Start: ");
-   debug_writehex(page_getphysical(elf_header->entry));
+   debug_writehex(page_getphysical(dir, elf_header->entry));
    debug_writestr("\n");
 
    // copy program to new location and assign virtual memory for each segment
@@ -124,6 +127,7 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    gettasks()[task_index].vmem_start = vmem_start;
    gettasks()[task_index].vmem_end = vmem_end;
    gettasks()[task_index].prog_start = (uint32_t)newProg;
+   gettasks()[task_index].page_dir = dir;
    launch_task(task_index, regs, false);
 
    // push args

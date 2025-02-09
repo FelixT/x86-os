@@ -18,6 +18,7 @@ bool switching_paused = false;
 
 extern void mouse_update(uint32_t relX, uint32_t relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
+extern void mouse_rightclick(registers_t *regs);
 extern void mouse_leftrelease();
 
 __attribute__((aligned(0x10))) 
@@ -251,11 +252,12 @@ void mouse_handler(registers_t *regs) {
 
       mouse_update(xm, ym);
 
-      if(mouse_data[1] & 0x1) {
+      if(mouse_data[1] & 0x2)
+         mouse_rightclick(regs);
+      else if(mouse_data[1] & 0x1)
          mouse_leftclick(regs, xm, ym);
-      } else {
+      else
          mouse_leftrelease();
-      }
 
       mouse_cycle = 0;
    }
@@ -298,23 +300,50 @@ void exception_handler(int int_no, registers_t *regs) {
 
          if(int_no == 14) {
             // page error
+            page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
+
             uint32_t addr;
 	         asm volatile("mov %%cr2, %0" : "=r" (addr));
             window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
             debug_writehex(addr);
-            if(page_getphysical(addr) != (uint32_t)-1) {
+            if(page_getphysical(dir, addr) != (uint32_t)-1) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(addr));
+               debug_writehex(page_getphysical(dir, addr));
                window_writestr(">", gui_rgb16(255, 100, 100), 0);
             }
             window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
             debug_writehex(regs->eip);
-            if(page_getphysical(regs->eip) != (uint32_t)-1) {
+            if(page_getphysical(dir, regs->eip) != (uint32_t)-1) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(regs->eip));
+               debug_writehex(page_getphysical(dir, regs->eip));
                window_writestr(">", gui_rgb16(255, 100, 100), 0);
             }
+            window_writestr(", ebp ", gui_rgb16(255, 100, 100), 0);
+            debug_writehex(regs->ebp);
+            if(page_getphysical(dir, regs->ebp) != (uint32_t)-1) {
+               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               debug_writehex(page_getphysical(dir, regs->ebp));
+               window_writestr(">", gui_rgb16(255, 100, 100), 0);
+            }
+
+            window_writestr(" useresp ", gui_rgb16(255, 100, 100), 0);
+            debug_writehex(regs->useresp);
+            if(page_getphysical(dir, regs->useresp) != (uint32_t)-1) {
+               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               debug_writehex(page_getphysical(dir, regs->useresp));
+               window_writestr(">", gui_rgb16(255, 100, 100), 0);
+            }
+
+            window_writestr(" and esp ", gui_rgb16(255, 100, 100), 0);
+            debug_writehex(regs->esp);
+            if(page_getphysical(dir, regs->esp) != (uint32_t)-1) {
+               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+               debug_writehex(page_getphysical(dir, regs->esp));
+               window_writestr(">", gui_rgb16(255, 100, 100), 0);
+            }
+
             window_writestr("\n", 0, 0);
+
 
             //while(true);
          }

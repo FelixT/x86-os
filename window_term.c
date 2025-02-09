@@ -132,7 +132,7 @@ void term_cmd_help() {
    gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3,\n", 0);
    gui_writestr("FILES, PAGE, TEST, ATA, FAT, DESKTOP, FATPATH path, PROGC addr, BMP addr,\n", 0);
    gui_writestr("VIEWBMP path, ELF addr, FATDIR clusterno, FATFILE clusterno, READ addr,\n", 0);
-   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>", 0);
+   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>, REDRAWALL", 0);
 }
 
 void term_cmd_init(void *regs) {
@@ -299,8 +299,12 @@ void term_cmd_fat() {
    fat_setup();
 }
 
+extern bool desktop_enabled;
 void term_cmd_desktop() {
-   desktop_init();
+   if(desktop_enabled)
+      desktop_enabled = false;
+   else
+      desktop_init();
 }
 
 void term_cmd_fatpath(char *arg) {
@@ -444,6 +448,10 @@ void term_cmd_dmpmem(char *arg) {
    free((uint32_t)buf, rowlen);
 }
 
+void term_cmd_redrawall() {
+   gui_redrawall();
+}
+
 void term_cmd_default(char *command) {
    gui_drawchar('\'', 1);
    gui_writestr(command, 1);
@@ -511,6 +519,9 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_mem((char*)arg);
    else if(strstartswith(command, "DMPMEM"))
       term_cmd_dmpmem((char*)arg);
+   else if(strstartswith(command, "REDRAWALL")) {
+      term_cmd_redrawall();
+   }
    else
       term_cmd_default((char*)command);
    

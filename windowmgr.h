@@ -23,6 +23,7 @@ void gui_uparrow();
 void gui_downarrow();
 void window_draw_content(gui_window_t *window);
 bool windowmgr_click(void *regs, int x, int y);
+void windowmgr_rightclick(void *regs, int x, int y);
 void windowmgr_draw();
 void windowmgr_redrawall();
 void windowmgr_dragged();

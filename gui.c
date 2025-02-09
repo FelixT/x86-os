@@ -129,9 +129,17 @@ void gui_draw(void) {
 }
 
 void gui_redrawall() {
+   // draw to buffer
+   uint32_t framebuffer = surface.buffer;
+   surface.buffer = (uint32_t)draw_buffer;
+
    gui_clear(gui_bg);
    desktop_draw();
    windowmgr_redrawall();
+
+   // copy to display
+   surface.buffer = framebuffer;
+   memcpy((void*)surface.buffer, (void*)draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
 
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
@@ -248,8 +256,7 @@ void mouse_leftclick(void *regs, int relX, int relY) {
    if(mouse_held) {
       windowmgr_dragged(relX, relY);
    } else {
-      if(relX > 0 || relY > 0)
-         mouse_held = true;
+      mouse_held = true;
 
       if(!windowmgr_click(regs, gui_mouse_x, gui_mouse_y))
          desktop_click(gui_mouse_x, gui_mouse_y);
@@ -268,6 +275,10 @@ void mouse_leftrelease() {
    }
 
    mouse_held = false;
+}
+
+void mouse_rightclick(void *regs) {
+   windowmgr_rightclick(regs, gui_mouse_x, gui_mouse_y);
 }
 
 uint16_t *gui_get_framebuffer() {

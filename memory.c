@@ -146,4 +146,10 @@ void memset(void *dest, uint8_t ch, int bytes) {
       mem[i] = ch;
 }
 
-// TODO: memcpy, memmove and memcmp 
+void memcpy(void *dest, void *src, int bytes) {
+   for(int i = 0; i < bytes; i++)
+      ((uint8_t*)dest)[i] = ((uint8_t*)src)[i];
+}
+
+
+// TODO: memmove and memcmp 

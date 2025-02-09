@@ -12,6 +12,7 @@
 #include "interrupts.h"
 #include "registers_t.h"
 #include "elf.h"
+#include "paging.h"
 
 typedef struct task_state_t {
    bool enabled;
@@ -28,6 +29,7 @@ typedef struct task_state_t {
    uint32_t *routine_args;
    int routine_argc;
    bool in_routine;
+   page_dir_entry_t *page_dir;
 } task_state_t;
 
 #define TOTAL_STACK_SIZE 0x0010000
@@ -54,6 +56,5 @@ int get_free_task_index();
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc);
 void task_subroutine_end(registers_t *regs);
 void tss_init();
-
 
 #endif

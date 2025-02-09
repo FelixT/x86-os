@@ -78,7 +78,7 @@ vesa_init:
       jnl .loop_next ; less than or equal to best, discard
 
       ; if width too big, discard...
-      cmp ax, 1000
+      cmp ax, 1100
       jnl .loop_next
 
       ; get bpp

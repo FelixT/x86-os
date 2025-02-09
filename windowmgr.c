@@ -17,8 +17,8 @@ gui_window_t *gui_windows;
 extern surface_t surface; // screen
 
 bool desktop_enabled = false;
-uint8_t *icon_window;
-uint8_t *gui_bgimage;
+uint8_t *icon_window = NULL;
+uint8_t *gui_bgimage = NULL;
 
 void debug_writestr(char *str) {
    if(windowCount == 0) return;
@@ -461,6 +461,13 @@ bool windowmgr_click(void *regs, int x, int y) {
    return true;
 }
 
+void windowmgr_rightclick(void *regs, int x, int y) {
+   (void)(regs);
+   // draw menu
+   draw_rect(&surface, COLOUR_TOOLBAR, x, y, 120, 340);
+   draw_string(&surface, "TEST", 0, x+4, y+4);
+}
+
 void windowmgr_draw() {
    // draw windows in reverse index order, then selected on top
    for(int i = getWindowCount()-1; i >= 0; i--) {
@@ -484,23 +491,27 @@ extern uint16_t gui_bg;
 void desktop_init() {
    // load add window icon
    debug_writestr("Init desktop\n");
-   fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
-   if(entry == NULL) {
-      debug_writestr("Icon not found\n");
-      return;
+
+   if(icon_window == NULL) {
+      fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
+      if(entry == NULL) {
+         debug_writestr("Icon not found\n");
+         return;
+      }
+
+      icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
    }
 
-   icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   if(gui_bgimage == NULL) {
+      fat_dir_t *entry = fat_parse_path("/bmp/bg16.bmp");
+      if(entry == NULL) {
+         debug_writestr("BG not found\n");
+         return;
+      }
 
-   // load background
-   entry = fat_parse_path("/bmp/bg16.bmp");
-   if(entry == NULL) {
-      debug_writestr("BG not found\n");
-      return;
+      gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
+      gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
    }
-
-   gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
 
    desktop_enabled = true;
 }
