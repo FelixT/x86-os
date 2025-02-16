@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "surface_t.h"
+#include "windowobj.h"
 
 #define TEXT_BUFFER_LENGTH 40
 #define CMD_HISTORY_LENGTH 10
@@ -30,6 +31,9 @@ typedef struct gui_window_t {
    uint16_t colour_bg;
 
    surface_t surface;
+
+   windowobj_t *window_objects[20];
+   int window_object_count;
 
 	// function pointers, window is type *gui_window_t
 	void (*return_func)(void *regs, void *window);

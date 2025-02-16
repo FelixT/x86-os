@@ -19,7 +19,7 @@ bool switching_paused = false;
 extern void mouse_update(uint32_t relX, uint32_t relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
 extern void mouse_rightclick(registers_t *regs);
-extern void mouse_leftrelease();
+extern void mouse_release();
 
 __attribute__((aligned(0x10))) 
 static idt_entry_t idt[256];
@@ -211,6 +211,9 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 30)
       api_queue_event(regs);
+
+   if(regs->eax == 31)
+      api_register_windowobj(regs);
 }  
 
 void keyboard_handler(registers_t *regs) {
@@ -257,7 +260,7 @@ void mouse_handler(registers_t *regs) {
       else if(mouse_data[1] & 0x1)
          mouse_leftclick(regs, xm, ym);
       else
-         mouse_leftrelease();
+         mouse_release();
 
       mouse_cycle = 0;
    }

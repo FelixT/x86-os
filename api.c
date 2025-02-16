@@ -6,6 +6,7 @@
 #include "api.h"
 #include "bmp.h"
 #include "events.h"
+#include "windowobj.h"
 
 void api_write_string(registers_t *regs) {
    // write ebx
@@ -146,6 +147,7 @@ void api_malloc(registers_t *regs) {
    regs->ebx = (uint32_t)mem;
 
    // TODO: use special usermode malloc rather than the kernel malloc
+   // keep track of which task each malloc is from
 }
 
 void api_fat_get_root(registers_t *regs) {
@@ -215,4 +217,14 @@ void api_queue_event(registers_t *regs) {
    uint32_t delta = regs->ecx;
 
    events_add(delta, (void *)callback, get_current_task());
+}
+
+void api_register_windowobj(registers_t *regs) {
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+
+   windowobj_t *wo = malloc(sizeof(windowobj_t));
+   windowobj_init(wo, &window->surface);
+   window->window_objects[window->window_object_count++] = wo;
+
+   regs->ebx = (uint32_t)wo;
 }

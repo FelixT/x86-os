@@ -1,6 +1,7 @@
 #include "gui.h"
 #include "window.h"
 #include "windowmgr.h"
+#include "font.h"
 
 extern int videomode;
 
@@ -11,6 +12,7 @@ uint16_t gui_bg;
 
 bool mouse_enabled = false;
 bool mouse_held = false;
+bool mouse_heldright = false;
 
 surface_t surface;
 
@@ -120,6 +122,7 @@ void gui_init(void) {
    memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
    
    gui_clear(gui_bg);
+   font_init();
    windowmgr_init();
 }
 
@@ -245,6 +248,8 @@ void mouse_update(int relX, int relY) {
       gui_mouse_y = surface.height + gui_mouse_y;
 
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
+   if(relX > 0 || relY > 0)
+      windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
 
    gui_cursor_save_bg(); // save pixels at new cursor location
 
@@ -266,19 +271,28 @@ void mouse_leftclick(void *regs, int relX, int relY) {
 
 }
 
-void mouse_leftrelease() {
+void mouse_release() {
    if(mouse_held) {
       if(getSelectedWindowIndex() >= 0)
          getSelectedWindow()->dragged = false;
 
       gui_redrawall();
    }
+   if(mouse_heldright) {
+      gui_redrawall();
+   }
 
    mouse_held = false;
+   mouse_heldright = false;
 }
 
 void mouse_rightclick(void *regs) {
-   windowmgr_rightclick(regs, gui_mouse_x, gui_mouse_y);
+   if(mouse_heldright) {
+
+   } else {
+      windowmgr_rightclick(regs, gui_mouse_x, gui_mouse_y);
+      mouse_heldright = true;
+   }
 }
 
 uint16_t *gui_get_framebuffer() {

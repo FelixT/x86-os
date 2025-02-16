@@ -1,9 +1,9 @@
-; extern tos_kernel (0x19000: see memory.h)
+; extern tos_kernel (0x20000: see memory.h)
 
 global tss_start
 tss_start:
    dd 0
-   dd 0x19000 ; esp0, kernel stack pointer
+   dd 0x20000 ; esp0, kernel stack pointer
    dd DATA_SEG ; ss0, kernel stack segment
    dd 0
    dd 0

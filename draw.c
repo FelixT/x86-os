@@ -4,6 +4,11 @@
 
 int font_letter[FONT_WIDTH*FONT_HEIGHT];
 
+uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
+   // 5r 6g 5b
+   return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+}
+
 void setpixel_safe(surface_t *surface, int index, int colour) {
    if(index < 0 || index >= surface->width*surface->height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
@@ -85,7 +90,7 @@ void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical,
 }
 
 void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y) {
-   getFontLetter(c, font_letter);
+   getFontLetter(getFont(), c, font_letter);
 
    int i = 0;      
    for(int yi = y; yi < y+FONT_HEIGHT; yi++) {

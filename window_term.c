@@ -132,7 +132,7 @@ void term_cmd_help() {
    gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3,\n", 0);
    gui_writestr("FILES, PAGE, TEST, ATA, FAT, DESKTOP, FATPATH path, PROGC addr, BMP addr,\n", 0);
    gui_writestr("VIEWBMP path, ELF addr, FATDIR clusterno, FATFILE clusterno, READ addr,\n", 0);
-   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>, REDRAWALL", 0);
+   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>, REDRAWALL, BGIMG path", 0);
 }
 
 void term_cmd_init(void *regs) {
@@ -219,6 +219,10 @@ void term_cmd_prog3(void *regs) {
    tasks_launch_elf(regs, "/sys/prog3.elf", 0, NULL);
 }
 
+void term_cmd_prog4(void *regs) {
+   tasks_launch_elf(regs, "/sys/prog4.elf", 0, NULL);
+}
+
 void term_cmd_files(void *regs) {
    tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
 }
@@ -245,48 +249,31 @@ void term_cmd_test() {
    uint32_t framebuffer = (uint32_t)gui_get_framebuffer();
    
    gui_writestr("\nKERNEL ", 4);
-   gui_writeuint(0x7e00, 0);
    gui_writestr(" 0x", 0);
    gui_writeuint_hex((uint32_t)0x7e00, 0);
 
-   gui_writestr("\nKERNEL END ", 4);
-   gui_writeuint((uint32_t)&kernel_end + 0x17e00, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nKERNEL END 0x", 4);
    gui_writeuint_hex((uint32_t)&kernel_end + 0x17e00, 0);
 
-   gui_writestr("\nKERNEL STACK ", 4);
-   gui_writeuint(STACKS_START + 0x17e00, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nKERNEL STACK 0x", 4);
    gui_writeuint_hex(STACKS_START + 0x17e00, 0);
 
-   gui_writestr("\nTOS KERNEL ", 4);
-   gui_writeuint(TOS_KERNEL, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nTOS KERNEL 0x", 4);
    gui_writeuint_hex(TOS_KERNEL, 0);
 
-   gui_writestr("\nTOS PROGRAM ", 4);
-   gui_writeuint(TOS_PROGRAM, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nTOS PROGRAM 0x", 4);
    gui_writeuint_hex(TOS_PROGRAM, 0);
 
-   gui_writestr("\nHEAP KERNEL ", 4);
-   gui_writeuint(HEAP_KERNEL, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nHEAP KERNEL 0x", 4);
    gui_writeuint_hex(HEAP_KERNEL, 0);
 
-   gui_writestr("\nHEAP KERNEL END ", 4);
-   gui_writeuint(HEAP_KERNEL_END, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nHEAP KERNEL END 0x", 4);
    gui_writeuint_hex(HEAP_KERNEL_END, 0);
 
-   gui_writestr("\nframebuffer ", 4);
-   gui_writeuint(framebuffer, 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nframebuffer 0x", 4);
    gui_writeuint_hex(framebuffer, 0);
 
-   gui_writestr("\nframebuffer END ", 4);
-   gui_writeuint(framebuffer + gui_get_framebuffer_size(), 0);
-   gui_writestr(" 0x", 0);
+   gui_writestr("\nframebuffer END 0x", 4);
    gui_writeuint_hex(framebuffer + gui_get_framebuffer_size(), 0);
 
 }
@@ -381,6 +368,20 @@ void term_cmd_bg(char *arg) {
    gui_writenum(bg, 0);
    extern int gui_bg;
    gui_bg = bg;
+   gui_redrawall();
+}
+
+void term_cmd_bgimg(char *arg) {
+
+   fat_dir_t *entry = fat_parse_path(arg);
+   if(entry == NULL) {
+      debug_writestr("Image not found\n");
+      return;
+   }
+
+   uint8_t *gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   desktop_setbgimg(gui_bgimage);
+
    gui_redrawall();
 }
 
@@ -485,6 +486,8 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_prog2(regs);
    else if(strcmp(command, "PROG3"))
       term_cmd_prog3(regs);
+   else if(strcmp(command, "PROG4"))
+      term_cmd_prog4(regs);
    else if(strcmp(command, "FILES"))
       term_cmd_files(regs);
    else if(strcmp(command, "PAGE"))
@@ -513,6 +516,8 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_fatfile((char*)arg);
    else if(strstartswith(command, "READ"))
       term_cmd_read((char*)arg);
+   else if(strstartswith(command, "BGIMG"))
+      term_cmd_bgimg((char*)arg);
    else if(strstartswith(command, "BG"))
       term_cmd_bg((char*)arg);
    else if(strstartswith(command, "MEM"))

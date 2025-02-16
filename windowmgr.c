@@ -20,6 +20,9 @@ bool desktop_enabled = false;
 uint8_t *icon_window = NULL;
 uint8_t *gui_bgimage = NULL;
 
+extern bool mouse_heldright;
+gui_menu_t default_menu; // right click menu
+
 void debug_writestr(char *str) {
    if(windowCount == 0) return;
    window_writestr(str, 0, 0);
@@ -126,6 +129,11 @@ bool window_init(gui_window_t *window) {
 
    // other functions without default behaviour
    window->click_func = NULL;
+
+   // no window objects
+   window->window_object_count = 0;
+   for(int i = 0; i < 20; i++)
+      window->window_objects[i] = NULL;
    
    window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
@@ -198,13 +206,13 @@ void window_draw_outline(gui_window_t *window) {
 
 }
 
-void window_draw_content(gui_window_t *window) {
+void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height) {
    if(window->framebuffer == NULL) return;
 
    gui_window_t *selected = getSelectedWindow();
 
-   for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y++) {
-      for(int x = 0; x < window->width; x++) {
+   for(int y = offsetY; y < offsetY+height; y++) {
+      for(int x = offsetX; x < offsetX+width; x++) {
          // ignore pixels covered by the currently selected window
          int screenY = (window->y + y + TITLEBAR_HEIGHT);
          int screenX = (window->x + x);
@@ -220,6 +228,11 @@ void window_draw_content(gui_window_t *window) {
          setpixel_safe(&surface, index, window->framebuffer[w_index]);
       }
    }
+
+}
+
+void window_draw_content(gui_window_t *window) {
+   window_draw_content_region(window, 0, 0, window->width, window->height - TITLEBAR_HEIGHT);
 }
 
 void window_draw(gui_window_t *window) {
@@ -233,6 +246,11 @@ void window_draw(gui_window_t *window) {
    if(window->needs_redraw || window == selectedWindow) {
       // draw window content/framebuffer
       window_draw_outline(window);
+      // call window objects draw funcs
+      for(int i = 0; i < window->window_object_count; i++) {
+         windowobj_t *wo = window->window_objects[i];
+         if(wo != NULL) wo->draw_func(wo);
+      }
       window_draw_content(window);
 
       if(window != selectedWindow)
@@ -383,16 +401,26 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
 
       window->needs_redraw = true;
       setSelectedWindowIndex(index);
+
+      // check if we clicked on window object
+      relY -= TOOLBAR_HEIGHT;
+
+      for(int i = 0; i < selectedWindow->window_object_count; i++) {
+         windowobj_t *wo = selectedWindow->window_objects[i];
+         if(relX > wo->x && relX < wo->x + wo->width
+         && relY > wo->y && relY < wo->y + wo->height) {
+            gui_interrupt_switchtask(regs);
+            windowobj_click(regs, (void*)wo);
+            windowobj_redraw((void*)selectedWindow, (void*)wo);
+            break;
+         }
+      }
+      
       return true;
 
    }
 
    return false;
-}
-
-
-void window_click() {
-
 }
 
 extern uint16_t *draw_buffer;
@@ -464,8 +492,8 @@ bool windowmgr_click(void *regs, int x, int y) {
 void windowmgr_rightclick(void *regs, int x, int y) {
    (void)(regs);
    // draw menu
-   draw_rect(&surface, COLOUR_TOOLBAR, x, y, 120, 340);
-   draw_string(&surface, "TEST", 0, x+4, y+4);
+   default_menu.x = x;
+   default_menu.y = y;
 }
 
 void windowmgr_draw() {
@@ -478,6 +506,9 @@ void windowmgr_draw() {
       window_draw(selectedWindow);
 
    toolbar_draw();
+
+   if(mouse_heldright)
+      menu_draw(&default_menu);
 }
 
 void windowmgr_redrawall() {
@@ -516,6 +547,11 @@ void desktop_init() {
    desktop_enabled = true;
 }
 
+void desktop_setbgimg(uint8_t *img) {
+   gui_bgimage = img;
+   gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
+}
+
 void desktop_draw() {
    if(!desktop_enabled) return;
 
@@ -534,3 +570,52 @@ void desktop_click(int x, int y) {
       windowmgr_add();
 }
 
+void windowmgr_mousemove(int x, int y) {
+   if(selectedWindow) {
+      // check if within selected window content
+
+      int relX = x - selectedWindow->x;
+      int relY = y - (selectedWindow->y + TOOLBAR_HEIGHT);
+
+      if(relX > 0 && relX < selectedWindow->width
+      && relY > 0 && relY < selectedWindow->height - TOOLBAR_HEIGHT) {
+         // within current window, check window objects
+
+         windowobj_t *hovered = NULL;
+         for(int i = 0; i < selectedWindow->window_object_count; i++) {
+            hovered = selectedWindow->window_objects[i];
+            if(relX > hovered->x && relX < hovered->x + hovered->width
+            && relY > hovered->y && relY < hovered->y + hovered->height) {
+               hovered->hovering = true;
+               if(hovered->hover_func != NULL)
+                  (*(hovered->hover_func))((void*)hovered);
+               windowobj_redraw((void*)selectedWindow, (void*)hovered);
+               break;
+
+            } else {
+               hovered = NULL;
+            }
+         }
+
+         // update other window object hovering = false
+         for(int i = 0; i < selectedWindow->window_object_count; i++) {
+            windowobj_t *wo = selectedWindow->window_objects[i];
+            if(wo == hovered) continue;
+
+            if(wo->hovering) {
+               wo->hovering = false;
+               if(wo->draw_func != NULL)
+                  (*(wo->draw_func))((void*)wo);
+               windowobj_redraw((void*)selectedWindow, (void*)wo);
+            }
+
+         }
+      }
+   }
+ }
+
+void menu_draw(gui_menu_t *menu) {
+   draw_rect(&surface, rgb16(210, 210, 210), menu->x, menu->y, 120, 340);
+   draw_unfilledrect(&surface, rgb16(230, 230, 230), menu->x, menu->y, 120, 340);
+   draw_string(&surface, "TEST", 0, menu->x+4, menu->y+4);
+}

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "../windowobj.h"
 
 #define NULL ( (void *) 0)
 
@@ -272,4 +273,14 @@ static inline void queue_event(uint32_t callback, int delta) {
       "b" ((uint32_t)callback),
       "c" ((uint32_t)delta)
    );
+}
+
+static inline windowobj_t *register_windowobj() {
+   uint32_t addr;
+    asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (addr)
+      : "a" (31)
+   );
+   return (windowobj_t*)addr;
 }
