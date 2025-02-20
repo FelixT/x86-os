@@ -6,13 +6,13 @@
 
 typedef struct {
     int time;
-    char *msg;
+    void *msg;
     void *next;
     void *callback;
     int task;
 } __attribute__((packed)) event_t;
 
-void events_add(int delta, void* callback, int taskid);
+void events_add(int delta, void *callback, void *msg, int taskid);
 void events_check(registers_t *regs);
 
 #endif

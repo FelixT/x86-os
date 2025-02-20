@@ -216,7 +216,7 @@ void api_queue_event(registers_t *regs) {
    uint32_t callback = regs->ebx;
    uint32_t delta = regs->ecx;
 
-   events_add(delta, (void *)callback, get_current_task());
+   events_add(delta, (void *)callback, NULL, get_current_task());
 }
 
 void api_register_windowobj(registers_t *regs) {

@@ -259,9 +259,17 @@ void window_draw(gui_window_t *window) {
       window->needs_redraw = false;
    }
 
-   if(window == selectedWindow && window->draw_func != NULL)
-      (*(window->draw_func))(window);
+   if(window == selectedWindow) {
+      // drop shadow if selected
+      draw_line(&surface, COLOUR_DARK_GREY, window->x+window->width+1, window->y+3, true, window->height-1);
+      draw_line(&surface, COLOUR_DARK_GREY, window->x+3, window->y+window->height+1, false, window->width-1);
 
+      // outline
+      draw_unfilledrect(&surface, gui_rgb16(80,80,80), window->x - 1, window->y - 1, window->width + 2, window->height + 2);
+
+      if(window->draw_func != NULL)
+         (*(window->draw_func))(window);
+   }
 }
 
 void windowmgr_init() {

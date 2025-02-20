@@ -38,24 +38,36 @@ typedef struct {
 
 volatile uint8_t *image;
 
-int i = 0;
+int x = 0;
+int y = 0;
 
 void timer_callback() {
     //clear(0xFFFF);
-    bmp_draw((uint8_t*)image, i%400, i%400);
+    bmp_draw((uint8_t*)image, x%400, y%250);
     redraw();
 
-    queue_event((uint32_t)(&timer_callback), 1);
+    queue_event((uint32_t)(&timer_callback), 6);
 
-    i+=5;
+    x+=5;
+    y+=5;
 
     end_subroutine();
 }
 
 void click_callback() {
     clear(0xFFFF);
-    i = 0;
+    x = 0;
     timer_callback();
+}
+
+void strcpy(char* dest, char* src) {
+   int i = 0;
+
+   while(src[i] != '\0') {
+      dest[i] = src[i];
+      i++;
+   }
+   dest[i] = '\0';
 }
 
 void _start() {
@@ -74,12 +86,8 @@ void _start() {
     windowobj_t *wo = register_windowobj();
     wo->type = WO_BUTTON;
     wo->text = (char*)malloc(1);
-    wo->text[0] = 'C';
-    wo->text[1] = 'L';
-    wo->text[2] = 'I';
-    wo->text[3] = 'C';
-    wo->text[4] = 'K';
-    wo->text[5] = '\0';
+    wo->x = wo->window_surface->width - wo->width - 2;
+    strcpy(wo->text, "RESET");
     wo->click_func = &click_callback;
 
     // main program loop

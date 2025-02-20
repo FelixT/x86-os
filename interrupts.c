@@ -278,7 +278,7 @@ void timer_handler(registers_t *regs) {
       if(timer_i%20 == 0)
          gui_draw();
 
-      if(timer_i%40 == 0) {
+      if(timer_i%10 == 0) {
          if(switching_paused) {
             if(switching) window_writestr(" SP", 0, 0);
          } else {

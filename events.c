@@ -10,15 +10,16 @@ event_t *first_event = NULL;
 
 extern int timer_i;
 
-void events_add(int delta, void* callback, int taskid) {
+void events_add(int delta, void *callback, void *msg, int taskid) {
     if(!events_active) {
         events_active = true;
     }
 
-    event_t *event = malloc(sizeof(event));
+    event_t *event = malloc(sizeof(event_t));
     event->time = (timer_i + delta)%10000000;
     event->callback = callback;
     event->task = taskid;
+    event->msg = msg;
     event->next = NULL;
 
     // find place for it
@@ -53,6 +54,22 @@ void events_add(int delta, void* callback, int taskid) {
     e->next = event;
 }
 
+void event_fire(registers_t *regs, event_t *event) {
+    if(event->callback == NULL) return;
+    uint32_t *args = malloc(sizeof(uint32_t) * 1);
+    args[1] = (uint32_t)event->msg;
+
+    if(event->task >= 0) {
+        if(switch_to_task(event->task, regs)) {
+            task_call_subroutine(regs, (uint32_t)(event->callback), args, 1);
+        }
+    } else {
+        // call function as kernel if task is -1
+        (*(void(*)(void*))event->callback)(event->msg);
+    }
+
+}
+
 void events_check(registers_t *regs) {
     if(!events_active) return;
 
@@ -69,18 +86,11 @@ void events_check(registers_t *regs) {
                 continue;
             }
 
-            // fire the event
-            if(first_event->callback != NULL && first_event->task >= 0) {
-                if(switch_to_task(first_event->task, regs)) {
-                    task_call_subroutine(regs, (uint32_t)(first_event->callback), NULL, 0);
-                }
-            // todo: call function as kernel if task is -1
-            }
+            event_t *e = first_event;
+            first_event = e->next;
+            event_fire(regs, e);
 
-            event_t *next = first_event->next;
-            free((uint32_t)first_event, sizeof(event_t));
-
-            first_event = next;
+            free((uint32_t)e, sizeof(event_t));
         } else {
             return;
         }
