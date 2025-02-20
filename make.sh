@@ -46,6 +46,12 @@ cp o/files.elf fs_root/sys/files.elf
 cp o/bmpview.elf fs_root/sys/bmpview.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
+# fonts
+nasm font.asm -f bin -o o/font11.bin
+nasm font7.asm -f bin -o o/font7.bin
+cp o/font11.bin fs_root/font/font11.bin
+cp o/font7.bin fs_root/font/font7.bin
+
 dd if=/dev/zero of=o/hd2.bin bs=64000 count=1 status=none
 dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc status=none
 

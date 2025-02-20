@@ -1,4 +1,63 @@
 ; 5*7 font
+global font7
+font7:
+
+; size
+db 49
+; width
+db 5
+; height
+db 7
+; list of characters in the order they're found
+db 0
+db ' '
+db '-'
+db '/'
+db ':'
+db 39 ; apostrophe
+db '.'
+db '>'
+db '<'
+db '_'
+db ','
+db 27 ; cursor outline
+db 28 ; cursor fill
+db '0'
+db '1'
+db '2'
+db '3'
+db '4'
+db '5'
+db '6'
+db '7'
+db '8'
+db '9'
+db 'A'
+db 'B'
+db 'C'
+db 'D'
+db 'E'
+db 'F'
+db 'G'
+db 'H'
+db 'I'
+db 'J'
+db 'K'
+db 'L'
+db 'M'
+db 'N'
+db 'O'
+db 'P'
+db 'Q'
+db 'R'
+db 'S'
+db 'T'
+db 'U'
+db 'V'
+db 'W'
+db 'X'
+db 'Y'
+db 'Z'
 
 global font_null
 font_null:

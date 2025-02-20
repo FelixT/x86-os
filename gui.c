@@ -16,7 +16,7 @@ bool mouse_heldright = false;
 
 surface_t surface;
 
-uint16_t cursor_buffer[FONT_WIDTH*FONT_HEIGHT]; // store whats behind cursor so it can be restored
+uint16_t cursor_buffer[MAX_FONT_WIDTH*MAX_FONT_HEIGHT]; // store whats behind cursor so it can be restored
 
 uint16_t *draw_buffer;
 
@@ -69,7 +69,7 @@ void gui_writestrat(char *c, uint16_t colour, int x, int y) {
    int i = 0;
    while(c[i] != '\0') {
       gui_drawcharat(c[i++], colour, x, y);
-      x+=FONT_WIDTH+FONT_PADDING;
+      x+=getFont()->width+getFont()->padding;
    }
 }
 
@@ -107,6 +107,7 @@ void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
 }
 
 extern vbe_mode_info_t vbe_mode_info_structure;
+extern int *font_letter;
 void gui_init(void) {
    videomode = 1;
 
@@ -117,6 +118,7 @@ void gui_init(void) {
    surface.buffer = vbe_mode_info_structure.framebuffer;
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
+   font_letter = (int*)malloc(1);
 
    // reserve framebuffer memory so malloc can't assign it
    memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
@@ -206,18 +208,18 @@ void mouse_enable() {
 
 void gui_cursor_save_bg() {
    uint16_t *terminal_buffer = (uint16_t*) surface.buffer;
-   for(int y = gui_mouse_y; y < gui_mouse_y + FONT_HEIGHT; y++) {
-      for(int x = gui_mouse_x; x < gui_mouse_x + FONT_WIDTH; x++) {
+   for(int y = gui_mouse_y; y < gui_mouse_y + getFont()->height; y++) {
+      for(int x = gui_mouse_x; x < gui_mouse_x + getFont()->width; x++) {
          if(x >= 0 && x < (int)surface.width && y >=0 && y < (int)surface.height)
-            cursor_buffer[(y-gui_mouse_y)*FONT_WIDTH+(x-gui_mouse_x)] = terminal_buffer[y*(int)surface.width+x];
+            cursor_buffer[(y-gui_mouse_y)*(getFont()->width)+(x-gui_mouse_x)] = terminal_buffer[y*(int)surface.width+x];
       }
    }
 }
 
 void gui_cursor_restore_bg(int old_x, int old_y) {
-   for(int y = old_y; y < old_y + FONT_HEIGHT; y++) {
-      for(int x = old_x; x < old_x + FONT_WIDTH; x++) {
-         set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-old_y)*FONT_WIDTH+(x-old_x)]);
+   for(int y = old_y; y < old_y + getFont()->height; y++) {
+      for(int x = old_x; x < old_x + getFont()->width; x++) {
+         set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-old_y)*(getFont()->width)+(x-old_x)]);
       }
    }
 }
@@ -330,5 +332,5 @@ void gui_showtimer(int number) {
 }
 
 int gui_gettextwidth(int textlength) {
-   return textlength*(FONT_WIDTH+FONT_PADDING);
+   return textlength*(getFont()->width+getFont()->padding);
 }

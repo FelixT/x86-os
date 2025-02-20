@@ -23,7 +23,7 @@ void window_term_keypress(char key, void *window) {
          selected->text_buffer[selected->text_index] = key;
          selected->text_buffer[selected->text_index+1] = '\0';
          selected->text_index++;
-         selected->text_x = (selected->text_index)*(FONT_WIDTH+FONT_PADDING);
+         selected->text_x = (selected->text_index)*(getFont()->width+getFont()->padding);
       }
 
       window_draw(selected);
@@ -38,7 +38,7 @@ void window_term_return(void *regs, void *window) {
 
    // write cmd to window framebuffer
    draw_char(&(selected->surface), '>', 8, 1, selected->text_y);
-   draw_string(&(selected->surface), selected->text_buffer, 0, 1 + FONT_WIDTH + FONT_PADDING, selected->text_y);
+   draw_string(&(selected->surface), selected->text_buffer, 0, 1 + getFont()->width + getFont()->padding, selected->text_y);
    
    // write cmd to cmdbuffer
    // shift all entries up
@@ -70,7 +70,7 @@ void window_term_backspace(void *window) {
    gui_window_t *selected = (gui_window_t*)window;
    if(selected->text_index > 0) {
       selected->text_index--;
-      selected->text_x-=FONT_WIDTH+FONT_PADDING;
+      selected->text_x-=getFont()->width+getFont()->padding;
       selected->text_buffer[selected->text_index] = '\0';
    }
 
@@ -87,7 +87,7 @@ void window_term_uparrow(void *window) {
    int len = strlen(selected->cmd_history[selected->cmd_history_pos]);
    strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
    selected->text_index = len;
-   selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
+   selected->text_x=len*(getFont()->width+getFont()->padding);
    window_draw(window);
 }
 
@@ -99,13 +99,13 @@ void window_term_downarrow(void *window) {
    if(selected->cmd_history_pos <= -1) {
       selected->cmd_history_pos = -1;
       selected->text_index = 0;
-      selected->text_x = FONT_PADDING;
+      selected->text_x = getFont()->padding;
       selected->text_buffer[0] = '\0';
    } else {
       int len = strlen(selected->cmd_history[selected->cmd_history_pos]);
       strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
       selected->text_index = len;
-      selected->text_x=len*(FONT_WIDTH+FONT_PADDING);
+      selected->text_x=len*(getFont()->width+getFont()->padding);
    }
    window_draw(window);
 }
@@ -115,24 +115,18 @@ void window_term_draw(void *window) {
    surface_t *surface = gui_get_surface();
 
    // current text content/buffer
-   draw_rect(surface, selected->colour_bg, selected->x+1, selected->y+selected->text_y+TITLEBAR_HEIGHT, selected->width-2, FONT_HEIGHT);
+   draw_rect(surface, selected->colour_bg, selected->x+1, selected->y+selected->text_y+TITLEBAR_HEIGHT, selected->width-2, getFont()->height);
    draw_char(surface, '>', 8, selected->x + 1, selected->y + selected->text_y+TITLEBAR_HEIGHT);
-   draw_string(surface, selected->text_buffer, 0, selected->x + 1 + FONT_WIDTH + FONT_PADDING, selected->y + selected->text_y+TITLEBAR_HEIGHT);
+   draw_string(surface, selected->text_buffer, 0, selected->x + 1 + getFont()->width + getFont()->padding, selected->y + selected->text_y+TITLEBAR_HEIGHT);
    // prompt
-   draw_char(surface, '_', 0, selected->x + selected->text_x + 1 + FONT_WIDTH + FONT_PADDING, selected->y + selected->text_y+TITLEBAR_HEIGHT);
-
-   // drop shadow if selected
-   draw_line(surface, COLOUR_DARK_GREY, selected->x+selected->width+1, selected->y+3, true, selected->height-1);
-   draw_line(surface, COLOUR_DARK_GREY, selected->x+3, selected->y+selected->height+1, false, selected->width-1);
-
-   draw_unfilledrect(surface, gui_rgb16(80,80,80), selected->x - 1, selected->y - 1, selected->width + 2, selected->height + 2);
+   draw_char(surface, '_', 0, selected->x + selected->text_x + 1 + getFont()->width + getFont()->padding, selected->y + selected->text_y+TITLEBAR_HEIGHT);
 }
 
 void term_cmd_help() {
    gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3,\n", 0);
    gui_writestr("FILES, PAGE, TEST, ATA, FAT, DESKTOP, FATPATH path, PROGC addr, BMP addr,\n", 0);
    gui_writestr("VIEWBMP path, ELF addr, FATDIR clusterno, FATFILE clusterno, READ addr,\n", 0);
-   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>, REDRAWALL, BGIMG path", 0);
+   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>, REDRAWALL, BGIMG path, FONT addr, PADDING size", 0);
 }
 
 void term_cmd_init(void *regs) {
@@ -155,15 +149,15 @@ void term_cmd_init(void *regs) {
    desktop_init();
 
    gui_writestr("\nEnabling events\n", COLOUR_ORANGE);
-   events_add(40, NULL, -1);
+   events_add(40, NULL, NULL, -1);
 
    gui_redrawall();
 }
 
 void term_cmd_clear(gui_window_t *selected) {
    window_clearbuffer(selected, COLOUR_WHITE);
-   selected->text_x = FONT_PADDING;
-   selected->text_y = FONT_PADDING;
+   selected->text_x = getFont()->padding;
+   selected->text_y = getFont()->padding;
    selected->text_index = 0;
    selected->text_buffer[0] = '\0';
    selected->needs_redraw = true;
@@ -453,6 +447,24 @@ void term_cmd_redrawall() {
    gui_redrawall();
 }
 
+void term_cmd_font(char *path) {
+   // switch font
+   fat_dir_t *entry = fat_parse_path(path);
+   if(entry == NULL) {
+      debug_writestr("Font not found\n");
+      return;
+   }
+
+   fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+   font_load(file);
+
+}
+
+void term_cmd_padding(char *arg) {
+   int padding = stoi((char*)arg);
+   getFont()->padding = padding;
+}
+
 void term_cmd_default(char *command) {
    gui_drawchar('\'', 1);
    gui_writestr(command, 1);
@@ -502,6 +514,12 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_desktop();
    else if(strcmp(command, "FATPATH"))
       term_cmd_fatpath((char*)arg);
+   else if(strcmp(command, "REDRAWALL"))
+      term_cmd_redrawall();
+   else if(strcmp(command, "FONT"))
+      term_cmd_font((char*)arg);
+   else if(strcmp(command, "PADDING"))
+      term_cmd_padding((char*)arg);
    else if(strstartswith(command, "PROGC"))
       term_cmd_progc(regs, (char*)arg);
    else if(strstartswith(command, "BMP"))
@@ -524,9 +542,6 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_mem((char*)arg);
    else if(strstartswith(command, "DMPMEM"))
       term_cmd_dmpmem((char*)arg);
-   else if(strstartswith(command, "REDRAWALL")) {
-      term_cmd_redrawall();
-   }
    else
       term_cmd_default((char*)command);
    

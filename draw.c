@@ -2,7 +2,7 @@
 #include "draw.h"
 #include "font.h"
 
-int font_letter[FONT_WIDTH*FONT_HEIGHT];
+int *font_letter;
 
 uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
@@ -93,8 +93,8 @@ void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y) {
    getFontLetter(getFont(), c, font_letter);
 
    int i = 0;      
-   for(int yi = y; yi < y+FONT_HEIGHT; yi++) {
-      for(int xi = x; xi < x+FONT_WIDTH; xi++) {
+   for(int yi = y; yi < y+getFont()->height; yi++) {
+      for(int xi = x; xi < x+getFont()->width; xi++) {
          if(font_letter[i] == 1)
             setpixel_safe(surface, yi*(int)surface->width+xi, colour);
          i++;
@@ -106,6 +106,6 @@ void draw_string(surface_t *surface, char* c, uint16_t colour, int x, int y) {
    int i = 0;
    while(c[i] != '\0') {
       draw_char(surface, c[i++], colour, x, y);
-      x+=FONT_WIDTH+FONT_PADDING;
+      x+=getFont()->width+getFont()->padding;
    }
 }

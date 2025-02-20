@@ -110,8 +110,8 @@ bool window_init(gui_window_t *window) {
    window->height = 320;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
-   window->text_x = FONT_PADDING;
-   window->text_y = FONT_PADDING;
+   window->text_x = getFont()->padding;
+   window->text_y = getFont()->padding;
    window->needs_redraw = true;
    window->active = false;
    window->minimised = false;
@@ -197,12 +197,12 @@ void window_draw_outline(gui_window_t *window) {
    // titlebar text, centred
    int titleWidth = gui_gettextwidth(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
-   draw_rect(&surface, COLOUR_TITLEBAR, titleX-4, window->y+3, titleWidth+8, FONT_HEIGHT+FONT_PADDING*2+2);
+   draw_rect(&surface, COLOUR_TITLEBAR, titleX-4, window->y+3, titleWidth+8, getFont()->height+getFont()->padding*2+2);
    draw_string(&surface, window->title, 0, titleX, window->y+5);
 
    // titlebar buttons
-   draw_char(&surface, 'x', 0, window->x+window->width-(FONT_WIDTH+3), window->y+2);
-   draw_char(&surface, '-', 0, window->x+window->width-(FONT_WIDTH+3)*2, window->y+2);
+   draw_char(&surface, 'x', 0, window->x+window->width-(getFont()->width+3), window->y+2);
+   draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, window->y+2);
 
 }
 
@@ -395,14 +395,14 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
       int relY = y - window->y;
 
       // minimise
-      if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)*2 && relX < window->width - (FONT_WIDTH+3)) {
+      if(relY < TITLEBAR_HEIGHT && relX > window->width - (getFont()->width+3)*2 && relX < window->width - (getFont()->width+3)) {
          window->minimised = true;
          setSelectedWindowIndex(-1);
          return false;
       }
 
       // close
-      if(relY < TITLEBAR_HEIGHT && relX > window->width - (FONT_WIDTH+3)) {
+      if(relY < TITLEBAR_HEIGHT && relX > window->width - (getFont()->width+3)) {
          window_close(regs, index);
          return false;
       }
