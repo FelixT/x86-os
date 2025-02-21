@@ -123,10 +123,14 @@ void window_term_draw(void *window) {
 }
 
 void term_cmd_help() {
-   gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS, PROG1, PROG2, PROG3,\n", 0);
-   gui_writestr("FILES, PAGE, TEST, ATA, FAT, DESKTOP, FATPATH path, PROGC addr, BMP addr,\n", 0);
-   gui_writestr("VIEWBMP path, ELF addr, FATDIR clusterno, FATFILE clusterno, READ addr,\n", 0);
-   gui_writestr("BG colour, MEM <x>, DMPMEM x <y>, REDRAWALL, BGIMG path, FONT addr, PADDING size", 0);
+   gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS,\n", 0);
+   gui_writestr("PROG1, PROG2, FILES,\n", 0);
+   gui_writestr("VIEWBMP path, LAUNCH path,\n", 0);
+   gui_writestr("PAGE, TEST, ATA, FAT, DESKTOP,\n", 0);
+   gui_writestr("BMP addr, ELF addr,\n", 0);
+   gui_writestr("FATPATH path, FATDIR clusterno, FATFILE clusterno,\n", 0);
+   gui_writestr("READ addr, MEM <x>, DMPMEM x <y>, RESIZE width height\n", 0);
+   gui_writestr("BG colour, BGIMG path, FONT path, PADDING size, REDRAWALL", 0);
 }
 
 void term_cmd_init(void *regs) {
@@ -209,14 +213,6 @@ void term_cmd_prog2(void *regs) {
    tasks_launch_binary(regs, "/sys/prog2.bin");
 }
 
-void term_cmd_prog3(void *regs) {
-   tasks_launch_elf(regs, "/sys/prog3.elf", 0, NULL);
-}
-
-void term_cmd_prog4(void *regs) {
-   tasks_launch_elf(regs, "/sys/prog4.elf", 0, NULL);
-}
-
 void term_cmd_files(void *regs) {
    tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
 }
@@ -294,13 +290,6 @@ void term_cmd_fatpath(char *arg) {
    }
 }
 
-void term_cmd_progc(void *regs, char *arg) {
-   int addr = stoi(arg);
-   gui_writeuint_hex(addr, 0);
-   create_task_entry(3, addr, 0, false);
-   launch_task(3, regs, true);
-}
-
 void term_cmd_bmp(gui_window_t *selected, char *arg) {
    int addr = stoi(arg);
    uint8_t *bmp = (uint8_t*)addr;
@@ -314,6 +303,19 @@ void term_cmd_elf(registers_t *regs, char *arg) {
       int addr = stoi(arg);
       uint8_t *prog = (uint8_t*)addr;
       elf_run(regs, prog, 0, NULL);
+}
+
+void term_cmd_launch(registers_t *regs, char *arg) {
+      tasks_launch_elf(regs, arg, 0, NULL);
+}
+
+void term_cmd_resize(gui_window_t *window, char *arg) {
+   char arg2[10];
+   if(!strsplit(arg, arg2, arg, ' ')) return;
+   int width = stoi(arg);
+   int height = stoi(arg2);
+   window_resize(window, width, height);
+   term_cmd_clear(window);
 }
 
 void term_cmd_fatdir(char *arg) {
@@ -338,14 +340,7 @@ void term_cmd_fatfile(char *arg) {
 
 void term_cmd_read(char *arg) {
    // convert str to int
-   uint32_t lba = 0;
-   int power = 1;
-   for(int i = strlen(arg) - 1; i >= 0 ; i--) {
-      if(arg[i] >= '0' && arg[i] <= '9') {
-         lba += power*(arg[i]-'0');
-         power *= 10;
-      }
-   }
+   uint32_t lba = (uint32_t)stoi(arg);
    gui_writeuint(lba, 0);
    gui_writestr("\n", 0);
    uint16_t *buf = malloc(512);
@@ -496,10 +491,6 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_prog1(regs);
    else if(strcmp(command, "PROG2"))
       term_cmd_prog2(regs);
-   else if(strcmp(command, "PROG3"))
-      term_cmd_prog3(regs);
-   else if(strcmp(command, "PROG4"))
-      term_cmd_prog4(regs);
    else if(strcmp(command, "FILES"))
       term_cmd_files(regs);
    else if(strcmp(command, "PAGE"))
@@ -520,14 +511,16 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_font((char*)arg);
    else if(strcmp(command, "PADDING"))
       term_cmd_padding((char*)arg);
-   else if(strstartswith(command, "PROGC"))
-      term_cmd_progc(regs, (char*)arg);
    else if(strstartswith(command, "BMP"))
       term_cmd_bmp(selected, (char*)arg);
    else if(strstartswith(command, "VIEWBMP"))
       term_cmd_viewbmp(regs, (char*)arg);
    else if(strstartswith(command, "ELF"))
       term_cmd_elf(regs, (char*)arg);
+   else if(strcmp(command, "LAUNCH"))
+      term_cmd_launch(regs, (char*)arg);
+   else if(strcmp(command, "RESIZE"))
+      term_cmd_resize(selected, (char*)arg);
    else if(strstartswith(command, "FATDIR"))
       term_cmd_fatdir((char*)arg);
    else if(strstartswith(command, "FATFILE"))

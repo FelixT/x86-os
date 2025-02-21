@@ -70,7 +70,7 @@ void ata_identify(bool primaryBus, bool masterDrive) {
 }
 
 void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf) {
-   // read using ATA PIO mode
+   // read 512 bytes using ATA PIO mode
 
    uint16_t ioPort;
    
@@ -130,7 +130,7 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    //int reads = (bytesRequired + (512-1))/512; // bytes
    for(int i = 0; i < reads; i++) {
       ata_read(primaryBus, masterDrive, lba+i, &readBuf[256*i]);
-      ata_delay(ioPort);
+      //ata_delay(ioPort);
    }
 
    // copy to new buffer

@@ -26,17 +26,6 @@ void fat_get_info() {
 
    noSectors = (fat_bpb->noSectors == 0) ? fat_bpb->largeNoSectors : fat_bpb->noSectors;
    noClusters = noSectors/fat_bpb->sectorsPerCluster;
-
-   /*
-   gui_writestr("\nBITS PER SECTOR: ", 0);
-   gui_writeuint(fat_bpb->bytesPerSector, 0);
-   gui_writestr("\nSECTORS: ", 0);
-   gui_writeuint(noSectors, 0);
-   gui_writestr("\nSECTORS PER CLUSTER: ", 0);
-   gui_writeuint(fat_bpb->sectorsPerCluster, 0);
-   gui_writestr("\nCLUSTERS: ", 0);
-   gui_writeuint(noClusters, 0);*/
-
 }
 
 void fat_parse_dir_entry(fat_dir_t *fat_dir) {
@@ -180,19 +169,20 @@ fat_dir_t *fat_find_in_root(char* filename, char* extension) {
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t rootDirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
 
-   uint32_t offset = 0;
    // get each file/dir in root
+
+   // read entire root in
+   uint8_t *rootBuf = ata_read_exact(true, true, rootDirAddr, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
+
    for(int i = 0; i < fat_bpb->noRootEntries; i++) {
-      uint8_t *buf2 = ata_read_exact(true, true, rootDirAddr + offset, sizeof(fat_dir_t));
-      fat_dir_t *fat_dir = (fat_dir_t*)buf2;
+      fat_dir_t *fat_dir = (fat_dir_t*)(rootBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
 
       if(fat_entry_matches_filename(fat_dir, filename, extension))
          return fat_dir;
-
-      offset+=32; // each entry is 32 bytes
-      free((uint32_t)buf2, sizeof(fat_dir_t));
    }
+
+   free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
 
    return NULL;
 
@@ -252,19 +242,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
    }
 
-   /*gui_writeuint(clusterCount, 0);
-   gui_writestr(" clusters ", 0);*/
-
    uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
-
-   /*gui_writestr("Addr ", 0);
-   gui_writeuint((uint32_t)(fileFirstSector*fat_bpb->bytesPerSector + baseAddr), 0);
-   gui_drawchar('\n', 0);
-   gui_writestr("size on disk ", 0);
-   gui_writeuint(fileSizeDisk, 0);
-   gui_writestr("\nreading ", 0);
-   gui_writeuint(size, 0);
-   gui_writestr(" bytes\n", 0);*/
 
    int allocate = (readEntireFile) ? fileSizeDisk : size;
    uint8_t *fileContents = malloc(allocate);
@@ -272,10 +250,11 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    uint32_t byte = 0;
    int cluster = 0;
    while(true) { // until we reach the end of the cluster chain or byte >= size
-      // read each sector of cluster
+      // read all sectors of cluster
+      uint32_t diskAddr = baseAddr + (fileFirstSector + cluster*fat_bpb->sectorsPerCluster) * fat_bpb->bytesPerSector;
+      uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
       for(int i = 0; i < fat_bpb->sectorsPerCluster; i++) {
-         uint32_t sectorAddr = (fileFirstSector+cluster*fat_bpb->sectorsPerCluster+i)*fat_bpb->bytesPerSector + baseAddr;
-         uint8_t *buf = ata_read_exact(true, true, sectorAddr, fat_bpb->bytesPerSector);
+         uint8_t *buf = (uint8_t*)(clusterBuf + i * fat_bpb->bytesPerSector); // sector buf
          uint32_t memOffset = fat_bpb->bytesPerSector * (cluster*fat_bpb->sectorsPerCluster + i);
          // copy to master buffer
          for(int b = 0; b < fat_bpb->bytesPerSector; b++) {
@@ -284,8 +263,8 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
             byte++;
          }
 
-         free((uint32_t)buf, fat_bpb->bytesPerSector);
       }
+      free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
 
       // check if theres more clusters to read
       uint16_t tableVal = ((uint16_t*)fatTable)[clusterNo];

@@ -39,5 +39,6 @@ void desktop_init();
 void desktop_setbgimg(uint8_t *img);
 void windowmgr_mousemove(int x, int y);
 void menu_draw(gui_menu_t *menu);
+void window_resize(gui_window_t *window, int width, int height);
 
 #endif

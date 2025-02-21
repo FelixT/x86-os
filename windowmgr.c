@@ -627,3 +627,11 @@ void menu_draw(gui_menu_t *menu) {
    draw_unfilledrect(&surface, rgb16(230, 230, 230), menu->x, menu->y, 120, 340);
    draw_string(&surface, "TEST", 0, menu->x+4, menu->y+4);
 }
+
+void window_resize(gui_window_t *window, int width, int height) {
+   window->framebuffer = resize((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2, width*(height-TITLEBAR_HEIGHT)*2);
+   window->width = width;
+   window->height = height;
+   window_clearbuffer(window, window->colour_bg);
+   gui_redrawall();
+}

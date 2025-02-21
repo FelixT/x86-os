@@ -124,7 +124,7 @@ void uparrow() {
    if(offset < 0) offset = 0;
 
    display_items();
-   
+   redraw();
 
    end_subroutine();
 
@@ -136,7 +136,7 @@ void downarrow() {
    if(offset >= no_items) offset = no_items - 1;
 
    display_items();
-   
+   redraw();
 
    end_subroutine();
 

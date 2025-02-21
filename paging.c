@@ -80,22 +80,22 @@ page_dir_entry_t *new_page() {
    // memset 0
    uint8_t *entry = (uint8_t*)dir;
    for(int i = 0; i < 1024*(int)sizeof(page_dir_entry_t); i++)
-      entry[i] = 2; // set to 2 for rw = 1, else 0
+      entry[i] = 0; // set to 2 for rw = 1, else 0
 
    // identity map kernel
-   for(uint32_t i = KERNEL_START; i < KERNEL_END; i++)
-      map(dir, i, i, 0, 0);
+   for(uint32_t i = KERNEL_START/0x1000; i <= KERNEL_END/0x1000; i++)
+      map(dir, i*0x1000, i*0x1000, 0, 0);
 
    // identity map stacks
-   for(uint32_t i = STACKS_START; i < TOS_KERNEL; i++)
-      map(dir, i, i, 1, 1); // user so progidle doesn't break upon push
+   for(uint32_t i = STACKS_START/0x1000; i < TOS_KERNEL/0x1000; i++)
+      map(dir, i*0x1000, i*0x1000, 1, 1); // user so progidle doesn't break upon push
       
-   for(uint32_t i = TOS_KERNEL; i < TOS_PROGRAM; i++)
-      map(dir, i, i, 1, 1);
+   for(uint32_t i = TOS_KERNEL/0x1000; i < TOS_PROGRAM/0x1000; i++)
+      map(dir, i*0x1000, i*0x1000, 1, 1);
    
    // identity map heap
-   for(uint32_t i = HEAP_KERNEL; i < HEAP_KERNEL_END; i++)
-      map(dir, i, i, 1, 1);
+   for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)
+      map(dir, i*0x1000, i*0x1000, 1, 1);
 
    // identity map framebuffer
    for(uint32_t i = (uint32_t)gui_get_framebuffer(); i < (uint32_t)gui_get_framebuffer()+gui_get_framebuffer_size(); i++)

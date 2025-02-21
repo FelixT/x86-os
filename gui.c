@@ -250,7 +250,7 @@ void mouse_update(int relX, int relY) {
       gui_mouse_y = surface.height + gui_mouse_y;
 
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
-   if(relX > 0 || relY > 0)
+   if(relX != 0 || relY != 0)
       windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
 
    gui_cursor_save_bg(); // save pixels at new cursor location
