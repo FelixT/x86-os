@@ -60,7 +60,8 @@ void windowobj_redraw(void *window, void *windowobj) {
    window_draw_content_region((gui_window_t*)window, wo->x, wo->y, wo->width, wo->height);
 }
 
-void windowobj_unclick(void *windowobj) {
+void windowobj_unclick(void *regs, void *windowobj) {
+   (void)regs;
    windowobj_t *wo = (windowobj_t*)windowobj; 
    wo->clicked = false;
    windowobj_draw(wo);

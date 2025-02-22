@@ -49,8 +49,10 @@ cp o/bmpview.elf fs_root/sys/bmpview.elf
 # fonts
 nasm font.asm -f bin -o o/font11.bin
 nasm font7.asm -f bin -o o/font7.bin
-cp o/font11.bin fs_root/font/font11.bin
-cp o/font7.bin fs_root/font/font7.bin
+nasm font8.asm -f bin -o o/font8.bin
+cp o/font11.bin fs_root/font/11.bin
+cp o/font7.bin fs_root/font/7.bin
+cp o/font8.bin fs_root/font/8.bin
 
 dd if=/dev/zero of=o/hd2.bin bs=64000 count=1 status=none
 dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc status=none

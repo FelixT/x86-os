@@ -50,9 +50,6 @@ void launch_task(int index, registers_t *regs, bool focus) {
    debug_writestr("Launching task ");
    debug_writeuint(index);
    debug_writestr("\n");
-   debug_writestr("esp ");
-   debug_writehex(tasks[current_task].registers.esp);
-   debug_writestr("\n");
 
    tasks[current_task].enabled = true;
 

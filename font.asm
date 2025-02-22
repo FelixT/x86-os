@@ -7,6 +7,12 @@ db 49
 db 7
 ; height
 db 11
+; reversed
+db 1
+; padding
+db 0
+db 0
+db 0
 ; list of characters in the order they're found
 db 0
 db ' '

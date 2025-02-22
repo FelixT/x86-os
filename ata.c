@@ -110,9 +110,9 @@ void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf) {
 }
 
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes) {
-   uint16_t ioPort;
+   /*uint16_t ioPort;
    if(primaryBus) ioPort = ATA_PORT_PRIMARY;
-   else ioPort = ATA_PORT_SECONDARY;
+   else ioPort = ATA_PORT_SECONDARY;*/
 
    uint32_t lba = addr/512;
    uint32_t startAddr = lba*512;

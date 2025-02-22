@@ -25,7 +25,6 @@ surface_t window_getsurface(int windowIndex) {
 // === window actions ===
 
 void window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex) {
-   if(c >= 'a' && c <= 'z') c = (c - 'a') + 'A'; // convert to uppercase
    surface_t surface = window_getsurface(windowIndex);
    draw_char(&surface, c, colour, x, y);
 }

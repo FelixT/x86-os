@@ -282,8 +282,6 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    gui_writestr("Loaded into 0x", 0);
    gui_writeuint_hex((uint32_t)fileContents, 0);
-   gui_writestr(" / ", 0);
-   gui_writeuint((uint32_t)fileContents, 0);
    gui_drawchar('\n', 0);
 
    free((uint32_t)fatTable, 2*noClusters);

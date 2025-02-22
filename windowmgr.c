@@ -201,7 +201,7 @@ void window_draw_outline(gui_window_t *window) {
    draw_string(&surface, window->title, 0, titleX, window->y+5);
 
    // titlebar buttons
-   draw_char(&surface, 'x', 0, window->x+window->width-(getFont()->width+3), window->y+2);
+   draw_char(&surface, 0, 0, window->x+window->width-(getFont()->width+3), window->y+2);
    draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, window->y+2);
 
 }
@@ -433,14 +433,16 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
 
 extern uint16_t *draw_buffer;
 
+extern int gui_mouse_y;
 void windowmgr_dragged(int relX, int relY) {
    gui_window_t *window = getSelectedWindow();
    if(window == NULL || !window->active) return;
+   if(!window->dragged && gui_mouse_y > window->y+TOOLBAR_HEIGHT) return;
 
    // restore dotted outline
    if(window->dragged)
       draw_dottedrect(&surface, COLOUR_WHITE, window->x, window->y, window->width, window->height, (int*)draw_buffer, true);
-
+   
    window->x += relX;
    window->y -= relY;
    if(window->x < 0)
@@ -529,8 +531,6 @@ void windowmgr_redrawall() {
 extern uint16_t gui_bg;
 void desktop_init() {
    // load add window icon
-   debug_writestr("Init desktop\n");
-
    if(icon_window == NULL) {
       fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
       if(entry == NULL) {
@@ -629,9 +629,13 @@ void menu_draw(gui_menu_t *menu) {
 }
 
 void window_resize(gui_window_t *window, int width, int height) {
-   window->framebuffer = resize((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2, width*(height-TITLEBAR_HEIGHT)*2);
+   free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
+   window->framebuffer = malloc(width*(height-TITLEBAR_HEIGHT)*2);
    window->width = width;
    window->height = height;
+   window->surface.buffer = (uint32_t)window->framebuffer;
+   window->surface.width = width;
+   window->surface.height = height;
    window_clearbuffer(window, window->colour_bg);
    gui_redrawall();
 }

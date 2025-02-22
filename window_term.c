@@ -123,39 +123,16 @@ void window_term_draw(void *window) {
 }
 
 void term_cmd_help() {
-   gui_writestr("HELP, INIT, CLEAR, MOUSE, TASKS, VIEWTASKS,\n", 0);
-   gui_writestr("PROG1, PROG2, FILES,\n", 0);
-   gui_writestr("VIEWBMP path, LAUNCH path,\n", 0);
-   gui_writestr("PAGE, TEST, ATA, FAT, DESKTOP,\n", 0);
-   gui_writestr("BMP addr, ELF addr,\n", 0);
-   gui_writestr("FATPATH path, FATDIR clusterno, FATFILE clusterno,\n", 0);
-   gui_writestr("READ addr, MEM <x>, DMPMEM x <y>, RESIZE width height\n", 0);
-   gui_writestr("BG colour, BGIMG path, FONT path, PADDING size, REDRAWALL", 0);
-}
-
-void term_cmd_init(void *regs) {
-   gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
-   mouse_enable();
-
-   gui_writestr("\nEnabling ATA\n", COLOUR_ORANGE);
-   ata_identify(true, true);
-
-   gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
-   fat_setup();
-
-   gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
-   page_init();
-
-   gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
-   tasks_init(regs);
-
-   gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
-   desktop_init();
-
-   gui_writestr("\nEnabling events\n", COLOUR_ORANGE);
-   events_add(40, NULL, NULL, -1);
-
-   gui_redrawall();
+   gui_writestr("\n", 0);
+   gui_writestr("HELP, CLEAR, MOUSE, TASKS\n", 0);
+   gui_writestr("PROG1, PROG2, FILES\n", 0);
+   gui_writestr("VIEWBMP path, LAUNCH path\n", 0);
+   gui_writestr("PAGE, TEST, DESKTOP\n", 0);
+   gui_writestr("FAT, FATPATH path\n", 0);
+   gui_writestr("FATDIR clusterno FATFILE clusterno\n", 0);
+   gui_writestr("READ addr, MEM <x>, DMPMEM x <y>\n", 0);
+   gui_writestr("BG colour, BGIMG path, FONT path\n", 0);
+   gui_writestr("PADDING size, REDRAWALL, RESIZE x y",0);
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -169,15 +146,15 @@ void term_cmd_clear(gui_window_t *selected) {
 }
 
 void term_cmd_mouse() {
-   mouse_enable();
-   gui_writestr("Enabled\n", 0);
+   extern bool mouse_enabled;
+   mouse_enabled = !mouse_enabled;
+   if(mouse_enabled)
+      gui_writestr("Enabled\n", 0);
+   else
+      gui_writestr("Disabled\n", 0);
 }
 
-void term_cmd_tasks(void *regs) {
-   tasks_init(regs);
-}
-
-void term_cmd_viewtasks() {
+void term_cmd_tasks() {
    task_state_t *tasks = gettasks();
 
    extern bool switching;
@@ -230,10 +207,6 @@ void term_cmd_viewbmp(void *regs, char *arg) {
    tasks_launch_elf(regs, "/sys/bmpview.elf", argc, args);
 }
 
-void term_cmd_page() {
-   page_init();
-}
-
 void term_cmd_test() {
    extern uint32_t kernel_end;
    uint32_t framebuffer = (uint32_t)gui_get_framebuffer();
@@ -268,10 +241,6 @@ void term_cmd_test() {
 
 }
 
-void term_cmd_ata() {
-   ata_identify(true, true); 
-}
-
 void term_cmd_fat() {
    fat_setup();
 }
@@ -290,21 +259,6 @@ void term_cmd_fatpath(char *arg) {
    }
 }
 
-void term_cmd_bmp(gui_window_t *selected, char *arg) {
-   int addr = stoi(arg);
-   uint8_t *bmp = (uint8_t*)addr;
-   uint16_t *buffer = selected->framebuffer;
-   bmp_draw(bmp, buffer, selected->width, selected->height - TITLEBAR_HEIGHT, 0, 0, false);
-   selected->needs_redraw = true;
-   gui_draw();
-}
-
-void term_cmd_elf(registers_t *regs, char *arg) {
-      int addr = stoi(arg);
-      uint8_t *prog = (uint8_t*)addr;
-      elf_run(regs, prog, 0, NULL);
-}
-
 void term_cmd_launch(registers_t *regs, char *arg) {
       tasks_launch_elf(regs, arg, 0, NULL);
 }
@@ -315,7 +269,6 @@ void term_cmd_resize(gui_window_t *window, char *arg) {
    int width = stoi(arg);
    int height = stoi(arg2);
    window_resize(window, width, height);
-   term_cmd_clear(window);
 }
 
 void term_cmd_fatdir(char *arg) {
@@ -477,28 +430,20 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
 
    if(strcmp(command, "HELP"))
       term_cmd_help();
-   else if(strcmp(command, "INIT"))
-      term_cmd_init(regs);
    else if(strcmp(command, "CLEAR"))
       term_cmd_clear(selected);
    else if(strcmp(command, "MOUSE"))
       term_cmd_mouse();
    else if(strcmp(command, "TASKS"))
-      term_cmd_tasks(regs);
-   else if(strcmp(command, "VIEWTASKS"))
-      term_cmd_viewtasks();
+      term_cmd_tasks();
    else if(strcmp(command, "PROG1"))
       term_cmd_prog1(regs);
    else if(strcmp(command, "PROG2"))
       term_cmd_prog2(regs);
    else if(strcmp(command, "FILES"))
       term_cmd_files(regs);
-   else if(strcmp(command, "PAGE"))
-      term_cmd_page();
    else if(strcmp(command, "TEST"))
       term_cmd_test();
-   else if(strcmp(command, "ATA"))
-      term_cmd_ata();
    else if(strcmp(command, "FAT"))
       term_cmd_fat();
    else if(strcmp(command, "DESKTOP"))
@@ -511,12 +456,8 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_font((char*)arg);
    else if(strcmp(command, "PADDING"))
       term_cmd_padding((char*)arg);
-   else if(strstartswith(command, "BMP"))
-      term_cmd_bmp(selected, (char*)arg);
    else if(strstartswith(command, "VIEWBMP"))
       term_cmd_viewbmp(regs, (char*)arg);
-   else if(strstartswith(command, "ELF"))
-      term_cmd_elf(regs, (char*)arg);
    else if(strcmp(command, "LAUNCH"))
       term_cmd_launch(regs, (char*)arg);
    else if(strcmp(command, "RESIZE"))

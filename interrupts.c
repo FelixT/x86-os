@@ -246,21 +246,24 @@ void mouse_handler(registers_t *regs) {
    mouse_cycle++;
 
    if(mouse_cycle == 3) {
-      int8_t xm = mouse_data[2];
-      int8_t ym = mouse_data[0];
+      int8_t xm = mouse_data[0];
+      int8_t ym = mouse_data[1];
 
       // handle case of negative relative values
       //int relX = xm - ((mouse_data[1] << 4) & 0x100);
       //int relY = ym - ((mouse_data[1] << 3) & 0x100);
 
-      mouse_update(xm, ym);
+      extern bool mouse_enabled;
+      if(mouse_enabled) {
+         mouse_update(xm, ym);
 
-      if(mouse_data[1] & 0x2)
-         mouse_rightclick(regs);
-      else if(mouse_data[1] & 0x1)
-         mouse_leftclick(regs, xm, ym);
-      else
-         mouse_release();
+         if(mouse_data[2] & 0x2)
+            mouse_rightclick(regs);
+         else if(mouse_data[2] & 0x1)
+            mouse_leftclick(regs, xm, ym);
+         else
+            mouse_release();
+      }
 
       mouse_cycle = 0;
    }

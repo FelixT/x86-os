@@ -2,6 +2,7 @@
 #include "window.h"
 #include "windowmgr.h"
 #include "font.h"
+#include "events.h"
 
 extern int videomode;
 
@@ -108,6 +109,23 @@ void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
 
 extern vbe_mode_info_t vbe_mode_info_structure;
 extern int *font_letter;
+
+void gui_init_meat(registers_t *regs, void *msg) {
+   (void)msg;
+   gui_writestr("Enabling ATA HD\n", COLOUR_ORANGE);
+   ata_identify(true, true);
+   gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
+   fat_setup();
+   gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
+   page_init();
+   gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
+   desktop_init();
+   gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
+   tasks_init(regs);
+
+   gui_redrawall();
+}
+
 void gui_init(void) {
    videomode = 1;
 
@@ -126,6 +144,9 @@ void gui_init(void) {
    gui_clear(gui_bg);
    font_init();
    windowmgr_init();
+   mouse_enable();
+
+   events_add(1, &gui_init_meat, NULL, -1);
 }
 
 void gui_draw_window(int windowIndex);
@@ -202,7 +223,7 @@ void mouse_enable() {
    outb(0x60, 0xF4);
    inb(0x60);
 
-   gui_cursor_save_bg();
+   //gui_cursor_save_bg();
    mouse_enabled = true;
 }
 

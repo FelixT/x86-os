@@ -62,9 +62,7 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    debug_writehex((uint32_t)newProg);
    debug_writestr(" - ");
    debug_writehex((uint32_t)newProg + vmem_size);
-
    debug_writestr(" to ");
-
    debug_writehex(vmem_start);
    debug_writestr(" - ");
    debug_writehex(vmem_end);
@@ -81,27 +79,13 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    // copy program to new location and assign virtual memory for each segment
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {
 
-      debug_writestr("\nSegment ");
-      debug_writeuint(i);
-
       if(prog_header->segment_type != 1) {
-         debug_writestr(" Type ");
-         debug_writeuint(prog_header->segment_type);
          // if not LOAD
          //continue;
       }
 
       uint32_t file_offset = prog_header->p_offset;
       uint32_t vmem_offset = prog_header->p_vaddr - vmem_start;
-
-      debug_writestr("\nFile offset ");
-      debug_writehex(file_offset);
-      debug_writestr(" size ");
-      debug_writehex((uint32_t)prog_header->p_filesz);
-      debug_writestr(" Vmem offset ");
-      debug_writehex(vmem_offset);
-      debug_writestr(" size ");
-      debug_writehex((uint32_t)prog_header->p_memsz);
 
       // copy
       for(int i = 0; i < (int)prog_header->p_filesz; i++)
@@ -111,15 +95,6 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
       
       prog_header++;
    }
-
-   uint32_t offset = elf_header->entry - vmem_start;
-
-   debug_writestr("\nOffset: ");
-   debug_writeuint(offset);
-   debug_writestr("\n");
-
-   //gui_draw();
-   //while(true);
 
    int task_index = get_free_task_index();
 
