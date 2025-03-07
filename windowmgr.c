@@ -274,6 +274,7 @@ void window_draw(gui_window_t *window) {
 
 void windowmgr_init() {
    // assigned fixed memory for 64 windows for now to reduce bugs
+   // bug is just that resize func doesn't work i think
    gui_windows = malloc(sizeof(gui_window_t) * 64);
    memset(gui_windows, 0, sizeof(gui_window_t) * 64);
    // Init with one (debug) window

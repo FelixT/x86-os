@@ -284,3 +284,13 @@ static inline windowobj_t *register_windowobj() {
    );
    return (windowobj_t*)addr;
 }
+
+static inline void launch_task(char *path, int argc, char **args) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (32),
+      "b" ((uint32_t)path),
+      "c" ((uint32_t)argc),
+      "d" ((uint32_t)args)
+   );
+}

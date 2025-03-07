@@ -47,6 +47,27 @@ volatile fat_dir_t *cur_items;
 volatile int no_items;
 volatile int offset;
 
+char cur_path[200];
+
+int strlen(char* str) {
+   int len = 0;
+   while(str[len] != '\0')
+      len++;
+   return len;
+}
+
+bool strcmp(char* str1, char* str2) {
+   int len = strlen(str1);
+   if(len != strlen(str2))
+      return false;
+
+   for(int i = 0; i < len; i++)
+      if(str1[i] != str2[i])
+         return false;
+
+   return true;
+}
+
 void display_items() {
    int y = 5;
    int x = 5;
@@ -102,9 +123,14 @@ void display_items() {
       y += 25;
       position++;
    }
+
+   // draw path
+   write_strat(cur_path, 0, 280);
 }
 
 void read_root() {
+   cur_path[0] = '/';
+   cur_path[1] = '\0';
    // read root
    bpb = (fat_bpb_t*) fat_get_bpb();
    cur_items = (fat_dir_t*)fat_read_root();
@@ -167,6 +193,16 @@ void click(int x, int y) {
       if(cur_items[index].firstClusterNo == 0) {
          read_root();
       } else {
+         // update path
+         int pi = strlen(cur_path);
+         if(pi == 1) pi = 0;
+         cur_path[pi] = '/';
+         int x;
+         for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
+            cur_path[pi+x+1] = cur_items[index].filename[x];
+         cur_path[pi+x+1] = '\0';
+
+         // read dir
          no_items = fat_get_dir_size(cur_items[index].firstClusterNo);
          cur_items = (fat_dir_t*)fat_read_dir(cur_items[index].firstClusterNo);
       }
@@ -174,6 +210,42 @@ void click(int x, int y) {
       // cur_items[index].firstClusterNo;
    } else {
       // file
+
+      int x;
+
+      char extension[4];
+      for(x = 0; x < 3; x++)
+         extension[x] = cur_items[index].filename[x+8];
+      extension[3] = '\0';
+
+      char fullpath[200];
+      int pi = strlen(cur_path);
+      for(x = 0; x < pi; x++)
+         fullpath[x] = cur_path[x];
+      fullpath[pi] = '/';
+      for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
+         fullpath[pi+x+1] = cur_items[index].filename[x];
+      pi+=x+1;
+      fullpath[pi] = '.';
+      for(x = 0; x < 4; x++)
+         fullpath[pi+x+1] = extension[x];
+
+      // handle supported extensions
+      // bmp, elf
+      if(strcmp(extension, "BMP")) {
+         
+         char **args = (char**)malloc(1);
+         args[0] = fullpath;
+
+         // note: this also ends the subroutine
+         launch_task("/sys/bmpview.elf", 1, args);
+      }
+
+      if(strcmp(extension, "ELF")) {
+         // note: this also ends the subroutine
+         launch_task(fullpath, 0, NULL);
+      }
+
 
       // cur_items[index].firstClusterNo;
    }
@@ -215,6 +287,7 @@ void _start() {
 
    read_root();
    display_items();
+   redraw();
 
    // main program loop
    while(1 == 1) {

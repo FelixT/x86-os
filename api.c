@@ -228,3 +228,17 @@ void api_register_windowobj(registers_t *regs) {
 
    regs->ebx = (uint32_t)wo;
 }
+
+void api_launch_task(registers_t *regs) {
+   // IN: ebx = path
+   // IN: ecx = argc
+   // IN: edx = args
+
+   char *path = (char*)regs->ebx;
+   int argc = (int)regs->ecx;
+   char **args = (char**)regs->edx;   
+
+   task_subroutine_end(regs);
+
+   tasks_launch_elf(regs, path, argc, args);
+}

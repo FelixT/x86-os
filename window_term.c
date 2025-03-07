@@ -260,7 +260,7 @@ void term_cmd_fatpath(char *arg) {
 }
 
 void term_cmd_launch(registers_t *regs, char *arg) {
-      tasks_launch_elf(regs, arg, 0, NULL);
+   tasks_launch_elf(regs, arg, 0, NULL);
 }
 
 void term_cmd_resize(gui_window_t *window, char *arg) {

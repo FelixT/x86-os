@@ -214,6 +214,9 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 31)
       api_register_windowobj(regs);
+
+   if(regs->eax == 32)
+      api_launch_task(regs);
 }  
 
 void keyboard_handler(registers_t *regs) {

@@ -5,6 +5,7 @@
 
 #include "fat.h"
 #include "string.h"
+#include "windowmgr.h"
 
 // 8.3 directory structure
 
@@ -280,9 +281,9 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
    }
 
-   gui_writestr("Loaded into 0x", 0);
-   gui_writeuint_hex((uint32_t)fileContents, 0);
-   gui_drawchar('\n', 0);
+   debug_writestr("Loaded into 0x");
+   debug_writehex((uint32_t)fileContents);
+   debug_writestr("\n");
 
    free((uint32_t)fatTable, 2*noClusters);
 
