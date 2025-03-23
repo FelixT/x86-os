@@ -129,7 +129,7 @@ void term_cmd_help() {
    gui_writestr("VIEWBMP path, LAUNCH path\n", 0);
    gui_writestr("PAGE, TEST, DESKTOP\n", 0);
    gui_writestr("FAT, FATPATH path\n", 0);
-   gui_writestr("FATDIR clusterno FATFILE clusterno\n", 0);
+   gui_writestr("FATDIR clusterno, FATFILE clusterno\n", 0);
    gui_writestr("READ addr, MEM <x>, DMPMEM x <y>\n", 0);
    gui_writestr("BG colour, BGIMG path, FONT path\n", 0);
    gui_writestr("PADDING size, REDRAWALL, RESIZE x y",0);

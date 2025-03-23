@@ -287,7 +287,7 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       mouse_held = true;
 
       if(!windowmgr_click(regs, gui_mouse_x, gui_mouse_y))
-         desktop_click(gui_mouse_x, gui_mouse_y);
+         desktop_click(regs, gui_mouse_x, gui_mouse_y);
 
       gui_draw();
    }

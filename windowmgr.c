@@ -19,6 +19,7 @@ extern surface_t surface; // screen
 bool desktop_enabled = false;
 uint8_t *icon_window = NULL;
 uint8_t *gui_bgimage = NULL;
+uint8_t *icon_files = NULL;
 
 extern bool mouse_heldright;
 gui_menu_t default_menu; // right click menu
@@ -104,8 +105,8 @@ void window_close(void *regs, int windowIndex) {
 
 bool window_init(gui_window_t *window) {
    strcpy(window->title, " TERMINAL");
-   window->x = 0;
-   window->y = 0;
+   window->x = 20;
+   window->y = 20;
    window->width = 440;
    window->height = 320;
    window->text_buffer[0] = '\0';
@@ -281,8 +282,8 @@ void windowmgr_init() {
    window_init(&gui_windows[0]);
    strcpy(gui_windows[0].title, "0DEBUG WINDOW");
    gui_windows[0].active = true;
-   gui_windows[0].x = 5;
-   gui_windows[0].y = 5;
+   gui_windows[0].x = 100;
+   gui_windows[0].y = 100;
    setSelectedWindowIndex(0);
    windowCount++;
 }
@@ -355,6 +356,20 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
 void windowmgr_keypress(void *regs, int scan_code) {
    if(selectedWindow == NULL) return;
    
+   // check if we have a window object selected
+   for(int i = 0; i < selectedWindow->window_object_count; i++) {
+      windowobj_t *wo = selectedWindow->window_objects[i];
+      if(!wo->clicked) continue;
+
+      gui_interrupt_switchtask(regs);
+      if(get_current_task_window() != getSelectedWindowIndex())
+         return; // no task
+      windowobj_keydown((void*)wo, scan_code);
+      windowobj_redraw((void*)selectedWindow, (void*)wo);
+      return;
+   }
+
+   // otherwise, default behaviour
    switch(scan_code) {
       case 28: // return
          if(selectedWindow->return_func != NULL)
@@ -502,6 +517,7 @@ bool windowmgr_click(void *regs, int x, int y) {
 
 void windowmgr_rightclick(void *regs, int x, int y) {
    (void)(regs);
+   setSelectedWindowIndex(-1);
    // draw menu
    default_menu.x = x;
    default_menu.y = y;
@@ -535,11 +551,19 @@ void desktop_init() {
    if(icon_window == NULL) {
       fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
       if(entry == NULL) {
-         debug_writestr("Icon not found\n");
+         debug_writestr("Window icon not found\n");
          return;
       }
 
       icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   }
+   if(icon_files == NULL) {
+      fat_dir_t *entry = fat_parse_path("/bmp/files.bmp");
+      if(entry == NULL) {
+         debug_writestr("Files icon not found\n");
+         return;
+      }
+      icon_files = fat_read_file(entry->firstClusterNo, entry->fileSize);
    }
 
    if(gui_bgimage == NULL) {
@@ -569,14 +593,34 @@ void desktop_draw() {
    int x = (surface.width - width) / 2;
    int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
    bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0);
-   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, 10, 10, 1);
+
+   x = 10;
+   y = 10;
+   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1);
+   y += 10 + bmp_get_height(icon_window);
+   draw_string(&surface, "Terminal", 0xFFFF, x, y);
+   y += 10 + getFont()->height;
+   bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1);
+   y += 10 + bmp_get_height(icon_files);
+   draw_string(&surface, "FileMgr", 0xFFFF, x, y);
 }
 
-void desktop_click(int x, int y) {
+void desktop_click(registers_t *regs, int x, int y) {
    if(!desktop_enabled) return;
 
-   if(x >= 10 && y >= 10 && x <= 60 && y <= 60)
+   int icony = 10;
+   int iconheight = bmp_get_height(icon_window);
+
+   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight)
       windowmgr_add();
+
+   icony += 10*2 + iconheight + getFont()->height;
+   iconheight = bmp_get_height(icon_files);
+
+   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
+      tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
+   }
+
 }
 
 void windowmgr_mousemove(int x, int y) {
@@ -624,8 +668,8 @@ void windowmgr_mousemove(int x, int y) {
  }
 
 void menu_draw(gui_menu_t *menu) {
-   draw_rect(&surface, rgb16(210, 210, 210), menu->x, menu->y, 120, 340);
-   draw_unfilledrect(&surface, rgb16(230, 230, 230), menu->x, menu->y, 120, 340);
+   draw_rect(&surface, rgb16(240, 240, 240), menu->x, menu->y, 120, 340);
+   draw_unfilledrect(&surface, rgb16(80, 80, 80), menu->x, menu->y, 120, 340);
    draw_string(&surface, "TEST", 0, menu->x+4, menu->y+4);
 }
 

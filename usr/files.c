@@ -231,7 +231,7 @@ void click(int x, int y) {
          fullpath[pi+x+1] = extension[x];
 
       // handle supported extensions
-      // bmp, elf
+      // bmp, elf, txt
       if(strcmp(extension, "BMP")) {
          
          char **args = (char**)malloc(1);
@@ -244,6 +244,15 @@ void click(int x, int y) {
       if(strcmp(extension, "ELF")) {
          // note: this also ends the subroutine
          launch_task(fullpath, 0, NULL);
+      }
+
+      if(strcmp(extension, "TXT")) {
+         
+         char **args = (char**)malloc(1);
+         args[0] = fullpath;
+
+         // note: this also ends the subroutine
+         launch_task("/sys/text.elf", 1, args);
       }
 
 

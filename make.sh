@@ -35,6 +35,7 @@ $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra us
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/prog4.c -o o/prog4.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/bmpview.c -o o/bmpview.elf 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/text.c -o o/text.elf 
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -44,6 +45,7 @@ cp o/prog3.elf fs_root/sys/prog3.elf
 cp o/prog4.elf fs_root/sys/prog4.elf
 cp o/files.elf fs_root/sys/files.elf
 cp o/bmpview.elf fs_root/sys/bmpview.elf
+cp o/text.elf fs_root/sys/text.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
 # fonts

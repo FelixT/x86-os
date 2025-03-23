@@ -103,7 +103,7 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    gettasks()[task_index].vmem_end = vmem_end;
    gettasks()[task_index].prog_start = (uint32_t)newProg;
    gettasks()[task_index].page_dir = dir;
-   launch_task(task_index, regs, false);
+   launch_task(task_index, regs, true);
 
    // push args
    regs->useresp -= 4;

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "window_t.h"
+#include "registers_t.h"
 
 typedef struct gui_menu_t {
    int x;
@@ -21,7 +22,7 @@ void debug_writeuint(uint32_t num);
 void debug_writehex(uint32_t num);
 gui_window_t *getWindow(int index);
 gui_window_t *getSelectedWindow();
-void windowmgr_keypress();
+void windowmgr_keypress(void *regs, int scan_code);
 void window_draw(gui_window_t *window);
 void toolbar_draw();
 void gui_uparrow();
@@ -34,7 +35,7 @@ void windowmgr_draw();
 void windowmgr_redrawall();
 void windowmgr_dragged();
 void desktop_draw();
-void desktop_click();
+void desktop_click(registers_t *regs, int x, int y);
 void desktop_init();
 void desktop_setbgimg(uint8_t *img);
 void windowmgr_mousemove(int x, int y);

@@ -27,6 +27,7 @@ typedef struct windowobj_t {
    int textpadding;
    bool hovering;
    bool clicked;
+   int textpos;
 
 } windowobj_t;
 
@@ -36,5 +37,6 @@ void windowobj_draw(void *windowobj);
 void windowobj_redraw(void *window, void *windowobj);
 void windowobj_click(void *regs, void *windowobj);
 void windowobj_hover(void *windowobj);
+void windowobj_keydown(void *windowobj, int scan_code);
 
 #endif
