@@ -2,7 +2,7 @@ ENTRY(kmain)
 OUTPUT_FORMAT(binary)
 
 MEMORY {
-    ram : org = 0x7e00, len = 63K
+    ram : org = 0x7e00, len = 127K
  }
 
 SECTIONS {

@@ -65,5 +65,6 @@ void fat_get_info();
 void fat_parse_dir_entry(fat_dir_t *fat_dir);
 fat_bpb_t fat_get_bpb();
 int fat_get_dir_size(uint16_t clusterNo);
+void fat_write_file(uint32_t clusterNo, uint8_t *buffer);
 
 #endif

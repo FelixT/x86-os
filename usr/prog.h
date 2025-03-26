@@ -186,6 +186,15 @@ static inline uint32_t *fat_read_file(uint16_t firstClusterNo, uint32_t fileSize
    return (uint32_t*)addr;
 }
 
+static inline void fat_write_file(uint16_t firstClusterNo, uint8_t *buffer) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (33),
+      "b" ((uint32_t)firstClusterNo),
+      "c" ((uint32_t)buffer)
+   );
+}
+
 static inline void bmp_draw(uint8_t *bmp, int x, int y) {
    asm volatile (
       "int $0x30;"

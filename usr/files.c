@@ -260,6 +260,7 @@ void click(int x, int y) {
    }
 
    display_items();
+   redraw();
 
    end_subroutine();
 

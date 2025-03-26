@@ -28,6 +28,7 @@ void api_fat_get_root(registers_t *regs);
 void api_fat_get_bpb(registers_t *regs);
 void api_fat_parse_path(registers_t *regs);
 void api_fat_read_file(registers_t *regs);
+void api_fat_write_file(registers_t *regs);
 void api_get_get_dir_size(registers_t *regs);
 void api_read_dir(registers_t *regs);
 void api_draw_bmp(registers_t *regs);

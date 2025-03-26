@@ -69,8 +69,8 @@ void ata_identify(bool primaryBus, bool masterDrive) {
 
 }
 
-void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf) {
-   // read 512 bytes using ATA PIO mode
+void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf, bool write) {
+   // read or write 512 bytes using ATA PIO mode
 
    uint16_t ioPort;
    
@@ -88,7 +88,8 @@ void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf) {
    outb(ioPort + ATA_REG_LBA1, (uint8_t)((lba)>>8));
    outb(ioPort + ATA_REG_LBA2, (uint8_t)((lba)>>16));
 
-   outb(ioPort + ATA_REG_COMMAND, ATA_CMD_READ_PIO);
+   uint8_t cmd = write ? ATA_CMD_WRITE_PIO : ATA_CMD_READ_PIO;
+   outb(ioPort + ATA_REG_COMMAND, cmd);
 
    ata_delay(ioPort);
    uint8_t status = inb(ioPort + ATA_REG_STATUS);
@@ -104,16 +105,18 @@ void ata_read(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf) {
 
    // read 256 words
    for(int i = 0; i < 256; i++) {
-      buf[i] = inw(ioPort + ATA_REG_DATA);
+      if(write) {
+         outw(ioPort + ATA_REG_DATA, buf[i]);
+         //outb(0x80, 0); // osdev forum suggestion
+         //asm volatile("jmp $+2"); // osdev suggestion
+      } else {
+         buf[i] = inw(ioPort + ATA_REG_DATA);
+      }
    }
 
 }
 
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes) {
-   /*uint16_t ioPort;
-   if(primaryBus) ioPort = ATA_PORT_PRIMARY;
-   else ioPort = ATA_PORT_SECONDARY;*/
-
    uint32_t lba = addr/512;
    uint32_t startAddr = lba*512;
 
@@ -129,8 +132,7 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
 
    //int reads = (bytesRequired + (512-1))/512; // bytes
    for(int i = 0; i < reads; i++) {
-      ata_read(primaryBus, masterDrive, lba+i, &readBuf[256*i]);
-      //ata_delay(ioPort);
+      ata_readwrite(primaryBus, masterDrive, lba+i, &readBuf[256*i], false);
    }
 
    // copy to new buffer
@@ -141,6 +143,19 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
 
    free((uint32_t)&readBuf[0], bytesRequired);
    return outBuf;
+}
+
+void ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *buf, int size) {
+   if(size%512 != 0) {
+      gui_writestr("Must read a multiple of 512 bytes\n", 0);
+      return;
+   }
+   if(addr%512 != 0) {
+      gui_writestr("Must read addr 512 bytes aligned\n", 0);
+      return;
+   }
+   for(int i = 0; i < size/512; i++)
+      ata_readwrite(primaryBus, masterDrive, addr/512 + i, (uint16_t*)(buf + i*512), true);
 }
 
 void ata_interrupt() {

@@ -9,7 +9,7 @@
 
 // 8.3 directory structure
 
-uint32_t baseAddr = 64000;
+uint32_t baseAddr = 128000;
 
 fat_bpb_t *fat_bpb = NULL;
 fat_ebr_t *fat_ebr;
@@ -213,6 +213,56 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
       free((uint32_t)buf2, sizeof(fat_dir_t));
    }
    return NULL;
+}
+
+void fat_write_file(uint32_t clusterNo, uint8_t *buffer) {
+   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
+   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
+   uint32_t firstDataSector = rootSector + rootSize;
+   uint32_t fileFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+
+   // read entire fat table
+   uint32_t fatTableAddr = baseAddr + fat_bpb->noReservedSectors*fat_bpb->bytesPerSector;
+   uint8_t *fatTable = ata_read_exact(true, true, fatTableAddr, 2*noClusters);
+
+   // get no clusters
+   uint16_t c = clusterNo;
+   uint16_t clusterCount = 1;
+   while(true) {
+      uint16_t tableVal = ((uint16_t*)fatTable)[c];
+      if(tableVal >= 0xFFF8) {
+         break; // no more clusters in chain
+      } else if(tableVal == 0xFFF7) {
+         break; // bad cluster
+      } else {
+         c = tableVal;
+         clusterCount++;
+      }
+   }
+
+   uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
+   debug_writestr("Writing ");
+   debug_writeuint(fileSizeDisk);
+   debug_writestr(" clusters ");
+   debug_writeuint(clusterCount);
+   debug_writestr(" sectors ");
+   debug_writeuint(fat_bpb->sectorsPerCluster);
+   debug_writestr(":\n");
+
+   for(int cluster = 0; cluster < clusterCount; cluster++) {
+      // read all sectors of cluster
+      for(int i = 0; i < fat_bpb->sectorsPerCluster; i++) {
+         uint32_t sectorAddr = (fileFirstSector+cluster*fat_bpb->sectorsPerCluster+i)*fat_bpb->bytesPerSector + baseAddr;
+         uint32_t memOffset = fat_bpb->bytesPerSector * (cluster*fat_bpb->sectorsPerCluster + i);
+         debug_writestr("Writing sector ");
+         debug_writeuint(i);
+         debug_writestr("\n");
+         ata_write_exact(true, true, sectorAddr, buffer + memOffset, fat_bpb->bytesPerSector);
+      }
+      //debug_writestr("Write\n");
+      //uint32_t diskAddr = baseAddr + (fileFirstSector + cluster*fat_bpb->sectorsPerCluster) * fat_bpb->bytesPerSector;
+      //ata_write_exact(true, true, diskAddr, buffer + i * fat_bpb->bytesPerSector, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
+   }
 }
 
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {

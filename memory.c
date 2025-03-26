@@ -3,8 +3,6 @@
 #include "memory.h"
 #include "gui.h"
 
-int malloc_debug = 0;
-
 mem_segment_status_t memory_status[KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE];
 
 void memory_reserve(uint32_t offset, int bytes) {
@@ -26,16 +24,6 @@ void free(uint32_t offset, int bytes) {
 
    int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
-
-   if(malloc_debug) {
-      debug_writestr("Free ");
-      debug_writeuint(offset);
-      debug_writestr(" <");
-      debug_writeuint(blockStart);
-      debug_writestr(",");
-      debug_writeuint(noBlocks);
-      debug_writestr(">\n");
-   }
 
    char freeASCII[6] = "FREE ";
 
@@ -107,16 +95,6 @@ void *malloc(int bytes) {
    }
 
    int addr = (int)(HEAP_KERNEL) + (int)(blockStart*MEM_BLOCK_SIZE);
-
-   if(malloc_debug) {
-      debug_writestr("Malloc ");
-      debug_writeuint(addr);
-      debug_writestr(" <");
-      debug_writeuint(blockStart);
-      debug_writestr(",");
-      debug_writeuint(noBlocks);
-      debug_writestr(">\n");
-   }
 
    return (void*)addr;
 }

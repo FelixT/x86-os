@@ -10,9 +10,9 @@
 void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
 
    //page_enable_debug();
-   debug_writestr("elf_run called with prog at ");
+   /*debug_writestr("elf_run called with prog at ");
    debug_writehex((uint32_t)prog);
-   debug_writestr("\n");
+   debug_writestr("\n");*/
 
    elf_header_t *elf_header = (elf_header_t*)prog;
    elf_prog_header_t *prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
@@ -113,8 +113,8 @@ void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args) {
    regs->useresp -= 4;
    ((uint32_t*)regs->useresp)[0] = vmem_start; // push dummy (mapped) return addr
 
-   debug_writestr("\nStarting at: ");
+   /*debug_writestr("\nStarting at: ");
    debug_writehex(elf_header->entry);
-   debug_writestr("\n");
+   debug_writestr("\n");*/
 
 }

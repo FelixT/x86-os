@@ -172,9 +172,9 @@ void tasks_init(registers_t *regs) {
 
    switching = true;
 
-   window_writestr("Entry at ", 0, 0);
+   /*window_writestr("Entry at ", 0, 0);
    window_writenum(regs->eip, 0, 0);
-   window_writestr("\n", 0, 0);
+   window_writestr("\n", 0, 0);*/
 }
 
 void switch_task(registers_t *regs) {

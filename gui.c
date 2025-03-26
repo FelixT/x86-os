@@ -123,6 +123,10 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
 
+   getSelectedWindow()->minimised = true;
+   getSelectedWindow()->active = false;
+   gui_redrawall();
+
    gui_redrawall();
 }
 

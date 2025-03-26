@@ -242,3 +242,10 @@ void api_launch_task(registers_t *regs) {
 
    tasks_launch_elf(regs, path, argc, args);
 }
+
+void api_fat_write_file(registers_t *regs) {
+   // IN: ebx = first cluster no
+   // IN: ecx = buffer
+
+   fat_write_file(regs->ebx, (uint8_t*)regs->ecx);
+}

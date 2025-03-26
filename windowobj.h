@@ -17,6 +17,7 @@ typedef struct windowobj_t {
    void (*draw_func)(void *windowobj);
    void (*click_func)(void *windowobj);
    void (*hover_func)(void *windowobj);
+   void (*return_func)(void *windowobj);
    surface_t *window_surface;
 
    int x;
@@ -28,6 +29,8 @@ typedef struct windowobj_t {
    bool hovering;
    bool clicked;
    int textpos;
+   int cursorx;
+   int cursory;
 
 } windowobj_t;
 
@@ -37,6 +40,6 @@ void windowobj_draw(void *windowobj);
 void windowobj_redraw(void *window, void *windowobj);
 void windowobj_click(void *regs, void *windowobj);
 void windowobj_hover(void *windowobj);
-void windowobj_keydown(void *windowobj, int scan_code);
+void windowobj_keydown(void *regs, void *windowobj, int scan_code);
 
 #endif

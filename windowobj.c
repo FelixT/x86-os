@@ -27,6 +27,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->draw_func = &windowobj_draw;
    windowobj->click_func = NULL;
    windowobj->hover_func = &windowobj_hover;
+   windowobj->return_func = NULL;
 }
 
 
@@ -50,7 +51,8 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
          x = wo->textpadding;
       }
    }
-   //draw_string(wo->window_surface, wo->text, colour, wo->x+wo->textpadding, wo->y+wo->textpadding);
+   wo->cursorx = x;
+   wo->cursory = y + getFont()->height - 2;
 
 }
 
@@ -75,7 +77,7 @@ void windowobj_draw(void *windowobj) {
       }
       border = 0;
    } else if(wo->hovering) {
-      bg = rgb16(230, 230, 230);
+      bg = rgb16(240, 240, 240);
       if(wo->type == WO_BUTTON) {
          bg = rgb16(200, 200, 200);
       }
@@ -87,6 +89,11 @@ void windowobj_draw(void *windowobj) {
    draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
 
    windowobj_drawstr(wo, text);
+
+   if(wo->type == WO_TEXT && wo->clicked) {
+      // draw cursor
+      draw_rect(wo->window_surface, text, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
+   }
    
 }
 
@@ -122,7 +129,7 @@ void windowobj_hover(void *windowobj) {
 
 extern char scan_to_char(int scan_code);
 
-void windowobj_keydown(void *windowobj, int scan_code) {
+void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    windowobj_t *wo = (windowobj_t*)windowobj;
    if(wo->type != WO_TEXT || wo->text == NULL) return;
 
@@ -130,7 +137,13 @@ void windowobj_keydown(void *windowobj, int scan_code) {
 
    switch(scan_code) {
       case 28: // return
-         c = '\n';
+         if(wo->return_func != NULL) {
+            gui_interrupt_switchtask(regs);
+            task_call_subroutine(regs, (uint32_t)(wo->return_func), NULL, 0);
+            c = 0;
+         } else {
+            c = '\n';
+         }
          break;
       case 14: // backspace
          wo->textpos--;

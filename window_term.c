@@ -122,6 +122,17 @@ void window_term_draw(void *window) {
    draw_char(surface, '_', 0, selected->x + selected->text_x + 1 + getFont()->width + getFont()->padding, selected->y + selected->text_y+TITLEBAR_HEIGHT);
 }
 
+void window_term_clear(void *window) {
+   gui_window_t *selected = (gui_window_t*)window;
+   window_clearbuffer(selected, COLOUR_WHITE);
+   selected->text_x = getFont()->padding;
+   selected->text_y = getFont()->padding;
+   selected->text_index = 0;
+   selected->text_buffer[0] = '\0';
+   selected->needs_redraw = true;
+   window_draw_content(selected);
+}
+
 void term_cmd_help() {
    gui_writestr("\n", 0);
    gui_writestr("HELP, CLEAR, MOUSE, TASKS\n", 0);
@@ -136,13 +147,7 @@ void term_cmd_help() {
 }
 
 void term_cmd_clear(gui_window_t *selected) {
-   window_clearbuffer(selected, COLOUR_WHITE);
-   selected->text_x = getFont()->padding;
-   selected->text_y = getFont()->padding;
-   selected->text_index = 0;
-   selected->text_buffer[0] = '\0';
-   selected->needs_redraw = true;
-   window_draw_content(selected);
+   window_term_clear((void*)selected);
 }
 
 void term_cmd_mouse() {
@@ -289,20 +294,6 @@ void term_cmd_fatdir(char *arg) {
 void term_cmd_fatfile(char *arg) {
    int cluster = stoi(arg);
    fat_read_file((uint16_t)cluster, 0);
-}
-
-void term_cmd_read(char *arg) {
-   // convert str to int
-   uint32_t lba = (uint32_t)stoi(arg);
-   gui_writeuint(lba, 0);
-   gui_writestr("\n", 0);
-   uint16_t *buf = malloc(512);
-   ata_read(true, true, lba, buf);
-   for(int i = 0; i < 256; i++) {
-      gui_writeuint_hex(buf[i], 0);
-      gui_drawchar(' ', 0);
-   }
-   free((uint32_t)buf, 512);
 }
 
 void term_cmd_bg(char *arg) {
@@ -466,8 +457,6 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_fatdir((char*)arg);
    else if(strstartswith(command, "FATFILE"))
       term_cmd_fatfile((char*)arg);
-   else if(strstartswith(command, "READ"))
-      term_cmd_read((char*)arg);
    else if(strstartswith(command, "BGIMG"))
       term_cmd_bgimg((char*)arg);
    else if(strstartswith(command, "BG"))

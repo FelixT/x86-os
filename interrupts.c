@@ -217,6 +217,9 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 32)
       api_launch_task(regs);
+
+   if(regs->eax == 33)
+      api_fat_write_file(regs);
 }  
 
 void keyboard_handler(registers_t *regs) {

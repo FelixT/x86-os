@@ -56,8 +56,8 @@ cp o/font11.bin fs_root/font/11.bin
 cp o/font7.bin fs_root/font/7.bin
 cp o/font8.bin fs_root/font/8.bin
 
-dd if=/dev/zero of=o/hd2.bin bs=64000 count=1 status=none
-dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc status=none
+dd if=/dev/zero of=o/hd2.bin bs=128000 count=1 status=none
+dd if=o/hd1.bin of=o/hd2.bin bs=128000 count=1 conv=notrunc status=none
 
 # create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
@@ -71,7 +71,7 @@ cp -R fs_root/ /Volumes/FATFS
 # unmount
 hdiutil unmount /Volumes/FATFS
 
-# add fs at 64000
+# add fs at 128000
 cat o/hd2.bin fs.img > hd.bin
 
 if [[ $# -eq 0 ]]; then

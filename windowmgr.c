@@ -364,7 +364,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
       gui_interrupt_switchtask(regs);
       if(get_current_task_window() != getSelectedWindowIndex())
          return; // no task
-      windowobj_keydown((void*)wo, scan_code);
+      windowobj_keydown(regs, (void*)wo, scan_code);
       windowobj_redraw((void*)selectedWindow, (void*)wo);
       return;
    }
@@ -400,9 +400,14 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
    if(x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
    && y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && y <= (int)surface.height-TOOLBAR_PADDING) {
       // clicked on window's icon in toolbar, maximise
-      window->minimised = false;
-      window->needs_redraw = true;
-      setSelectedWindowIndex(index);
+      if(window->minimised) {
+         window->minimised = false;
+         window->needs_redraw = true;
+         setSelectedWindowIndex(index);
+      } else {
+         window->minimised = true;
+         window->active = false;
+      }
       return true;
    } else if(!window->minimised && x >= window->x && x <= window->x + window->width && y >= window->y && y <= window->y + window->height) {
       // clicked within window bounds
@@ -429,6 +434,7 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
       // check if we clicked on window object
       relY -= TOOLBAR_HEIGHT;
 
+      int clicked_index = -1;
       for(int i = 0; i < selectedWindow->window_object_count; i++) {
          windowobj_t *wo = selectedWindow->window_objects[i];
          if(relX > wo->x && relX < wo->x + wo->width
@@ -436,10 +442,18 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
             gui_interrupt_switchtask(regs);
             windowobj_click(regs, (void*)wo);
             windowobj_redraw((void*)selectedWindow, (void*)wo);
+            clicked_index = i;
             break;
          }
       }
       
+      // unclick others
+      for(int i = 0; i < selectedWindow->window_object_count; i++) {
+         if(i == clicked_index) continue;
+         windowobj_t *wo = selectedWindow->window_objects[i];
+         wo->clicked = false;
+      }
+
       return true;
 
    }
@@ -628,10 +642,10 @@ void windowmgr_mousemove(int x, int y) {
       // check if within selected window content
 
       int relX = x - selectedWindow->x;
-      int relY = y - (selectedWindow->y + TOOLBAR_HEIGHT);
+      int relY = y - (selectedWindow->y + TITLEBAR_HEIGHT);
 
       if(relX > 0 && relX < selectedWindow->width
-      && relY > 0 && relY < selectedWindow->height - TOOLBAR_HEIGHT) {
+      && relY > 0 && relY < selectedWindow->height - TITLEBAR_HEIGHT) {
          // within current window, check window objects
 
          windowobj_t *hovered = NULL;
