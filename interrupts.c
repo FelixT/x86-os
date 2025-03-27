@@ -19,7 +19,7 @@ bool switching_paused = false;
 extern void mouse_update(uint32_t relX, uint32_t relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
 extern void mouse_rightclick(registers_t *regs);
-extern void mouse_release();
+extern void mouse_release(registers_t *regs);
 
 __attribute__((aligned(0x10))) 
 static idt_entry_t idt[256];
@@ -220,6 +220,10 @@ void software_handler(registers_t *regs) {
 
    if(regs->eax == 33)
       api_fat_write_file(regs);
+
+   if(regs->eax == 34)
+      api_override_resize(regs);
+
 }  
 
 void keyboard_handler(registers_t *regs) {
@@ -268,7 +272,7 @@ void mouse_handler(registers_t *regs) {
          else if(mouse_data[2] & 0x1)
             mouse_leftclick(regs, xm, ym);
          else
-            mouse_release();
+            mouse_release(regs);
       }
 
       mouse_cycle = 0;

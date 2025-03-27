@@ -25,8 +25,10 @@ typedef struct gui_window_t {
    bool minimised;
    bool closed;
 	bool dragged;
+   bool resized;
    int toolbar_pos; // index in toolbar
    uint16_t *framebuffer; // width*(height-titlebar_height)
+   uint32_t framebuffer_size;
 
    uint16_t colour_bg;
 
@@ -45,6 +47,7 @@ typedef struct gui_window_t {
 
    void (*draw_func)(void *window);
    void (*write_func)(void *window, char *string);
+   void (*resize_func)(void *window);
 
 } gui_window_t;
 

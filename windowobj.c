@@ -98,7 +98,7 @@ void windowobj_draw(void *windowobj) {
 }
 
 void windowobj_redraw(void *window, void *windowobj) {
-   if(((gui_window_t*)window)->dragged) return;
+   if(((gui_window_t*)window)->dragged || ((gui_window_t*)window)->resized) return;
    windowobj_t *wo = (windowobj_t*)windowobj;
    window_draw_content_region((gui_window_t*)window, wo->x, wo->y, wo->width, wo->height);
 }

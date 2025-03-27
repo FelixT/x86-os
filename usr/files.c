@@ -73,7 +73,7 @@ void display_items() {
    int x = 5;
 
    clear(0xFFFF); // white
-
+   
    int offsetLeft = offset;
    int position = 0;
 
@@ -266,6 +266,16 @@ void click(int x, int y) {
 
 }
 
+void resize(uint32_t fb, uint32_t w, uint32_t h) {
+   framebuffer = (uint16_t*)fb;
+   width = w;
+   height = h;
+
+   display_items();
+   redraw();
+   end_subroutine();
+}
+
 void _start() {
 
    // init
@@ -292,6 +302,7 @@ void _start() {
    override_downarrow((uint32_t)&downarrow);
    override_click((uint32_t)&click);
    override_draw((uint32_t)NULL);
+   override_resize((uint32_t)&resize);
    width = get_width();
    height = get_height();
 

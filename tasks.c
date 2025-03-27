@@ -211,7 +211,9 @@ bool switch_to_task(int index, registers_t *regs) {
    window_writestr("\n", 0, 0);*/
 
    if(!tasks[index].enabled) {
-      window_writestr("Task switch failed: task is unavaliable\n", 0, 0);
+      window_writestr("Task switch failed: task ", 0, 0);
+      window_writeuint(index, 0, 0);
+      window_writestr(" is unavaliable\n", 0, 0);
       return false;
    }
 

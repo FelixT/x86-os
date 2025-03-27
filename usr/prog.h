@@ -265,6 +265,14 @@ static inline void override_downarrow(uint32_t addr) {
    );
 }
 
+static inline void override_resize(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (34),
+      "b" (addr)
+   );
+}
+
 static inline void write_numat(int num, int x, int y) {
    asm volatile(
       "int $0x30"

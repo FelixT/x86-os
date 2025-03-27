@@ -2,7 +2,7 @@
 ; 7*11 font
 
 ; size
-db 49
+db 51
 ; width
 db 7
 ; height
@@ -27,6 +27,8 @@ db '_'
 db ','
 db 27 ; cursor outline
 db 28 ; cursor fill
+db 29 ; cursor resize outline
+db 30 ; cursor resize fill
 db '0'
 db '1'
 db '2'
@@ -231,7 +233,7 @@ font_cursor_outline:
    db 1000100b
    db 1010010b
    db 1101001b
-   db 1000101b
+   db 0000101b
    db 0000010b
 
 global font_cursor_fill
@@ -244,6 +246,32 @@ font_cursor_fill:
    db 0111000b
    db 0111000b
    db 0101100b
+   db 0000110b
+   db 0000010b
+   db 0000000b
+
+; cursor resize ouline
+   db 1100000b
+   db 1010000b
+   db 1001000b
+   db 1000100b
+   db 1000010b
+   db 0110100b
+   db 0100011b
+   db 0010001b
+   db 0001001b
+   db 0000101b
+   db 0000011b
+
+; cursor resize fill
+   db 0000000b
+   db 0100000b
+   db 0110000b
+   db 0111000b
+   db 0111100b
+   db 0001000b
+   db 0011110b
+   db 0001110b
    db 0000110b
    db 0000010b
    db 0000000b

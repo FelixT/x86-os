@@ -26,12 +26,6 @@ void api_write_uint(registers_t *regs) {
    window_writeuint(regs->ebx, 0, get_current_task_window());
 }
 
-void api_write_uint_debug(registers_t *regs) {
-   // write ebx to window 0 (debug window)
-   window_writeuint(regs->ebx, 0, 0);
-   window_writestr("\n", 0, 0);
-}
-
 void api_write_newline() {
    window_drawchar('\n', 0, get_current_task_window());
 }
@@ -106,15 +100,12 @@ void api_override_uparrow(registers_t *regs) {
    // override uparrow window function with ebx
    uint32_t addr = regs->ebx;
 
-   window_writestr("Overriding uparrow function\n", 0, get_current_task_window());
    gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
 }
 
 void api_override_downarrow(registers_t *regs) {
    // override downarrow window function with ebx
    uint32_t addr = regs->ebx;
-
-   window_writestr("Overriding downarrow function\n", 0, get_current_task_window());
 
    gui_get_windows()[get_current_task_window()].downarrow_func = (void *)(addr);
 }
@@ -123,8 +114,6 @@ void api_override_mouseclick(registers_t *regs) {
    // override mouse left click function with ebx
    uint32_t addr = regs->ebx;
 
-   window_writestr("Overriding click function\n", 0, get_current_task_window());
-
    gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
 }
 
@@ -132,9 +121,14 @@ void api_override_draw(registers_t *regs) {
    // override draw function with ebx
    uint32_t addr = regs->ebx;
 
-   window_writestr("Overriding draw function\n", 0, get_current_task_window());
-
    gui_get_windows()[get_current_task_window()].draw_func = (void *)(addr);
+}
+
+void api_override_resize(registers_t *regs) {
+   // override resize function with ebx
+   uint32_t addr = regs->ebx;
+
+   gui_get_windows()[get_current_task_window()].resize_func = (void *)(addr);
 }
 
 void api_end_subroutine(registers_t *regs) {

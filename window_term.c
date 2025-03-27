@@ -268,12 +268,12 @@ void term_cmd_launch(registers_t *regs, char *arg) {
    tasks_launch_elf(regs, arg, 0, NULL);
 }
 
-void term_cmd_resize(gui_window_t *window, char *arg) {
+void term_cmd_resize(registers_t *regs, gui_window_t *window, char *arg) {
    char arg2[10];
    if(!strsplit(arg, arg2, arg, ' ')) return;
    int width = stoi(arg);
    int height = stoi(arg2);
-   window_resize(window, width, height);
+   window_resize(regs, window, width, height);
 }
 
 void term_cmd_fatdir(char *arg) {
@@ -452,7 +452,7 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
    else if(strcmp(command, "LAUNCH"))
       term_cmd_launch(regs, (char*)arg);
    else if(strcmp(command, "RESIZE"))
-      term_cmd_resize(selected, (char*)arg);
+      term_cmd_resize(regs, selected, (char*)arg);
    else if(strstartswith(command, "FATDIR"))
       term_cmd_fatdir((char*)arg);
    else if(strstartswith(command, "FATFILE"))

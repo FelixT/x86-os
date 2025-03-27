@@ -144,7 +144,8 @@ bool window_init(gui_window_t *window) {
    }
    window->cmd_history_pos = -1;
 
-   window->framebuffer = malloc(window->width*(window->height-TITLEBAR_HEIGHT)*2);
+   window->framebuffer_size = window->width*(window->height-TITLEBAR_HEIGHT)*2;
+   window->framebuffer = malloc(window->framebuffer_size);
    if(window->framebuffer == NULL) return false;
    
    surface_t surface;
@@ -224,8 +225,12 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
          && screenY < selected->y + selected->height)
             continue;
 
+         // ignore pixels off window
+         if(x > window->width || y > window->height - TITLEBAR_HEIGHT) continue;
+
          int index = screenY*surface.width + screenX;
          int w_index = y*window->width + x;
+
          setpixel_safe(&surface, index, window->framebuffer[w_index]);
       }
    }
@@ -238,10 +243,10 @@ void window_draw_content(gui_window_t *window) {
 
 void window_draw(gui_window_t *window) {
 
-   if(window->dragged)
-      draw_dottedrect(&surface, COLOUR_WHITE, window->x, window->y, window->width, window->height, NULL, false);
+   if(window->dragged || window->resized)
+      draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, NULL, false);
 
-   if(window->closed || window->minimised || window->dragged)
+   if(window->closed || window->minimised || window->dragged || window->resized)
       return;
 
    if(window->needs_redraw || window == selectedWindow) {
@@ -404,9 +409,14 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
          window->minimised = false;
          window->needs_redraw = true;
          setSelectedWindowIndex(index);
-      } else {
+      } else if(window->active) {
          window->minimised = true;
          window->active = false;
+         setSelectedWindowIndex(-1);
+         gui_redrawall();
+      } else {
+         window->needs_redraw = true;
+         setSelectedWindowIndex(index);
       }
       return true;
    } else if(!window->minimised && x >= window->x && x <= window->x + window->width && y >= window->y && y <= window->y + window->height) {
@@ -430,6 +440,11 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
 
       window->needs_redraw = true;
       setSelectedWindowIndex(index);
+
+      if(relY < TITLEBAR_HEIGHT) {
+         window->dragged = true;
+         return true;
+      }
 
       // check if we clicked on window object
       relY -= TOOLBAR_HEIGHT;
@@ -467,32 +482,43 @@ extern int gui_mouse_y;
 void windowmgr_dragged(int relX, int relY) {
    gui_window_t *window = getSelectedWindow();
    if(window == NULL || !window->active) return;
-   if(!window->dragged && gui_mouse_y > window->y+TOOLBAR_HEIGHT) return;
+
+   if(!window->dragged && !window->resized) return;
 
    // restore dotted outline
-   if(window->dragged)
-      draw_dottedrect(&surface, COLOUR_WHITE, window->x, window->y, window->width, window->height, (int*)draw_buffer, true);
+   draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, (int*)draw_buffer, true);
    
-   window->x += relX;
-   window->y -= relY;
-   if(window->x < 0)
-      window->x = 0;
-   if(window->x + window->width > (int)surface.width)
-      window->x = surface.width - window->width;
-   if(window->y < 0)
-      window->y = 0;
-   if(window->y + window->height > (int)surface.height - TOOLBAR_HEIGHT)
-      window->y = surface.height - window->height - TOOLBAR_HEIGHT;
+   if(window->dragged) {
+      window->x += relX;
+      window->y -= relY;
+      if(window->x < 0)
+         window->x = 0;
+      if(window->x + window->width > (int)surface.width)
+         window->x = surface.width - window->width;
+      if(window->y < 0)
+         window->y = 0;
+      if(window->y + window->height > (int)surface.height - TOOLBAR_HEIGHT)
+         window->y = surface.height - window->height - TOOLBAR_HEIGHT;
+   }
+   if(selectedWindow->resized) {
+      selectedWindow->width += relX;
+      selectedWindow->height -= relY;
+   }
 
-   window->dragged = true;
    window->needs_redraw = true;
 
    // draw dotted outline
-   draw_dottedrect(&surface, COLOUR_WHITE, window->x, window->y, window->width, window->height, (int*)draw_buffer, false);
+   draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, (int*)draw_buffer, false);
 }
 
+extern bool cursor_resize;
 bool windowmgr_click(void *regs, int x, int y) {
    gui_window_t *prevSelected = selectedWindow;
+
+   if(cursor_resize && selectedWindow != NULL) {
+      selectedWindow->resized = true;
+      return false;
+   }
 
    if(!clicked_on_window(regs, getSelectedWindowIndex(), x, y)) {
       // check other windows
@@ -678,6 +704,17 @@ void windowmgr_mousemove(int x, int y) {
 
          }
       }
+
+      // if just outside to the bottom right, display resize cursor
+      if(relX >= selectedWindow->width && relX < selectedWindow->width + 5
+      && relY >= selectedWindow->height - TITLEBAR_HEIGHT && relY < selectedWindow->height + 5 - TITLEBAR_HEIGHT) {
+         cursor_resize = true;
+      } else {
+         cursor_resize = false;
+      }
+
+   } else {
+      cursor_resize = false;
    }
  }
 
@@ -687,14 +724,35 @@ void menu_draw(gui_menu_t *menu) {
    draw_string(&surface, "TEST", 0, menu->x+4, menu->y+4);
 }
 
-void window_resize(gui_window_t *window, int width, int height) {
-   free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
-   window->framebuffer = malloc(width*(height-TITLEBAR_HEIGHT)*2);
+int get_window_index_from_pointer(gui_window_t *window) {
+   for(int i = 0; i < windowCount; i++) {
+      if(window == &gui_windows[i]) return i;
+   }
+   return -1;
+}
+
+void window_resize(registers_t *regs, gui_window_t *window, int width, int height) {
+   free((uint32_t)window->framebuffer, window->framebuffer_size);
+   window->framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
+   window->framebuffer = malloc(window->framebuffer_size);
    window->width = width;
    window->height = height;
    window->surface.buffer = (uint32_t)window->framebuffer;
    window->surface.width = width;
    window->surface.height = height;
    window_clearbuffer(window, window->colour_bg);
-   gui_redrawall();
+
+   // call resize func if exists
+   int index = get_window_index_from_pointer(window);
+   int task = get_task_from_window(index);
+   if(task > -1 && window->resize_func) {
+      switch_to_task(task, regs);
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = (uint32_t)window->framebuffer;
+      args[1] = width;
+      args[0] = height;
+      task_call_subroutine(regs, (uint32_t)(window->resize_func), args, 3);
+   }
+
+   
 }

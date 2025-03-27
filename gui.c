@@ -14,6 +14,7 @@ uint16_t gui_bg;
 bool mouse_enabled = false;
 bool mouse_held = false;
 bool mouse_heldright = false;
+bool cursor_resize = false;
 
 surface_t surface;
 
@@ -250,8 +251,15 @@ void gui_cursor_restore_bg(int old_x, int old_y) {
 }
 
 void gui_cursor_draw() {
-   gui_drawcharat(27, 0, gui_mouse_x, gui_mouse_y); // outline
-   gui_drawcharat(28, COLOUR_WHITE, gui_mouse_x, gui_mouse_y); // fill
+   char outline = 27;
+   char fill = 28;
+   if(cursor_resize) {
+      outline = 29;
+      fill = 30;
+   }
+
+   gui_drawcharat(outline, 0, gui_mouse_x, gui_mouse_y);
+   gui_drawcharat(fill, COLOUR_WHITE, gui_mouse_x, gui_mouse_y);
 
 }
 
@@ -298,10 +306,16 @@ void mouse_leftclick(void *regs, int relX, int relY) {
 
 }
 
-void mouse_release() {
+void mouse_release(registers_t *regs) {
    if(mouse_held) {
-      if(getSelectedWindowIndex() >= 0)
-         getSelectedWindow()->dragged = false;
+      gui_window_t *window = getSelectedWindow();
+      if(window) {
+         window->dragged = false;
+         if(window->resized) {
+            window_resize(regs, window, window->width, window->height);
+         window->resized = false;
+         }
+      }
 
       gui_redrawall();
    }
