@@ -54,6 +54,11 @@ read_kernel:
    mov bx, 0x0000
    int 0x13
 
+   mov bx, 0 ; set es:bx
+   mov es, bx ; first part of memory pointer (should be 0)
+   mov bx, 0x7e00 ; 512 after our bootloader start 
+
+
    jmp 0x7e00
 
    ; strings

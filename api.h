@@ -16,12 +16,14 @@ void api_return_framebuffer(registers_t *regs);
 void api_return_window_width(registers_t *regs);
 void api_return_window_height(registers_t *regs);
 void api_redraw_window();
+void api_redraw_pixel(registers_t *regs);
 void api_end_task(registers_t *regs);
 void api_override_uparrow(registers_t *regs);
 void api_override_downarrow(registers_t *regs);
 void api_override_mouseclick(registers_t *regs);
 void api_override_draw(registers_t *regs);
 void api_override_resize(registers_t *regs);
+void api_override_drag(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_fat_get_root(registers_t *regs);
@@ -36,5 +38,6 @@ void api_clear_window(registers_t *regs);
 void api_queue_event(registers_t *regs);
 void api_register_windowobj(registers_t *regs);
 void api_launch_task(registers_t *regs);
+void api_set_sys_font(registers_t *regs);
 
 #endif

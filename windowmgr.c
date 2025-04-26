@@ -130,6 +130,7 @@ bool window_init(gui_window_t *window) {
 
    // other functions without default behaviour
    window->click_func = NULL;
+   window->drag_func = NULL;
 
    // no window objects
    window->window_object_count = 0;
@@ -478,12 +479,26 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
 
 extern uint16_t *draw_buffer;
 
+extern int gui_mouse_x;
 extern int gui_mouse_y;
-void windowmgr_dragged(int relX, int relY) {
+void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    gui_window_t *window = getSelectedWindow();
-   if(window == NULL || !window->active) return;
+   if(selectedWindow == NULL || !selectedWindow->active) return;
 
-   if(!window->dragged && !window->resized) return;
+   if(!selectedWindow->dragged && !selectedWindow->resized) {
+      if(selectedWindow->drag_func == NULL) return;
+      if(relX == 0 && relY > 0) return;
+   
+      if(!gui_interrupt_switchtask(regs)) return;
+      // calling function as task
+      uint32_t *args = malloc(sizeof(uint32_t) * 2);
+      args[1] = gui_mouse_x - selectedWindow->x;
+      args[0] = gui_mouse_y - (selectedWindow->y + TITLEBAR_HEIGHT); //y - (selectedWindow->y + TITLEBAR_HEIGHT);
+   
+      task_call_subroutine(regs, (uint32_t)(selectedWindow->drag_func), args, 2);
+   
+      return;
+   }
 
    // restore dotted outline
    draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, (int*)draw_buffer, true);
@@ -679,6 +694,7 @@ void windowmgr_mousemove(int x, int y) {
             hovered = selectedWindow->window_objects[i];
             if(relX > hovered->x && relX < hovered->x + hovered->width
             && relY > hovered->y && relY < hovered->y + hovered->height) {
+               if(hovered->hovering) break;
                hovered->hovering = true;
                if(hovered->hover_func != NULL)
                   (*(hovered->hover_func))((void*)hovered);
@@ -706,8 +722,8 @@ void windowmgr_mousemove(int x, int y) {
       }
 
       // if just outside to the bottom right, display resize cursor
-      if(relX >= selectedWindow->width && relX < selectedWindow->width + 5
-      && relY >= selectedWindow->height - TITLEBAR_HEIGHT && relY < selectedWindow->height + 5 - TITLEBAR_HEIGHT) {
+      if(relX >= selectedWindow->width - 1 && relX < selectedWindow->width + 5
+      && relY >= selectedWindow->height - 1 - TITLEBAR_HEIGHT && relY < selectedWindow->height + 5 - TITLEBAR_HEIGHT) {
          cursor_resize = true;
       } else {
          cursor_resize = false;
@@ -739,7 +755,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    window->height = height;
    window->surface.buffer = (uint32_t)window->framebuffer;
    window->surface.width = width;
-   window->surface.height = height;
+   window->surface.height = height - TITLEBAR_HEIGHT;
    window_clearbuffer(window, window->colour_bg);
 
    // call resize func if exists
@@ -750,7 +766,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       uint32_t *args = malloc(sizeof(uint32_t) * 3);
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width;
-      args[0] = height;
+      args[0] = height - TITLEBAR_HEIGHT;
       task_call_subroutine(regs, (uint32_t)(window->resize_func), args, 3);
    }
 

@@ -146,16 +146,15 @@ db 0x7E ; ~
 db 0x7F
 
 ; charmap
-
 ;
-db 0x00
-db 0x00
-db 0x00
-db 0x00
-db 0x00
-db 0x00
-db 0x00
-db 0x00
+db 00000000b
+db 01000001b
+db 00110110b
+db 00001000b
+db 00010100b
+db 00100010b
+db 01000001b
+db 00000000b
 ; U+0000 (nul)
 ;
 db 0x00

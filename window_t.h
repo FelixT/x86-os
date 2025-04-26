@@ -44,6 +44,7 @@ typedef struct gui_window_t {
    void (*uparrow_func)(void *window);
    void (*downarrow_func)(void *window);
    void (*click_func)(void *window, int x, int y);
+   void (*drag_func)(void *window, int x, int y);
 
    void (*draw_func)(void *window);
    void (*write_func)(void *window, char *string);

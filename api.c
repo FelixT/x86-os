@@ -7,6 +7,8 @@
 #include "bmp.h"
 #include "events.h"
 #include "windowobj.h"
+#include "font.h"
+#include "windowmgr.h"
 
 void api_write_string(registers_t *regs) {
    // write ebx
@@ -87,6 +89,14 @@ void api_redraw_window() {
    gui_draw_window(get_current_task_window());
 }
 
+void api_redraw_pixel(registers_t *regs) {
+   // IN: ebx = x
+   // IN: ecx = y
+
+   // x, y
+   window_draw_content_region(&(gui_get_windows()[get_current_task_window()]), regs->ebx, regs->ecx, 1, 1);
+}
+
 void api_end_task(registers_t *regs) {
    // return with status ebx
    window_writestr("Task ended with status ", 0, get_current_task_window());
@@ -129,6 +139,13 @@ void api_override_resize(registers_t *regs) {
    uint32_t addr = regs->ebx;
 
    gui_get_windows()[get_current_task_window()].resize_func = (void *)(addr);
+}
+
+void api_override_drag(registers_t *regs) {
+   // override drag function with ebx
+   uint32_t addr = regs->ebx;
+
+   gui_get_windows()[get_current_task_window()].drag_func = (void *)(addr);
 }
 
 void api_end_subroutine(registers_t *regs) {
@@ -242,4 +259,20 @@ void api_fat_write_file(registers_t *regs) {
    // IN: ecx = buffer
 
    fat_write_file(regs->ebx, (uint8_t*)regs->ecx);
+}
+
+void api_set_sys_font(registers_t *regs) {
+   // IN: ebx = path
+
+   // todo: require privilege
+   char *path = (char*)regs->ebx;
+   fat_dir_t *entry = fat_parse_path(path);
+   if(entry == NULL) {
+      gui_writestr("Font not found\n", 0);
+      return;
+   }
+
+   fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+   font_load(file);
+
 }

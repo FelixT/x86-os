@@ -18,10 +18,11 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->width = 50;
    windowobj->height = 14;
    windowobj->text = NULL;
-   windowobj->textpadding = 3;
+   windowobj->textpadding = getFont()->padding;
    windowobj->hovering = false;
    windowobj->clicked = false;
    windowobj->textpos = 0;
+   windowobj->textvalign = false;
    
    // default funcs
    windowobj->draw_func = &windowobj_draw;
@@ -33,8 +34,12 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
 
 void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
+   if(wo->text == NULL) return;
+
    int x = wo->textpadding;
    int y = wo->textpadding;
+   if(wo->textvalign || wo->type == WO_BUTTON)
+      y = (wo->height - (getFont()->height + wo->textpadding))/2+1;
 
    for(int i = 0; i < strlen(wo->text); i++) {
       char c = wo->text[i];
@@ -62,7 +67,6 @@ void windowobj_draw(void *windowobj) {
 
    if(wo->type == WO_DISABLED) return;
    
-
    uint16_t bg = rgb16(255, 255, 255);
    uint16_t border = rgb16(120, 120, 120);
    uint16_t text = 0;

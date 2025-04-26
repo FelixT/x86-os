@@ -95,55 +95,38 @@ void _start(int argc, char **args) {
    override_draw((uint32_t)NULL);
    clear(0xFFFF);
 
-   windowobj_t *wo_save = register_windowobj();
-   wo_save->type = WO_BUTTON;
+   windowobj_t *wo_save = register_windowobj(WO_BUTTON, 5, 2, 34, 13);
    wo_save->text = (char*)malloc(1);
    strcpy(wo_save->text, "Save");
-   wo_save->textpadding = 2;
-   wo_save->x = 5;
-   wo_save->y = 2;
-   wo_save->width = 30;
-   wo_save->height = 12;
+   wo_save->textvalign = true;
    wo_save->click_func = &save_func;
 
-   windowobj_t *wo_path = register_windowobj();
-   wo_path->type = WO_TEXT;
+   windowobj_t *wo_path = register_windowobj(WO_TEXT, 40, 2, 300, 13);
    wo_path->text = (char*)malloc(1);
    strcpy(wo_path->text, "<New file>");
-   wo_path->textpadding = 2;
-   wo_path->x = 40;
-   wo_path->y = 2;
-   wo_path->width = 300;
-   wo_path->height = 12;
+   wo_path->textvalign = true;
    wo_path->return_func = &path_return;
    wo_path_o = wo_path;
 
-   windowobj_t *wo_status = register_windowobj();
-   wo_status->type = WO_TEXT;
+   windowobj_t *wo_status = register_windowobj(WO_TEXT, 345, 2, 80, 13);
    wo_status->text = (char*)malloc(1);
    wo_status->text[0] = '\0';
-   wo_status->textpadding = 2;
-   wo_status->x = 345;
-   wo_status->y = 2;
-   wo_status->width = 80;
-   wo_status->height = 12;
+   wo_status->textvalign = true;
    wo_status_o = wo_status;
 
-
-   windowobj_t *wo_text = register_windowobj();
+   int width = get_width();
+   int height = get_height();
+   windowobj_t *wo_text = register_windowobj(WO_TEXT, 5, 17, width - 10, height - 20);
    wo_text->type = WO_TEXT;
    wo_text->text = (char*)malloc(1);
    wo_text->text[0] = '\0';
-   wo_text->textpadding = 2;
-   wo_text->x = 5;
-   wo_text->y = 15;
-   wo_text->width = get_width() - 10;
-   wo_text->height = get_height() - 20;
    wo_text_o = wo_text;
 
    if(argc == 1) {
       load_file(args[0]);
    }
+
+   redraw();
 
    while(true) {
       asm volatile("nop");

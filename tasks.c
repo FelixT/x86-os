@@ -254,12 +254,12 @@ int get_task_from_window(int windowIndex) {
 void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
-      debug_writestr("Task ");
+      /*debug_writestr("Task ");
       debug_writeuint(current_task);
       if(tasks[current_task].in_routine)
          debug_writestr(" is already in a subroutine, returning.\n");
       if(!tasks[current_task].enabled)
-         debug_writestr(" not enabled.\n");
+         debug_writestr(" not enabled.\n");*/
       return;
    }
 

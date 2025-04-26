@@ -21,6 +21,18 @@ uint16_t *framebuffer;
 uint8_t *bmp;
 int width = 0;
 
+windowobj_t *wo_clear_obj;
+
+void resize(uint32_t fb, uint32_t w, uint32_t h) {
+   framebuffer = (uint16_t*)fb;
+
+   width = w;
+   wo_clear_obj->x = width - (wo_clear_obj->width + 20);
+   bmp_draw((uint8_t*)bmp, 0, 0);
+   redraw();
+   end_subroutine();
+}
+
 void strcpy(char* dest, char* src) {
    int i = 0;
 
@@ -31,12 +43,72 @@ void strcpy(char* dest, char* src) {
    dest[i] = '\0';
 }
 
+void set(int x, int y, int c) {
+   framebuffer[x+y*width] = c;
+   redraw_pixel(x, y);
+   framebuffer[x+1+y*width] = c;
+   framebuffer[x+(y+1)*width] = c;
+   framebuffer[x+1+(y+1)*width] = c;
+}
+
+int abs(int i) {
+   if(i < 0) return -i;
+   return i;
+}
+
+void drawLine(int x0, int y0, int x1, int y1) {
+   // Bresenham's line algorithm
+   int dx = abs(x1 - x0);
+   int sx = x0 < x1 ? 1 : -1;
+   int dy = -abs(y1 - y0);
+   int sy = y0 < y1 ? 1 : -1;
+   int error = dx + dy;
+   int e2;
+   
+   while (1) {
+       set(x0, y0, 0);  // Set the current pixel
+       
+       // Check if we've reached the end point
+       if (x0 == x1 && y0 == y1) 
+           break;
+           
+       e2 = 2 * error;
+       
+       // Update x if needed
+       if (e2 >= dy) {
+           if (x0 == x1) 
+               break;
+           error += dy;
+           x0 += sx;
+       }
+       
+       // Update y if needed
+       if (e2 <= dx) {
+           if (y0 == y1) 
+               break;
+           error += dx;
+           y0 += sy;
+       }
+   }
+}
+
+int prevX = -1;
+int prevY = -1;
+
 void click(int x, int y) {
-   framebuffer[x+y*width] = 0;
-   framebuffer[x+1+y*width] = 0;
-   framebuffer[x+(y+1)*width] = 0;
-   framebuffer[x+1+(y+1)*width] = 0;
-   redraw();
+
+   set(x, y, 0);
+   if(prevX == -1) prevX = x;
+   if(prevY == -1) prevY = y;
+
+   int deltaX = abs(x - prevX);
+   int deltaY = abs(y - prevY);
+
+   if(deltaX > 1 || deltaY > 1)
+      drawLine(prevX, prevY, x, y);
+
+   prevX = x;
+   prevY = y;
 
    end_subroutine();
 
@@ -70,32 +142,23 @@ void _start(int argc, char **args) {
    }
 
    override_click((uint32_t)&click);
+   override_drag((uint32_t)&click);
    override_draw((uint32_t)NULL);
+   override_resize((uint32_t)&resize);
    clear(0xFFFF);
    
    bmp = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
    bmp_draw((uint8_t*)bmp, 0, 0);
 
-   // warning: this will change if the window is resized
-   // ideally this should be mapped to a constant vmem location
    framebuffer = (uint16_t*)get_framebuffer();
    width = get_width();
 
    // window objects
-   windowobj_t *wo_clear = register_windowobj();
-   wo_clear->type = WO_BUTTON;
+   windowobj_t *wo_clear = register_windowobj(WO_BUTTON, width - 70, 10, 50, 14);
    wo_clear->text = (char*)malloc(1);
-   wo_clear->x = wo_clear->window_surface->width - wo_clear->width - 2;
    strcpy(wo_clear->text, "CLEAR");
    wo_clear->click_func = &clear_click;
-
-   /*windowobj_t *wo_save = register_windowobj();
-   wo_save->type = WO_BUTTON;
-   wo_save->text = (char*)malloc(1);
-   wo_save->x = wo_save->window_surface->width - wo_save->width - 2;
-   wo_save->y = 40;
-   strcpy(wo_save->text, "SAVE");
-   wo_save->click_func = &clear_click;*/
+   wo_clear_obj = wo_clear;
 
    redraw();
 

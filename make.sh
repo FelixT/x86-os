@@ -52,9 +52,9 @@ cp o/text.elf fs_root/sys/text.elf
 nasm font.asm -f bin -o o/font11.bin
 nasm font7.asm -f bin -o o/font7.bin
 nasm font8.asm -f bin -o o/font8.bin
-cp o/font11.bin fs_root/font/11.bin
-cp o/font7.bin fs_root/font/7.bin
-cp o/font8.bin fs_root/font/8.bin
+cp o/font11.bin fs_root/font/11.fon
+cp o/font7.bin fs_root/font/7.fon
+cp o/font8.bin fs_root/font/8.fon
 
 dd if=/dev/zero of=o/hd2.bin bs=128000 count=1 status=none
 dd if=o/hd1.bin of=o/hd2.bin bs=128000 count=1 conv=notrunc status=none

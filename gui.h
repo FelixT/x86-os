@@ -98,7 +98,7 @@ void gui_cursor_draw();
 void gui_cursor_save_bg();
 void gui_desktop_draw();
 
-void gui_interrupt_switchtask(void *regs);
+bool gui_interrupt_switchtask(void *regs);
 void gui_keypress(void *regs, char scan_code);
 void gui_return(void *regs);
 void gui_backspace();

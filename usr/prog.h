@@ -60,6 +60,15 @@ static inline void redraw() {
    );
 }
 
+static inline void redraw_pixel(int x, int y) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (37),
+      "b" ((uint32_t)x),
+      "c" ((uint32_t)y)
+   );
+}
+
 static inline void exit(int status) {
    asm volatile(
       "int $0x30"
@@ -273,6 +282,14 @@ static inline void override_resize(uint32_t addr) {
    );
 }
 
+static inline void override_drag(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (36),
+      "b" (addr)
+   );
+}
+
 static inline void write_numat(int num, int x, int y) {
    asm volatile(
       "int $0x30"
@@ -292,14 +309,20 @@ static inline void queue_event(uint32_t callback, int delta) {
    );
 }
 
-static inline windowobj_t *register_windowobj() {
+static inline windowobj_t *register_windowobj(int type, int x, int y, int width, int height) {
    uint32_t addr;
     asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (addr)
       : "a" (31)
    );
-   return (windowobj_t*)addr;
+   windowobj_t *wo = (windowobj_t*)addr;
+   wo->type = type;
+   wo->x = x;
+   wo->y = y;
+   wo->width = width;
+   wo->height = height;
+   return wo;
 }
 
 static inline void launch_task(char *path, int argc, char **args) {
@@ -309,5 +332,13 @@ static inline void launch_task(char *path, int argc, char **args) {
       "b" ((uint32_t)path),
       "c" ((uint32_t)argc),
       "d" ((uint32_t)args)
+   );
+}
+
+static inline void set_sys_font(char *path) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (35),
+      "b" ((uint32_t)path)
    );
 }

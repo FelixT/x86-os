@@ -178,12 +178,13 @@ void gui_redrawall() {
 
 void mouse_enable();
 
-void gui_interrupt_switchtask(void *regs) {
+bool gui_interrupt_switchtask(void *regs) {
    // switch to task of selected window to handle interrupt
 
    int newtask = get_task_from_window(getSelectedWindowIndex());
+   if(newtask == -1) return false;
 
-   if(newtask == get_current_task() || newtask == -1) return;
+   if(newtask == get_current_task()) return true;
 
    if(!switch_to_task(newtask, regs)) {
       debug_writestr("Task ");
@@ -191,8 +192,10 @@ void gui_interrupt_switchtask(void *regs) {
       debug_writestr("for window ");
       debug_writeuint(getSelectedWindowIndex());
       debug_writestr(" is stopped\n");
+      return false;
    }
 
+   return true;
 }
 
 void gui_keypress(void *regs, char scan_code) {
@@ -294,7 +297,7 @@ void mouse_update(int relX, int relY) {
 void mouse_leftclick(void *regs, int relX, int relY) {
    // dragging windows
    if(mouse_held) {
-      windowmgr_dragged(relX, relY);
+      windowmgr_dragged(regs, relX, relY);
    } else {
       mouse_held = true;
 

@@ -83,10 +83,9 @@ void _start() {
 
     clear(0xFFFF);
 
-    windowobj_t *wo = register_windowobj();
-    wo->type = WO_BUTTON;
+    int width = get_width();
+    windowobj_t *wo = register_windowobj(WO_BUTTON, width - 65, 10, 50, 14);
     wo->text = (char*)malloc(1);
-    wo->x = wo->window_surface->width - wo->width - 2;
     strcpy(wo->text, "RESET");
     wo->click_func = &click_callback;
 

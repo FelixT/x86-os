@@ -122,108 +122,120 @@ void register_irq(int index, void (*handler)(registers_t *regs)) {
 
 void software_handler(registers_t *regs) {
 
-   if(regs->eax == 1)
-      api_write_string(regs);
+   switch(regs->eax) {
+      case 1:
+         api_write_string(regs);
+         break;
 
-   if(regs->eax == 2)
-      api_write_number(regs);
-
-   if(regs->eax == 3)
-      api_yield(regs);
-
-   if(regs->eax == 4)
-      api_print_program_stack(regs);
-
-   if(regs->eax == 5)
-      api_print_stack(regs);
-
-   if(regs->eax == 6)
-      api_write_uint(regs);
-
-   if(regs->eax == 7)
-      api_return_framebuffer(regs);
-
-   if(regs->eax == 8)
-      api_write_newline(regs);
-
-   if(regs->eax == 9)
-      api_redraw_window(regs);
-
-   if(regs->eax == 10)
-      api_end_task(regs);
-
-   if(regs->eax == 11)
-      api_override_uparrow(regs);
-
-   if(regs->eax == 12)
-      api_end_subroutine(regs);
-
-   if(regs->eax == 13)
-      api_override_mouseclick(regs);
-
-   if(regs->eax == 14)
-      api_return_window_width(regs);
-
-   if(regs->eax == 15)
-      api_return_window_height(regs);
-
-   if(regs->eax == 16)
-      api_malloc(regs);
-
-   if(regs->eax == 17)
-      api_fat_get_bpb(regs);
-
-   if(regs->eax == 18)
-      api_fat_get_bpb(regs);
-
-   if(regs->eax == 19)
-      api_fat_parse_path(regs);
-
-   if(regs->eax == 20)
-      api_fat_read_file(regs);
-
-   if(regs->eax == 21)
-      api_draw_bmp(regs);
-
-   if(regs->eax == 22)
-      api_write_string_at(regs);
-
-   if(regs->eax == 23)
-      api_clear_window(regs);
-
-   if(regs->eax == 24)
-      api_get_get_dir_size(regs);
-
-   if(regs->eax == 25)
-      api_read_dir(regs);
-
-   if(regs->eax == 26)
-      api_get_get_dir_size(regs);
-   
-   if(regs->eax == 27) 
-      api_override_downarrow(regs);
-
-   if(regs->eax == 28)
-      api_write_number_at(regs);
-
-   if(regs->eax == 29)
-      api_override_draw(regs);
-
-   if(regs->eax == 30)
-      api_queue_event(regs);
-
-   if(regs->eax == 31)
-      api_register_windowobj(regs);
-
-   if(regs->eax == 32)
-      api_launch_task(regs);
-
-   if(regs->eax == 33)
-      api_fat_write_file(regs);
-
-   if(regs->eax == 34)
-      api_override_resize(regs);
-
+      case 2:
+         api_write_number(regs);
+         break;
+      case 3:
+         api_yield(regs);
+         break;
+      case 4:
+         api_print_program_stack(regs);
+         break;
+      case 5:
+         api_print_stack(regs);
+         break;
+      case 6:
+         api_write_uint(regs);
+         break;
+      case 7:
+         api_return_framebuffer(regs);
+         break;
+      case 8:
+         api_write_newline(regs);
+         break;
+      case 9:
+         api_redraw_window();
+         break;
+      case 10:
+         api_end_task(regs);
+         break;
+      case 11:
+         api_override_uparrow(regs);
+         break;
+      case 12:
+         api_end_subroutine(regs);
+         break;
+      case 13:
+         api_override_mouseclick(regs);
+         break;
+      case 14:
+         api_return_window_width(regs);
+         break;
+      case 15:
+         api_return_window_height(regs);
+         break;
+      case 16:
+         api_malloc(regs);
+         break;
+      case 17:
+         api_fat_get_bpb(regs);
+         break;
+      case 18:
+         api_fat_get_bpb(regs);
+         break;
+      case 19:
+         api_fat_parse_path(regs);
+         break;
+      case 20:
+         api_fat_read_file(regs);
+         break;
+      case 21:
+         api_draw_bmp(regs);
+         break;
+      case 22:
+         api_write_string_at(regs);
+         break;
+      case 23:
+         api_clear_window(regs);
+         break;
+      case 24:
+         api_get_get_dir_size(regs);
+         break;
+      case 25:
+         api_read_dir(regs);
+         break;
+      case 26:
+         api_get_get_dir_size(regs);
+         break;
+      case 27: 
+         api_override_downarrow(regs);
+         break;
+      case 28:
+         api_write_number_at(regs);
+         break;
+      case 29:
+         api_override_draw(regs);
+         break;
+      case 30:
+         api_queue_event(regs);
+         break;
+      case 31:
+         api_register_windowobj(regs);
+         break;
+      case 32:
+         api_launch_task(regs);
+         break;
+      case 33:
+         api_fat_write_file(regs);
+         break;
+      case 34:
+         api_override_resize(regs);
+         break;
+      case 35:
+         api_set_sys_font(regs);
+         break;
+      case 36:
+         api_override_drag(regs);
+         break;
+      case 37:
+         api_redraw_pixel(regs);
+         break;
+   }
 }  
 
 void keyboard_handler(registers_t *regs) {
@@ -267,12 +279,14 @@ void mouse_handler(registers_t *regs) {
       if(mouse_enabled) {
          mouse_update(xm, ym);
 
-         if(mouse_data[2] & 0x2)
-            mouse_rightclick(regs);
-         else if(mouse_data[2] & 0x1)
-            mouse_leftclick(regs, xm, ym);
-         else
-            mouse_release(regs);
+         if(regs) {
+            if(mouse_data[2] & 0x2)
+               mouse_rightclick(regs);
+            else if(mouse_data[2] & 0x1)
+               mouse_leftclick(regs, xm, ym);
+            else
+               mouse_release(regs);
+         }
       }
 
       mouse_cycle = 0;
@@ -288,7 +302,7 @@ void timer_handler(registers_t *regs) {
    } else {
       gui_showtimer(timer_i%10);
 
-      if(timer_i%20 == 0)
+      if(timer_i%10 == 0)
          gui_draw();
 
       if(timer_i%10 == 0) {

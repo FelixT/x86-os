@@ -125,7 +125,7 @@ void display_items() {
    }
 
    // draw path
-   write_strat(cur_path, 0, 280);
+   write_strat(cur_path, 5, height - 30);
 }
 
 void read_root() {
@@ -255,6 +255,10 @@ void click(int x, int y) {
          launch_task("/sys/text.elf", 1, args);
       }
 
+      if(strcmp(extension, "FON")) {
+         set_sys_font(fullpath);
+      }
+
 
       // cur_items[index].firstClusterNo;
    }
@@ -276,7 +280,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    end_subroutine();
 }
 
-void _start() {
+void _start(int argc, char **args) {
+   (void)argc;
+   (void)args;
 
    // init
    cur_items = NULL;
