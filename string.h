@@ -15,5 +15,5 @@ bool strcmp(char* str1, char* str2);
 void uinttohexstr(uint32_t num, char* out);
 void uinttostr(uint32_t num, char* out);
 void inttostr(int num, char* out);
-
+void sprintf(char *buffer, char *format, ...);
 #endif

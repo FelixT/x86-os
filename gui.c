@@ -127,8 +127,6 @@ void gui_init_meat(registers_t *regs, void *msg) {
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
    gui_redrawall();
-
-   gui_redrawall();
 }
 
 void gui_init(void) {
@@ -187,11 +185,7 @@ bool gui_interrupt_switchtask(void *regs) {
    if(newtask == get_current_task()) return true;
 
    if(!switch_to_task(newtask, regs)) {
-      debug_writestr("Task ");
-      debug_writeuint(newtask);
-      debug_writestr("for window ");
-      debug_writeuint(getSelectedWindowIndex());
-      debug_writestr(" is stopped\n");
+      debug_printf("Task %u for window %u is stopped", newtask, getSelectedWindowIndex());
       return false;
    }
 

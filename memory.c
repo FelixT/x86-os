@@ -124,9 +124,19 @@ void memset(void *dest, uint8_t ch, int bytes) {
       mem[i] = ch;
 }
 
-void memcpy(void *dest, void *src, int bytes) {
+void memcpy(void *dest, const void *src, int bytes) {
    for(int i = 0; i < bytes; i++)
       ((uint8_t*)dest)[i] = ((uint8_t*)src)[i];
+}
+
+int memcmp(const void *a, const void *b, int bytes) {
+   const uint8_t *pa = (const uint8_t*)a;
+   const uint8_t *pb = (const uint8_t*)b;
+   for(int i = 0; i < bytes; i++) {
+      if(pa[i] != pb[i])
+           return pa[i] - pb[i];
+   }
+   return 0; 
 }
 
 

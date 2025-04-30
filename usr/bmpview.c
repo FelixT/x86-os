@@ -20,14 +20,19 @@ typedef struct {
 uint16_t *framebuffer;
 uint8_t *bmp;
 int width = 0;
+int height = 0;
 
-windowobj_t *wo_clear_obj;
+windowobj_t *clearbtn_wo;
+windowobj_t *toolbtn_wo;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
 
    width = w;
-   wo_clear_obj->x = width - (wo_clear_obj->width + 20);
+   height = h;
+   clearbtn_wo->x = width - (clearbtn_wo->width + 20);
+   clearbtn_wo->y = height - (clearbtn_wo->height + 20);
+   clear(0xFFFF);
    bmp_draw((uint8_t*)bmp, 0, 0);
    redraw();
    end_subroutine();
@@ -43,12 +48,16 @@ void strcpy(char* dest, char* src) {
    dest[i] = '\0';
 }
 
+int size = 1; 
+
 void set(int x, int y, int c) {
    framebuffer[x+y*width] = c;
    redraw_pixel(x, y);
-   framebuffer[x+1+y*width] = c;
-   framebuffer[x+(y+1)*width] = c;
-   framebuffer[x+1+(y+1)*width] = c;
+   for(int i = 1; i < size; i++) {
+      framebuffer[x+i+y*width] = c;
+      framebuffer[x+(y+i)*width] = c;
+      framebuffer[x+i+(y+i)*width] = c;
+   }
 }
 
 int abs(int i) {
@@ -104,7 +113,7 @@ void click(int x, int y) {
    int deltaX = abs(x - prevX);
    int deltaY = abs(y - prevY);
 
-   if(deltaX > 1 || deltaY > 1)
+   if(deltaX >= 1 || deltaY >= 1)
       drawLine(prevX, prevY, x, y);
 
    prevX = x;
@@ -119,6 +128,14 @@ void clear_click(void *wo) {
    clear(0xFFFF);
 
    bmp_draw((uint8_t*)bmp, 0, 0);
+
+   end_subroutine();
+
+}
+
+void tool_click(void *wo) {
+   (void)wo;
+   size++;
 
    end_subroutine();
 
@@ -152,13 +169,24 @@ void _start(int argc, char **args) {
 
    framebuffer = (uint16_t*)get_framebuffer();
    width = get_width();
+   height = get_height();
 
    // window objects
-   windowobj_t *wo_clear = register_windowobj(WO_BUTTON, width - 70, 10, 50, 14);
-   wo_clear->text = (char*)malloc(1);
-   strcpy(wo_clear->text, "CLEAR");
-   wo_clear->click_func = &clear_click;
-   wo_clear_obj = wo_clear;
+   windowobj_t *clearbtn = register_windowobj(WO_BUTTON, 0, 0, 50, 14);
+   clearbtn->x = width - (clearbtn->width + 10);
+   clearbtn->y = height - (clearbtn->height + 10);
+   clearbtn->text = (char*)malloc(1);
+   strcpy(clearbtn->text, "CLEAR");
+   clearbtn->click_func = &clear_click;
+   clearbtn_wo = clearbtn;
+
+   windowobj_t *toolbtn = register_windowobj(WO_BUTTON, 0, 0, 50, 14);
+   toolbtn->x = width - (clearbtn->width + 65);
+   toolbtn->y = height - (clearbtn->height + 10);
+   toolbtn->text = (char*)malloc(1);
+   strcpy(toolbtn->text, "TOOL");
+   toolbtn->click_func = &tool_click;
+   toolbtn_wo = clearbtn;
 
    redraw();
 

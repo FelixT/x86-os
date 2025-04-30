@@ -78,7 +78,7 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
    else ioPort = ATA_PORT_SECONDARY;
 
    uint8_t initByte = (masterDrive ? 0xE0:0xF0);
-   initByte |= (lba << 24) & 0x0F;
+   initByte |= (lba >> 24) & 0x0F;
    outb(ioPort + ATA_REG_DRIVE_SELECT, initByte);
    outb(ioPort + ATA_REG_FEATURES, 0);
 
@@ -107,40 +107,54 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
    for(int i = 0; i < 256; i++) {
       if(write) {
          outw(ioPort + ATA_REG_DATA, buf[i]);
-         //outb(0x80, 0); // osdev forum suggestion
-         //asm volatile("jmp $+2"); // osdev suggestion
       } else {
          buf[i] = inw(ioPort + ATA_REG_DATA);
       }
    }
 
+   if(write) {
+      outb(ioPort + ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
+      while(inb(ioPort + ATA_REG_STATUS) & ATA_STATUS_BIT_BSY);
+  }
+
 }
 
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes) {
-   uint32_t lba = addr/512;
-   uint32_t startAddr = lba*512;
+   uint32_t startSector = addr/512;
+   uint32_t offset = addr%512;
+   uint32_t endAddr = addr + bytes;
+   uint32_t endSector = (endAddr + (512-1)) / 512;
+   uint32_t sectorCount = endSector - startSector;
+   uint32_t bytesRequired = sectorCount*512;
 
-   uint32_t offset = addr - startAddr;
-   uint32_t endAddr = startAddr + offset + bytes; // = addr+bytes
-   //uint32_t extraBytes = 512 - offset;
-   uint32_t diffAddr = endAddr - startAddr;
-   int reads = (diffAddr + (512-1))/512;
-   uint32_t bytesRequired = reads*512;
-
-   uint16_t *readBuf = malloc(bytesRequired);
-   
-
-   //int reads = (bytesRequired + (512-1))/512; // bytes
-   for(int i = 0; i < reads; i++) {
-      ata_readwrite(primaryBus, masterDrive, lba+i, &readBuf[256*i], false);
-   }
-
-   // copy to new buffer
    uint8_t *outBuf = malloc(bytes);
-   for(uint32_t i = 0; i < bytes; i++) {
-      outBuf[i] = *((uint8_t *) (&readBuf[0]) + (offset + i));
+   if(!outBuf) return NULL;
+   
+   // read that fits within a single sector
+   if(sectorCount == 1) {
+      uint16_t sectorBuf[256]; // 512 bytes
+      ata_readwrite(primaryBus, masterDrive, startSector, sectorBuf, false);
+      memcpy(outBuf, ((uint8_t*)sectorBuf) + offset, bytes);
+      return outBuf;
    }
-
+   
+   // read multiple sectors
+   uint16_t *readBuf = malloc(sectorCount*512);
+   if (!readBuf) {
+       free((uint32_t)outBuf, bytes);
+       return NULL;
+   }
+   
+   // read all sectors at once if reasonable, or in chunks
+   const uint32_t MAX_SECTORS_PER_READ = 128; // safe value
+   for(uint32_t i = 0; i < sectorCount; i += MAX_SECTORS_PER_READ) {
+      uint32_t sectorsToRead = (i + MAX_SECTORS_PER_READ > sectorCount) ? (sectorCount - i) : MAX_SECTORS_PER_READ;
+      for(uint32_t j = 0; j < sectorsToRead; j++)
+         ata_readwrite(primaryBus, masterDrive, startSector + i + j, &readBuf[256*(i + j)], false);
+   }
+   
+   // copy only the required bytes
+   memcpy(outBuf, ((uint8_t*)readBuf) + offset, bytes);
    free((uint32_t)&readBuf[0], bytesRequired);
    return outBuf;
 }

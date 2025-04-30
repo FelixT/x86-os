@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdarg.h>
 #include "string.h"
 
 void strtoupper(char* dest, char* src) {
@@ -182,4 +183,75 @@ void inttostr(int num, char* out) {
       out[length-i-1] = '0' + num%10;
       num/=10;
    }
+}
+
+char *strcat(char *dest, const char *src) {
+   char *ptr = dest;
+   
+   while (*ptr) ptr++;  // Move to end of dest
+
+   while (*src) {
+       *ptr++ = *src++;
+   }
+
+   *ptr = '\0';  // Null-terminate
+
+   return dest;
+}
+
+void sprintf(char *buffer, char *format, ...) {
+   va_list args;
+   va_start(args, format);
+
+   char *pfmt = format;
+   char x[2] = "x";
+
+   buffer[0] = '\0';
+
+   while (*pfmt) {
+      if (*pfmt == '%' && *(pfmt + 1)) {
+         pfmt++;
+         switch (*pfmt) {
+            case 'i':
+               int i = va_arg(args, int);
+               char istr[8];
+               inttostr(i, istr);
+               strcat(buffer, istr);
+               break;
+            case 'u':
+               uint32_t u = va_arg(args, int);
+               char ustr[8];
+               uinttostr(u, ustr);
+               strcat(buffer, ustr);
+               break;
+            case 'h':
+               uint32_t h = va_arg(args, int);
+               char hstr[8];
+               uinttohexstr(h, hstr);
+               strcat(buffer, hstr);
+               break;
+            case 's':
+               char *s = va_arg(args, char *);
+               strcat(buffer, s);
+               break;
+            case 'c':
+               x[0] = (char)va_arg(args, int);
+               strcat(buffer, x);
+               break;
+            default:
+               x[0] = '%';
+               strcat(buffer, x);
+               x[0] = *pfmt;
+               strcat(buffer, pfmt);
+         }
+      } else {
+         x[0] = *pfmt;
+         strcat(buffer, x);
+      }
+      pfmt++;
+   }
+
+   //strcpy_fixed(buffer, x, 1);
+   
+   va_end(args);
 }

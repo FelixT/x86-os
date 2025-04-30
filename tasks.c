@@ -47,9 +47,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
    tasks[current_task].window = windowmgr_add();
    if(!focus) setSelectedWindowIndex(tmpwindow);
 
-   debug_writestr("Launching task ");
-   debug_writeuint(index);
-   debug_writestr("\n");
+   debug_printf("Launching task %u\n", index);
 
    tasks[current_task].enabled = true;
 
@@ -75,18 +73,11 @@ int get_free_task_index() {
 void end_task(int index, registers_t *regs) {
    if(index < 0 || index >= TOTAL_TASKS) return;
    if(!tasks[index].enabled) {
-      debug_writestr("Task ");
-      debug_writeuint(index);
-      debug_writestr(" already ended\n");
+      debug_printf("Task %u already ended\n", index);
       return;
    }
 
-   debug_writestr("Ending task ");
-   debug_writeuint(index);
-   debug_writestr("\n");
-   debug_writestr("Current task is ");
-   debug_writeuint(get_current_task());
-   debug_writestr("\n");
+   debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
    if(tasks[index].in_routine)
       debug_writestr("Task was in routine\n");
@@ -105,11 +96,7 @@ void end_task(int index, registers_t *regs) {
    // TODO: free args
 
    if(tasks[index].vmem_start != 0) {
-      debug_writestr("Unmapping ");
-      debug_writehex(tasks[index].vmem_start);
-      debug_writestr(" - ");
-      debug_writehex(tasks[index].vmem_end);
-      debug_writestr("\n");
+      debug_printf("Unmapping 0x%h - 0x%h\n", tasks[index].vmem_start, tasks[index].vmem_end);
 
       for(uint32_t i = tasks[index].vmem_start; i < tasks[index].vmem_end; i++) {
          unmap(tasks[index].page_dir, i);

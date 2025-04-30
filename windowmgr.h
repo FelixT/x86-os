@@ -20,6 +20,7 @@ void windowmgr_init();
 void debug_writestr(char *str);
 void debug_writeuint(uint32_t num);
 void debug_writehex(uint32_t num);
+void debug_printf(char *format, ...);
 gui_window_t *getWindow(int index);
 gui_window_t *getSelectedWindow();
 void windowmgr_keypress(void *regs, int scan_code);

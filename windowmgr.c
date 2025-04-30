@@ -7,6 +7,7 @@
 #include "bmp.h"
 
 #include "window_term.h"
+#include <stdarg.h>
 
 int windowCount = 0;
 int gui_selected_window = -1;
@@ -40,6 +41,15 @@ void debug_writehex(uint32_t num) {
    uinttohexstr(num, out);
    window_writestr("0x", 0, 0);
    window_writestr(out, 0, 0);
+}
+
+void debug_printf(char *format, ...) {
+   char buffer[512];
+   va_list args;
+   va_start(args, format);
+   sprintf(buffer, format, args);
+   va_end(args);
+   debug_writestr(buffer);
 }
 
 int getFirstFreeIndex() {
@@ -487,13 +497,19 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
 
    if(!selectedWindow->dragged && !selectedWindow->resized) {
       if(selectedWindow->drag_func == NULL) return;
-      if(relX == 0 && relY > 0) return;
+      if(relX == 0 && relY == 0) return;
    
       if(!gui_interrupt_switchtask(regs)) return;
       // calling function as task
+      int windowX = gui_mouse_x - selectedWindow->x;
+      int windowY = gui_mouse_y - (selectedWindow->y + TITLEBAR_HEIGHT);
+
+      if(windowX < 0 || windowY < 0 || windowX >= selectedWindow->width || windowY >= selectedWindow->height - TITLEBAR_HEIGHT)
+         return;
+
       uint32_t *args = malloc(sizeof(uint32_t) * 2);
-      args[1] = gui_mouse_x - selectedWindow->x;
-      args[0] = gui_mouse_y - (selectedWindow->y + TITLEBAR_HEIGHT); //y - (selectedWindow->y + TITLEBAR_HEIGHT);
+      args[1] = windowX;
+      args[0] = windowY;
    
       task_call_subroutine(regs, (uint32_t)(selectedWindow->drag_func), args, 2);
    
