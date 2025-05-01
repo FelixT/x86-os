@@ -27,6 +27,7 @@ typedef struct windowobj_t {
    char *text;
    int textpadding;
    bool textvalign;
+   bool texthalign;
    bool hovering;
    bool clicked;
    int textpos;

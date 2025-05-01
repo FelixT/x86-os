@@ -199,10 +199,7 @@ char *strcat(char *dest, const char *src) {
    return dest;
 }
 
-void sprintf(char *buffer, char *format, ...) {
-   va_list args;
-   va_start(args, format);
-
+void vsprintf(char *buffer, char *format, va_list args) {
    char *pfmt = format;
    char x[2] = "x";
 
@@ -214,19 +211,19 @@ void sprintf(char *buffer, char *format, ...) {
          switch (*pfmt) {
             case 'i':
                int i = va_arg(args, int);
-               char istr[8];
+               char istr[20];
                inttostr(i, istr);
                strcat(buffer, istr);
                break;
             case 'u':
-               uint32_t u = va_arg(args, int);
-               char ustr[8];
+               uint32_t u = va_arg(args, uint32_t);
+               char ustr[20];
                uinttostr(u, ustr);
                strcat(buffer, ustr);
                break;
             case 'h':
-               uint32_t h = va_arg(args, int);
-               char hstr[8];
+               uint32_t h = va_arg(args, uint32_t);
+               char hstr[20];
                uinttohexstr(h, hstr);
                strcat(buffer, hstr);
                break;
@@ -251,7 +248,20 @@ void sprintf(char *buffer, char *format, ...) {
       pfmt++;
    }
 
-   //strcpy_fixed(buffer, x, 1);
-   
+}
+
+void sprintf(char *buffer, char *format, ...) {
+   va_list args;
+   va_start(args, format);
+   vsprintf(buffer, format, args);
    va_end(args);
+}
+
+char *strchr(const char *str, int c) {
+   while (*str) {
+      if (*str == (char)c)
+         return (char *)str;
+      str++;
+   }
+   return NULL;
 }

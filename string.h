@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 
 void strtoupper(char* dest, char* src);
 void strcpy(char* dest, char* src);
@@ -15,5 +16,8 @@ bool strcmp(char* str1, char* str2);
 void uinttohexstr(uint32_t num, char* out);
 void uinttostr(uint32_t num, char* out);
 void inttostr(int num, char* out);
+void vsprintf(char *buffer, char *format, va_list args);
 void sprintf(char *buffer, char *format, ...);
+char *strchr(const char *str, int c);
+
 #endif

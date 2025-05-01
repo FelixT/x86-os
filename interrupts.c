@@ -88,7 +88,7 @@ void idt_init() {
 
 }
 
-char scan_to_char(int scan_code) {
+char scan_to_char(int scan_code, bool caps) {
    // https://www.millisecond.com/support/docs/current/html/language/scancodes.htm
 
    char upperFirst[13] = "1234567890-=";
@@ -96,22 +96,23 @@ char scan_to_char(int scan_code) {
    char upperThird[13] = "ASDFGHJKL;'#";
    char upperFourth[12] = "\\ZXCVBNM,./";
 
+   char c = '\0';
+
    if(scan_code >= 2 && scan_code <= 13)
-      return upperFirst[scan_code-2];
-
+      c = upperFirst[scan_code-2];
    if(scan_code >= 16 && scan_code <= 27)
-      return upperSecond[scan_code-16];
-
+      c = upperSecond[scan_code-16];
    if(scan_code >= 30 && scan_code <= 41)
-      return upperThird[scan_code-30];
-
+      c = upperThird[scan_code-30];
    if(scan_code >= 43 && scan_code <= 53)
-      return upperFourth[scan_code-43];
-
+      c = upperFourth[scan_code-43];
    if(scan_code == 57)
-      return ' ';
+      c = ' ';
 
-   return '\0';
+   if(!caps && c >= 'A' && c <= 'Z')
+      c += ('a' - 'A');
+
+   return c;
 }
 
 extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
@@ -235,6 +236,8 @@ void software_handler(registers_t *regs) {
       case 37:
          api_redraw_pixel(regs);
          break;
+      case 38:
+         api_override_mouserelease(regs);
    }
 }  
 
@@ -250,7 +253,7 @@ void keyboard_handler(registers_t *regs) {
       else if(scan_code == 14)
          terminal_backspace();
       else
-         terminal_keypress(scan_to_char(scan_code));
+         terminal_keypress(scan_to_char(scan_code, true));
 
    } else {
       gui_keypress(regs, scan_code);
@@ -302,7 +305,7 @@ void timer_handler(registers_t *regs) {
    } else {
       gui_showtimer(timer_i%10);
 
-      if(timer_i%10 == 0)
+      if(timer_i%8 == 0)
          gui_draw();
 
       if(timer_i%10 == 0) {

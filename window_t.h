@@ -43,12 +43,13 @@ typedef struct gui_window_t {
    void (*backspace_func)(void *window);
    void (*uparrow_func)(void *window);
    void (*downarrow_func)(void *window);
-   void (*click_func)(void *window, int x, int y);
-   void (*drag_func)(void *window, int x, int y);
+   void (*click_func)(int x, int y);
+   void (*drag_func)(int x, int y);
 
    void (*draw_func)(void *window);
    void (*write_func)(void *window, char *string);
-   void (*resize_func)(void *window);
+   void (*resize_func)(uint32_t fb, uint32_t w, uint32_t h);
+   void (*mouserelease_func)();
 
 } gui_window_t;
 

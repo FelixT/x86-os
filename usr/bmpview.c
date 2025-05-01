@@ -30,8 +30,10 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 
    width = w;
    height = h;
-   clearbtn_wo->x = width - (clearbtn_wo->width + 20);
-   clearbtn_wo->y = height - (clearbtn_wo->height + 20);
+   clearbtn_wo->x = width - (clearbtn_wo->width + 10);
+   toolbtn_wo->x = width - (toolbtn_wo->width + 65);
+   clearbtn_wo->y = height - (clearbtn_wo->height + 10);
+   toolbtn_wo->y = height - (toolbtn_wo->height + 10);
    clear(0xFFFF);
    bmp_draw((uint8_t*)bmp, 0, 0);
    redraw();
@@ -123,6 +125,13 @@ void click(int x, int y) {
 
 }
 
+void release() {
+   prevX = -1;
+   prevY = -1;
+
+   end_subroutine();
+}
+
 void clear_click(void *wo) {
    (void)wo;
    clear(0xFFFF);
@@ -160,6 +169,7 @@ void _start(int argc, char **args) {
 
    override_click((uint32_t)&click);
    override_drag((uint32_t)&click);
+   override_mouserelease((uint32_t)&release);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
    clear(0xFFFF);
@@ -186,12 +196,12 @@ void _start(int argc, char **args) {
    toolbtn->text = (char*)malloc(1);
    strcpy(toolbtn->text, "TOOL");
    toolbtn->click_func = &tool_click;
-   toolbtn_wo = clearbtn;
+   toolbtn_wo = toolbtn;
 
    redraw();
 
    while(1==1) {
-      asm volatile("nop");
+      asm volatile("pause");
    }
 
    exit(0);

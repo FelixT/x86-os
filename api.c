@@ -148,6 +148,13 @@ void api_override_drag(registers_t *regs) {
    gui_get_windows()[get_current_task_window()].drag_func = (void *)(addr);
 }
 
+void api_override_mouserelease(registers_t *regs) {
+   // override mouserelease function with ebx
+   uint32_t addr = regs->ebx;
+
+   gui_get_windows()[get_current_task_window()].mouserelease_func = (void *)(addr);
+}
+
 void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }
@@ -257,8 +264,9 @@ void api_launch_task(registers_t *regs) {
 void api_fat_write_file(registers_t *regs) {
    // IN: ebx = first cluster no
    // IN: ecx = buffer
+   // IN: edx = size
 
-   fat_write_file(regs->ebx, (uint8_t*)regs->ecx);
+   fat_write_file(regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
 }
 
 void api_set_sys_font(registers_t *regs) {

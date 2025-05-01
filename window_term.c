@@ -14,7 +14,7 @@
 // default terminal behaviour
 
 void window_term_keypress(char key, void *window) {
-   if(((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == ' ')
+   if((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') || (key >= '0' && key <= '9') || (key == ' ')
    || (key == '/') || (key == '.')) {
 
       // write to current window
@@ -417,7 +417,9 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
 
    char command[10];
    char arg[30];
-   strsplit((char*)command, (char*)arg, selected->text_buffer, ' ');
+   strsplit((char*)command, (char*)arg, selected->text_buffer, ' '); // super unsafe
+
+   strtoupper(command, command);
 
    if(strcmp(command, "HELP"))
       term_cmd_help();

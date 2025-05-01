@@ -308,10 +308,11 @@ void mouse_release(registers_t *regs) {
       gui_window_t *window = getSelectedWindow();
       if(window) {
          window->dragged = false;
-         if(window->resized) {
+         if(window->resized)
             window_resize(regs, window, window->width, window->height);
+         else
+            window_mouserelease(regs, window);
          window->resized = false;
-         }
       }
 
       gui_redrawall();

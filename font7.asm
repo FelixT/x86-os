@@ -3,7 +3,7 @@ global font7
 font7:
 
 ; size
-db 49
+db 75
 ; width
 db 5
 ; height
@@ -65,6 +65,32 @@ db 'W'
 db 'X'
 db 'Y'
 db 'Z'
+db 'a'
+db 'b'
+db 'c'
+db 'd'
+db 'e'
+db 'f'
+db 'g'
+db 'h'
+db 'i'
+db 'j'
+db 'k'
+db 'l'
+db 'm'
+db 'n'
+db 'o'
+db 'p'
+db 'q'
+db 'r'
+db 's'
+db 't'
+db 'u'
+db 'v'
+db 'w'
+db 'x'
+db 'y'
+db 'z'
 
 global font_null
 font_null:
@@ -550,6 +576,266 @@ global font_Z
 font_Z:
    db 11111b
    db 00001b
+   db 00010b
+   db 00100b
+   db 01000b
+   db 10000b
+   db 11111b
+
+global font_a
+font_a:
+   db 00000b
+   db 01110b
+   db 00001b
+   db 01111b
+   db 10001b
+   db 10011b
+   db 01101b
+
+global font_b
+font_b:
+   db 10000b
+   db 10000b
+   db 11110b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 11110b
+
+global font_c
+font_c:
+   db 00000b
+   db 01110b
+   db 10001b
+   db 10000b
+   db 10000b
+   db 10001b
+   db 01110b
+
+global font_d
+font_d:
+   db 00001b
+   db 00001b
+   db 01111b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 01111b
+
+global font_e
+font_e:
+   db 00000b
+   db 01110b
+   db 10001b
+   db 11111b
+   db 10000b
+   db 10001b
+   db 01110b
+
+global font_f
+font_f:
+   db 00110b
+   db 01001b
+   db 01000b
+   db 11100b
+   db 01000b
+   db 01000b
+   db 01000b
+
+global font_g
+font_g:
+   db 00000b
+   db 01111b
+   db 10001b
+   db 10001b
+   db 01111b
+   db 00001b
+   db 11110b
+
+global font_h
+font_h:
+   db 10000b
+   db 10000b
+   db 11110b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10001b
+
+global font_i
+font_i:
+   db 00100b
+   db 00000b
+   db 01100b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 01110b
+
+global font_j
+font_j:
+   db 00010b
+   db 00000b
+   db 00110b
+   db 00010b
+   db 00010b
+   db 10010b
+   db 01100b
+
+global font_k
+font_k:
+   db 10000b
+   db 10000b
+   db 10010b
+   db 10100b
+   db 11000b
+   db 10100b
+   db 10010b
+
+global font_l
+font_l:
+   db 11000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 11100b
+
+global font_m
+font_m:
+   db 00000b
+   db 11010b
+   db 10101b
+   db 10101b
+   db 10101b
+   db 10101b
+   db 10101b
+
+global font_n
+font_n:
+   db 00000b
+   db 11110b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10001b
+
+global font_o
+font_o:
+   db 00000b
+   db 01110b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 01110b
+
+global font_p
+font_p:
+   db 00000b
+   db 11110b
+   db 10001b
+   db 10001b
+   db 11110b
+   db 10000b
+   db 10000b
+
+global font_q
+font_q:
+   db 00000b
+   db 01111b
+   db 10001b
+   db 10001b
+   db 01111b
+   db 00001b
+   db 00001b
+
+global font_r
+font_r:
+   db 00000b
+   db 10110b
+   db 11001b
+   db 10000b
+   db 10000b
+   db 10000b
+   db 10000b
+
+global font_s
+font_s:
+   db 00000b
+   db 01110b
+   db 10000b
+   db 01110b
+   db 00001b
+   db 10001b
+   db 01110b
+
+global font_t
+font_t:
+   db 01000b
+   db 01000b
+   db 11100b
+   db 01000b
+   db 01000b
+   db 01001b
+   db 00110b
+
+global font_u
+font_u:
+   db 00000b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10011b
+   db 01101b
+
+global font_v
+font_v:
+   db 00000b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 01010b
+   db 01010b
+   db 00100b
+
+global font_w
+font_w:
+   db 00000b
+   db 10001b
+   db 10001b
+   db 10001b
+   db 10101b
+   db 10101b
+   db 01010b
+
+global font_x
+font_x:
+   db 00000b
+   db 10001b
+   db 01010b
+   db 00100b
+   db 00100b
+   db 01010b
+   db 10001b
+
+global font_y
+font_y:
+   db 00000b
+   db 10001b
+   db 10001b
+   db 01111b
+   db 00001b
+   db 10001b
+   db 01110b
+
+global font_z
+font_z:
+   db 00000b
+   db 11111b
    db 00010b
    db 00100b
    db 01000b

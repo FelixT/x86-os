@@ -195,12 +195,13 @@ static inline uint32_t *fat_read_file(uint16_t firstClusterNo, uint32_t fileSize
    return (uint32_t*)addr;
 }
 
-static inline void fat_write_file(uint16_t firstClusterNo, uint8_t *buffer) {
+static inline void fat_write_file(uint16_t firstClusterNo, uint8_t *buffer, uint32_t size) {
    asm volatile (
       "int $0x30;"
       :: "a" (33),
       "b" ((uint32_t)firstClusterNo),
-      "c" ((uint32_t)buffer)
+      "c" ((uint32_t)buffer),
+      "d" ((uint32_t)size)
    );
 }
 
@@ -290,6 +291,14 @@ static inline void override_drag(uint32_t addr) {
    );
 }
 
+static inline void override_mouserelease(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (38),
+      "b" (addr)
+   );
+}
+
 static inline void write_numat(int num, int x, int y) {
    asm volatile(
       "int $0x30"
@@ -322,6 +331,10 @@ static inline windowobj_t *register_windowobj(int type, int x, int y, int width,
    wo->y = y;
    wo->width = width;
    wo->height = height;
+   if(type != WO_BUTTON) {
+      wo->texthalign = false;
+      wo->textvalign = false;
+   }
    return wo;
 }
 

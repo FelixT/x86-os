@@ -27,5 +27,6 @@ font_t *getFont();
 void getFontLetter(font_t *font, char c, int* dest);
 void font_init();
 void font_load(fontfile_t *file);
+int font_width(int len);
 
 #endif

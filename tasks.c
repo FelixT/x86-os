@@ -153,7 +153,7 @@ void tasks_init(registers_t *regs) {
    
    gui_get_windows()[tasks[0].window].minimised = true;
    gui_get_windows()[tasks[0].window].draw_func = NULL;
-   strcpy(gui_get_windows()[tasks[0].window].title+1, "IDLE");
+   strcpy(gui_get_windows()[tasks[0].window].title+1, "Idle Process");
    //elf_run(regs, prog, 0, 0, NULL);
    //free((uint32_t)prog, entry->fileSize);
 

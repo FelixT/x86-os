@@ -85,7 +85,7 @@ void save_func() {
    strcpy(wo_status_o->text, "Saved");
 
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(wo_path_o->text);
-   fat_write_file(entry->firstClusterNo, (uint8_t*)wo_text_o->text);
+   fat_write_file(entry->firstClusterNo, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
 
    end_subroutine();
 }

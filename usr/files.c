@@ -318,8 +318,9 @@ void _start(int argc, char **args) {
 
    // main program loop
    while(1 == 1) {
-      for(int i = 0; i < (int)width; i++)
-      framebuffer[i] = 0;
+      //for(int i = 0; i < (int)width; i++)
+      //framebuffer[i] = 0;
+      asm volatile("pause");
    }
 
    exit(0);

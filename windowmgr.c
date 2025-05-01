@@ -47,7 +47,7 @@ void debug_printf(char *format, ...) {
    char buffer[512];
    va_list args;
    va_start(args, format);
-   sprintf(buffer, format, args);
+   vsprintf(buffer, format, args);
    va_end(args);
    debug_writestr(buffer);
 }
@@ -114,7 +114,7 @@ void window_close(void *regs, int windowIndex) {
 }
 
 bool window_init(gui_window_t *window) {
-   strcpy(window->title, " TERMINAL");
+   strcpy(window->title, " Terminal");
    window->x = 20;
    window->y = 20;
    window->width = 440;
@@ -150,7 +150,7 @@ bool window_init(gui_window_t *window) {
    window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
       if(i > 0)
-         window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH;
+         window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH*i;
       window->cmd_history[i][0] = '\0';
    }
    window->cmd_history_pos = -1;
@@ -220,32 +220,48 @@ void window_draw_outline(gui_window_t *window) {
 }
 
 void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height) {
-   if(window->framebuffer == NULL) return;
+   if (window->framebuffer == NULL) return;
 
    gui_window_t *selected = getSelectedWindow();
 
-   for(int y = offsetY; y < offsetY+height; y++) {
-      for(int x = offsetX; x < offsetX+width; x++) {
-         // ignore pixels covered by the currently selected window
-         int screenY = (window->y + y + TITLEBAR_HEIGHT);
-         int screenX = (window->x + x);
-         if(selected != window && selected != NULL
-         && screenX >= selected->x
-         && screenX < selected->x + selected->width
-         && screenY >= selected->y
-         && screenY < selected->y + selected->height)
-            continue;
+   int winX = window->x;
+   int winY = window->y + TITLEBAR_HEIGHT;
+   int winW = window->width;
+   int winH = window->height - TITLEBAR_HEIGHT;
 
-         // ignore pixels off window
-         if(x > window->width || y > window->height - TITLEBAR_HEIGHT) continue;
+   int selX = 0, selY = 0, selW = 0, selH = 0;
+   bool checkOcclusion = selected && selected != window;
 
-         int index = screenY*surface.width + screenX;
-         int w_index = y*window->width + x;
-
-         setpixel_safe(&surface, index, window->framebuffer[w_index]);
-      }
+   if (checkOcclusion) {
+      selX = selected->x;
+      selY = selected->y;
+      selW = selected->width;
+      selH = selected->height;
    }
 
+   // Clamp drawing to window content bounds
+   int maxY = offsetY + height;
+   int maxX = offsetX + width;
+   if (maxY > winH) maxY = winH;
+   if (maxX > winW) maxX = winW;
+
+   for (int y = offsetY; y < maxY; y++) {
+       int screenY = winY + y;
+       for (int x = offsetX; x < maxX; x++) {
+           int screenX = winX + x;
+
+           // Skip pixels covered by selected window
+           if (checkOcclusion &&
+               screenX >= selX && screenX < selX + selW &&
+               screenY >= selY && screenY < selY + selH)
+               continue;
+
+           int screenIndex = screenY * surface.width + screenX;
+           int winIndex = y * winW + x;
+
+           gui_get_framebuffer()[screenIndex] = window->framebuffer[winIndex];
+       }
+   }
 }
 
 void window_draw_content(gui_window_t *window) {
@@ -296,7 +312,7 @@ void windowmgr_init() {
    memset(gui_windows, 0, sizeof(gui_window_t) * 64);
    // Init with one (debug) window
    window_init(&gui_windows[0]);
-   strcpy(gui_windows[0].title, "0DEBUG WINDOW");
+   strcpy(gui_windows[0].title, "0Debug Msgs");
    gui_windows[0].active = true;
    gui_windows[0].x = 100;
    gui_windows[0].y = 100;
@@ -331,7 +347,7 @@ void toolbar_draw() {
 
 }
 
-extern char scan_to_char(int scan_code);
+extern char scan_to_char(int scan_code, bool caps);
 
 void windowmgr_uparrow(registers_t *regs, gui_window_t *window) {
 
@@ -369,9 +385,22 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
    
 }
 
+bool keyboard_shift = false;
+bool keyboard_caps = false;
 void windowmgr_keypress(void *regs, int scan_code) {
    if(selectedWindow == NULL) return;
+
+   bool released = scan_code & 0x80;
+   scan_code = scan_code & 0x7F;
+
+   if(scan_code == 0x2A || scan_code == 0x36)
+      keyboard_shift = !released;
    
+   if(released) return; // don't handle these currently
+   
+   if(scan_code == 0x3A)
+      keyboard_caps = true;
+
    // check if we have a window object selected
    for(int i = 0; i < selectedWindow->window_object_count; i++) {
       windowobj_t *wo = selectedWindow->window_objects[i];
@@ -401,8 +430,11 @@ void windowmgr_keypress(void *regs, int scan_code) {
       case 80: // down arrow
          windowmgr_downarrow(regs, selectedWindow);
          break;
+      case 0x3A:
+         keyboard_caps = !keyboard_caps;
+         break;
       default:
-         char c = scan_to_char(scan_code);
+         char c = scan_to_char(scan_code, keyboard_shift^keyboard_caps);
          if(selectedWindow->keypress_func != NULL)
             (*(selectedWindow->keypress_func))(c, selectedWindow);
          break;
@@ -705,35 +737,26 @@ void windowmgr_mousemove(int x, int y) {
       && relY > 0 && relY < selectedWindow->height - TITLEBAR_HEIGHT) {
          // within current window, check window objects
 
-         windowobj_t *hovered = NULL;
-         for(int i = 0; i < selectedWindow->window_object_count; i++) {
-            hovered = selectedWindow->window_objects[i];
-            if(relX > hovered->x && relX < hovered->x + hovered->width
-            && relY > hovered->y && relY < hovered->y + hovered->height) {
-               if(hovered->hovering) break;
-               hovered->hovering = true;
-               if(hovered->hover_func != NULL)
-                  (*(hovered->hover_func))((void*)hovered);
-               windowobj_redraw((void*)selectedWindow, (void*)hovered);
-               break;
-
-            } else {
-               hovered = NULL;
-            }
-         }
-
-         // update other window object hovering = false
-         for(int i = 0; i < selectedWindow->window_object_count; i++) {
+         for (int i = 0; i < selectedWindow->window_object_count; i++) {
             windowobj_t *wo = selectedWindow->window_objects[i];
-            if(wo == hovered) continue;
-
-            if(wo->hovering) {
-               wo->hovering = false;
-               if(wo->draw_func != NULL)
-                  (*(wo->draw_func))((void*)wo);
-               windowobj_redraw((void*)selectedWindow, (void*)wo);
+            bool inside = (relX > wo->x && relX < wo->x + wo->width &&
+                           relY > wo->y && relY < wo->y + wo->height);
+        
+            if (inside) {
+               if (!wo->hovering) {
+                  wo->hovering = true;
+                  if (wo->hover_func)
+                     wo->hover_func((void*)wo);
+                  windowobj_redraw((void*)selectedWindow, (void*)wo);
+                }
+            } else {
+               if (wo->hovering) {
+                  wo->hovering = false;
+                  if (wo->draw_func)
+                     wo->draw_func((void*)wo);
+                  windowobj_redraw((void*)selectedWindow, (void*)wo);
+               }
             }
-
          }
       }
 
@@ -787,4 +810,14 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    }
 
    
+}
+
+void window_mouserelease(registers_t *regs, gui_window_t *window) {
+   // call mouserelease func if exists
+   int index = get_window_index_from_pointer(window);
+   int task = get_task_from_window(index);
+   if(task > -1 && window->mouserelease_func) {
+      switch_to_task(task, regs);
+      task_call_subroutine(regs, (uint32_t)(window->mouserelease_func), NULL, 0);
+   }   
 }

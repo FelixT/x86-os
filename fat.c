@@ -215,7 +215,7 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
    return NULL;
 }
 
-void fat_write_file(uint32_t clusterNo, uint8_t *buffer) {
+void fat_write_file(uint32_t clusterNo, uint8_t *buffer, uint32_t size) {
    uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
    uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t firstDataSector = rootSector + rootSize;

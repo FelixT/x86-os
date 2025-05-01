@@ -58,3 +58,7 @@ void font_init() {
    font_load((fontfile_t*)(&font7));
    default_font.padding = 2;
 }
+
+int font_width(int len) {
+   return len*(getFont()->width+getFont()->padding);
+}

@@ -24,6 +24,7 @@ void api_override_mouseclick(registers_t *regs);
 void api_override_draw(registers_t *regs);
 void api_override_resize(registers_t *regs);
 void api_override_drag(registers_t *regs);
+void api_override_mouserelease(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_fat_get_root(registers_t *regs);

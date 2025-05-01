@@ -80,8 +80,8 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
    uint8_t initByte = (masterDrive ? 0xE0:0xF0);
    initByte |= (lba >> 24) & 0x0F;
    outb(ioPort + ATA_REG_DRIVE_SELECT, initByte);
+   ata_delay(ioPort);
    outb(ioPort + ATA_REG_FEATURES, 0);
-
    outb(ioPort + ATA_REG_SECTOR_COUNT, 1);
 
    outb(ioPort + ATA_REG_LBA0, (uint8_t)((lba)));
