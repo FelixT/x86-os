@@ -62,6 +62,18 @@ volatile windowobj_t *wo_path_o;
 volatile windowobj_t *wo_text_o;
 volatile windowobj_t *wo_status_o;
 
+void resize(uint32_t fb, uint32_t w, uint32_t h) {
+   (void)fb;
+   clear(0xFFFF);
+   wo_text_o->width = w - 10;
+   wo_text_o->height = h - 20;
+   wo_path_o->width = 2*(w-10)/3;
+   wo_status_o->x = 42+2*(w-10)/3;
+   wo_status_o->width = (w-10)/3 - 42;
+   redraw();
+   end_subroutine();
+}
+
 void load_file(char *filepath) {
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath);
    if(entry == NULL) {
@@ -93,7 +105,11 @@ void save_func() {
 void _start(int argc, char **args) {
    write_str("Text\n");
    override_draw((uint32_t)NULL);
+   override_resize((uint32_t)resize);
    clear(0xFFFF);
+
+   int width = get_width();
+   int height = get_height();
 
    windowobj_t *wo_save = register_windowobj(WO_BUTTON, 5, 2, 34, 13);
    wo_save->text = (char*)malloc(1);
@@ -101,21 +117,19 @@ void _start(int argc, char **args) {
    wo_save->textvalign = true;
    wo_save->click_func = &save_func;
 
-   windowobj_t *wo_path = register_windowobj(WO_TEXT, 40, 2, 300, 13);
+   windowobj_t *wo_path = register_windowobj(WO_TEXT, 40, 2, 2*(width-10)/3, 13);
    wo_path->text = (char*)malloc(1);
    strcpy(wo_path->text, "<New file>");
    wo_path->textvalign = true;
    wo_path->return_func = &path_return;
    wo_path_o = wo_path;
 
-   windowobj_t *wo_status = register_windowobj(WO_TEXT, 345, 2, 80, 13);
+   windowobj_t *wo_status = register_windowobj(WO_TEXT, 42+2*(width-10)/3, 2, (width-10)/3 - 42, 13);
    wo_status->text = (char*)malloc(1);
    wo_status->text[0] = '\0';
    wo_status->textvalign = true;
    wo_status_o = wo_status;
 
-   int width = get_width();
-   int height = get_height();
    windowobj_t *wo_text = register_windowobj(WO_TEXT, 5, 17, width - 10, height - 20);
    wo_text->type = WO_TEXT;
    wo_text->text = (char*)malloc(1);

@@ -76,36 +76,50 @@ void windowobj_draw(void *windowobj) {
    uint16_t bg = rgb16(255, 255, 255);
    uint16_t border = rgb16(120, 120, 120);
    uint16_t text = 0;
+   uint16_t light = rgb16(235, 235, 235);
+   uint16_t dark = rgb16(145, 145, 145);
 
    if(wo->type == WO_BUTTON) {
-      uint16_t color_bg = rgb16(200, 200, 200);
-      uint16_t color_light = rgb16(235, 235, 235);
-      uint16_t color_dark = rgb16(145, 145, 145);
-      uint16_t color_text = 0;
+      bg = rgb16(200, 200, 200);
 
       if(wo->clicked) {
-         color_bg = rgb16(185, 185, 185);
-         color_text = rgb16(40, 40, 40);
-      } else if(wo->hovering) {
-         color_bg = rgb16(220, 220, 220);
+         bg = rgb16(185, 185, 185);
+         text = rgb16(40, 40, 40);
+      } else {
+         if(wo->hovering)
+            bg = rgb16(220, 220, 220);
+
+         uint16_t tmp = light;
+         light = dark;
+         dark = tmp;
       }
 
-      draw_rect(wo->window_surface, color_bg, wo->x, wo->y, wo->width, wo->height);
+
+
+      draw_rect(wo->window_surface, bg, wo->x, wo->y, wo->width, wo->height);
+
+      draw_line(wo->window_surface, dark,  wo->x, wo->y, true,  wo->height);                    // left
+      draw_line(wo->window_surface, dark,  wo->x, wo->y, false, wo->width);                     // top
+      draw_line(wo->window_surface, light, wo->x, wo->y + wo->height - 1, false, wo->width);   // bottom
+      draw_line(wo->window_surface, light, wo->x + wo->width - 1, wo->y, true,  wo->height);   // right
+
+
+   } else if(wo->type == WO_TEXT) {
 
       if (wo->clicked) {
-         draw_line(wo->window_surface, color_dark,  wo->x, wo->y, true,  wo->height);                    // left
-         draw_line(wo->window_surface, color_dark,  wo->x, wo->y, false, wo->width);                     // top
-         draw_line(wo->window_surface, color_light, wo->x, wo->y + wo->height - 1, false, wo->width);   // bottom
-         draw_line(wo->window_surface, color_light, wo->x + wo->width - 1, wo->y, true,  wo->height);   // right
-      } else {
-         draw_line(wo->window_surface, color_light, wo->x, wo->y, true,  wo->height);                    // left
-         draw_line(wo->window_surface, color_light, wo->x, wo->y, false, wo->width);                     // top
-         draw_line(wo->window_surface, color_dark,  wo->x, wo->y + wo->height - 1, false, wo->width);   // bottom
-         draw_line(wo->window_surface, color_dark,  wo->x + wo->width - 1, wo->y, true,  wo->height);   // right
+         dark = rgb16(40, 40, 40);
+         light = rgb16(140, 140, 140);
+      } else if (wo->hovering) {
+         bg = rgb16(245, 245, 245);
+         border = rgb16(40, 40, 40);
+         text = rgb16(40, 40, 40);
       }
 
-      text = color_text;
-
+      draw_rect(wo->window_surface, bg, wo->x + 1, wo->y + 1, wo->width - 2, wo->height - 2);
+      draw_line(wo->window_surface, dark,  wo->x, wo->y, false, wo->width);                    // top
+      draw_line(wo->window_surface, dark,  wo->x, wo->y, true,  wo->height);                   // left
+      draw_line(wo->window_surface, light, wo->x, wo->y + wo->height - 1, false, wo->width);   // bottom
+      draw_line(wo->window_surface, light, wo->x + wo->width - 1, wo->y, true, wo->height);    // right
    } else {
       if (wo->clicked) {
          border = 0;
@@ -152,7 +166,7 @@ void windowobj_click(void *regs, void *windowobj) {
 
    wo->clicked = true;
    if(wo->type == WO_BUTTON)
-      events_add(2, &windowobj_unclick, (void*)wo, -1);
+      events_add(1, &windowobj_unclick, (void*)wo, -1);
 
    if(wo->click_func != NULL)
       task_call_subroutine(regs, (uint32_t)(wo->click_func), NULL, 0);

@@ -742,17 +742,17 @@ void windowmgr_mousemove(int x, int y) {
             bool inside = (relX > wo->x && relX < wo->x + wo->width &&
                            relY > wo->y && relY < wo->y + wo->height);
         
-            if (inside) {
-               if (!wo->hovering) {
+            if(inside) {
+               if(!wo->hovering) {
                   wo->hovering = true;
-                  if (wo->hover_func)
+                  if(wo->hover_func)
                      wo->hover_func((void*)wo);
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
                 }
             } else {
-               if (wo->hovering) {
+               if(wo->hovering) {
                   wo->hovering = false;
-                  if (wo->draw_func)
+                  if(wo->draw_func)
                      wo->draw_func((void*)wo);
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
                }
@@ -771,7 +771,7 @@ void windowmgr_mousemove(int x, int y) {
    } else {
       cursor_resize = false;
    }
- }
+}
 
 void menu_draw(gui_menu_t *menu) {
    draw_rect(&surface, rgb16(240, 240, 240), menu->x, menu->y, 120, 340);

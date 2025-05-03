@@ -186,7 +186,7 @@ void _start(int argc, char **args) {
    clearbtn->x = width - (clearbtn->width + 10);
    clearbtn->y = height - (clearbtn->height + 10);
    clearbtn->text = (char*)malloc(1);
-   strcpy(clearbtn->text, "CLEAR");
+   strcpy(clearbtn->text, "Clear");
    clearbtn->click_func = &clear_click;
    clearbtn_wo = clearbtn;
 
@@ -194,7 +194,7 @@ void _start(int argc, char **args) {
    toolbtn->x = width - (clearbtn->width + 65);
    toolbtn->y = height - (clearbtn->height + 10);
    toolbtn->text = (char*)malloc(1);
-   strcpy(toolbtn->text, "TOOL");
+   strcpy(toolbtn->text, "Size");
    toolbtn->click_func = &tool_click;
    toolbtn_wo = toolbtn;
 

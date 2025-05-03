@@ -40,6 +40,6 @@ typedef struct elf_prog_header_t {
 
 } __attribute__((packed)) elf_prog_header_t;
 
-void elf_run(registers_t *regs, uint8_t *prog, int argc, char **args);
+void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args);
 
 #endif

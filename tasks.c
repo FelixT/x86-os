@@ -133,7 +133,7 @@ void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args) {
       return;
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   elf_run(regs, prog, argc, args);
+   elf_run(regs, prog, entry->fileSize, argc, args);
    free((uint32_t)prog, entry->fileSize);
 }
 

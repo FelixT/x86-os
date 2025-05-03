@@ -68,6 +68,12 @@ bool strcmp(char* str1, char* str2) {
    return true;
 }
 
+char tolower(char c) {
+   if(c >= 'A' && c <= 'Z')
+      c += ('a'-'A');
+   return c;
+}
+
 void display_items() {
    int y = 5;
    int x = 5;
@@ -94,28 +100,28 @@ void display_items() {
       char extension[4];
 
       for(int x = 0; x < 8; x++)
-         fileName[x] = cur_items[i].filename[x];
+         fileName[x] = tolower(cur_items[i].filename[x]);
       fileName[8] = '\0';
 
       for(int x = 0; x < 3; x++)
-         extension[x] = cur_items[i].filename[x+8];
+         extension[x] = tolower(cur_items[i].filename[x+8]);
       extension[3] = '\0';
 
       // draw
       if((cur_items[i].attributes & 0x10) == 0x10) {
          // directory
          bmp_draw((uint8_t*)folder_icon, x, y);
-         write_strat(fileName, x + 25, y + 4);
+         write_strat(fileName, x + 25, y + 7);
       } else {
          // file
          bmp_draw((uint8_t*)file_icon, x, y);
-         write_strat(fileName, x + 25, y + 4);
+         write_strat(fileName, x + 25, y + 7);
 
          if(extension[0] != ' ') {
-            write_strat(extension, x + 105, y + 4);
-            write_strat(extension, x + 105, y + 4);
+            write_strat(extension, x + 105, y + 7);
+            write_strat(extension, x + 105, y + 7);
 
-            write_numat(cur_items[i].fileSize, x + 150, y + 4);
+            write_numat(cur_items[i].fileSize, x + 150, y + 7);
          }
       }
 
@@ -125,7 +131,7 @@ void display_items() {
    }
 
    // draw path
-   write_strat(cur_path, 5, height - 30);
+   write_strat(cur_path, 5, height - 12);
 }
 
 void read_root() {
@@ -199,7 +205,7 @@ void click(int x, int y) {
          cur_path[pi] = '/';
          int x;
          for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
-            cur_path[pi+x+1] = cur_items[index].filename[x];
+            cur_path[pi+x+1] = tolower(cur_items[index].filename[x]);
          cur_path[pi+x+1] = '\0';
 
          // read dir

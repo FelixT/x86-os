@@ -290,6 +290,11 @@ void mouse_handler(registers_t *regs) {
             else
                mouse_release(regs);
          }
+         if(xm != 0 || ym != 0) {
+            gui_cursor_save_bg(); // save pixels at new cursor location
+            gui_cursor_draw();
+         }
+      
       }
 
       mouse_cycle = 0;

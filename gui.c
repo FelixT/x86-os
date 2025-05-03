@@ -15,6 +15,7 @@ bool mouse_enabled = false;
 bool mouse_held = false;
 bool mouse_heldright = false;
 bool cursor_resize = false;
+bool gui_cursor_shown = false;
 
 surface_t surface;
 
@@ -170,6 +171,7 @@ void gui_redrawall() {
    surface.buffer = framebuffer;
    memcpy((void*)surface.buffer, (void*)draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
 
+   gui_cursor_shown = false;
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
 }
@@ -230,6 +232,7 @@ void mouse_enable() {
 }
 
 void gui_cursor_save_bg() {
+   if(gui_cursor_shown) return;
    uint16_t *terminal_buffer = (uint16_t*) surface.buffer;
    for(int y = gui_mouse_y; y < gui_mouse_y + getFont()->height; y++) {
       for(int x = gui_mouse_x; x < gui_mouse_x + getFont()->width; x++) {
@@ -245,9 +248,11 @@ void gui_cursor_restore_bg(int old_x, int old_y) {
          set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-old_y)*(getFont()->width)+(x-old_x)]);
       }
    }
+   gui_cursor_shown = false;
 }
 
 void gui_cursor_draw() {
+   if(gui_cursor_shown) return;
    char outline = 27;
    char fill = 28;
    if(cursor_resize) {
@@ -257,35 +262,22 @@ void gui_cursor_draw() {
 
    gui_drawcharat(outline, 0, gui_mouse_x, gui_mouse_y);
    gui_drawcharat(fill, COLOUR_WHITE, gui_mouse_x, gui_mouse_y);
-
+   gui_cursor_shown = true;
 }
 
 void mouse_update(int relX, int relY) {
+   if(relX == 0 && relY == 0) return;
+
    int old_x = gui_mouse_x;
    int old_y = gui_mouse_y;
 
    gui_mouse_x += relX;
    gui_mouse_y -= relY;
-
-   if(gui_mouse_x >= (int)surface.width)
-      gui_mouse_x %= surface.width;
-
-   if(gui_mouse_y >= (int)surface.height)
-      gui_mouse_y %= surface.height;
-
-   if(gui_mouse_x < 0)
-      gui_mouse_x = surface.width + gui_mouse_x;
-
-   if(gui_mouse_y < 0)
-      gui_mouse_y = surface.height + gui_mouse_y;
+   gui_mouse_x = (gui_mouse_x + surface.width) % surface.width;
+   gui_mouse_y = (gui_mouse_y + surface.height) % surface.height;
 
    gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
-   if(relX != 0 || relY != 0)
-      windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
-
-   gui_cursor_save_bg(); // save pixels at new cursor location
-
-   gui_cursor_draw();
+   windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
 }
 
 void mouse_leftclick(void *regs, int relX, int relY) {
