@@ -115,8 +115,6 @@ char scan_to_char(int scan_code, bool caps) {
    return c;
 }
 
-extern void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent);
-
 void register_irq(int index, void (*handler)(registers_t *regs)) {
    irqs[index] = handler;
 }
@@ -338,6 +336,10 @@ void exception_handler(int int_no, registers_t *regs) {
 
          if(int_no == 14) {
             // page error
+            if(get_current_task() < 0) {
+               debug_printf("Page fault in kernel mode with task %i\n", get_current_task);
+               return;
+            }
             page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
 
             uint32_t addr;

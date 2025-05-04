@@ -35,18 +35,18 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {
       elf_prog_header_t *ph = &headers[i];
    
-      if (ph->segment_type != 1) // Only LOAD segments
+      if(ph->segment_type != 1) // Only LOAD segments
          continue;
 
-      if (ph->p_offset + ph->p_filesz > size) {
-         debug_printf("ELF segment %d exceeds binary size \n", i, ph->p_offset, ph->p_filesz, size);
+      if(ph->p_offset + ph->p_filesz > size) {
+         debug_printf("ELF segment %u exceeds binary size \n", i, ph->p_offset, ph->p_filesz, size);
          return;
       }
    
-      if (ph->p_vaddr < vmem_start)
+      if(ph->p_vaddr < vmem_start)
          vmem_start = ph->p_vaddr;
    
-       if (ph->p_vaddr + ph->p_memsz > vmem_end)
+       if(ph->p_vaddr + ph->p_memsz > vmem_end)
          vmem_end = ph->p_vaddr + ph->p_memsz;
    }
    

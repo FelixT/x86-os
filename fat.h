@@ -56,7 +56,7 @@ typedef struct {
    uint32_t fileSize; // bytes
 } __attribute__((packed)) fat_dir_t;
 
-fat_dir_t *fat_parse_path(char *path);
+fat_dir_t *fat_parse_path(char *path, bool isFile);
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
 void fat_read_root(fat_dir_t *items);
 void fat_setup();
@@ -65,6 +65,6 @@ void fat_get_info();
 void fat_parse_dir_entry(fat_dir_t *fat_dir);
 fat_bpb_t fat_get_bpb();
 int fat_get_dir_size(uint16_t clusterNo);
-void fat_write_file(uint32_t clusterNo, uint8_t *buffer, uint32_t size);
+void fat_write_file(char *path, uint8_t *buffer, uint32_t size);
 
 #endif

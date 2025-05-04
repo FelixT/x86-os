@@ -52,7 +52,9 @@ uint16_t bmp_get_colour(uint8_t *bmp, int x, int y) {
       return pixels16bit[index];
 }
 
-void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent) {
+void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent, int scale) {
+   if(scale < 1) return;
+
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    
@@ -80,9 +82,15 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHe
             colour = pixels16bit[index16];
 
          if(!whiteIsTransparent || colour != COLOUR_WHITE) {
-            int i = (yi+y)*screenWidth+(xi+x);
-            if(i >= 0 && i < screenWidth * screenHeight) {
-               framebuffer[i] = colour;
+            for(int dy = 0; dy < scale; dy++) {
+               for(int dx = 0; dx < scale; dx++) {
+                  int sx = x + xi * scale + dx;
+                  int sy = y + yi * scale + dy;
+                  int i = sy * screenWidth + sx;
+                  if(sx >= 0 && sx < screenWidth && sy >= 0 && sy < screenHeight) {
+                     framebuffer[i] = colour;
+                  }
+               }
             }
          }
       }

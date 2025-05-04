@@ -80,7 +80,7 @@ void end_task(int index, registers_t *regs) {
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
    if(tasks[index].in_routine)
-      debug_writestr("Task was in routine\n");
+      debug_printf("Task was in routine %s\n", tasks[index].routine_name);
 
    if(tasks[index].window >= 0)
       window_writestr("Task ended\n", 0, tasks[index].window);
@@ -114,7 +114,7 @@ void tasks_alloc() {
 }
 
 void tasks_launch_binary(registers_t *regs, char *path) {
-   fat_dir_t *entry = fat_parse_path(path);
+   fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Program not found\n", 0);
       return;
@@ -127,7 +127,7 @@ void tasks_launch_binary(registers_t *regs, char *path) {
 }
 
 void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args) {
-   fat_dir_t *entry = fat_parse_path(path);
+   fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Not found\n", 0);
       return;
@@ -238,7 +238,7 @@ int get_task_from_window(int windowIndex) {
    return -1;
 }
 
-void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int argc) {
+void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
       /*debug_writestr("Task ");
@@ -249,6 +249,8 @@ void task_call_subroutine(registers_t *regs, uint32_t addr, uint32_t *args, int 
          debug_writestr(" not enabled.\n");*/
       return;
    }
+
+   strcpy(tasks[current_task].routine_name, name);
 
    // save registers
 

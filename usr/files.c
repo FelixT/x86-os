@@ -110,11 +110,11 @@ void display_items() {
       // draw
       if((cur_items[i].attributes & 0x10) == 0x10) {
          // directory
-         bmp_draw((uint8_t*)folder_icon, x, y);
+         bmp_draw((uint8_t*)folder_icon, x, y, 1);
          write_strat(fileName, x + 25, y + 7);
       } else {
          // file
-         bmp_draw((uint8_t*)file_icon, x, y);
+         bmp_draw((uint8_t*)file_icon, x, y, 1);
          write_strat(fileName, x + 25, y + 7);
 
          if(extension[0] != ' ') {

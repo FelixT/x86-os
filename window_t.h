@@ -47,7 +47,7 @@ typedef struct gui_window_t {
    void (*drag_func)(int x, int y);
 
    void (*draw_func)(void *window);
-   void (*write_func)(void *window, char *string);
+   //void (*write_func)(void *window, char *string);
    void (*resize_func)(uint32_t fb, uint32_t w, uint32_t h);
    void (*mouserelease_func)();
 

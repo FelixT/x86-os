@@ -24,6 +24,10 @@ int height = 0;
 
 windowobj_t *clearbtn_wo;
 windowobj_t *toolbtn_wo;
+windowobj_t *zoominbtn_wo;
+windowobj_t *zoomoutbtn_wo;
+int size = 1; 
+int scale = 1;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
@@ -34,8 +38,12 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    toolbtn_wo->x = width - (toolbtn_wo->width + 65);
    clearbtn_wo->y = height - (clearbtn_wo->height + 10);
    toolbtn_wo->y = height - (toolbtn_wo->height + 10);
+   zoomoutbtn_wo->x = width - (clearbtn_wo->width + 130);
+   zoomoutbtn_wo->y = height - (clearbtn_wo->height + 10);
+   zoominbtn_wo->x = width - (clearbtn_wo->width + 110);
+   zoominbtn_wo->y = height - (clearbtn_wo->height + 10);
    clear(0xFFFF);
-   bmp_draw((uint8_t*)bmp, 0, 0);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale);
    redraw();
    end_subroutine();
 }
@@ -49,8 +57,6 @@ void strcpy(char* dest, char* src) {
    }
    dest[i] = '\0';
 }
-
-int size = 1; 
 
 void set(int x, int y, int c) {
    framebuffer[x+y*width] = c;
@@ -68,7 +74,7 @@ int abs(int i) {
 }
 
 void drawLine(int x0, int y0, int x1, int y1) {
-   // Bresenham's line algorithm
+   // bresenham's line algorithm
    int dx = abs(x1 - x0);
    int sx = x0 < x1 ? 1 : -1;
    int dy = -abs(y1 - y0);
@@ -77,29 +83,29 @@ void drawLine(int x0, int y0, int x1, int y1) {
    int e2;
    
    while (1) {
-       set(x0, y0, 0);  // Set the current pixel
+      set(x0, y0, 0);  // set the current pixel
        
-       // Check if we've reached the end point
-       if (x0 == x1 && y0 == y1) 
-           break;
+      // check if we've reached the end point
+      if(x0 == x1 && y0 == y1) 
+         break;
            
-       e2 = 2 * error;
+      e2 = 2 * error;
        
-       // Update x if needed
-       if (e2 >= dy) {
-           if (x0 == x1) 
-               break;
-           error += dy;
-           x0 += sx;
+      // update x if needed
+      if(e2 >= dy) {
+         if(x0 == x1) 
+            break;
+         error += dy;
+         x0 += sx;
        }
        
-       // Update y if needed
-       if (e2 <= dx) {
-           if (y0 == y1) 
-               break;
-           error += dx;
-           y0 += sy;
-       }
+      // update y if needed
+      if(e2 <= dx) {
+         if(y0 == y1) 
+            break;
+         error += dx;
+         y0 += sy;
+      }
    }
 }
 
@@ -136,7 +142,7 @@ void clear_click(void *wo) {
    (void)wo;
    clear(0xFFFF);
 
-   bmp_draw((uint8_t*)bmp, 0, 0);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale);
 
    end_subroutine();
 
@@ -148,6 +154,22 @@ void tool_click(void *wo) {
 
    end_subroutine();
 
+}
+
+void zoomout_click(void *wo) {
+   (void)wo;
+   if(scale > 1) scale--;
+   clear(0xFFFF);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale);
+   end_subroutine();
+}
+
+void zoomin_click(void *wo) {
+   (void)wo;
+   scale++;
+   clear(0xFFFF);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale);
+   end_subroutine();
 }
 
 void _start(int argc, char **args) {
@@ -175,7 +197,7 @@ void _start(int argc, char **args) {
    clear(0xFFFF);
    
    bmp = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
-   bmp_draw((uint8_t*)bmp, 0, 0);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale);
 
    framebuffer = (uint16_t*)get_framebuffer();
    width = get_width();
@@ -198,6 +220,21 @@ void _start(int argc, char **args) {
    toolbtn->click_func = &tool_click;
    toolbtn_wo = toolbtn;
 
+   windowobj_t *zoominbtn = register_windowobj(WO_BUTTON, 0, 0, 20, 14);
+   zoominbtn->x = width - (clearbtn->width + 120);
+   zoominbtn->y = height - (clearbtn->height + 10);
+   zoominbtn->text = (char*)malloc(1);
+   strcpy(zoominbtn->text, "+");
+   zoominbtn->click_func = &zoomin_click;
+   zoominbtn_wo = zoominbtn;
+
+   windowobj_t *zoomoutbtn = register_windowobj(WO_BUTTON, 0, 0, 20, 14);
+   zoomoutbtn->x = width - (clearbtn->width + 140);
+   zoomoutbtn->y = height - (clearbtn->height + 10);
+   zoomoutbtn->text = (char*)malloc(1);
+   strcpy(zoomoutbtn->text, "-");
+   zoomoutbtn->click_func = &zoomout_click;
+   zoomoutbtn_wo = zoomoutbtn;
    redraw();
 
    while(1==1) {

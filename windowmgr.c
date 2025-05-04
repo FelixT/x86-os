@@ -5,6 +5,7 @@
 #include "draw.h"
 #include "string.h"
 #include "bmp.h"
+#include "windowobj.h"
 
 #include "window_term.h"
 #include <stdarg.h>
@@ -23,7 +24,7 @@ uint8_t *gui_bgimage = NULL;
 uint8_t *icon_files = NULL;
 
 extern bool mouse_heldright;
-gui_menu_t default_menu; // right click menu
+windowobj_t default_menu; // right click menu
 
 void debug_writestr(char *str) {
    if(windowCount == 0) return;
@@ -141,6 +142,8 @@ bool window_init(gui_window_t *window) {
    // other functions without default behaviour
    window->click_func = NULL;
    window->drag_func = NULL;
+   window->resize_func = NULL;
+   window->mouserelease_func = NULL;
 
    // no window objects
    window->window_object_count = 0;
@@ -211,16 +214,18 @@ void window_draw_outline(gui_window_t *window) {
    int titleWidth = gui_gettextwidth(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
    draw_rect(&surface, COLOUR_TITLEBAR, titleX-4, window->y+3, titleWidth+8, getFont()->height+getFont()->padding*2+2);
+   draw_string(&surface, window->title, rgb16(210,210,210), titleX, window->y+6);
    draw_string(&surface, window->title, 0, titleX, window->y+5);
 
    // titlebar buttons
    draw_char(&surface, 0, 0, window->x+window->width-(getFont()->width+3), window->y+2);
    draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, window->y+2);
 
+   draw_line(&surface, rgb16(170,170,170), window->x, window->y+TITLEBAR_HEIGHT-1, false, window->width);
 }
 
 void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height) {
-   if (window->framebuffer == NULL) return;
+   if(window->framebuffer == NULL) return;
 
    gui_window_t *selected = getSelectedWindow();
 
@@ -232,7 +237,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
    int selX = 0, selY = 0, selW = 0, selH = 0;
    bool checkOcclusion = selected && selected != window;
 
-   if (checkOcclusion) {
+   if(checkOcclusion) {
       selX = selected->x;
       selY = selected->y;
       selW = selected->width;
@@ -242,25 +247,35 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
    // Clamp drawing to window content bounds
    int maxY = offsetY + height;
    int maxX = offsetX + width;
-   if (maxY > winH) maxY = winH;
-   if (maxX > winW) maxX = winW;
+   if(maxY > winH) maxY = winH;
+   if(maxX > winW) maxX = winW;
 
-   for (int y = offsetY; y < maxY; y++) {
-       int screenY = winY + y;
-       for (int x = offsetX; x < maxX; x++) {
-           int screenX = winX + x;
+   uint16_t *fb = gui_get_framebuffer();
+   uint16_t *winfb = window->framebuffer;
 
-           // Skip pixels covered by selected window
-           if (checkOcclusion &&
-               screenX >= selX && screenX < selX + selW &&
-               screenY >= selY && screenY < selY + selH)
+   if(!checkOcclusion && offsetX == 0 && width == winW) {
+      // fast path: copy entire row
+      for (int y = offsetY; y < maxY; y++) {
+         int screenY = winY + y;
+         memcpy_fast(&fb[screenY * surface.width + winX], &winfb[y * winW], width * sizeof(uint16_t));
+      }
+   } else {
+      // general case: copy pixel by pixel
+      for (int y = offsetY; y < maxY; y++) {
+         int screenY = winY + y;
+         for (int x = offsetX; x < maxX; x++) {
+            int screenX = winX + x;
+
+            // skip pixels covered by selected window
+            if(checkOcclusion && screenX >= selX && screenX < selX + selW && screenY >= selY && screenY < selY + selH)
                continue;
 
-           int screenIndex = screenY * surface.width + screenX;
-           int winIndex = y * winW + x;
+            int screenIndex = screenY * surface.width + screenX;
+            int winIndex = y * winW + x;
 
-           gui_get_framebuffer()[screenIndex] = window->framebuffer[winIndex];
-       }
+            fb[screenIndex] = window->framebuffer[winIndex];
+         }
+      }
    }
 }
 
@@ -318,6 +333,17 @@ void windowmgr_init() {
    gui_windows[0].y = 100;
    setSelectedWindowIndex(0);
    windowCount++;
+
+   // set up default menu
+   windowobj_init(&default_menu, &surface);
+   default_menu.type = WO_MENU;
+   default_menu.visible = false;
+   default_menu.width = 100;
+   default_menu.height = 200;
+   default_menu.menuitems = malloc(sizeof(windowobj_menu_t) * 10);
+   strcpy(default_menu.menuitems[0].text, "Test");
+   strcpy(default_menu.menuitems[1].text, "Test2");
+   default_menu.menuitem_count = 2;
 }
 
 void toolbar_draw() {
@@ -332,10 +358,10 @@ void toolbar_draw() {
          bg = COLOUR_LIGHT_GREY;
       if(getWindow(i)->active)
          bg = COLOUR_DARK_GREY;
-      int textWidth = gui_gettextwidth(3);
+      int textWidth = gui_gettextwidth(6);
       int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
-      char text[4] = "   ";
-      strcpy_fixed(text, getWindow(i)->title, 3);
+      char text[7] = "   ";
+      strcpy_fixed(text, getWindow(i)->title, 6);
       int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
       int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
       gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
@@ -362,7 +388,7 @@ void windowmgr_uparrow(registers_t *regs, gui_window_t *window) {
       (*(window->uparrow_func))(window);
    } else {
       // run as task
-      task_call_subroutine(regs, (uint32_t)(window->uparrow_func), NULL, 0);
+      task_call_subroutine(regs, "uparrow", (uint32_t)(window->uparrow_func), NULL, 0);
    }
    
 }
@@ -380,7 +406,7 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
       (*(window->downarrow_func))(window);
    } else {
       // run as task
-      task_call_subroutine(regs, (uint32_t)(window->downarrow_func), NULL, 0);
+      task_call_subroutine(regs, "downarrow", (uint32_t)(window->downarrow_func), NULL, 0);
    }
    
 }
@@ -388,6 +414,12 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
 bool keyboard_shift = false;
 bool keyboard_caps = false;
 void windowmgr_keypress(void *regs, int scan_code) {
+   // check desktop window objects
+   if(default_menu.visible) {
+      windowobj_keydown(regs, &default_menu, scan_code);
+      return;
+   }
+
    if(selectedWindow == NULL) return;
 
    bool released = scan_code & 0x80;
@@ -543,7 +575,7 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
       args[1] = windowX;
       args[0] = windowY;
    
-      task_call_subroutine(regs, (uint32_t)(selectedWindow->drag_func), args, 2);
+      task_call_subroutine(regs, "dragged", (uint32_t)(selectedWindow->drag_func), args, 2);
    
       return;
    }
@@ -583,6 +615,19 @@ bool windowmgr_click(void *regs, int x, int y) {
       return false;
    }
 
+   if(default_menu.visible) {
+      // clicked on menu
+      if(x >= default_menu.x && x <= default_menu.x + default_menu.width
+      && y >= default_menu.y && y <= default_menu.y + default_menu.height) {
+         windowobj_click(regs, (void*)&default_menu);
+         default_menu.visible = false;
+         return true;
+      } else {
+         default_menu.visible = false;
+         return false;
+      }
+   }
+
    if(!clicked_on_window(regs, getSelectedWindowIndex(), x, y)) {
       // check other windows
       setSelectedWindowIndex(-1);
@@ -609,7 +654,7 @@ bool windowmgr_click(void *regs, int x, int y) {
    args[0] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
 
    if((y - (selectedWindow->y + TITLEBAR_HEIGHT)) >= 0) {
-      task_call_subroutine(regs, (uint32_t)(selectedWindow->click_func), args, 2);
+      task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 2);
    } else {
       // clicked titlebar, don't call routine
       free((uint32_t)args, sizeof(uint32_t) * 2);
@@ -622,6 +667,7 @@ void windowmgr_rightclick(void *regs, int x, int y) {
    (void)(regs);
    setSelectedWindowIndex(-1);
    // draw menu
+   default_menu.visible = true;
    default_menu.x = x;
    default_menu.y = y;
 }
@@ -636,9 +682,10 @@ void windowmgr_draw() {
       window_draw(selectedWindow);
 
    toolbar_draw();
+   windowobj_draw(&default_menu);
 
    if(mouse_heldright)
-      menu_draw(&default_menu);
+      windowobj_draw(&default_menu);
 }
 
 void windowmgr_redrawall() {
@@ -652,7 +699,7 @@ extern uint16_t gui_bg;
 void desktop_init() {
    // load add window icon
    if(icon_window == NULL) {
-      fat_dir_t *entry = fat_parse_path("/bmp/window.bmp");
+      fat_dir_t *entry = fat_parse_path("/bmp/window.bmp", true);
       if(entry == NULL) {
          debug_writestr("Window icon not found\n");
          return;
@@ -661,7 +708,7 @@ void desktop_init() {
       icon_window = fat_read_file(entry->firstClusterNo, entry->fileSize);
    }
    if(icon_files == NULL) {
-      fat_dir_t *entry = fat_parse_path("/bmp/files.bmp");
+      fat_dir_t *entry = fat_parse_path("/bmp/files.bmp", true);
       if(entry == NULL) {
          debug_writestr("Files icon not found\n");
          return;
@@ -670,7 +717,7 @@ void desktop_init() {
    }
 
    if(gui_bgimage == NULL) {
-      fat_dir_t *entry = fat_parse_path("/bmp/bg16.bmp");
+      fat_dir_t *entry = fat_parse_path("/bmp/bg16.bmp", true);
       if(entry == NULL) {
          debug_writestr("BG not found\n");
          return;
@@ -695,15 +742,15 @@ void desktop_draw() {
    int32_t height = bmp_get_height(gui_bgimage);
    int x = (surface.width - width) / 2;
    int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
-   bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0);
+   bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0, 1);
 
    x = 10;
    y = 10;
-   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1);
+   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
    y += 10 + bmp_get_height(icon_window);
    draw_string(&surface, "Terminal", 0xFFFF, x, y);
    y += 10 + getFont()->height;
-   bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1);
+   bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
    y += 10 + bmp_get_height(icon_files);
    draw_string(&surface, "FileMgr", 0xFFFF, x, y);
 }
@@ -727,6 +774,25 @@ void desktop_click(registers_t *regs, int x, int y) {
 }
 
 void windowmgr_mousemove(int x, int y) {
+   // check desktop windowobjects
+   if(default_menu.visible) {
+      // check if within menu
+      int relX_wo = x - default_menu.x;
+      int relY_wo = y - default_menu.y;
+      if(relX_wo > 0 && relX_wo < default_menu.width
+      && relY_wo > 0 && relY_wo < default_menu.height) {
+         if(default_menu.hover_func)
+            default_menu.hover_func((void*)&default_menu, relX_wo, relY_wo);
+         return;
+      } else {
+         if(default_menu.menuselected != -1 || default_menu.hovering) {
+            default_menu.menuselected = -1;
+            default_menu.hovering = false;
+            windowobj_draw(&default_menu);
+         }
+      }
+   }
+
    if(selectedWindow) {
       // check if within selected window content
 
@@ -739,14 +805,15 @@ void windowmgr_mousemove(int x, int y) {
 
          for (int i = 0; i < selectedWindow->window_object_count; i++) {
             windowobj_t *wo = selectedWindow->window_objects[i];
-            bool inside = (relX > wo->x && relX < wo->x + wo->width &&
-                           relY > wo->y && relY < wo->y + wo->height);
+            int relX_wo = relX - wo->x;
+            int relY_wo = relY - wo->y;
+            bool inside = relX_wo > 0 && relX_wo < wo->width && relY_wo > 0 && relY_wo < wo->height;
         
             if(inside) {
                if(!wo->hovering) {
-                  wo->hovering = true;
+                  //wo->hovering = true;
                   if(wo->hover_func)
-                     wo->hover_func((void*)wo);
+                     wo->hover_func((void*)wo, relX_wo, relY_wo);
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
                 }
             } else {
@@ -771,12 +838,6 @@ void windowmgr_mousemove(int x, int y) {
    } else {
       cursor_resize = false;
    }
-}
-
-void menu_draw(gui_menu_t *menu) {
-   draw_rect(&surface, rgb16(240, 240, 240), menu->x, menu->y, 120, 340);
-   draw_unfilledrect(&surface, rgb16(80, 80, 80), menu->x, menu->y, 120, 340);
-   draw_string(&surface, "TEST", 0, menu->x+4, menu->y+4);
 }
 
 int get_window_index_from_pointer(gui_window_t *window) {
@@ -806,9 +867,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width;
       args[0] = height - TITLEBAR_HEIGHT;
-      task_call_subroutine(regs, (uint32_t)(window->resize_func), args, 3);
+      task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
    }
-
    
 }
 
@@ -818,6 +878,6 @@ void window_mouserelease(registers_t *regs, gui_window_t *window) {
    int task = get_task_from_window(index);
    if(task > -1 && window->mouserelease_func) {
       switch_to_task(task, regs);
-      task_call_subroutine(regs, (uint32_t)(window->mouserelease_func), NULL, 0);
+      task_call_subroutine(regs, "mouserelease", (uint32_t)(window->mouserelease_func), NULL, 0);
    }   
 }

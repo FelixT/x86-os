@@ -12,6 +12,7 @@
 #include "elf.h"
 #include "events.h"
 #include "draw.h"
+#include "windowmgr.h"
 
 surface_t window_getsurface(int windowIndex) {
    gui_window_t *window = &(gui_get_windows()[windowIndex]);
@@ -67,11 +68,13 @@ void window_drawchar(char c, uint16_t colour, int windowIndex) {
 
       if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (getFont()->height+getFont()->padding))) {
          window_scroll(selected);
+         selected->needs_redraw=true;
+         gui_draw_window(windowIndex); // whole window needs redaw
       }
 
       // immediately output each line
-      selected->needs_redraw=true;
-      gui_draw_window(windowIndex);
+      if(!selected->minimised)
+         window_draw_content_region(selected, 0, selected->text_y - getFont()->height - getFont()->padding, selected->width, getFont()->height + getFont()->padding);
 
       return;
    }

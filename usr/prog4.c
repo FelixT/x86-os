@@ -43,7 +43,7 @@ int y = 0;
 
 void timer_callback() {
     //clear(0xFFFF);
-    bmp_draw((uint8_t*)image, x%400, y%250);
+    bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1);
     redraw();
 
     queue_event((uint32_t)(&timer_callback), 6);

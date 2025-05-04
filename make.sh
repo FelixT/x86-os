@@ -64,7 +64,7 @@ dd if=o/hd1.bin of=o/hd2.bin bs=128000 count=1 conv=notrunc status=none
 rm -f fs.img
 
 find . -name ".DS_Store" -delete
-mkfs.fat -F 16 -n FATFS -C fs.img 12000
+mkfs.fat -F 16 -n FATFS -C fs.img 10240
 # mount drive & copy files from fs_root dir
 hdiutil mount fs.img
 cp -R fs_root/ /Volumes/FATFS

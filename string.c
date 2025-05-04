@@ -205,8 +205,8 @@ void vsprintf(char *buffer, char *format, va_list args) {
 
    buffer[0] = '\0';
 
-   while (*pfmt) {
-      if (*pfmt == '%' && *(pfmt + 1)) {
+   while(*pfmt) {
+      if(*pfmt == '%' && *(pfmt + 1)) {
          pfmt++;
          switch (*pfmt) {
             case 'i':
@@ -259,8 +259,8 @@ void sprintf(char *buffer, char *format, ...) {
 
 char *strchr(const char *str, int c) {
    while (*str) {
-      if (*str == (char)c)
-         return (char *)str;
+      if(*str == (char)c)
+         return (char*)str;
       str++;
    }
    return NULL;

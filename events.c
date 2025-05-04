@@ -61,7 +61,7 @@ void event_fire(registers_t *regs, event_t *event) {
 
     if(event->task >= 0) {
         if(switch_to_task(event->task, regs)) {
-            task_call_subroutine(regs, (uint32_t)(event->callback), args, 1);
+            task_call_subroutine(regs, "event", (uint32_t)(event->callback), args, 1);
         }
     } else {
         // call function as kernel if task is -1

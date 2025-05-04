@@ -30,8 +30,6 @@ void free(uint32_t offset, int bytes) {
    for(int i = 0; i < noBlocks; i++) {
       int block = blockStart+i;
       if(block >= 0 && block < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
-         //window_writenum(block, 0, 0);
-         //window_writestr(" ", 0, 0);
          memory_status[block].allocated = false;
       }
    }
@@ -139,5 +137,33 @@ int memcmp(const void *a, const void *b, int bytes) {
    return 0; 
 }
 
+void memcpy_fast(void *dest, const void *src, size_t bytes) {
+   uint8_t *d = (uint8_t*)dest;
+   const uint8_t *s = (const uint8_t*)src;
 
-// TODO: memmove and memcmp 
+   // align dest to 4 bytes if necessary
+   while(((uintptr_t)d & 3) && bytes > 0) {
+      *d++ = *s++;
+      bytes--;
+   }
+
+   // if src is also 4 byte aligned copy 4 bytes at a time
+   if(((uintptr_t)s & 3) == 0) {
+      uint32_t *d32 = (uint32_t*)d;
+      const uint32_t *s32 = (const uint32_t*)s;
+
+      while(bytes >= 4) {
+         *d32++ = *s32++;
+         bytes -= 4;
+      }
+
+      d = (uint8_t*)d32;
+      s = (const uint8_t*)s32;
+   }
+
+   // copy remaining bytes
+   while(bytes--)
+      *d++ = *s++;
+}
+
+// TODO: memmove 

@@ -6,6 +6,7 @@
 #include "memory.h"
 #include "ata.h"
 #include "io.h"
+#include "windowmgr.h"
 
 void ata_delay(uint16_t ioPort) {
    // create 400ns delay through 4 alternative status queries
@@ -134,15 +135,15 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    if(sectorCount == 1) {
       uint16_t sectorBuf[256]; // 512 bytes
       ata_readwrite(primaryBus, masterDrive, startSector, sectorBuf, false);
-      memcpy(outBuf, ((uint8_t*)sectorBuf) + offset, bytes);
+      memcpy_fast(outBuf, ((uint8_t*)sectorBuf) + offset, bytes);
       return outBuf;
    }
    
    // read multiple sectors
    uint16_t *readBuf = malloc(sectorCount*512);
-   if (!readBuf) {
-       free((uint32_t)outBuf, bytes);
-       return NULL;
+   if(!readBuf) {
+      free((uint32_t)outBuf, bytes);
+      return NULL;
    }
    
    // read all sectors at once if reasonable, or in chunks
@@ -154,18 +155,19 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    }
    
    // copy only the required bytes
-   memcpy(outBuf, ((uint8_t*)readBuf) + offset, bytes);
+   memcpy_fast(outBuf, ((uint8_t*)readBuf) + offset, bytes);
    free((uint32_t)&readBuf[0], bytesRequired);
    return outBuf;
 }
 
 void ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *buf, int size) {
+   debug_printf("Writing %u bytes to 0x%h\n", size, addr);
    if(size%512 != 0) {
-      gui_writestr("Must read a multiple of 512 bytes\n", 0);
+      debug_writestr("Must read a multiple of 512 bytes\n");
       return;
    }
    if(addr%512 != 0) {
-      gui_writestr("Must read addr 512 bytes aligned\n", 0);
+      debug_writestr("Must read addr 512 bytes aligned\n");
       return;
    }
    for(int i = 0; i < size/512; i++)

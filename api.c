@@ -188,7 +188,7 @@ void api_fat_parse_path(registers_t *regs) {
    // IN: ebx = addr of char* path
    // OUT: ebx = addr of fat_dir_t entry for path or 0 if doesn't exist
 
-   fat_dir_t *entry = fat_parse_path((char*)regs->ebx);
+   fat_dir_t *entry = fat_parse_path((char*)regs->ebx, true);
    regs->ebx = (uint32_t)entry;
 }
 
@@ -219,9 +219,10 @@ void api_draw_bmp(registers_t *regs) {
    // IN: ebx = bmp address
    // IN: ecx = x
    // IN: edx = y
+   // IN: esi = scale
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
 
-   bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, false);
+   bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, false, regs->esi);
 }
 
 void api_clear_window(registers_t *regs) {
@@ -262,11 +263,11 @@ void api_launch_task(registers_t *regs) {
 }
 
 void api_fat_write_file(registers_t *regs) {
-   // IN: ebx = first cluster no
+   // IN: ebx = path
    // IN: ecx = buffer
    // IN: edx = size
 
-   fat_write_file(regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
+   fat_write_file((char*)regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
 }
 
 void api_set_sys_font(registers_t *regs) {
@@ -274,7 +275,7 @@ void api_set_sys_font(registers_t *regs) {
 
    // todo: require privilege
    char *path = (char*)regs->ebx;
-   fat_dir_t *entry = fat_parse_path(path);
+   fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Font not found\n", 0);
       return;

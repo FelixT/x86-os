@@ -138,12 +138,12 @@ void term_cmd_help() {
    gui_writestr("HELP, CLEAR, MOUSE, TASKS\n", 0);
    gui_writestr("PROG1, PROG2, FILES\n", 0);
    gui_writestr("VIEWBMP path, LAUNCH path\n", 0);
-   gui_writestr("PAGE, TEST, DESKTOP\n", 0);
+   gui_writestr("TEST, DESKTOP\n", 0);
    gui_writestr("FAT, FATPATH path\n", 0);
    gui_writestr("FATDIR clusterno, FATFILE clusterno\n", 0);
-   gui_writestr("READ addr, MEM <x>, DMPMEM x <y>\n", 0);
+   gui_writestr("MEM <x>, DMPMEM x <y>\n", 0);
    gui_writestr("BG colour, BGIMG path, FONT path\n", 0);
-   gui_writestr("PADDING size, REDRAWALL, RESIZE x y",0);
+   gui_writestr("PADDING size, REDRAWALL, RESIZE x y\n",0);
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -259,7 +259,7 @@ void term_cmd_desktop() {
 }
 
 void term_cmd_fatpath(char *arg) {
-   if(fat_parse_path(arg) == NULL) {
+   if(fat_parse_path(arg, true) == NULL) {
       gui_writestr("File not found\n", 0);
    }
 }
@@ -306,7 +306,7 @@ void term_cmd_bg(char *arg) {
 
 void term_cmd_bgimg(char *arg) {
 
-   fat_dir_t *entry = fat_parse_path(arg);
+   fat_dir_t *entry = fat_parse_path(arg, true);
    if(entry == NULL) {
       debug_writestr("Image not found\n");
       return;
@@ -388,7 +388,7 @@ void term_cmd_redrawall() {
 
 void term_cmd_font(char *path) {
    // switch font
-   fat_dir_t *entry = fat_parse_path(path);
+   fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       debug_writestr("Font not found\n");
       return;

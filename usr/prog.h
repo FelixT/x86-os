@@ -195,23 +195,24 @@ static inline uint32_t *fat_read_file(uint16_t firstClusterNo, uint32_t fileSize
    return (uint32_t*)addr;
 }
 
-static inline void fat_write_file(uint16_t firstClusterNo, uint8_t *buffer, uint32_t size) {
+static inline void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    asm volatile (
       "int $0x30;"
       :: "a" (33),
-      "b" ((uint32_t)firstClusterNo),
+      "b" ((uint32_t)path),
       "c" ((uint32_t)buffer),
       "d" ((uint32_t)size)
    );
 }
 
-static inline void bmp_draw(uint8_t *bmp, int x, int y) {
+static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale) {
    asm volatile (
       "int $0x30;"
       :: "a" (21),
       "b" ((uint32_t)bmp),
       "c" ((uint32_t)x),
-      "d" ((uint32_t)y)
+      "d" ((uint32_t)y),
+      "S" ((uint32_t)scale)
    );
 }
 

@@ -169,7 +169,7 @@ void gui_redrawall() {
 
    // copy to display
    surface.buffer = framebuffer;
-   memcpy((void*)surface.buffer, (void*)draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
+   memcpy_fast((void*)surface.buffer, (void*)draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
 
    gui_cursor_shown = false;
    gui_cursor_save_bg();

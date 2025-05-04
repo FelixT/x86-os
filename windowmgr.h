@@ -6,11 +6,6 @@
 #include "window_t.h"
 #include "registers_t.h"
 
-typedef struct gui_menu_t {
-   int x;
-   int y;
-} gui_menu_t;
-
 int windowmgr_add();
 bool window_init(gui_window_t *window);
 int getSelectedWindowIndex();
@@ -40,7 +35,6 @@ void desktop_click(registers_t *regs, int x, int y);
 void desktop_init();
 void desktop_setbgimg(uint8_t *img);
 void windowmgr_mousemove(int x, int y);
-void menu_draw(gui_menu_t *menu);
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height);
 void window_mouserelease(registers_t *regs, gui_window_t *window);
 
