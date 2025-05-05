@@ -856,7 +856,6 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    window->surface.buffer = (uint32_t)window->framebuffer;
    window->surface.width = width;
    window->surface.height = height - TITLEBAR_HEIGHT;
-   window_clearbuffer(window, window->colour_bg);
 
    // call resize func if exists
    int index = get_window_index_from_pointer(window);
@@ -868,6 +867,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[1] = width;
       args[0] = height - TITLEBAR_HEIGHT;
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
+   } else {
+      window_clearbuffer(window, window->colour_bg);
    }
    
 }

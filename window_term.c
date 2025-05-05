@@ -296,6 +296,10 @@ void term_cmd_fatfile(char *arg) {
    fat_read_file((uint16_t)cluster, 0);
 }
 
+void term_cmd_fatnew(char *path) {
+   fat_new_file(path, NULL, 0);
+}
+
 void term_cmd_bg(char *arg) {
    int bg = stoi(arg);
    gui_writenum(bg, 0);
@@ -449,23 +453,25 @@ void window_checkcmd(void *regs, gui_window_t *selected) {
       term_cmd_font((char*)arg);
    else if(strcmp(command, "PADDING"))
       term_cmd_padding((char*)arg);
-   else if(strstartswith(command, "VIEWBMP"))
+   else if(strcmp(command, "VIEWBMP"))
       term_cmd_viewbmp(regs, (char*)arg);
    else if(strcmp(command, "LAUNCH"))
       term_cmd_launch(regs, (char*)arg);
    else if(strcmp(command, "RESIZE"))
       term_cmd_resize(regs, selected, (char*)arg);
-   else if(strstartswith(command, "FATDIR"))
+   else if(strcmp(command, "FATDIR"))
       term_cmd_fatdir((char*)arg);
-   else if(strstartswith(command, "FATFILE"))
+   else if(strcmp(command, "FATFILE"))
       term_cmd_fatfile((char*)arg);
-   else if(strstartswith(command, "BGIMG"))
+   else if(strcmp(command, "FATNEW"))
+      term_cmd_fatnew((char*)arg);
+   else if(strcmp(command, "BGIMG"))
       term_cmd_bgimg((char*)arg);
-   else if(strstartswith(command, "BG"))
+   else if(strcmp(command, "BG"))
       term_cmd_bg((char*)arg);
-   else if(strstartswith(command, "MEM"))
+   else if(strcmp(command, "MEM"))
       term_cmd_mem((char*)arg);
-   else if(strstartswith(command, "DMPMEM"))
+   else if(strcmp(command, "DMPMEM"))
       term_cmd_dmpmem((char*)arg);
    else
       term_cmd_default((char*)command);

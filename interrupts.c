@@ -125,7 +125,6 @@ void software_handler(registers_t *regs) {
       case 1:
          api_write_string(regs);
          break;
-
       case 2:
          api_write_number(regs);
          break;

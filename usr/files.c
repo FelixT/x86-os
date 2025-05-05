@@ -200,13 +200,27 @@ void click(int x, int y) {
          read_root();
       } else {
          // update path
-         int pi = strlen(cur_path);
-         if(pi == 1) pi = 0;
-         cur_path[pi] = '/';
-         int x;
-         for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
-            cur_path[pi+x+1] = tolower(cur_items[index].filename[x]);
-         cur_path[pi+x+1] = '\0';
+         if(cur_items[index].filename[0] == '.') {
+            if(cur_items[index].filename[1] == '.') {
+               int lastslashpos = -1;
+               for(int i = 0; i < strlen(cur_path); i++) {
+                  if(cur_path[i] == '/')
+                     lastslashpos = i;
+               }
+               if(lastslashpos)
+                  cur_path[lastslashpos] = '\0';
+            } else {
+               // do nothing
+            }
+         } else {
+            int pi = strlen(cur_path);
+            if(pi == 1) pi = 0;
+            cur_path[pi] = '/';
+            int x;
+            for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
+               cur_path[pi+x+1] = tolower(cur_items[index].filename[x]);
+            cur_path[pi+x+1] = '\0';
+         }
 
          // read dir
          no_items = fat_get_dir_size(cur_items[index].firstClusterNo);
