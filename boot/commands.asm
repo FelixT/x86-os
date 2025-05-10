@@ -35,7 +35,11 @@ cmd_cli_str db 'cli', 0
 cmd_gui_str db 'gui', 0
 
 check_cmd:
-   ; 'protected'
+   ; 'cli'
+   mov al, byte [si]
+   cmp al, 0
+   jz cmd_gui
+
    mov di, cmd_cli_str
    call compare_strings
    cmp ax, 1

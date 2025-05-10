@@ -1,7 +1,7 @@
 #ifndef TERMINAL_H
 #define TERMINAL_H
 
-#include "string.h"
+#include "lib/string.h"
 
 void terminal_clear();
 void terminal_prompt();

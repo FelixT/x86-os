@@ -247,7 +247,8 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
          debug_writestr(" is already in a subroutine, returning.\n");
       if(!tasks[current_task].enabled)
          debug_writestr(" not enabled.\n");*/
-      return;
+         if(!strcmp(name, "resize"))
+            return;
    }
 
    strcpy(tasks[current_task].routine_name, name);
@@ -283,7 +284,7 @@ void task_subroutine_end(registers_t *regs) {
 
    *regs = tasks[current_task].routine_return_regs;
 
-   free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t));
+   free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t*));
 
    tasks[current_task].in_routine = false;
 }

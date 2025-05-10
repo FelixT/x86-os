@@ -10,7 +10,7 @@
 #include "tasks.h"
 #include "fat.h"
 #include "paging.h"
-#include "string.h"
+#include "lib/string.h"
 #include "font.h"
 #include "bmp.h"
 #include "elf.h"
@@ -76,6 +76,7 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 #define COLOUR_TOOLBAR gui_rgb16(215, 215, 215)
 #define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)
 #define COLOUR_WHITE gui_rgb16(255, 255, 255)
+#define COLOUR_BLACK gui_rgb16(0, 0, 0)
 #define COLOUR_CYAN gui_rgb16(0, 128, 138)
 #define COLOUR_ORANGE gui_rgb16(200, 125, 0)
 
@@ -85,6 +86,7 @@ void gui_drawchar(char c, uint16_t colour);
 void gui_writenumat(int num, uint16_t colour, int x, int y);
 void gui_writenum(int num, uint16_t colour);
 void gui_writestr(char *c, uint16_t colour);
+void gui_printf(char *format, uint16_t colour, ...);
 void gui_drawrect(uint16_t colour, int x, int y, int width, int height);
 void gui_writestrat(char *c, uint16_t colour, int x, int y);
 void gui_draw();

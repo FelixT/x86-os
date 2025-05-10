@@ -64,9 +64,9 @@ void window_drawchar(char c, uint16_t colour, int windowIndex) {
 
    if(c == '\n') {
       selected->text_x = getFont()->padding;
-      selected->text_y += getFont()->height + getFont()->padding;
+      selected->text_y += getFont()->height + getFont()->padding_y;
 
-      if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (getFont()->height+getFont()->padding))) {
+      if(selected->text_y > selected->height - (TITLEBAR_HEIGHT + (getFont()->height+getFont()->padding_y))) {
          window_scroll(selected);
          selected->needs_redraw=true;
          gui_draw_window(windowIndex); // whole window needs redaw
@@ -74,7 +74,7 @@ void window_drawchar(char c, uint16_t colour, int windowIndex) {
 
       // immediately output each line
       if(!selected->minimised)
-         window_draw_content_region(selected, 0, selected->text_y - getFont()->height - getFont()->padding, selected->width, getFont()->height + getFont()->padding);
+         window_draw_content_region(selected, 0, selected->text_y - getFont()->height - getFont()->padding_y, selected->width, getFont()->height + getFont()->padding_y);
 
       return;
    }
@@ -126,7 +126,7 @@ void window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
 void window_scroll(gui_window_t *window) {
    uint16_t *terminal_buffer = window->framebuffer;
 
-   int scrollY = getFont()->height+getFont()->padding;
+   int scrollY = getFont()->height+getFont()->padding_y;
    for(int y = scrollY; y < window->height - TITLEBAR_HEIGHT; y++) {
       for(int x = window->x; x < window->x + window->width; x++) {
          int srcIndex = y*(int)window->width+x;
@@ -138,7 +138,7 @@ void window_scroll(gui_window_t *window) {
    }
    // clear bottom
    int newY = window->height - (scrollY + TITLEBAR_HEIGHT);
-   draw_rect(&(window->surface), COLOUR_WHITE, 0, newY, window->width, scrollY);
+   draw_rect(&(window->surface), window->bgcolour, 0, newY, window->width, scrollY);
    window->text_y = newY;
    window->text_x = getFont()->padding;
 }

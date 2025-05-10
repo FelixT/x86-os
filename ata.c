@@ -100,7 +100,10 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
    // poll until ready & DRQ is set, or until error
    while(!((status = inb(ioPort + ATA_REG_STATUS)) & ATA_STATUS_BIT_DRQ) && !(status & ATA_STATUS_BIT_ERR));
    if(status & ATA_STATUS_BIT_ERR) {
-      gui_writestr("ATA DRIVE ERROR 2.", 0);
+      gui_writestr("ATA DRIVE ERROR 2.\n", 0);
+      uint8_t error = inb(ioPort + ATA_REG_ERROR);
+      gui_printf("LBA 0x%h\nError: 0x%h\n", 0, lba, error);
+      while(true){};
       return;
    }
 

@@ -27,10 +27,10 @@ typedef struct gui_window_t {
 	bool dragged;
    bool resized;
    int toolbar_pos; // index in toolbar
+   uint16_t bgcolour; // default
+   uint16_t txtcolour; // default
    uint16_t *framebuffer; // width*(height-titlebar_height)
    uint32_t framebuffer_size;
-
-   uint16_t colour_bg;
 
    surface_t surface;
 
@@ -45,12 +45,13 @@ typedef struct gui_window_t {
    void (*downarrow_func)(void *window);
    void (*click_func)(int x, int y);
    void (*drag_func)(int x, int y);
-
    void (*draw_func)(void *window);
    //void (*write_func)(void *window, char *string);
    void (*resize_func)(uint32_t fb, uint32_t w, uint32_t h);
    void (*mouserelease_func)();
+   void (*checkcmd_func)(char *buffer); // override terminal behaviour
 
+   void *state;
 } gui_window_t;
 
 #endif

@@ -5,7 +5,7 @@
 #include "windowmgr.h"
 #include "tasks.h"
 #include "events.h"
-#include "string.h"
+#include "lib/string.h"
 
 // window widgets/objects
 
@@ -194,6 +194,14 @@ void windowobj_click(void *regs, void *windowobj) {
    if(wo->type == WO_BUTTON)
       events_add(1, &windowobj_unclick, (void*)wo, -1);
 
+   if(wo->type == WO_MENU) {
+      if(wo->menuselected >= 0) {
+         windowobj_menu_t *item = &wo->menuitems[wo->menuselected];
+         if(item->func != NULL)
+            item->func();
+      }
+   }
+
    if(wo->click_func != NULL)
       task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 0);
 }
@@ -249,7 +257,10 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
       case 28: // return
          if(wo->return_func != NULL) {
             gui_interrupt_switchtask(regs);
-            task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), NULL, 0);
+            if(get_task_from_window(getSelectedWindowIndex()) == -1) // kernel
+               wo->return_func(wo);
+            else // usr
+               task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), NULL, 0);
          } else {
             c = '\n';
          }

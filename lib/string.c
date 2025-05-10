@@ -187,15 +187,9 @@ void inttostr(int num, char* out) {
 
 char *strcat(char *dest, const char *src) {
    char *ptr = dest;
-   
-   while (*ptr) ptr++;  // Move to end of dest
-
-   while (*src) {
-       *ptr++ = *src++;
-   }
-
-   *ptr = '\0';  // Null-terminate
-
+   while(*ptr) ptr++;
+   while(*src) *ptr++ = *src++;
+   *ptr = '\0';
    return dest;
 }
 
@@ -258,7 +252,7 @@ void sprintf(char *buffer, char *format, ...) {
 }
 
 char *strchr(const char *str, int c) {
-   while (*str) {
+   while(*str) {
       if(*str == (char)c)
          return (char*)str;
       str++;

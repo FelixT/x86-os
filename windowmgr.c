@@ -3,11 +3,12 @@
 #include "window.h"
 #include "tasks.h"
 #include "draw.h"
-#include "string.h"
+#include "lib/string.h"
 #include "bmp.h"
 #include "windowobj.h"
 
 #include "window_term.h"
+#include "window_settings.h"
 #include <stdarg.h>
 
 int windowCount = 0;
@@ -45,12 +46,13 @@ void debug_writehex(uint32_t num) {
 }
 
 void debug_printf(char *format, ...) {
-   char buffer[512];
+   char *buffer = malloc(512);
    va_list args;
    va_start(args, format);
    vsprintf(buffer, format, args);
    va_end(args);
    debug_writestr(buffer);
+   free((uint32_t)buffer, 512);
 }
 
 int getFirstFreeIndex() {
@@ -129,22 +131,11 @@ bool window_init(gui_window_t *window) {
    window->minimised = false;
    window->closed = false;
    window->dragged = false;
-   window->colour_bg = COLOUR_WHITE;
+   window->bgcolour = COLOUR_WHITE;
+   window->txtcolour = COLOUR_BLACK;
+   window->state = NULL;
 
-   // default TERMINAL functions
-   window->return_func = &window_term_return;
-   window->keypress_func = &window_term_keypress;
-   window->backspace_func = &window_term_backspace;
-   window->uparrow_func = &window_term_uparrow;
-   window->downarrow_func = &window_term_downarrow;
-   window->draw_func = &window_term_draw;
-
-   // other functions without default behaviour
-   window->click_func = NULL;
-   window->drag_func = NULL;
-   window->resize_func = NULL;
-   window->mouserelease_func = NULL;
-
+   window_resetfuncs(window);
    // no window objects
    window->window_object_count = 0;
    for(int i = 0; i < 20; i++)
@@ -171,6 +162,23 @@ bool window_init(gui_window_t *window) {
    window_clearbuffer(window, COLOUR_WHITE);
 
    return true;
+}
+
+void window_resetfuncs(gui_window_t *window) {
+   // reset all functions
+   window->return_func = &window_term_return;
+   window->keypress_func = &window_term_keypress;
+   window->backspace_func = &window_term_backspace;
+   window->uparrow_func = &window_term_uparrow;
+   window->downarrow_func = &window_term_downarrow;
+   window->draw_func = &window_term_draw;
+
+   // other functions without default behaviour
+   window->click_func = NULL;
+   window->drag_func = NULL;
+   window->resize_func = NULL;
+   window->mouserelease_func = NULL;
+   window->checkcmd_func = NULL;
 }
 
 int windowmgr_add() {
@@ -255,15 +263,15 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
 
    if(!checkOcclusion && offsetX == 0 && width == winW) {
       // fast path: copy entire row
-      for (int y = offsetY; y < maxY; y++) {
+      for(int y = offsetY; y < maxY; y++) {
          int screenY = winY + y;
          memcpy_fast(&fb[screenY * surface.width + winX], &winfb[y * winW], width * sizeof(uint16_t));
       }
    } else {
       // general case: copy pixel by pixel
-      for (int y = offsetY; y < maxY; y++) {
+      for(int y = offsetY; y < maxY; y++) {
          int screenY = winY + y;
-         for (int x = offsetX; x < maxX; x++) {
+         for(int x = offsetX; x < maxX; x++) {
             int screenX = winX + x;
 
             // skip pixels covered by selected window
@@ -273,7 +281,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
             int screenIndex = screenY * surface.width + screenX;
             int winIndex = y * winW + x;
 
-            fb[screenIndex] = window->framebuffer[winIndex];
+            fb[screenIndex] = winfb[winIndex];
          }
       }
    }
@@ -320,6 +328,14 @@ void window_draw(gui_window_t *window) {
    }
 }
 
+void windowmgr_getproperties() {
+   // selected 
+   gui_window_t *selected = getSelectedWindow();
+   int new = windowmgr_add();
+   gui_window_t *window = getWindow(new);
+   window->state = (void*)window_settings_init(window, selected);
+}
+
 void windowmgr_init() {
    // assigned fixed memory for 64 windows for now to reduce bugs
    // bug is just that resize func doesn't work i think
@@ -333,17 +349,20 @@ void windowmgr_init() {
    gui_windows[0].y = 100;
    setSelectedWindowIndex(0);
    windowCount++;
+   window_draw(&gui_windows[0]);
 
    // set up default menu
    windowobj_init(&default_menu, &surface);
    default_menu.type = WO_MENU;
    default_menu.visible = false;
-   default_menu.width = 100;
-   default_menu.height = 200;
+   default_menu.width = 80;
+   default_menu.height = 160;
    default_menu.menuitems = malloc(sizeof(windowobj_menu_t) * 10);
-   strcpy(default_menu.menuitems[0].text, "Test");
-   strcpy(default_menu.menuitems[1].text, "Test2");
-   default_menu.menuitem_count = 2;
+   strcpy(default_menu.menuitems[0].text, "Settings");
+   default_menu.menuitems[0].func = &windowmgr_getproperties;
+   //strcpy(default_menu.menuitems[1].text, "Test2");
+   //default_menu.menuitems[1].func = NULL;
+   default_menu.menuitem_count = 1;
 }
 
 void toolbar_draw() {
@@ -439,8 +458,10 @@ void windowmgr_keypress(void *regs, int scan_code) {
       if(!wo->clicked) continue;
 
       gui_interrupt_switchtask(regs);
-      if(get_current_task_window() != getSelectedWindowIndex())
-         return; // no task
+      if(get_current_task_window() != getSelectedWindowIndex()) {
+         int tasks = get_task_from_window(getSelectedWindowIndex());
+         if(tasks != -1) return; // no task
+      }
       windowobj_keydown(regs, (void*)wo, scan_code);
       windowobj_redraw((void*)selectedWindow, (void*)wo);
       return;
@@ -665,7 +686,7 @@ bool windowmgr_click(void *regs, int x, int y) {
 
 void windowmgr_rightclick(void *regs, int x, int y) {
    (void)(regs);
-   setSelectedWindowIndex(-1);
+   //setSelectedWindowIndex(-1);
    // draw menu
    default_menu.visible = true;
    default_menu.x = x;
@@ -746,13 +767,18 @@ void desktop_draw() {
 
    x = 10;
    y = 10;
-   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
-   y += 10 + bmp_get_height(icon_window);
-   draw_string(&surface, "Terminal", 0xFFFF, x, y);
-   y += 10 + getFont()->height;
    bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
    y += 10 + bmp_get_height(icon_files);
    draw_string(&surface, "FileMgr", 0xFFFF, x, y);
+   y += 10 + getFont()->height;
+   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
+   y += 10 + bmp_get_height(icon_files);
+   draw_string(&surface, "UsrTerm", 0xFFFF, x, y);
+   y += 10 + getFont()->height;
+   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
+   y += 10 + bmp_get_height(icon_window);
+   draw_string(&surface, "KTerm", 0xFFFF, x, y);
+
 }
 
 void desktop_click(registers_t *regs, int x, int y) {
@@ -761,15 +787,22 @@ void desktop_click(registers_t *regs, int x, int y) {
    int icony = 10;
    int iconheight = bmp_get_height(icon_window);
 
-   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight)
-      windowmgr_add();
+   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
+      tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
+   }
+
+   icony += 10*2 + iconheight + getFont()->height;
+   iconheight = bmp_get_height(icon_window);
+
+   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
+      tasks_launch_elf(regs, "/sys/term.elf", 0, NULL);
+   }
 
    icony += 10*2 + iconheight + getFont()->height;
    iconheight = bmp_get_height(icon_files);
 
-   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
-      tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
-   }
+   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight)
+      windowmgr_add();
 
 }
 
@@ -803,7 +836,7 @@ void windowmgr_mousemove(int x, int y) {
       && relY > 0 && relY < selectedWindow->height - TITLEBAR_HEIGHT) {
          // within current window, check window objects
 
-         for (int i = 0; i < selectedWindow->window_object_count; i++) {
+         for(int i = 0; i < selectedWindow->window_object_count; i++) {
             windowobj_t *wo = selectedWindow->window_objects[i];
             int relX_wo = relX - wo->x;
             int relY_wo = relY - wo->y;
@@ -860,15 +893,14 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    // call resize func if exists
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
-   if(task > -1 && window->resize_func) {
+   window_clearbuffer(window, window->bgcolour);
+   if(regs && task > -1 && window->resize_func) {
       switch_to_task(task, regs);
       uint32_t *args = malloc(sizeof(uint32_t) * 3);
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width;
       args[0] = height - TITLEBAR_HEIGHT;
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
-   } else {
-      window_clearbuffer(window, window->colour_bg);
    }
    
 }

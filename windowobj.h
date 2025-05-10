@@ -14,6 +14,7 @@ enum windowobj_type {
 
 typedef struct windowobj_menuitem_t {
    char text[20];
+   void (*func)();
 } windowobj_menu_t;
 
 typedef struct windowobj_t {

@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#include "string.h"
+#include "lib/string.h"
 #include "registers_t.h"
 #include "window_t.h"
 

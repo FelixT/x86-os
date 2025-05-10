@@ -7,7 +7,7 @@
 #include "memory.h"
 #include "gui.h"
 #include "ata.h"
-#include "string.h"
+#include "lib/string.h"
 
 // https://www.freebsd.org/cgi/man.cgi?query=newfs_msdos&apropos=0&sektion=0&manpath=FreeBSD+5.2-RELEASE&format=html
 // BPB / bios parameter block
@@ -58,7 +58,7 @@ typedef struct {
 
 fat_dir_t *fat_parse_path(char *path, bool isFile);
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
-void fat_read_root(fat_dir_t *items);
+fat_dir_t *fat_read_root();
 void fat_setup();
 void fat_read_dir(uint16_t clusterNo, fat_dir_t *items);
 void fat_get_info();

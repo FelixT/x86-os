@@ -159,5 +159,3 @@ compare_strings:
 %include "boot/commands.asm"
 
 prompt db '>', 0
-true db 'true', 0
-false db 'false', 0

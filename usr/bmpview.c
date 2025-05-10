@@ -42,7 +42,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    zoomoutbtn_wo->y = height - (clearbtn_wo->height + 10);
    zoominbtn_wo->x = width - (clearbtn_wo->width + 110);
    zoominbtn_wo->y = height - (clearbtn_wo->height + 10);
-   clear(0xFFFF);
+   clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
    redraw();
    end_subroutine();
@@ -82,7 +82,7 @@ void drawLine(int x0, int y0, int x1, int y1) {
    int error = dx + dy;
    int e2;
    
-   while (1) {
+   while(1) {
       set(x0, y0, 0);  // set the current pixel
        
       // check if we've reached the end point
@@ -140,7 +140,7 @@ void release() {
 
 void clear_click(void *wo) {
    (void)wo;
-   clear(0xFFFF);
+   clear();
 
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
 
@@ -159,7 +159,7 @@ void tool_click(void *wo) {
 void zoomout_click(void *wo) {
    (void)wo;
    if(scale > 1) scale--;
-   clear(0xFFFF);
+   clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
    end_subroutine();
 }
@@ -167,7 +167,7 @@ void zoomout_click(void *wo) {
 void zoomin_click(void *wo) {
    (void)wo;
    scale++;
-   clear(0xFFFF);
+   clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
    end_subroutine();
 }
@@ -183,7 +183,7 @@ void _start(int argc, char **args) {
 
    write_str(path);
    write_str("\n");
-   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path);
+   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
    if(entry == NULL) {
       write_str("File not found\n");
       exit(0);
@@ -194,7 +194,7 @@ void _start(int argc, char **args) {
    override_mouserelease((uint32_t)&release);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
-   clear(0xFFFF);
+   clear();
    
    bmp = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
@@ -238,7 +238,8 @@ void _start(int argc, char **args) {
    redraw();
 
    while(1==1) {
-      asm volatile("pause");
+      //asm volatile("pause");
+      yield();
    }
 
    exit(0);

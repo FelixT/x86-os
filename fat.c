@@ -4,7 +4,7 @@
 // http://www.c-jump.com/CIS24/Slides/FAT/FAT.html
 
 #include "fat.h"
-#include "string.h"
+#include "lib/string.h"
 #include "windowmgr.h"
 
 // 8.3 directory structure
@@ -15,6 +15,10 @@ fat_bpb_t *fat_bpb = NULL;
 fat_ebr_t *fat_ebr;
 uint32_t noSectors;
 uint32_t noClusters;
+uint32_t rootSize;
+uint32_t rootSector;
+uint32_t firstDataSector;
+
 
 void fat_get_info() {
    // get drive formatting info
@@ -27,6 +31,10 @@ void fat_get_info() {
 
    noSectors = (fat_bpb->noSectors == 0) ? fat_bpb->largeNoSectors : fat_bpb->noSectors;
    noClusters = noSectors/fat_bpb->sectorsPerCluster;
+
+   rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
+   rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables * fat_bpb->sectorsPerFat;
+   firstDataSector = rootSector + rootSize;
    debug_printf("%u clusters %u sectors\n", noClusters, noSectors);
 }
 
@@ -50,9 +58,7 @@ void fat_parse_dir_entry(fat_dir_t *fat_dir) {
    else
       gui_writenum(fat_dir->fileSize, 4);
    
-   gui_writestr(" <", 0);
-   gui_writenum(fat_dir->firstClusterNo, 0);
-   gui_writestr(">\n", 0);
+   gui_printf(" <%i>\n", 0, fat_dir->firstClusterNo);
 }
 
 // return clusterNo from filename and extension in a specific directory
@@ -76,51 +82,26 @@ bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension)
    return true;
 }
 
-void fat_read_root(fat_dir_t *items) {
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
+fat_dir_t *fat_read_root() {
    uint32_t rootDirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
 
-   //gui_writeuint(rootDirAddr, 0);
-   gui_writestr("\n", 0);
-
-   uint32_t offset = 0;
-
-   // get each file/dir in root
-   for(int i = 0; i < fat_bpb->noRootEntries; i++) {
-      fat_dir_t *dir = (fat_dir_t*)ata_read_exact(true, true, rootDirAddr + offset, sizeof(fat_dir_t));
-      items[i] = *dir;
-
-      if(dir->filename[0] == 0) {
-         // no more files/dirs in directory
-         free((uint32_t)dir, sizeof(fat_dir_t));
-         break;
-      }
-
-      offset+=32; // each entry is 32 bytes
-
-      free((uint32_t)dir, sizeof(fat_dir_t));
-   }
-
+   return (fat_dir_t*)ata_read_exact(true, true, rootDirAddr, sizeof(fat_dir_t)*fat_bpb->noRootEntries);
 }
 
 void fat_setup() {
    
    fat_get_info();
 
-   fat_dir_t *items = malloc(32 * fat_bpb->noRootEntries);
-   fat_read_root(items);
+   fat_dir_t *items = fat_read_root();
    for(int i = 0; i < fat_bpb->noRootEntries; i++) {
       if(items[i].filename[0] == 0) break;
       fat_parse_dir_entry(&items[i]);
    }
-   free((uint32_t)items, 32 * fat_bpb->noRootEntries);
+   free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
 
 }
 
 int fat_get_dir_size(uint16_t clusterNo) {
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables * fat_bpb->sectorsPerFat;
-   uint32_t firstDataSector = rootSector + rootSize;
    uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
 
    uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
@@ -131,7 +112,7 @@ int fat_get_dir_size(uint16_t clusterNo) {
 
    int entries = dirSize / sizeof(fat_dir_t);
    int count = 0;
-   for (int i = 0; i < entries; i++) {
+   for(int i = 0; i < entries; i++) {
       fat_dir_t *dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(dir->filename[0] == 0)
          break; // no more files/dirs in directory
@@ -143,9 +124,6 @@ int fat_get_dir_size(uint16_t clusterNo) {
 }
 
 void fat_read_dir(uint16_t clusterNo, fat_dir_t *items) {
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables * fat_bpb->sectorsPerFat;
-   uint32_t firstDataSector = rootSector + rootSize;
    uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
 
    uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
@@ -155,7 +133,7 @@ void fat_read_dir(uint16_t clusterNo, fat_dir_t *items) {
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
 
    int entries = dirSize / sizeof(fat_dir_t);
-   for (int i = 0; i < entries; i++) {
+   for(int i = 0; i < entries; i++) {
       fat_dir_t *dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       items[i] = *dir;
       if(dir->filename[0] == 0)
@@ -166,7 +144,6 @@ void fat_read_dir(uint16_t clusterNo, fat_dir_t *items) {
 }
 
 fat_dir_t *fat_find_in_root(char* filename, char* extension) {
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t rootDirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
 
    // get each file/dir in root
@@ -190,9 +167,6 @@ fat_dir_t *fat_find_in_root(char* filename, char* extension) {
 
 // and return info
 fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) {
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
-   uint32_t firstDataSector = rootSector + rootSize;
    uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
 
    uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
@@ -202,7 +176,7 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
 
    int entries = dirSize / sizeof(fat_dir_t);
-   for (int i = 0; i < entries; i++) {
+   for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0)
          break; // no more files/dirs in directory
@@ -221,9 +195,6 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
 }
 
 bool fat_update_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_dir_t *dir) {
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
-   uint32_t firstDataSector = rootSector + rootSize;
    uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
 
    uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
@@ -233,7 +204,7 @@ bool fat_update_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
    int entries = dirSize / sizeof(fat_dir_t);
 
-   for (int i = 0; i < entries; i++) {
+   for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0)
          break; // no more files/dirs in directory
@@ -383,16 +354,13 @@ void fat_new_file(char *path, uint8_t *buffer, uint32_t size) {
    debug_printf("Found free cluster %u\n", freeCluster);
 
    // find free entry in directory
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
-   uint32_t firstDataSector = rootSector + rootSize;
    uint32_t dirFirstSector = ((dir->firstClusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
    uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
    uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
    int entries = dirSize / sizeof(fat_dir_t);
 
-   for (int i = 0; i < entries; i++) {
+   for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(memcmp((char*)fat_dir->filename, (char*)filedir->filename, 11) == 0) {
          debug_printf("Error: file already exists\n");
@@ -428,8 +396,6 @@ void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
 
    uint32_t clusterNo = dir->firstClusterNo;
    uint32_t oldsize = dir->fileSize;
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t firstDataSector = rootSector + rootSize;
 
    debug_printf("Writing file '%s' to cluster %u\n", path, clusterNo);
@@ -508,8 +474,6 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    bool readEntireFile = (size == 0); // read entry entry as stored on disk or the size supplied
 
-   uint32_t rootSize = ((fat_bpb->noRootEntries * 32) + (fat_bpb->bytesPerSector - 1)) / fat_bpb->bytesPerSector; // in sectors
-   uint32_t rootSector = fat_bpb->noReservedSectors + fat_bpb->noTables*fat_bpb->sectorsPerFat;
    uint32_t firstDataSector = rootSector + rootSize;
    uint32_t fileFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
 
@@ -552,7 +516,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
             fileContents[memOffset + b] = buf[b];
             byte++;
 
-            if(byte >= size) {
+            if((int)byte >= allocate) {
                free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
                break; // reached the end of the file
             }

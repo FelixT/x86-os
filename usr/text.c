@@ -64,7 +64,7 @@ volatile windowobj_t *wo_status_o;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)fb;
-   clear(0xFFFF);
+   clear();
    wo_text_o->width = w - 10;
    wo_text_o->height = h - 20;
    wo_path_o->width = 2*(w-10)/3;
@@ -75,7 +75,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 }
 
 void load_file(char *filepath) {
-   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath);
+   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath, true);
    if(entry == NULL) {
       write_str("File not found\n");
       exit(0);
@@ -105,7 +105,7 @@ void _start(int argc, char **args) {
    write_str("Text\n");
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)resize);
-   clear(0xFFFF);
+   clear();
 
    int width = get_width();
    int height = get_height();
@@ -131,7 +131,7 @@ void _start(int argc, char **args) {
 
    windowobj_t *wo_text = register_windowobj(WO_TEXT, 5, 17, width - 10, height - 20);
    wo_text->type = WO_TEXT;
-   wo_text->text = (char*)malloc(1);
+   wo_text->text = (char*)malloc(0x1000);
    wo_text->text[0] = '\0';
    wo_text_o = wo_text;
 

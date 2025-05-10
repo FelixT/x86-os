@@ -174,7 +174,7 @@ void software_handler(registers_t *regs) {
          api_fat_get_bpb(regs);
          break;
       case 18:
-         api_fat_get_bpb(regs);
+         api_fat_read_root(regs);
          break;
       case 19:
          api_fat_parse_path(regs);
@@ -235,8 +235,18 @@ void software_handler(registers_t *regs) {
          break;
       case 38:
          api_override_mouserelease(regs);
+         break;
+      case 39:
+         api_override_checkcmd(regs);
+         break;
+      case 40:
+         api_free(regs);
+         break;
+      default:
+         debug_printf("Unknown syscall %i\n", regs->eax);
+         break;
    }
-}  
+}
 
 void keyboard_handler(registers_t *regs) {
    unsigned char scan_code = inb(0x60);
@@ -398,6 +408,8 @@ void exception_handler(int int_no, registers_t *regs) {
          window_writestr(" ended due to exception ", gui_rgb16(255, 100, 100), 0);
          window_writenum(int_no, 0, 0);
          window_writestr("\n", 0, 0);
+
+         window_resetfuncs(gui_get_windows(get_current_task_window()));
 
          end_task(get_current_task(), regs);
       }

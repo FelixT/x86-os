@@ -11,11 +11,12 @@
 #include "windowmgr.h"
 
 void api_write_string(registers_t *regs) {
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
    // write ebx
    if(gettasks()[get_current_task()].vmem_start == 0) // not elf
-      window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), 0, get_current_task_window());
+      window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), window->txtcolour, get_current_task_window());
    else // elf
-      window_writestr((char*)regs->ebx, 0, get_current_task_window());
+      window_writestr((char*)regs->ebx, window->txtcolour, get_current_task_window());
 }
 
 void api_write_number(registers_t *regs) {
@@ -36,7 +37,8 @@ void api_write_string_at(registers_t *regs) {
       // IN: ebx = string address
       // IN: ecx = x
       // IN: edx = y
-      window_writestrat((char*)regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
+      gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+      window_writestrat((char*)regs->ebx, window->txtcolour, regs->ecx, regs->edx, get_current_task_window());
 }
 
 void api_write_number_at(registers_t *regs) {
@@ -47,7 +49,8 @@ void api_write_number_at(registers_t *regs) {
 }
 
 void api_yield(registers_t *regs) {
-   api_write_number(regs);
+   switch_task(regs);
+   //debug_printf("Switched to task %u\n", get_current_task());
 }
 
 void api_print_program_stack(registers_t *regs) {
@@ -113,6 +116,13 @@ void api_override_uparrow(registers_t *regs) {
    gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
 }
 
+void api_override_checkcmd(registers_t *regs) {
+   // override terminal checkcmd function with ebx
+   uint32_t addr = regs->ebx;
+
+   gui_get_windows()[get_current_task_window()].checkcmd_func = (void *)(addr);
+}
+
 void api_override_downarrow(registers_t *regs) {
    // override downarrow window function with ebx
    uint32_t addr = regs->ebx;
@@ -160,15 +170,22 @@ void api_end_subroutine(registers_t *regs) {
 }
 
 void api_malloc(registers_t *regs) {
+   // IN: ebx = size
    // OUT: ebx = addr
-   uint32_t *mem = malloc(1); // 4K
+   uint32_t *mem = malloc(regs->ebx); 
    regs->ebx = (uint32_t)mem;
 
    // TODO: use special usermode malloc rather than the kernel malloc
    // keep track of which task each malloc is from
 }
 
-void api_fat_get_root(registers_t *regs) {
+void api_free(registers_t *regs) {
+   // IN: ebx = addr
+   // IN: ecx = size
+   free(regs->ebx, regs->ecx);
+}
+
+void api_fat_get_bpb(registers_t *regs) {
    // out: ebx
    fat_bpb_t *bpb = malloc(sizeof(fat_bpb_t));
    *bpb = fat_get_bpb(); // refresh fat tables
@@ -176,19 +193,19 @@ void api_fat_get_root(registers_t *regs) {
    regs->ebx = (uint32_t)bpb;
 }
 
-void api_fat_get_bpb(registers_t *regs) {
+void api_fat_read_root(registers_t *regs) {
    // out: ebx
-   fat_dir_t *items = malloc(32 * fat_get_bpb().noRootEntries);
-   fat_read_root(items);
+   fat_dir_t *items = fat_read_root();
 
    regs->ebx = (uint32_t)items;
 }
 
 void api_fat_parse_path(registers_t *regs) {
    // IN: ebx = addr of char* path
+   // IN: ebx = isfile
    // OUT: ebx = addr of fat_dir_t entry for path or 0 if doesn't exist
 
-   fat_dir_t *entry = fat_parse_path((char*)regs->ebx, true);
+   fat_dir_t *entry = fat_parse_path((char*)regs->ebx, (bool)regs->ecx);
    regs->ebx = (uint32_t)entry;
 }
 
@@ -226,7 +243,9 @@ void api_draw_bmp(registers_t *regs) {
 }
 
 void api_clear_window(registers_t *regs) {
-   window_clearbuffer(&gui_get_windows()[get_current_task_window()], (uint16_t)regs->ebx);
+   (void)regs;
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   window_clearbuffer(window, window->bgcolour);
 }
 
 void api_queue_event(registers_t *regs) {
@@ -276,11 +295,10 @@ void api_set_sys_font(registers_t *regs) {
    // todo: require privilege
    char *path = (char*)regs->ebx;
    fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry == NULL) {
-      gui_writestr("Font not found\n", 0);
+   if(entry == NULL || entry->attributes == 0x10) {
+      window_writestr("Font not found\n", 0, get_current_task_window());
       return;
    }
-
    fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
    font_load(file);
 

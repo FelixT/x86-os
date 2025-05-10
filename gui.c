@@ -3,6 +3,7 @@
 #include "windowmgr.h"
 #include "font.h"
 #include "events.h"
+#include "lib/string.h"
 
 extern int videomode;
 
@@ -66,6 +67,15 @@ void gui_writestr(char *c, uint16_t colour) {
    int i = 0;
    while(c[i] != '\0')
       gui_drawchar(c[i++], colour);
+}
+
+void gui_printf(char *format, uint16_t colour, ...) {
+   va_list args;
+   va_start(args, colour);
+   char buffer[256];
+   vsprintf(buffer, format, args);
+   gui_writestr(buffer, colour);
+   va_end(args);
 }
 
 void gui_writestrat(char *c, uint16_t colour, int x, int y) {

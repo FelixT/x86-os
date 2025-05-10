@@ -71,30 +71,39 @@ void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHe
 
    // pixels starts at bottom, works up left to right
    for(int yi = 0; yi < info->height; yi++) {
+      int rowOffset = (info->height - (yi + 1)) * rowSize;
+      int scaledY = y + yi * scale;
+
+      if (scaledY + scale <= 0 || scaledY >= screenHeight) continue; // Skip rows completely outside the screen
+
       for(int xi = 0; xi < info->width; xi++) {
-         int index = (info->height-(yi+1))*rowSize+xi;
-         int index16 = ((info->height-(yi+1))*rowSize)/2+xi;
+         int index = rowOffset + xi;
+         int index16 = rowOffset / 2 + xi;
 
-         // 8bit
-         uint16_t colour = gui_rgb16(colours[pixels8bit[index]].red, colours[pixels8bit[index]].green, colours[pixels8bit[index]].blue);
-         // 16 bit
-         if(info->bpp == 16)
+         uint16_t colour;
+         if(info->bpp == 8) {
+            colour = gui_rgb16(colours[pixels8bit[index]].red, colours[pixels8bit[index]].green, colours[pixels8bit[index]].blue);
+         } else { // 16 bit
             colour = pixels16bit[index16];
+         }
 
-         if(!whiteIsTransparent || colour != COLOUR_WHITE) {
-            for(int dy = 0; dy < scale; dy++) {
-               for(int dx = 0; dx < scale; dx++) {
-                  int sx = x + xi * scale + dx;
-                  int sy = y + yi * scale + dy;
-                  int i = sy * screenWidth + sx;
-                  if(sx >= 0 && sx < screenWidth && sy >= 0 && sy < screenHeight) {
-                     framebuffer[i] = colour;
-                  }
-               }
+         if(whiteIsTransparent && colour == COLOUR_WHITE) continue;
+
+         int scaledX = x + xi * scale;
+         if(scaledX + scale <= 0 || scaledX >= screenWidth) continue;
+
+         for(int dy = 0; dy < scale; dy++) {
+            int sy = scaledY + dy;
+            if(sy < 0 || sy >= screenHeight) continue;
+
+            for(int dx = 0; dx < scale; dx++) {
+               int sx = scaledX + dx;
+               if(sx < 0 || sx >= screenWidth) continue;
+
+               framebuffer[sy * screenWidth + sx] = colour;
             }
          }
       }
-
    }
 
    

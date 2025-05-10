@@ -4,10 +4,11 @@ export GCC="i686-elf-gcc"
 export GAS="i686-elf-as"
 export LD="i686-elf-ld"
 
-c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging windowmgr window draw string api windowobj window_term"
-o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/string.o o/api.o o/windowobj.o o/window_term.o"
+c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging windowmgr window draw lib/string api windowobj window_term window_settings"
+o_files="o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/lib/string.o o/api.o o/windowobj.o o/window_term.o o/window_settings.o"
 
 mkdir -p o
+mkdir -p o/lib
 mkdir -p fs_root
 mkdir -p fs_root/sys
 
@@ -36,6 +37,7 @@ $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra us
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/bmpview.c -o o/bmpview.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/text.c -o o/text.elf 
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/term.c -o o/term.elf o/string.o
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -46,6 +48,7 @@ cp o/prog4.elf fs_root/sys/prog4.elf
 cp o/files.elf fs_root/sys/files.elf
 cp o/bmpview.elf fs_root/sys/bmpview.elf
 cp o/text.elf fs_root/sys/text.elf
+cp o/term.elf fs_root/sys/term.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
 # fonts
@@ -69,10 +72,11 @@ mkfs.fat -F 16 -n FATFS -C fs.img 10240
 hdiutil mount fs.img
 cp -R fs_root/ /Volumes/FATFS
 # unmount
-hdiutil unmount /Volumes/FATFS
+hdiutil eject /Volumes/FATFS
 
 # add fs at 128000
 cat o/hd2.bin fs.img > hd.bin
+chmod 644 hd.bin
 
 if [[ $# -eq 0 ]]; then
    qemu-system-i386 -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio
@@ -81,8 +85,6 @@ else
    # Debug with LLDB
 
    #gdb-remote localhost:1234
-
-
    #w s e -- 0x123456
    osascript -e 'tell app "Terminal" to do script "echo gdb-remote localhost:1234;echo br s -a addr;lldb;"'
 

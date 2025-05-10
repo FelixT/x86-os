@@ -10,6 +10,7 @@ typedef struct font_t {
    int width;
    int height;
    int padding;
+   int padding_y;
    bool reversed;
    uint8_t *fontmap[256]; // 256 possible chars, map from char to pointer to letter
 } __attribute__((packed)) font_t;

@@ -132,16 +132,26 @@ static inline int get_height() {
    return output;
 }
 
-static inline uint32_t *malloc() {
+static inline uint32_t *malloc(uint32_t size) {
    uint32_t addr;
 
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (addr)
-      : "a" (16)
+      : "a" (16),
+      "b" (size)
    );
 
    return (uint32_t*)addr;
+}
+
+static inline void free(uint32_t addr, uint32_t size) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (40),
+      "b" (addr),
+      "c" (size)
+   );
 }
 
 static inline uint32_t *fat_get_bpb() {
@@ -168,14 +178,15 @@ static inline uint32_t *fat_read_root() {
    return (uint32_t*)addr;
 }
 
-static inline uint32_t *fat_parse_path(char *path) {
+static inline uint32_t *fat_parse_path(char *path, bool isfile) {
    uint32_t addr;
 
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (addr)
       : "a" (19),
-      "b" ((uint32_t)path)
+      "b" ((uint32_t)path),
+      "c" ((uint32_t)isfile)
    );
 
    return (uint32_t*)addr;
@@ -226,12 +237,10 @@ static inline void write_strat(char *str, int x, int y) {
    );
 }
 
-static inline void clear(uint16_t colour) {
+static inline void clear() {
    asm volatile(
       "int $0x30"
-      :: "a" (23),
-      "b" ((uint32_t)colour)
-   );
+      :: "a" (23));
 }
 
 static inline int fat_get_dir_size(int firstClusterNo) {
@@ -354,5 +363,15 @@ static inline void set_sys_font(char *path) {
       "int $0x30;"
       :: "a" (35),
       "b" ((uint32_t)path)
+   );
+}
+
+// terminal override
+
+static inline void override_term_checkcmd(uint32_t addr) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (39),
+      "b" ((uint32_t)addr)
    );
 }

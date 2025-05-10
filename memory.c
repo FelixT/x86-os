@@ -25,7 +25,7 @@ void free(uint32_t offset, int bytes) {
    int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
 
-   char freeASCII[6] = "FREE ";
+   /*char freeASCII[6] = "FREE ";*/
 
    for(int i = 0; i < noBlocks; i++) {
       int block = blockStart+i;
@@ -34,10 +34,10 @@ void free(uint32_t offset, int bytes) {
       }
    }
 
-   for(int x = 0; x < noBlocks*MEM_BLOCK_SIZE; x++) {
+   /*for(int x = 0; x < noBlocks*MEM_BLOCK_SIZE; x++) {
       char *byte = (char*) ((HEAP_KERNEL) + (int)blockStart*MEM_BLOCK_SIZE) + x;
       *byte = freeASCII[x%6];
-   }
+   }*/
 }
 
 void memory_init() {
@@ -45,11 +45,11 @@ void memory_init() {
       memory_status[i].allocated = false;
    }
    // fill free memory with 'FREE' in ascii
-   char freeASCII[6] = "FREE ";
+   /*char freeASCII[6] = "FREE ";
    for(int i = 0; i < KERNEL_HEAP_SIZE; i++) {
       char *byte = (char*) ((HEAP_KERNEL) + i);
       *byte = freeASCII[i%6];
-   }
+   }*/
 }
 
 void *malloc(int bytes) {
@@ -85,12 +85,13 @@ void *malloc(int bytes) {
       memory_status[i].allocated = true;
    }
 
+   /*
    // fill allocated memory with 'ALLC' in ascii
    char allcASCII[6] = "ALLC ";
    for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
       char *byte = (char*) ((HEAP_KERNEL) + (int)((blockStart)*MEM_BLOCK_SIZE)) + i;
       *byte = allcASCII[i%6];
-   }
+   }*/
 
    int addr = (int)(HEAP_KERNEL) + (int)(blockStart*MEM_BLOCK_SIZE);
 
@@ -117,9 +118,12 @@ mem_segment_status_t *memory_get_table() {
 }
 
 void memset(void *dest, uint8_t ch, int bytes) {
-   uint8_t *mem = (uint8_t*)dest;
-   for(int i = 0; i < bytes; i++)
-      mem[i] = ch;
+   asm volatile (
+      "rep stosb"
+      : "=D" (dest), "=c" (bytes)
+      : "0" (dest), "a" (ch), "1" (bytes)
+      : "memory"
+   );
 }
 
 void memcpy(void *dest, const void *src, int bytes) {
@@ -138,6 +142,23 @@ int memcmp(const void *a, const void *b, int bytes) {
 }
 
 void memcpy_fast(void *dest, const void *src, size_t bytes) {
+   // Use rep movsd for 4-byte blocks, then rep movsb for remaining bytes
+   unsigned int dword_count = bytes / 4;
+   unsigned int byte_remainder = bytes % 4;
+
+   asm volatile (
+      "cld\n\t"
+      "rep movsl\n\t"
+      "mov %3, %%ecx\n\t"
+      "rep movsb"
+      : "+D" (dest), "+S" (src), "+c" (dword_count)
+      : "r" (byte_remainder)
+      : "memory"
+   );
+
+}
+
+/*void memcpy_fast_old(void *dest, const void *src, size_t bytes) {
    uint8_t *d = (uint8_t*)dest;
    const uint8_t *s = (const uint8_t*)src;
 
@@ -164,6 +185,6 @@ void memcpy_fast(void *dest, const void *src, size_t bytes) {
    // copy remaining bytes
    while(bytes--)
       *d++ = *s++;
-}
+}*/
 
 // TODO: memmove 

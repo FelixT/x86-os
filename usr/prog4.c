@@ -42,7 +42,7 @@ int x = 0;
 int y = 0;
 
 void timer_callback() {
-    //clear(0xFFFF);
+    //clear();
     bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1);
     redraw();
 
@@ -55,7 +55,7 @@ void timer_callback() {
 }
 
 void click_callback() {
-    clear(0xFFFF);
+    clear();
     x = 0;
     timer_callback();
 }
@@ -74,14 +74,14 @@ void _start() {
     write_str("Prog4\n");
     override_draw((uint32_t)NULL);
 
-    fat_dir_t *entry = (fat_dir_t*)fat_parse_path("/bmp/file20.bmp");
+    fat_dir_t *entry = (fat_dir_t*)fat_parse_path("/bmp/file20.bmp", true);
     if(entry == NULL) {
         write_str("File icon not found\n");
         exit(0);
     }
     image = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
 
-    clear(0xFFFF);
+    clear();
 
     int width = get_width();
     windowobj_t *wo = register_windowobj(WO_BUTTON, width - 65, 10, 50, 14);

@@ -3,7 +3,7 @@ global font7
 font7:
 
 ; size
-db 75
+db 76
 ; width
 db 5
 ; height
@@ -19,6 +19,7 @@ db 0
 db 0
 db ' '
 db '-'
+db '+'
 db '/'
 db ':'
 db 39 ; apostrophe
@@ -119,6 +120,16 @@ font_minus:
    db 00000b
    db 01110b
    db 00000b
+   db 00000b
+   db 00000b
+
+global font_plus
+font_plus:
+   db 00000b
+   db 00000b
+   db 00100b
+   db 01110b
+   db 00100b
    db 00000b
    db 00000b
 

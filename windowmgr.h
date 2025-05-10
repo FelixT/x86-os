@@ -37,5 +37,7 @@ void desktop_setbgimg(uint8_t *img);
 void windowmgr_mousemove(int x, int y);
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height);
 void window_mouserelease(registers_t *regs, gui_window_t *window);
+int get_window_index_from_pointer(gui_window_t *window);
+void window_resetfuncs(gui_window_t *window);
 
 #endif
