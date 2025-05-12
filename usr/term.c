@@ -22,7 +22,8 @@ void term_cmd_help() {
    write_str("\n");
    printf("CLEAR\n");
    printf("LAUNCH path\n");
-   printf("FAT path\n");
+   printf("FILES, TEXT <path>\n");
+   printf("FAT path, FATNEW path\n");
    printf("FATDIR cluster, FATFILE cluster\n");
    printf("DMPMEM x <y>\n");
    printf("FONT path\n");
@@ -186,12 +187,17 @@ void term_cmd_dmpmem(char *arg) {
 }
 
 void term_cmd_fatnew(char *arg) {
-   (void)arg;
-   printf("TODO\n");
+   fat_new_file(arg);
 }
 
 void term_cmd_launch(char *arg) {
    launch_task(arg, 0, NULL);
+}
+
+void term_cmd_text(char *arg) {
+      char **args = (char**)malloc(sizeof(char*) * 1);
+      args[0] = arg;
+   launch_task("/sys/text.elf", 1, args);
 }
 
 void checkcmd(char *buffer) {
@@ -221,8 +227,15 @@ void checkcmd(char *buffer) {
       term_cmd_viewbmp(arg);
    else if(strcmp(command, "DMPMEM"))
       term_cmd_dmpmem(arg);
+      else if(strcmp(command, "LAUNCH"))
+      term_cmd_launch(arg);
    else if(strcmp(command, "LAUNCH"))
       term_cmd_launch(arg);
+      else if(strcmp(command, "LAUNCH"))
+      term_cmd_launch(arg);
+   else if(strcmp(command, "TEXT"))
+      term_cmd_text(arg);
+
 
    else
       term_cmd_default(command);

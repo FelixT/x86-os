@@ -25,8 +25,8 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->textpos = 0;
    windowobj->textvalign = true;
    windowobj->texthalign = true;
-   windowobj->cursorx = windowobj->textpadding;
-   windowobj->cursory = windowobj->textpadding;
+   windowobj->cursorx = windowobj->textpadding + 1;
+   windowobj->cursory = windowobj->textpadding + 1;
    windowobj->menuitem_count = 0;
    windowobj->menuitems = NULL;
    windowobj->menuselected = -1;
@@ -44,8 +44,8 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
    if(wo->text == NULL) return;
 
-   int x = wo->textpadding;
-   int y = wo->textpadding;
+   int x = wo->textpadding + 1;
+   int y = wo->textpadding + 1;
    if(wo->textvalign)
       y = (wo->height - (getFont()->height + wo->textpadding))/2+1;
    if(wo->texthalign) {
@@ -57,7 +57,7 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
       char c = wo->text[i];
       if(c == '\n') {
          y += wo->textpadding + getFont()->height;
-         x = wo->textpadding;
+         x = wo->textpadding + 1;
       } else {
          draw_char(wo->window_surface, c, colour, wo->x + x, wo->y + y);
          x += wo->textpadding + getFont()->width;
@@ -65,7 +65,7 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
       if(x + wo->textpadding + getFont()->width > wo->width) {
          y += wo->textpadding + getFont()->height;
-         x = wo->textpadding;
+         x = wo->textpadding + 1;
       }
    }
    wo->cursorx = x;
@@ -274,6 +274,10 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
          break;
       case 80: // down arrow
          break;
+      case 203: // left arrow
+         break;
+      case 205: // right arrow
+         break;
       case 0x3A:
          keyboard_caps = !keyboard_caps;
          break;   
@@ -289,15 +293,20 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
 
    // draw char, assuming no aligns
    if(c == '\n') {
+      // cover current cursor
+      draw_rect(wo->window_surface, 0xFFFF, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
       wo->cursory += getFont()->height + wo->textpadding;
-      wo->cursorx = wo->textpadding;
+      wo->cursorx = wo->textpadding + 1;
    } else {
       draw_rect(wo->window_surface, rgb16(255, 255, 255), wo->x + wo->cursorx, wo->y + wo->cursory - getFont()->height + 2, getFont()->width, getFont()->height);
       draw_char(wo->window_surface, c, 0, wo->x + wo->cursorx, wo->y + wo->cursory - getFont()->height + 2);
       wo->cursorx += getFont()->width + wo->textpadding;
       if(wo->cursorx + getFont()->width + wo->textpadding > wo->width) {
          wo->cursory += getFont()->height + wo->textpadding;
-         wo->cursorx = wo->textpadding;
+         wo->cursorx = wo->textpadding + 1;
       }
    }
+
+   // draw cursor
+   draw_rect(wo->window_surface, 0, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
 }

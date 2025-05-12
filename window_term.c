@@ -268,10 +268,6 @@ void term_cmd_resize(registers_t *regs, gui_window_t *window, char *arg) {
    window_resize(regs, window, width, height);
 }
 
-void term_cmd_fatnew(char *path) {
-   fat_new_file(path, NULL, 0);
-}
-
 void term_cmd_bg(char *arg) {
    int bg = stoi(arg);
    gui_writenum(bg, 0);

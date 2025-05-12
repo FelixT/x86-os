@@ -242,6 +242,9 @@ void software_handler(registers_t *regs) {
       case 40:
          api_free(regs);
          break;
+      case 41:
+         api_fat_new_file(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

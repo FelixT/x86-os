@@ -135,7 +135,7 @@ void _start(int argc, char **args) {
    wo_text->text[0] = '\0';
    wo_text_o = wo_text;
 
-   if(argc == 1) {
+   if(argc == 1 && *args[0] != '\0') {
       load_file(args[0]);
    }
 

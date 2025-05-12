@@ -289,6 +289,11 @@ void api_fat_write_file(registers_t *regs) {
    fat_write_file((char*)regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
 }
 
+void api_fat_new_file(registers_t *regs) {
+   // IN: ebx = path
+   fat_new_file((char*)regs->ebx, NULL, 0);
+}
+
 void api_set_sys_font(registers_t *regs) {
    // IN: ebx = path
 

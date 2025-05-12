@@ -2,11 +2,12 @@ ENTRY(kmain)
 OUTPUT_FORMAT(binary)
 
 MEMORY {
-    ram : org = 0x7e00, len = 127K
+    ram : org = 0x7e00, len = 63K
  }
 
 SECTIONS {
     . = 0x7e00;
+    boot_start = .;
 
     .text : {
         *(.text)
@@ -22,6 +23,6 @@ SECTIONS {
         *(.bss)
     } > ram
 
-    kernel_end = .;
+    boot_end = .;
      
 }

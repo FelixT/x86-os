@@ -9,7 +9,7 @@
 
 // 8.3 directory structure
 
-uint32_t baseAddr = 128000;
+uint32_t baseAddr = 256000;
 
 fat_bpb_t *fat_bpb = NULL;
 fat_ebr_t *fat_ebr;

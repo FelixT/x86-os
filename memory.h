@@ -5,11 +5,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define KERNEL_START 0x07000  // kernel loads at 0x7e00 but we map from here for 4KiB align
-#define KERNEL_END   0x28000 // kernel really ends at (0x7e00+0x20000=0x27e00)
-#define STACKS_START 0x28000
-#define TOS_KERNEL 0x30000 // STACKS_START + 0x2000
-#define TOS_PROGRAM 0x40000 // TOS_KERNEL + 0x10000
+#define KERNEL_START 0x18000 // loaded to here in bootloader1
+#define KERNEL_END 0x38000 // KERNEL_START + 0x20000
+#define STACKS_START 0x38000
+#define TOS_KERNEL 0x40000 // STACKS_START + 0x2000
+#define TOS_PROGRAM 0x50000 // TOS_KERNEL + 0x10000
 #define HEAP_KERNEL 0x100000
 #define HEAP_KERNEL_END 0x2100000 // HEAP_KERNEL + 0x2000000
 

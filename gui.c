@@ -119,7 +119,6 @@ void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
    gui_writestrat(out, colour, x, y);
 }
 
-extern vbe_mode_info_t vbe_mode_info_structure;
 extern int *font_letter;
 
 void gui_init_meat(registers_t *regs, void *msg) {
@@ -145,9 +144,8 @@ void gui_init(void) {
 
    gui_bg = COLOUR_CYAN;
 
-   surface.width = vbe_mode_info_structure.width;
-   surface.height = vbe_mode_info_structure.height;
-   surface.buffer = vbe_mode_info_structure.framebuffer;
+   extern uintptr_t surface_boot;
+   memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);

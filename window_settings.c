@@ -83,7 +83,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
 
    strcpy(window->title, "Settings");
    window->draw_func = &window_settings_draw;
-   window_resize(NULL, window, 400, 300);
+   window_resize(NULL, window, 400, 180);
 
    if(selected == NULL) {
       selected = window;

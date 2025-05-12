@@ -216,6 +216,14 @@ static inline void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    );
 }
 
+static inline void fat_new_file(char *path) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (41),
+      "b" ((uint32_t)path)
+   );
+}
+
 static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale) {
    asm volatile (
       "int $0x30;"

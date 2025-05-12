@@ -8,9 +8,6 @@ extern "C" {
 #include "tasks.h"
 #include "terminal.h"
 #include "registers_t.h"
-#include "registers_t.h"
-
-extern bool videomode;
 
 extern void gdt_flush();
 extern void tss_flush();
@@ -42,11 +39,16 @@ void cmain_cli_init() {
 
 extern "C" {
 
+extern uint32_t videomode;
+ 
 void cmain() {
    if(videomode)
       cmain_gui_init();
    else
       cmain_cli_init();
+
+   while(true)
+      asm volatile("nop");
 }
 
 }

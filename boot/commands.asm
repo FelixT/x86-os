@@ -29,7 +29,7 @@ cmd_gui:
    extern videomode
    mov byte[videomode], 1
    
-   jmp CODE_SEG:main_32   
+   jmp CODE_SEG:main_32
 
 cmd_cli_str db 'cli', 0
 cmd_gui_str db 'gui', 0

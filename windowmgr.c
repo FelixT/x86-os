@@ -117,7 +117,7 @@ void window_close(void *regs, int windowIndex) {
 }
 
 bool window_init(gui_window_t *window) {
-   strcpy(window->title, " Terminal");
+   strcpy(window->title, "Terminal");
    window->x = 20;
    window->y = 20;
    window->width = 440;
@@ -195,7 +195,6 @@ int windowmgr_add() {
    }
       
    if(window_init(&gui_windows[index])) {
-      gui_windows[index].title[0] = index+'0';
       setSelectedWindowIndex(index);
 
       return index;
@@ -343,7 +342,7 @@ void windowmgr_init() {
    memset(gui_windows, 0, sizeof(gui_window_t) * 64);
    // Init with one (debug) window
    window_init(&gui_windows[0]);
-   strcpy(gui_windows[0].title, "0Debug Msgs");
+   strcpy(gui_windows[0].title, "Debug Log");
    gui_windows[0].active = true;
    gui_windows[0].x = 100;
    gui_windows[0].y = 100;
