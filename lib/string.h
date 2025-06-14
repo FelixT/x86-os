@@ -11,6 +11,7 @@ void strcpy_fixed(char* dest, char* src, int length);
 int stoi(char* str);
 bool strsplit(char* dest1, char* dest2, char* src, char splitat);
 bool strstartswith(char* src, char* startswith);
+bool strsplit_last(char* dest1, char* dest2, char* src, char splitat);
 int strlen(char* str);
 bool strcmp(char* str1, char* str2);
 void uinttohexstr(uint32_t num, char* out);
@@ -19,5 +20,6 @@ void inttostr(int num, char* out);
 void vsprintf(char *buffer, char *format, va_list args);
 void sprintf(char *buffer, char *format, ...);
 char *strchr(const char *str, int c);
+char *strcat(char *dest, const char *src);
 
 #endif

@@ -5,7 +5,6 @@
 
 cmd_cli:
    ; enter protected mode
-   cli ; disable interrupts
    lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
    mov eax, cr0
    or eax, 0x1
@@ -20,7 +19,6 @@ cmd_gui:
    call vesa_init ; has to be done in real mode
    
    ; enter protected mode
-   cli ; disable interrupts
    lgdt [gdt_descriptor] ; load GDT register with start address of Global Descriptor Table
    mov eax, cr0
    or eax, 0x1

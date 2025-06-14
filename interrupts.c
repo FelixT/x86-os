@@ -7,6 +7,7 @@
 #include "events.h"
 #include "ata.h"
 #include "windowmgr.h"
+#include "memory.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -120,6 +121,10 @@ void register_irq(int index, void (*handler)(registers_t *regs)) {
 }
 
 void software_handler(registers_t *regs) {
+
+   task_state_t *task = &gettasks()[get_current_task()];
+   task->in_syscall = true;
+   task->syscall_no = regs->eax;
 
    switch(regs->eax) {
       case 1:
@@ -249,6 +254,8 @@ void software_handler(registers_t *regs) {
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
    }
+
+   task->in_syscall = false;
 }
 
 void keyboard_handler(registers_t *regs) {
@@ -320,10 +327,11 @@ void timer_handler(registers_t *regs) {
    } else {
       gui_showtimer(timer_i%10);
 
-      if(timer_i%8 == 0)
+      if(timer_i%2 == 0) {
          gui_draw();
+      }
 
-      if(timer_i%10 == 0) {
+      if(timer_i%3 == 0) {
          if(switching_paused) {
             if(switching) window_writestr(" SP", 0, 0);
          } else {

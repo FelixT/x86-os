@@ -60,6 +60,12 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    // create page directory
    page_dir_entry_t *dir = new_page();
 
+   if(vmem_start <= KERNEL_END && vmem_end >= KERNEL_START) {
+      // if virtual memory addresses conflict with kernel space
+      debug_printf("ELF virtual addresses conflict with kernel space\n");
+      return;
+   }
+
    // allocate memory
    uint8_t *newProg = malloc(vmem_size);
    // fill with 0s
@@ -75,13 +81,15 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    for(uint32_t i = 0; i < vmem_size; i+=0x1000)
       map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1);
 
-   debug_printf("Start %h\n", page_getphysical(dir, elf_header->entry));
+   debug_printf("Start 0x%h\n", page_getphysical(dir, elf_header->entry));
 
    // copy program to new location and assign virtual memory for each segment
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {
+      debug_printf("Header %i\n", i);
 
       if(prog_header->segment_type != 1) {
          // if not LOAD
+         prog_header++;
          continue;
       }
 
@@ -89,8 +97,10 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
       uint32_t vmem_offset = prog_header->p_vaddr - vmem_start;
 
       // copy
-      for(int j = 0; j < (int)prog_header->p_filesz; j++)
-         newProg[vmem_offset + j] = prog[file_offset + j];
+      memcpy_fast(&newProg[vmem_offset], &prog[file_offset], (int)prog_header->p_filesz);
+
+      if(prog_header->p_memsz > prog_header->p_filesz)
+         memset(&newProg[vmem_offset] + prog_header->p_filesz, 0, prog_header->p_memsz - prog_header->p_filesz);
 
       //int rw = (prog_header->flags & 0x1) == 0x1;
       

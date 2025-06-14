@@ -22,6 +22,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->textpadding = getFont()->padding;
    windowobj->hovering = false;
    windowobj->clicked = false;
+   windowobj->disabled = false;
    windowobj->textpos = 0;
    windowobj->textvalign = true;
    windowobj->texthalign = true;
@@ -111,10 +112,10 @@ void windowobj_draw(void *windowobj) {
 
    } else if(wo->type == WO_TEXT) {
 
-      if(wo->clicked) {
+      if(wo->clicked && !wo->disabled) {
          dark = rgb16(40, 40, 40);
          light = rgb16(140, 140, 140);
-      } else if(wo->hovering) {
+      } else if(wo->hovering && !wo->disabled) {
          bg = rgb16(245, 245, 245);
          border = rgb16(40, 40, 40);
          text = rgb16(40, 40, 40);
@@ -182,7 +183,7 @@ void windowobj_redraw(void *window, void *windowobj) {
 
 void windowobj_unclick(void *regs, void *windowobj) {
    (void)regs;
-   windowobj_t *wo = (windowobj_t*)windowobj; 
+   windowobj_t *wo = (windowobj_t*)windowobj;
    wo->clicked = false;
    windowobj_draw(wo);
 }
@@ -202,8 +203,15 @@ void windowobj_click(void *regs, void *windowobj) {
       }
    }
 
-   if(wo->click_func != NULL)
-      task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 0);
+   if(wo->click_func != NULL) {
+      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+         // kernel
+         wo->click_func(windowobj);
+      } else {
+         gui_interrupt_switchtask(regs);
+         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 0);
+      }
+   }
 }
 
 void windowobj_hover(void *windowobj, int x, int y) {
@@ -237,6 +245,8 @@ extern bool keyboard_caps;
 
 void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    windowobj_t *wo = (windowobj_t*)windowobj;
+
+   if(wo->disabled) return;
 
    if(wo->type == WO_MENU) {
       // handle uparrow/downarrow

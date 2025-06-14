@@ -93,6 +93,9 @@ void window_term_return(void *regs, void *window) {
       buffer[selected->text_index] = '\0';
       uint32_t *args = malloc(sizeof(uint32_t) * 1);
       args[0] = (uint32_t)buffer;
+      // map both to prog
+      map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+      map(gettasks()[get_current_task()].page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1);
 
       task_call_subroutine(regs, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
    } else {
@@ -219,6 +222,7 @@ void term_cmd_tasks() {
          window_term_printf(" <routine %s>", tasks[i].routine_name);
          if(tasks[i].privileged)
             window_term_printf(" privileged");
+         window_term_printf(" eip %h\n", tasks[i].registers.eip);
       } else {
          window_term_printf("Disabled");
       }

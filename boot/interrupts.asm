@@ -27,6 +27,7 @@ setup_interrupts:
       .done:
    %endif
       
+   ; setup int 9 keyboard handler
    mov bx, 0x09 ; hardware interrupt #
    shl bx, 2 ; multiply by 4
    mov [gs:bx], word interrupt_key
@@ -47,24 +48,26 @@ interrupt_default:
    iret
 
 interrupt_key:
+   cli
    in al, 0x60 ; get scancode
    mov bl, al ; save to bl
-
    mov al, 0x20 ; End of Interrupt
-   out 0x20, al ;
-
+   out 0x20, al
+   
    movzx ebx, bl
+   test bl, 0x80 ; check if bit 7 is set (key release)
+   jz .done
+   
+   ; handle key release
+   and bl, 0x7F ; clear bit 7 to get the actual scancode
    mov cl, [keymap + ebx] ; convert to ascii
-
-   and bl, 0x80 ; if key released
-   jnz .done ; don't repeat
-
    mov al, cl ; ascii key
    call terminal_keypress
    jmp .done
    
-   .done:
-      iret
+.done:
+   sti
+   iret
 
 keymap:
    db       0 , 27,'1','2','3','4','5','6','7','8','9','0','-','=', 8,  9, 'q','w','e','r'

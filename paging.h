@@ -42,7 +42,6 @@ void unmap(page_dir_entry_t *dir, uint32_t addr);
 void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw);
 void page_init();
 uint32_t page_getphysical(page_dir_entry_t *dir, uint32_t vaddr);
-void page_enable_debug();
 page_dir_entry_t *page_get_kernel_pagedir();
 void swap_pagedir(page_dir_entry_t *dir);
 page_dir_entry_t *new_page();

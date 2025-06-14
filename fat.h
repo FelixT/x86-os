@@ -67,5 +67,6 @@ fat_bpb_t fat_get_bpb();
 int fat_get_dir_size(uint16_t clusterNo);
 void fat_write_file(char *path, uint8_t *buffer, uint32_t size);
 void fat_new_file(char *path, uint8_t *buffer, uint32_t size);
+fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir);
 
 #endif

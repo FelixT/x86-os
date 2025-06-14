@@ -10,6 +10,8 @@
 #include "windowmgr.h"
 #include "gui.h"
 
+#include "window_popup.h"
+
 void window_settings_draw(void *w) {
    gui_window_t *window = (gui_window_t*)w;
    int index = get_window_index_from_pointer(window);
@@ -78,12 +80,38 @@ void window_settings_set_window_txtcolour(void *w) {
    window_settings_update(settings);
 }
 
+void window_settings_set_bgimg(void *w) {
+   fat_dir_t *entry = fat_parse_path(((windowobj_t*)w)->text, true);
+   if(entry == NULL) {
+      debug_writestr("Image not found\n");
+      return;
+   }
+
+   uint8_t *gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   desktop_setbgimg(gui_bgimage);
+
+   gui_redrawall();
+}
+
+void window_settings_bgimg_callback(char *path) {
+   windowobj_t *wo = ((window_settings_t*)getSelectedWindow()->state)->d_bgimg_wo;
+   strcpy(wo->text, path);
+   wo->textpos = strlen(wo->text);
+   window_settings_set_bgimg(wo);
+}
+
+void window_settings_browesebg(void *w) {
+   gui_window_t *parent = getSelectedWindow();
+   int popup = windowmgr_add();
+   window_popup_filepicker(getWindow(popup), parent, &window_settings_bgimg_callback);
+}
+
 window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *selected) {
    window_settings_t *settings = malloc(sizeof(window_settings_t));
 
    strcpy(window->title, "Settings");
    window->draw_func = &window_settings_draw;
-   window_resize(NULL, window, 400, 180);
+   window_resize(NULL, window, 415, 180);
 
    if(selected == NULL) {
       selected = window;
@@ -103,55 +131,74 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    int y = 35;
    windowobj_init(d_bgcolour_wo, &window->surface);
    d_bgcolour_wo->type = WO_TEXT;
-   d_bgcolour_wo->x = 250;
+   d_bgcolour_wo->x = 220;
    d_bgcolour_wo->y = y;
-   d_bgcolour_wo->width = 100;
+   d_bgcolour_wo->width = 130;
    d_bgcolour_wo->height = 20;
    d_bgcolour_wo->text = malloc(40);
    d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
    uinttohexstr(gui_bg, d_bgcolour_wo->text);
+   d_bgcolour_wo->textpos = strlen(d_bgcolour_wo->text);
    window->window_objects[window->window_object_count++] = d_bgcolour_wo;
 
    y += 30;
    windowobj_init(d_bgimg_wo, &window->surface);
    d_bgimg_wo->type = WO_TEXT;
-   d_bgimg_wo->x = 250;
+   d_bgimg_wo->x = 220;
    d_bgimg_wo->y = y;
-   d_bgimg_wo->width = 100;
+   d_bgimg_wo->width = 130;
    d_bgimg_wo->height = 20;
    d_bgimg_wo->text = malloc(100);
-   strcpy(d_bgimg_wo->text, "/bg/bg16.bmp");
+   strcpy(d_bgimg_wo->text, "/bmp/bg16.bmp");
+   d_bgimg_wo->textpos = strlen(d_bgimg_wo->text);
+   d_bgimg_wo->return_func = &window_settings_set_bgimg;
    //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
    window->window_objects[window->window_object_count++] = d_bgimg_wo;
+
+   // browse button
+   windowobj_t *browsebtn = (windowobj_t*)malloc(sizeof(windowobj_t));
+   windowobj_init(browsebtn, &window->surface);
+   browsebtn->type = WO_BUTTON;
+   browsebtn->x = 355;
+   browsebtn->y = y;
+   browsebtn->width = 50;
+   browsebtn->height = 20;
+   browsebtn->text = malloc(strlen("Browse")+1);
+   strcpy(browsebtn->text, "Browse");
+   browsebtn->click_func = &window_settings_browesebg;
+   window->window_objects[window->window_object_count++] = browsebtn;
 
    y += 30;
    windowobj_init(w_bgcolour_wo, &window->surface);
    w_bgcolour_wo->type = WO_TEXT;
-   w_bgcolour_wo->x = 250;
+   w_bgcolour_wo->x = 220;
    w_bgcolour_wo->y = y;
-   w_bgcolour_wo->width = 100;
+   w_bgcolour_wo->width = 130;
    w_bgcolour_wo->height = 20;
    w_bgcolour_wo->text = malloc(100);
    w_bgcolour_wo->return_func = &window_settings_set_window_bgcolour;
    uinttohexstr(selected->bgcolour, w_bgcolour_wo->text);
+   w_bgcolour_wo->textpos = strlen(w_bgcolour_wo->text);
    window->window_objects[window->window_object_count++] = w_bgcolour_wo;
 
    y += 30;
    windowobj_init(w_txtcolour_wo, &window->surface);
    w_txtcolour_wo->type = WO_TEXT;
-   w_txtcolour_wo->x = 250;
+   w_txtcolour_wo->x = 220;
    w_txtcolour_wo->y = y;
-   w_txtcolour_wo->width = 100;
+   w_txtcolour_wo->width = 130;
    w_txtcolour_wo->height = 20;
    w_txtcolour_wo->text = malloc(100);
    w_txtcolour_wo->return_func = &window_settings_set_window_txtcolour;
    uinttohexstr(selected->txtcolour, w_txtcolour_wo->text);
+   w_txtcolour_wo->textpos = strlen(w_txtcolour_wo->text);
    window->window_objects[window->window_object_count++] = w_txtcolour_wo;
 
    windowobj_redraw(window, d_bgcolour_wo);
    windowobj_redraw(window, d_bgimg_wo);
    windowobj_redraw(window, w_bgcolour_wo);
    windowobj_redraw(window, w_txtcolour_wo);
+   windowobj_redraw(window, browsebtn);
 
    window_settings_redraw(window);
 

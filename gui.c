@@ -21,6 +21,8 @@ bool gui_cursor_shown = false;
 surface_t surface;
 
 uint16_t cursor_buffer[MAX_FONT_WIDTH*MAX_FONT_HEIGHT]; // store whats behind cursor so it can be restored
+int cursor_oldx = 0;
+int cursor_oldy = 0;
 
 uint16_t *draw_buffer;
 
@@ -32,7 +34,7 @@ static inline void set_framebuffer(int index, uint16_t colour) {
    }
 }
 
-uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
+inline uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
@@ -122,11 +124,13 @@ void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
 extern int *font_letter;
 
 void gui_init_meat(registers_t *regs, void *msg) {
+   // needs to be run from interrupt routine with interrupts disabled
    (void)msg;
    gui_writestr("Enabling ATA HD\n", COLOUR_ORANGE);
    ata_identify(true, true);
    gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
    fat_setup();
+   gui_printf("\nFramebuffer at 0x%h", 0, surface.buffer);
    gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
    page_init();
    gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
@@ -136,6 +140,7 @@ void gui_init_meat(registers_t *regs, void *msg) {
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
+   setSelectedWindowIndex(-1);
    gui_redrawall();
 }
 
@@ -146,6 +151,7 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
+   //surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);
@@ -161,11 +167,6 @@ void gui_init(void) {
    events_add(1, &gui_init_meat, NULL, -1);
 }
 
-void gui_draw_window(int windowIndex);
-void gui_draw(void) {
-   windowmgr_draw();
-}
-
 void gui_redrawall() {
    // draw to buffer
    uint32_t framebuffer = surface.buffer;
@@ -174,6 +175,7 @@ void gui_redrawall() {
    gui_clear(gui_bg);
    desktop_draw();
    windowmgr_redrawall();
+   toolbar_draw();
 
    // copy to display
    surface.buffer = framebuffer;
@@ -248,15 +250,26 @@ void gui_cursor_save_bg() {
             cursor_buffer[(y-gui_mouse_y)*(getFont()->width)+(x-gui_mouse_x)] = terminal_buffer[y*(int)surface.width+x];
       }
    }
+
+   cursor_oldx = gui_mouse_x;
+   cursor_oldy = gui_mouse_y;
 }
 
-void gui_cursor_restore_bg(int old_x, int old_y) {
-   for(int y = old_y; y < old_y + getFont()->height; y++) {
-      for(int x = old_x; x < old_x + getFont()->width; x++) {
-         set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-old_y)*(getFont()->width)+(x-old_x)]);
+void gui_cursor_restore_bg() {
+   for(int y = cursor_oldy; y < cursor_oldy + getFont()->height; y++) {
+      for(int x = cursor_oldx; x < cursor_oldx + getFont()->width; x++) {
+         set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-cursor_oldy)*(getFont()->width)+(x-cursor_oldx)]);
       }
    }
    gui_cursor_shown = false;
+}
+
+void gui_draw(void) {
+   gui_cursor_restore_bg(); // Always restore old cursor first
+   windowmgr_draw();
+
+   gui_cursor_save_bg();    // Save new background before drawing cursor
+   if(mouse_enabled) gui_cursor_draw();
 }
 
 void gui_cursor_draw() {
@@ -276,16 +289,16 @@ void gui_cursor_draw() {
 void mouse_update(int relX, int relY) {
    if(relX == 0 && relY == 0) return;
 
-   int old_x = gui_mouse_x;
-   int old_y = gui_mouse_y;
-
    gui_mouse_x += relX;
    gui_mouse_y -= relY;
    gui_mouse_x = (gui_mouse_x + surface.width) % surface.width;
    gui_mouse_y = (gui_mouse_y + surface.height) % surface.height;
 
-   gui_cursor_restore_bg(old_x, old_y); // restore pixels under old cursor location
+   gui_cursor_restore_bg(); // restore pixels under old cursor location
    windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
+
+   gui_cursor_save_bg();    // save new background at new position
+   if(mouse_enabled) gui_cursor_draw();
 }
 
 void mouse_leftclick(void *regs, int relX, int relY) {
@@ -298,28 +311,34 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       if(!windowmgr_click(regs, gui_mouse_x, gui_mouse_y))
          desktop_click(regs, gui_mouse_x, gui_mouse_y);
 
-      gui_draw();
+      //gui_draw();
    }
 
 }
 
 void mouse_release(registers_t *regs) {
+   bool redraw = false;
+
    if(mouse_held) {
       gui_window_t *window = getSelectedWindow();
       if(window) {
-         window->dragged = false;
-         if(window->resized)
+         if(window->dragged) {
+            redraw = true;
+            window->dragged = false;
+         }
+         if(window->resized) {
+            redraw = true;
             window_resize(regs, window, window->width, window->height);
-         else
+            window->resized = false;
+         } else {
             window_mouserelease(regs, window);
-         window->resized = false;
+         }
       }
+   }
+   //if(mouse_heldright)
+   //   redraw = true;
 
-      gui_redrawall();
-   }
-   if(mouse_heldright) {
-      gui_redrawall();
-   }
+   if(redraw) gui_redrawall();
 
    mouse_held = false;
    mouse_heldright = false;

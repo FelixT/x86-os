@@ -37,6 +37,7 @@ typedef struct windowobj_t {
    bool hovering;
    bool clicked;
    bool visible;
+   bool disabled;
    int textpos;
    int cursorx;
    int cursory;

@@ -22,10 +22,10 @@ void cmain_gui_init() {
    gdt_flush();
    tss_flush();
 
-   register_irq(0, *timer_handler);
-   register_irq(1, *keyboard_handler);
-   register_irq(12, *mouse_handler);
-   register_irq(16, *software_handler);
+   register_irq(0, timer_handler);
+   register_irq(1, keyboard_handler);
+   register_irq(12, mouse_handler);
+   register_irq(16, software_handler);
 }
 
 void cmain_cli_init() {
@@ -33,8 +33,8 @@ void cmain_cli_init() {
    terminal_clear();
    terminal_prompt();
 
-   register_irq(0, *timer_handler);
-   register_irq(1, *keyboard_handler);
+   register_irq(0, timer_handler);
+   register_irq(1, keyboard_handler);
 }
 
 extern "C" {

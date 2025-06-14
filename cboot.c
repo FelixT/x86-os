@@ -1,13 +1,16 @@
 // bootloader 1 loader
 // located in memory at 0x7e00 size 63.5k
 // init text mode terminal, interrupts, ata
-// loads kernel to 0x18000
+// loads kernel to 0x06400000 (KERNEL_START)
+// just go ahead and load the kernel to the 'higher half location'
+// which simplies enabling paging (can identity map)
 
 #include "ata.h"
 #include "terminal.h"
 #include "draw.h"
 #include "font.h"
 #include "surface_t.h"
+#include "memory.h"
 
 extern uint8_t videomode;
 
@@ -104,7 +107,7 @@ void cboot() {
       terminal_clear();
    }
 
-   cboot_printf("Loading into 0x18000\n");
+   cboot_printf("Loading into 0x%h", KERNEL_START);
    ata_identify(true, true);
 
    uint8_t *bytes = ata_read_exact(true, true, 64000, size);
@@ -112,15 +115,15 @@ void cboot() {
    for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
       if(memory_get_table()[i].allocated) used++;
    }
-   cboot_printf("\nLoaded at %u\nAllocated %i/%i\n", bytes, used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE);
+   cboot_printf("Loaded at %u\nAllocated %i/%i", bytes, used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE);
 
-   cboot_printf("\nCopying to 0x18000\n");
-   memcpy((void*)0x18000, bytes, size);
+   cboot_printf("Copying to 0x%h", KERNEL_START);
+   memcpy_fast((void*)KERNEL_START, bytes, size);
 
-   cboot_printf("\nFreeing\n");
+   cboot_printf("Freeing");
    free((uint32_t)bytes, size);
 
-   cboot_printf("\nJumping\n");
+   cboot_printf("Jumping");
    
    // set videomode in eax, read in cmain
    if(videomode) {
@@ -129,7 +132,7 @@ void cboot() {
          "movl %0, %%edx\n\t" // surface ptr
          "jmp *%1\n\t"
          :
-         : "r" (&surface), "r" ((void*)0x18000)
+         : "r" (&surface), "r" ((void*)KERNEL_START)
          : "%ecx", "%edx"
       );
    } else {
@@ -138,7 +141,7 @@ void cboot() {
          "movl %0, %%edx\n\t" // surface ptr
          "jmp *%1\n\t"
          :
-         : "r" (&surface), "r" ((void*)0x18000)
+         : "r" (&surface), "r" ((void*)KERNEL_START)
          : "%ecx", "%edx"
       );
    }

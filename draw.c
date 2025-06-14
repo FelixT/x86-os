@@ -4,12 +4,12 @@
 
 int *font_letter;
 
-uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
+inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
 
-void setpixel_safe(surface_t *surface, int index, int colour) {
+inline void setpixel_safe(surface_t *surface, int index, int colour) {
    if(index < 0 || index >= surface->width*surface->height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {

@@ -3,7 +3,7 @@
 VIDEO_MEMORY equ 0xb8000
 WHITE_ON_BLACK equ 0x0f
 
-; extern tos_kernel (0x40000: see memory.h)
+; extern tos_kernel (0x06422000: see memory.h)
 
 main_32:
    ; setup registers
@@ -13,7 +13,7 @@ main_32:
    mov fs, ax
    mov gs, ax
    mov ss, ax
-   mov ebp, 0x40000
+   mov ebp, 0x06422000
    mov esp, ebp
 
    extern cboot

@@ -73,7 +73,13 @@ void api_print_stack() {
 
 void api_return_framebuffer(registers_t *regs) {
    // get framebuffer in ebx
-   regs->ebx = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
+   uint32_t framebuffer = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
+   regs->ebx = framebuffer;
+   uint32_t size = gui_get_windows()[get_current_task_window()].framebuffer_size;
+   // map to task
+   for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size)/0x1000; i++) {
+      map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
+   }
 }
 
 void api_return_window_width(registers_t *regs) {
@@ -172,7 +178,15 @@ void api_end_subroutine(registers_t *regs) {
 void api_malloc(registers_t *regs) {
    // IN: ebx = size
    // OUT: ebx = addr
-   uint32_t *mem = malloc(regs->ebx); 
+   uint32_t *mem = malloc(regs->ebx);
+
+   task_state_t *task = &gettasks()[get_current_task()];
+   //task->allocated_pages[task->no_allocated] = mem;
+   //task->no_allocated++;*/
+
+   // identity map
+   map(task->page_dir, (uint32_t)mem, (uint32_t)mem, 1, 1);
+
    regs->ebx = (uint32_t)mem;
 
    // TODO: use special usermode malloc rather than the kernel malloc
@@ -189,6 +203,7 @@ void api_fat_get_bpb(registers_t *regs) {
    // out: ebx
    fat_bpb_t *bpb = malloc(sizeof(fat_bpb_t));
    *bpb = fat_get_bpb(); // refresh fat tables
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)bpb, (uint32_t)bpb, 1, 1);
 
    regs->ebx = (uint32_t)bpb;
 }
@@ -196,6 +211,7 @@ void api_fat_get_bpb(registers_t *regs) {
 void api_fat_read_root(registers_t *regs) {
    // out: ebx
    fat_dir_t *items = fat_read_root();
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)items, (uint32_t)items, 1, 1);
 
    regs->ebx = (uint32_t)items;
 }
@@ -206,6 +222,7 @@ void api_fat_parse_path(registers_t *regs) {
    // OUT: ebx = addr of fat_dir_t entry for path or 0 if doesn't exist
 
    fat_dir_t *entry = fat_parse_path((char*)regs->ebx, (bool)regs->ecx);
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)entry, (uint32_t)entry, 1, 1);
    regs->ebx = (uint32_t)entry;
 }
 
@@ -215,6 +232,7 @@ void api_fat_read_file(registers_t *regs) {
    // OUT: ebx = addr of file content buffer
 
    uint8_t *content = fat_read_file(regs->ebx, regs->ecx);
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)content, (uint32_t)content, 1, 1);
    regs->ebx = (uint32_t)content;
 }
 
@@ -229,6 +247,7 @@ void api_read_dir(registers_t *regs) {
    // OUT: ebx
    fat_dir_t *items = malloc(32 * fat_get_dir_size(regs->ebx));
    fat_read_dir((uint16_t)regs->ebx, items);
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)items, (uint32_t)items, 1, 1);
    regs->ebx = (uint32_t)items;
 }
 
@@ -263,6 +282,7 @@ void api_register_windowobj(registers_t *regs) {
    windowobj_t *wo = malloc(sizeof(windowobj_t));
    windowobj_init(wo, &window->surface);
    window->window_objects[window->window_object_count++] = wo;
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)wo, (uint32_t)wo, 1, 1);
 
    regs->ebx = (uint32_t)wo;
 }
@@ -279,6 +299,15 @@ void api_launch_task(registers_t *regs) {
    task_subroutine_end(regs);
 
    tasks_launch_elf(regs, path, argc, args);
+
+   // map args to new task
+   if(argc > 0 && args != NULL) {
+      for(int i = 0; i < argc; i++) {
+         // map args to task
+         map(gettasks()[get_current_task()].page_dir, (uint32_t)*(args[i]), (uint32_t)*(args[i]), 1, 1);
+      }
+   }
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
 }
 
 void api_fat_write_file(registers_t *regs) {

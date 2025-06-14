@@ -74,11 +74,18 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    end_subroutine();
 }
 
+void set_status(char *status) {
+   strcpy(wo_status_o->text, status);
+   wo_status_o->textpos = strlen(status);
+}
+
 void load_file(char *filepath) {
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath, true);
    if(entry == NULL) {
-      write_str("File not found\n");
-      exit(0);
+      set_status("File not found");
+      wo_text_o->textpos = 0;
+      wo_text_o->text[wo_text_o->textpos] = '\0';
+      return;
    }
    strcpy(wo_path_o->text, filepath);
    wo_path_o->textpos = strlen(filepath);
@@ -94,9 +101,11 @@ void path_return() {
 }
 
 void save_func() {
-   strcpy(wo_status_o->text, "Saved");
+   set_status("Saving...");
 
    fat_write_file(wo_path_o->text, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
+
+   set_status("Saved");
 
    end_subroutine();
 }

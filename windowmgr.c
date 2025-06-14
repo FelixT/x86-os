@@ -100,7 +100,8 @@ void window_close(void *regs, int windowIndex) {
    if(windowIndex == getSelectedWindowIndex())
       setSelectedWindowIndex(-1);
 
-   end_task(get_task_from_window(windowIndex), regs);
+   if(regs != NULL)
+      end_task(get_task_from_window(windowIndex), regs);
 
    // re-establish pointer as gui_windows may have been resized in end_task
    window = getWindow(windowIndex);
@@ -196,6 +197,8 @@ int windowmgr_add() {
       
    if(window_init(&gui_windows[index])) {
       setSelectedWindowIndex(index);
+      gui_windows[index].x = index * 20;
+      gui_windows[index].y = index * 20;
 
       return index;
    } else {
@@ -309,7 +312,7 @@ void window_draw(gui_window_t *window) {
       window_draw_content(window);
 
       if(window != selectedWindow)
-         draw_dottedrect(&surface, 0, window->x-1, window->y-1, window->width+2, window->height+2, NULL, false);
+         draw_dottedrect(&surface, rgb16(80, 80, 80), window->x-1, window->y-1, window->width+2, window->height+2, NULL, false);
 
       window->needs_redraw = false;
    }
@@ -355,7 +358,7 @@ void windowmgr_init() {
    default_menu.type = WO_MENU;
    default_menu.visible = false;
    default_menu.width = 80;
-   default_menu.height = 160;
+   default_menu.height = 40;
    default_menu.menuitems = malloc(sizeof(windowobj_menu_t) * 10);
    strcpy(default_menu.menuitems[0].text, "Settings");
    default_menu.menuitems[0].func = &windowmgr_getproperties;
@@ -391,7 +394,7 @@ void toolbar_draw() {
 
 }
 
-extern char scan_to_char(int scan_code, bool caps);
+extern char scan_to_char(int scan_code, bool shift, bool caps);
 
 void windowmgr_uparrow(registers_t *regs, gui_window_t *window) {
 
@@ -486,7 +489,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
          keyboard_caps = !keyboard_caps;
          break;
       default:
-         char c = scan_to_char(scan_code, keyboard_shift^keyboard_caps);
+         char c = scan_to_char(scan_code, keyboard_shift, keyboard_caps);
          if(selectedWindow->keypress_func != NULL)
             (*(selectedWindow->keypress_func))(c, selectedWindow);
          break;
@@ -495,7 +498,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
 
 bool clicked_on_window(void *regs, int index, int x, int y) {
    gui_window_t *window = getWindow(index);
-   if(window->closed) return false;
+   if(!window || window->closed) return false;
 
    if(x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
    && y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && y <= (int)surface.height-TOOLBAR_PADDING) {
@@ -549,7 +552,6 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
          windowobj_t *wo = selectedWindow->window_objects[i];
          if(relX > wo->x && relX < wo->x + wo->width
          && relY > wo->y && relY < wo->y + wo->height) {
-            gui_interrupt_switchtask(regs);
             windowobj_click(regs, (void*)wo);
             windowobj_redraw((void*)selectedWindow, (void*)wo);
             clicked_index = i;
@@ -575,6 +577,9 @@ extern uint16_t *draw_buffer;
 
 extern int gui_mouse_x;
 extern int gui_mouse_y;
+
+int clicked_x;
+int clicked_y;
 void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    gui_window_t *window = getSelectedWindow();
    if(selectedWindow == NULL || !selectedWindow->active) return;
@@ -628,6 +633,9 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
 
 extern bool cursor_resize;
 bool windowmgr_click(void *regs, int x, int y) {
+   clicked_x = x;
+   clicked_y = y;
+
    gui_window_t *prevSelected = selectedWindow;
 
    if(cursor_resize && selectedWindow != NULL) {
@@ -641,9 +649,11 @@ bool windowmgr_click(void *regs, int x, int y) {
       && y >= default_menu.y && y <= default_menu.y + default_menu.height) {
          windowobj_click(regs, (void*)&default_menu);
          default_menu.visible = false;
+         gui_redrawall();
          return true;
       } else {
          default_menu.visible = false;
+         gui_redrawall();
          return false;
       }
    }
@@ -653,6 +663,14 @@ bool windowmgr_click(void *regs, int x, int y) {
       setSelectedWindowIndex(-1);
       for(int i = 0; i < getWindowCount(); i++) {
          if(clicked_on_window(regs, i, x, y)) break;
+      }
+      if(selectedWindow) {
+         // clicked_on_window sets dragged to true, so window content would be hidden on draw
+         selectedWindow->dragged = false;
+         gui_redrawall();
+         selectedWindow->dragged = true;
+      } else {
+         gui_redrawall();
       }
    }
 
@@ -672,6 +690,7 @@ bool windowmgr_click(void *regs, int x, int y) {
    uint32_t *args = malloc(sizeof(uint32_t) * 2);
    args[1] = x - selectedWindow->x;
    args[0] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
+   map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
 
    if((y - (selectedWindow->y + TITLEBAR_HEIGHT)) >= 0) {
       task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 2);
@@ -701,11 +720,7 @@ void windowmgr_draw() {
    if(selectedWindow != NULL)
       window_draw(selectedWindow);
 
-   toolbar_draw();
    windowobj_draw(&default_menu);
-
-   if(mouse_heldright)
-      windowobj_draw(&default_menu);
 }
 
 void windowmgr_redrawall() {
@@ -899,6 +914,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width;
       args[0] = height - TITLEBAR_HEIGHT;
+      map(gettasks()[task].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+      map(gettasks()[task].page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, 1, 1);
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
    }
    

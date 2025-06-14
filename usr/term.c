@@ -23,7 +23,7 @@ void term_cmd_help() {
    printf("CLEAR\n");
    printf("LAUNCH path\n");
    printf("FILES, TEXT <path>\n");
-   printf("FAT path, FATNEW path\n");
+   printf("FAT <path>, FATNEW path\n");
    printf("FATDIR cluster, FATFILE cluster\n");
    printf("DMPMEM x <y>\n");
    printf("FONT path\n");
@@ -88,7 +88,7 @@ void printdir(fat_dir_t *items, int size) {
 void term_cmd_fat(char *arg) {
    fat_dir_t *items = NULL;
    int size = 0;
-   if(strcmp(arg, "/")) {
+   if(strcmp(arg, "/") || strcmp(arg, "")) {
       // root
       printf("Root directory\n");
       items = (fat_dir_t*)fat_read_root();
@@ -200,6 +200,19 @@ void term_cmd_text(char *arg) {
    launch_task("/sys/text.elf", 1, args);
 }
 
+void term_cmd_rgbhex(char *arg) {
+   char first[5];
+   char second[5];
+   char third[5];
+   strsplit(first, arg, arg, ' ');
+   strsplit(second, third, arg, ' ');
+   int r = stoi(first);
+   int g = stoi(second);
+   int b = stoi(third);
+   int n = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+   printf("0x%h\n", n);
+}
+
 void checkcmd(char *buffer) {
 
    char command[10];
@@ -235,8 +248,8 @@ void checkcmd(char *buffer) {
       term_cmd_launch(arg);
    else if(strcmp(command, "TEXT"))
       term_cmd_text(arg);
-
-
+   else if(strcmp(command, "RGBHEX"))
+      term_cmd_rgbhex(arg);
    else
       term_cmd_default(command);
 
@@ -247,7 +260,7 @@ void checkcmd(char *buffer) {
 
 void _start() {
       // clear the screen
-      clear();
+      //clear();
 
       write_str("UsrTerm\n");
 

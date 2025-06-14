@@ -31,6 +31,10 @@ typedef struct task_state_t {
    bool in_routine;
    char routine_name[32];
    page_dir_entry_t *page_dir;
+   uint32_t *allocated_pages[128]; // pointers as returned by malloc
+   uint16_t no_allocated;
+   bool in_syscall;
+   uint16_t syscall_no;
 } task_state_t;
 
 #define TOTAL_STACK_SIZE 0x0010000

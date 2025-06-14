@@ -77,6 +77,35 @@ bool strsplit(char* dest1, char* dest2, char* src, char splitat) {
    return true;
 }
 
+
+// split at last of char
+bool strsplit_last(char* dest1, char* dest2, char* src, char splitat) {
+   int at = -1;
+   int len = strlen(src);
+   for(int i = 0; i < len; i++) {
+      if(src[i] == splitat) {
+         at = i;
+      }
+   }
+
+   if(at == -1) {
+      // not found
+      if(dest1 != NULL)
+         strcpy(dest1, src);
+      if(dest2 != NULL)
+         dest2[0] = '\0';
+      return false;
+   }
+
+   if(dest1 != NULL)
+      strcpy_fixed(dest1, src, at);
+
+   if(dest2 != NULL)
+      strcpy_fixed(dest2, src + at + 1, len - (at + 1));
+
+   return true;
+}
+
 bool strstartswith(char* src, char* startswith) {
    int i = 0;
    while(startswith[i] != '\0') {

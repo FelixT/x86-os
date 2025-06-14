@@ -73,7 +73,7 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 #define COLOUR_DARK_GREY gui_rgb16(65, 65, 65) 
 #define COLOUR_LIGHT_GREY gui_rgb16(180, 180, 180) 
 #define COLOUR_TASKBAR_ENTRY gui_rgb16(100, 100, 100)
-#define COLOUR_TOOLBAR gui_rgb16(215, 215, 215)
+#define COLOUR_TOOLBAR gui_rgb16(205, 205, 205)
 #define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)
 #define COLOUR_WHITE gui_rgb16(255, 255, 255)
 #define COLOUR_BLACK gui_rgb16(0, 0, 0)
@@ -98,7 +98,6 @@ void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length);
 void gui_drawcharat(char c, uint16_t colour, int x, int y);
 void gui_cursor_draw();
 void gui_cursor_save_bg();
-void gui_desktop_draw();
 
 bool gui_interrupt_switchtask(void *regs);
 void gui_keypress(void *regs, char scan_code);

@@ -3,7 +3,7 @@
 global tss_start
 tss_start:
    dd 0
-   dd 0x40000 ; esp0, kernel stack pointer
+   dd 0x06422000 ; esp0, kernel stack pointer
    dd DATA_SEG ; ss0, kernel stack segment
    dd 0
    dd 0

@@ -24,11 +24,12 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].vmem_start = 0;
    tasks[index].vmem_end = 0;
    tasks[index].in_routine = false;
+   tasks[index].in_syscall = false;
    tasks[index].page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
+   tasks[index].no_allocated = 0;
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
-   tasks[index].registers.eax = USR_DATA_SEG | 3;
    tasks[index].registers.eip = entry;
 }
 
@@ -38,7 +39,6 @@ void launch_task(int index, registers_t *regs, bool focus) {
    tasks[current_task].registers.ds = USR_DATA_SEG | 3;
    tasks[current_task].registers.cs = USR_CODE_SEG | 3; // user code segment
 
-   tasks[current_task].registers.esp = tasks[current_task].stack_top; // ignored
    tasks[current_task].registers.eflags = regs->eflags;
    tasks[current_task].registers.useresp = tasks[current_task].stack_top; // stack_top
    tasks[current_task].registers.ss = USR_DATA_SEG | 3;
@@ -82,6 +82,9 @@ void end_task(int index, registers_t *regs) {
    if(tasks[index].in_routine)
       debug_printf("Task was in routine %s\n", tasks[index].routine_name);
 
+   if(tasks[index].in_syscall)
+      debug_printf("Task was in syscall %i\n", tasks[index].syscall_no);
+
    if(tasks[index].window >= 0)
       window_writestr("Task ended\n", 0, tasks[index].window);
 
@@ -94,6 +97,7 @@ void end_task(int index, registers_t *regs) {
    if(tasks[index].prog_size != 0)
       free(tasks[index].prog_start, tasks[index].prog_size);
    // TODO: free args
+   // TODO: free page dir at some point
 
    if(tasks[index].vmem_start != 0) {
       debug_printf("Unmapping 0x%h - 0x%h\n", tasks[index].vmem_start, tasks[index].vmem_end);
