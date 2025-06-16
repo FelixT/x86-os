@@ -50,9 +50,6 @@ void window_clearbuffer(gui_window_t *window, uint16_t colour) {
 }
 
 void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex) {
-   if(num < 0)
-      window_drawcharat('-', colour, x+=(getFont()->width+getFont()->padding), y, windowIndex);
-
    char out[20];
    inttostr(num, out);
    window_writestrat(out, colour, x, y, windowIndex);
@@ -108,9 +105,6 @@ void window_writestr(char *c, uint16_t colour, int windowIndex) {
 }
 
 void window_writenum(int num, uint16_t colour, int windowIndex) {
-   if(num < 0)
-      window_drawchar('-', colour, windowIndex);
-
    char out[20];
    inttostr(num, out);
    window_writestr(out, colour, windowIndex);

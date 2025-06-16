@@ -9,6 +9,7 @@
 #include "windowobj.h"
 #include "font.h"
 #include "windowmgr.h"
+#include "window_popup.h"
 
 void api_write_string(registers_t *regs) {
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
@@ -211,7 +212,9 @@ void api_fat_get_bpb(registers_t *regs) {
 void api_fat_read_root(registers_t *regs) {
    // out: ebx
    fat_dir_t *items = fat_read_root();
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)items, (uint32_t)items, 1, 1);
+   for(uint32_t i = (uint32_t)items/0x1000; i < ((uint32_t)items+sizeof(fat_dir_t)*fat_get_bpb().noRootEntries)/0x1000; i++) {
+      map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
+   }
 
    regs->ebx = (uint32_t)items;
 }
@@ -265,6 +268,9 @@ void api_clear_window(registers_t *regs) {
    (void)regs;
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
    window_clearbuffer(window, window->bgcolour);
+   window->text_index = 0;
+   window->text_x = getFont()->padding;
+   window->text_y = getFont()->padding;
 }
 
 void api_queue_event(registers_t *regs) {
@@ -294,17 +300,21 @@ void api_launch_task(registers_t *regs) {
 
    char *path = (char*)regs->ebx;
    int argc = (int)regs->ecx;
-   char **args = (char**)regs->edx;   
+   char **args = (char**)regs->edx;  
+   
+   task_state_t *parenttask = &gettasks()[get_current_task()];
 
    task_subroutine_end(regs);
 
    tasks_launch_elf(regs, path, argc, args);
+   task_state_t *task = &gettasks()[get_current_task()];
+   strcpy(task->working_dir, parenttask->working_dir); // inherit working dir
 
    // map args to new task
    if(argc > 0 && args != NULL) {
       for(int i = 0; i < argc; i++) {
          // map args to task
-         map(gettasks()[get_current_task()].page_dir, (uint32_t)*(args[i]), (uint32_t)*(args[i]), 1, 1);
+         map(task->page_dir, (uint32_t)*(args[i]), (uint32_t)*(args[i]), 1, 1);
       }
    }
    map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
@@ -336,4 +346,46 @@ void api_set_sys_font(registers_t *regs) {
    fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
    font_load(file);
 
+}
+
+void api_set_window_title(registers_t *regs) {
+   // IN: ebx = title
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   strcpy(window->title, (char*)regs->ebx);
+
+   // redraw window
+   gui_draw_window(get_current_task_window());
+}
+
+void api_set_working_dir(registers_t *regs) {
+   // IN: ebx = path
+   char *path = (char*)regs->ebx;
+   strcpy(gettasks()[get_current_task()].working_dir, path);
+}
+
+void api_get_working_dir(registers_t *regs) {
+   // IN: ebx = size 256 buf for working dif
+   strcpy((char*)regs->ebx, gettasks()[get_current_task()].working_dir);
+}
+
+void api_display_popup(registers_t *regs) {
+   // IN: ebx = title
+   // IN: ecx = message
+
+   // program loses control of dialog after its created
+
+   char *title = (char*)regs->ebx;
+   char *message = (char*)regs->ecx;
+   gui_window_t *parent = getWindow(get_current_task_window());
+   int popup = windowmgr_add();
+   window_popup_dialog(getWindow(popup), parent, message);
+   strcpy(getWindow(popup)->title, title);
+}
+
+void api_display_colourpicker(registers_t *regs) {
+   // IN: ebx = callback function (argument is uint16_t colour)
+
+   gui_window_t *parent = getWindow(get_current_task_window());
+   int popup = windowmgr_add();
+   window_popup_colourpicker(getWindow(popup), parent, (void*)regs->ebx);
 }

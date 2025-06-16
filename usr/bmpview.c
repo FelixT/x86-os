@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include "prog.h"
+#include "../lib/string.h"
 
 typedef struct {
    uint8_t filename[11];
@@ -28,6 +29,7 @@ windowobj_t *zoominbtn_wo;
 windowobj_t *zoomoutbtn_wo;
 int size = 1; 
 int scale = 1;
+int colour = 0;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
@@ -48,23 +50,13 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    end_subroutine();
 }
 
-void strcpy(char* dest, char* src) {
-   int i = 0;
-
-   while(src[i] != '\0') {
-      dest[i] = src[i];
-      i++;
-   }
-   dest[i] = '\0';
-}
-
-void set(int x, int y, int c) {
-   framebuffer[x+y*width] = c;
+void set(int x, int y) {
+   framebuffer[x+y*width] = colour;
    redraw_pixel(x, y);
    for(int i = 1; i < size; i++) {
-      framebuffer[x+i+y*width] = c;
-      framebuffer[x+(y+i)*width] = c;
-      framebuffer[x+i+(y+i)*width] = c;
+      framebuffer[x+i+y*width] = colour;
+      framebuffer[x+(y+i)*width] = colour;
+      framebuffer[x+i+(y+i)*width] = colour;
    }
 }
 
@@ -83,7 +75,7 @@ void drawLine(int x0, int y0, int x1, int y1) {
    int e2;
    
    while(1) {
-      set(x0, y0, 0);  // set the current pixel
+      set(x0, y0);  // set the current pixel
        
       // check if we've reached the end point
       if(x0 == x1 && y0 == y1) 
@@ -114,7 +106,7 @@ int prevY = -1;
 
 void click(int x, int y) {
 
-   set(x, y, 0);
+   set(x, y);
    if(prevX == -1) prevX = x;
    if(prevY == -1) prevY = y;
 
@@ -138,8 +130,9 @@ void release() {
    end_subroutine();
 }
 
-void clear_click(void *wo) {
+void clear_click(void *wo, void *regs) {
    (void)wo;
+   (void)regs;
    clear();
 
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
@@ -148,38 +141,67 @@ void clear_click(void *wo) {
 
 }
 
-void tool_click(void *wo) {
+void tool_click(void *wo, void *regs) {
    (void)wo;
+   (void)regs;
    size++;
 
    end_subroutine();
 
 }
 
-void zoomout_click(void *wo) {
+void zoomout_click(void *wo, void *regs) {
    (void)wo;
+   (void)regs;
    if(scale > 1) scale--;
    clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
    end_subroutine();
 }
 
-void zoomin_click(void *wo) {
+void zoomin_click(void *wo, void *regs) {
    (void)wo;
+   (void)regs;
    scale++;
    clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale);
    end_subroutine();
 }
 
+void colour_callback(uint16_t c) {
+   colour = c;
+   end_subroutine();
+}
+
+void colour_click(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
+   display_colourpicker(&colour_callback);
+   end_subroutine();
+}
+
 void _start(int argc, char **args) {
+   set_window_title("BMP Viewer");
 
    if(argc != 1) {
       write_str("Wrong number of arguments provided");
       exit(0);
    }
 
-   char *path = (char*)args[0];
+   char path[256];
+
+   if(*args[0] != '\0') {
+      if(args[0][0] != '/') {
+         // relative path
+         getwd(path);
+         if(!strcmp(path, "/"))
+            strcat(path, "/");
+         strcat(path, args[0]);
+      } else {
+         // absolute path
+         strcpy(path, args[0]);
+      }
+   }
 
    write_str(path);
    write_str("\n");
@@ -204,33 +226,42 @@ void _start(int argc, char **args) {
    height = get_height();
 
    // window objects
-   windowobj_t *clearbtn = register_windowobj(WO_BUTTON, 0, 0, 50, 14);
-   clearbtn->x = width - (clearbtn->width + 10);
-   clearbtn->y = height - (clearbtn->height + 10);
+   int margin = 5;
+   int x = margin;
+   int y = height - 30;
+   windowobj_t *clearbtn = register_windowobj(WO_BUTTON, x, y, 50, 14);
    clearbtn->text = (char*)malloc(1);
    strcpy(clearbtn->text, "Clear");
    clearbtn->click_func = &clear_click;
    clearbtn_wo = clearbtn;
 
-   windowobj_t *toolbtn = register_windowobj(WO_BUTTON, 0, 0, 50, 14);
-   toolbtn->x = width - (clearbtn->width + 65);
-   toolbtn->y = height - (clearbtn->height + 10);
+   x += clearbtn->width + margin;
+
+   windowobj_t *toolbtn = register_windowobj(WO_BUTTON, x, y, 50, 14);
    toolbtn->text = (char*)malloc(1);
    strcpy(toolbtn->text, "Size");
    toolbtn->click_func = &tool_click;
    toolbtn_wo = toolbtn;
 
-   windowobj_t *zoominbtn = register_windowobj(WO_BUTTON, 0, 0, 20, 14);
-   zoominbtn->x = width - (clearbtn->width + 120);
-   zoominbtn->y = height - (clearbtn->height + 10);
+   x += toolbtn->width + margin;
+
+   windowobj_t *colourbtn = register_windowobj(WO_BUTTON, x, y, 50, 14);
+   colourbtn->text = (char*)malloc(1);
+   strcpy(colourbtn->text, "Colour");
+   colourbtn->click_func = &colour_click;
+   colourbtn = toolbtn;
+
+   x += colourbtn->width + margin;
+
+   windowobj_t *zoominbtn = register_windowobj(WO_BUTTON, x, y, 20, 14);
    zoominbtn->text = (char*)malloc(1);
    strcpy(zoominbtn->text, "+");
    zoominbtn->click_func = &zoomin_click;
    zoominbtn_wo = zoominbtn;
 
-   windowobj_t *zoomoutbtn = register_windowobj(WO_BUTTON, 0, 0, 20, 14);
-   zoomoutbtn->x = width - (clearbtn->width + 140);
-   zoomoutbtn->y = height - (clearbtn->height + 10);
+   x += zoominbtn_wo->width + margin;
+
+   windowobj_t *zoomoutbtn = register_windowobj(WO_BUTTON, x, y, 20, 14);
    zoomoutbtn->text = (char*)malloc(1);
    strcpy(zoomoutbtn->text, "-");
    zoomoutbtn->click_func = &zoomout_click;

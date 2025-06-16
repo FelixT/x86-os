@@ -25,7 +25,7 @@ int gui_font_y = 5;
 void cboot_writestr(char *c) {
    if(videomode) {
       // gui
-      draw_string(&surface, c, 0, 5, gui_font_y);
+      draw_string(&surface, c, 0xFFFF, 5, gui_font_y);
       gui_font_y += getFont()->height + getFont()->padding_y;
    } else {
       // cli
@@ -94,10 +94,10 @@ void cboot() {
       surface.width = vbe_info->width;
       surface.height = vbe_info->height;
 
-      // set white
+      // set black
       for(int i = 0; i < vbe_info->width*vbe_info->height; i++) {
          uint16_t *fb = (uint16_t*)vbe_info->framebuffer;
-         fb[i] = 0xFFFF;
+         fb[i] = 0;
       }
 
       font_init();

@@ -181,19 +181,40 @@ void windowobj_redraw(void *window, void *windowobj) {
    window_draw_content_region((gui_window_t*)window, wo->x, wo->y, wo->width, wo->height);
 }
 
-void windowobj_unclick(void *regs, void *windowobj) {
+typedef struct {
+   windowobj_t *wo;
+   gui_window_t *window;
+} windowobj_click_event_t;
+
+extern int gui_mouse_x;
+extern int gui_mouse_y;
+extern bool gui_cursor_shown;
+void windowobj_unclick(void *regs, void *event) {
    (void)regs;
-   windowobj_t *wo = (windowobj_t*)windowobj;
-   wo->clicked = false;
-   windowobj_draw(wo);
+   windowobj_click_event_t *e = (windowobj_click_event_t*)event;
+   if(!e->window->active) return;
+   e->wo->clicked = false;
+   windowobj_draw(e->wo);
+   window_draw_content_region(e->window, e->wo->x, e->wo->y, e->wo->width, e->wo->height + getFont()->height);
+   if(gui_mouse_x >= e->window->x + e->wo->x && gui_mouse_x <= e->window->x + e->wo->x + e->wo->width
+   && gui_mouse_y >= e->window->y + e->wo->y && gui_mouse_y <= e->window->y + TITLEBAR_HEIGHT + e->wo->y + e->wo->height) {
+      gui_cursor_shown = false;
+      gui_cursor_save_bg();
+      gui_cursor_draw();
+   }
+   free((uint32_t)event, sizeof(windowobj_click_event_t));
 }
 
 void windowobj_click(void *regs, void *windowobj) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
    wo->clicked = true;
-   if(wo->type == WO_BUTTON)
-      events_add(1, &windowobj_unclick, (void*)wo, -1);
+   if(wo->type == WO_BUTTON) {
+      windowobj_click_event_t *event = (windowobj_click_event_t*)malloc(sizeof(windowobj_click_event_t));
+      event->wo = wo;
+      event->window = getSelectedWindow();
+      events_add(2, &windowobj_unclick, (void*)event, -1);
+   }
 
    if(wo->type == WO_MENU) {
       if(wo->menuselected >= 0) {
@@ -206,10 +227,11 @@ void windowobj_click(void *regs, void *windowobj) {
    if(wo->click_func != NULL) {
       if(get_task_from_window(getSelectedWindowIndex()) == -1) {
          // kernel
-         wo->click_func(windowobj);
+         // supply with regs so we can switch task
+         ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
       } else {
          gui_interrupt_switchtask(regs);
-         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 0);
+         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 2);
       }
    }
 }

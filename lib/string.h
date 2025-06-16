@@ -21,5 +21,6 @@ void vsprintf(char *buffer, char *format, va_list args);
 void sprintf(char *buffer, char *format, ...);
 char *strchr(const char *str, int c);
 char *strcat(char *dest, const char *src);
+uint32_t hextouint(char *str);
 
 #endif

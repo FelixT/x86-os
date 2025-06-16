@@ -272,6 +272,8 @@ void _start(int argc, char **args) {
    (void)args;
 
    // init
+   set_window_title("File Manager");
+
    cur_items = NULL;
    no_items = 0;
    offset = 0;

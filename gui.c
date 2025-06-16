@@ -89,9 +89,6 @@ void gui_writestrat(char *c, uint16_t colour, int x, int y) {
 }
 
 void gui_writenum(int num, uint16_t colour) {
-   if(num < 0)
-      gui_drawchar('-', colour);
-
    char out[20];
    inttostr(num, out);
    gui_writestr(out, colour);
@@ -147,11 +144,12 @@ void gui_init_meat(registers_t *regs, void *msg) {
 void gui_init(void) {
    videomode = 1;
 
-   gui_bg = COLOUR_CYAN;
+   //gui_bg = COLOUR_CYAN;
+   gui_bg = COLOUR_BLACK;
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
-   //surface.buffer-=128; // ??????? horrible alignment issue
+   surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);
@@ -159,7 +157,7 @@ void gui_init(void) {
    // reserve framebuffer memory so malloc can't assign it
    memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
    
-   gui_clear(gui_bg);
+   //gui_clear(gui_bg);
    font_init();
    windowmgr_init();
    mouse_enable();
@@ -188,8 +186,10 @@ void gui_redrawall() {
 
 void mouse_enable();
 
+extern bool switching;
 bool gui_interrupt_switchtask(void *regs) {
    // switch to task of selected window to handle interrupt
+   if(!switching) return false; // in case we end up here before tasks are enabled
 
    int newtask = get_task_from_window(getSelectedWindowIndex());
    if(newtask == -1) return false;
@@ -197,7 +197,7 @@ bool gui_interrupt_switchtask(void *regs) {
    if(newtask == get_current_task()) return true;
 
    if(!switch_to_task(newtask, regs)) {
-      debug_printf("Task %u for window %u is stopped", newtask, getSelectedWindowIndex());
+      debug_printf("Task %u for window %u is stopped\n", newtask, getSelectedWindowIndex());
       return false;
    }
 
@@ -388,5 +388,5 @@ void gui_showtimer(int number) {
 }
 
 int gui_gettextwidth(int textlength) {
-   return textlength*(getFont()->width+getFont()->padding);
+   return textlength*(getFont()->width+getFont()->padding) - getFont()->padding;
 }

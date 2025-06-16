@@ -52,7 +52,7 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
    //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
    window->window_objects[window->window_object_count++] = wo_okbtn;
 
-   // cancel button
+   /*// cancel button
    windowobj_t *wo_cancelbtn = malloc(sizeof(windowobj_t));
    windowobj_init(wo_cancelbtn, &window->surface);
    wo_cancelbtn->type = WO_BUTTON;
@@ -63,11 +63,12 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
    wo_cancelbtn->text = malloc(strlen("Cancel") + 1);
    strcpy(wo_cancelbtn->text, "Cancel");
    //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
-   window->window_objects[window->window_object_count++] = wo_cancelbtn;
+   window->window_objects[window->window_object_count++] = wo_cancelbtn;*/
 
 }
 
-void window_popup_filepicker_click(void *windowobj) {
+void window_popup_filepicker_click(void *windowobj, void *regs) {
+   (void)regs;
    windowobj_t *wo = (windowobj_t*)windowobj;
    window_popup_filepicker_t *fp = (window_popup_filepicker_t*)getSelectedWindow()->state;
    if(strcmp(wo->text, ".")) {
@@ -137,7 +138,7 @@ void window_popup_filepicker_click(void *windowobj) {
       wo_file->height = 16;
       wo_file->text = malloc(13);
       // filename
-      strcpy_fixed(wo_file->text, items[i].filename, 8);
+      strcpy_fixed(wo_file->text, (char*)items[i].filename, 8);
       wo_file->text[8] = '\0';
       if(strchr(wo_file->text, ' '))
          strchr(wo_file->text, ' ')[0] = '\0';
@@ -147,7 +148,8 @@ void window_popup_filepicker_click(void *windowobj) {
          strcpy_fixed(wo_file->text+strlen(wo_file->text), (char*)&(items[i].filename[8]), 3);
          if(strchr(wo_file->text, ' '))
             strchr(wo_file->text, ' ')[0] = '\0';
-      }      wo_file->click_func = &window_popup_filepicker_click;
+      }      
+      wo_file->click_func = &window_popup_filepicker_click;
       wo_file->texthalign = false;
       window->window_objects[window->window_object_count++] = wo_file;
 
@@ -201,7 +203,7 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
       wo_file->text = malloc(13);
       wo_file->text[12] = '\0';
       // filename
-      strcpy_fixed(wo_file->text, items[i].filename, 8);
+      strcpy_fixed(wo_file->text, (char*)items[i].filename, 8);
       wo_file->text[8] = '\0';
       if(strchr(wo_file->text, ' '))
          strchr(wo_file->text, ' ')[0] = '\0';
@@ -222,4 +224,147 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
    free((uint32_t)items, sizeof(fat_dir_t)*fat_get_bpb().noRootEntries);
 
    return fp;
+}
+
+void window_popup_colourpicker_click(int x, int y) {
+   if(x >= 5 && x < 261 && y >= 30 && y < 306) {
+      // clicked in colour picker area
+      x -= 5; // offset
+      y -= 30; // offset
+      if(x < 0 || x >= 256 || y < 0 || y >= 256) return; // out of bounds
+
+      gui_window_t *window = getSelectedWindow();
+
+      // calculate colour
+      uint16_t colour = window->framebuffer[(y+50)*window->width + (x+5)];
+      char hex[7];
+      sprintf(hex, "%h", colour);
+      windowobj_t *wo_col = window->window_objects[0];
+      strcpy(wo_col->text, hex);
+
+      // draw colour square
+      for(int x = 0; x < 50; x++) {
+         for(int y = 0; y < 50; y++) {
+            window->framebuffer[(y + 30) * window->width + (x + 265)] = colour;
+         }
+      }
+   }
+}
+
+void window_popup_colourpicker_return(void *windowobj, void *regs) {
+   (void)windowobj;
+   //windowobj_t *wo = (windowobj_t*)windowobj;
+   gui_window_t *window = getSelectedWindow();
+   window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
+   uint16_t colour = (uint16_t)hextouint(window->window_objects[0]->text);
+
+   // call callback function
+   if(cp->callback_func != NULL) {
+      setSelectedWindowIndex(get_window_index_from_pointer(cp->parent));
+      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+         // call as kernel
+         cp->callback_func(colour);
+      } else {
+         if(!gui_interrupt_switchtask(regs)) return;
+         // calling function as task
+         uint32_t *args = malloc(sizeof(uint32_t) * 1);
+         args[0] = (uint32_t)colour;
+      
+         debug_printf("Calling colourpicker callback %h with colour %h\n", cp->callback_func, colour);
+
+         task_call_subroutine(regs, "colourpickerreturn", (uint32_t)cp->callback_func, args, 1);
+      
+         return;
+      }
+   }
+
+   // close popup
+   //window_close(NULL, get_window_index_from_pointer(cp->parent));
+}
+
+// init
+window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback) {
+   window_resize(NULL, window, 320, 340);
+   window_popup_init(window, parent);
+   strcpy(window->title, "Colour Picker");
+
+   window->click_func = &window_popup_colourpicker_click;
+   window->drag_func = &window_popup_colourpicker_click;
+
+   window->resizable = false;
+   window->state = malloc(sizeof(window_popup_colourpicker_t));
+   window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
+   cp->callback_func = callback;
+   cp->parent = parent;
+
+   int y = 5;
+   windowobj_t *wo_col = malloc(sizeof(windowobj_t));
+   windowobj_init(wo_col, &window->surface);
+   wo_col->type = WO_TEXT;
+   wo_col->x = 5;
+   wo_col->y = y;
+   wo_col->width = 190;
+   wo_col->height = 16;
+   wo_col->text = malloc(10);
+   strcpy(wo_col->text, "FFFFFF");
+   wo_col->texthalign = false;
+   wo_col->disabled = true;
+   window->window_objects[window->window_object_count++] = wo_col;
+
+   // ok button
+   windowobj_t *wo_okbtn = malloc(sizeof(windowobj_t));
+   windowobj_init(wo_okbtn, &window->surface);
+   wo_okbtn->type = WO_BUTTON;
+   wo_okbtn->x = 205;
+   wo_okbtn->y = y;
+   wo_okbtn->width = 110;
+   wo_okbtn->height = 16;
+   wo_okbtn->text = malloc(strlen("OK") + 1);
+   strcpy(wo_okbtn->text, "OK");
+   wo_okbtn->click_func = &window_popup_colourpicker_return;
+   window->window_objects[window->window_object_count++] = wo_okbtn;
+
+   // draw colour square border
+   draw_unfilledrect(&window->surface, rgb16(0, 0, 0), 264, 29, 52, 52); // border
+   // draw the colour picker at (5, 50)
+   draw_unfilledrect(&window->surface, rgb16(0, 0, 0), 4, 29, 258, 258); // border
+   int xoffset = 5;
+   int yoffset = 30;
+   for(int x = 0; x < 256; x++) {
+      for(int y = 0; y < 256; y++) {
+         uint16_t colour = 0;
+         
+         if(x < 128 && y < 128) {
+            // top left - red gradient
+            uint16_t red = (x * 31) / 127;      // scale to 5-bit (0-31)
+            uint16_t green = (y * 63) / 127;    // scale to 6-bit (0-63)
+            colour = (red << 11) | (green << 5) | 0;  // blue = 0
+               
+         } else if(x >= 128 && y < 128) {
+            // top right - green gradient
+            uint16_t green = ((x - 128) * 63) / 127;  // scale (x-128) to 6-bit
+            uint16_t blue = (y * 31) / 127;           // scale y to 5-bit
+            colour = (0 << 11) | (green << 5) | blue; // red = 0
+               
+         } else if(x < 128 && y >= 128) {
+            // bottom left - blue gradient
+            uint16_t red = (x * 31) / 127;            // scale x to 5-bit
+            uint16_t blue = ((y - 128) * 31) / 127;   // scale (y-128) to 5-bit
+            colour = (red << 11) | (0 << 5) | blue;   // green = 0
+               
+         } else {
+            // bottom right - white to black gradient
+            uint16_t intensity = ((x - 128) + (y - 128)) / 2;  // 0-127
+            uint16_t red = (intensity * 31) / 127;
+            uint16_t green = (intensity * 63) / 127;
+            uint16_t blue = (intensity * 31) / 127;
+            colour = (red << 11) | (green << 5) | blue;
+         }
+         
+         window->framebuffer[(y+yoffset)*window->width + x+xoffset] = colour;
+      }
+   }
+
+   return cp;
+
 }

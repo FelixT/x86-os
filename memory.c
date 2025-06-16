@@ -144,9 +144,9 @@ void memset(void *dest, uint8_t ch, int count) {
    value |= value << 16;  // Replicate the byte across all 4 bytes
    
    // Handle unaligned prefix bytes
-   unsigned int pre = (4 - ((uintptr_t)dest & 3)) & 3;
+   int pre = (4 - ((uintptr_t)dest & 3)) & 3;
    if(pre > 0) {
-      if (pre > count) pre = count;
+      if(pre > count) pre = count;
       asm volatile (
          "rep stosb"
          :

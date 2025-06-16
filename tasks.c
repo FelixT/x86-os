@@ -31,6 +31,8 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
    tasks[index].registers.eip = entry;
+
+   strcpy(tasks[index].working_dir, "/sys");
 }
 
 void launch_task(int index, registers_t *regs, bool focus) {
@@ -203,7 +205,7 @@ bool switch_to_task(int index, registers_t *regs) {
 
    if(!tasks[index].enabled) {
       window_writestr("Task switch failed: task ", 0, 0);
-      window_writeuint(index, 0, 0);
+      window_writenum(index, 0, 0);
       window_writestr(" is unavaliable\n", 0, 0);
       return false;
    }

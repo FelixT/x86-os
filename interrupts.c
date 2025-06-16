@@ -250,6 +250,21 @@ void software_handler(registers_t *regs) {
       case 41:
          api_fat_new_file(regs);
          break;
+      case 42:
+         api_set_window_title(regs);
+         break;
+      case 43:
+         api_set_working_dir(regs);
+         break;
+      case 44:
+         api_get_working_dir(regs);
+         break;
+      case 45:
+         api_display_popup(regs);
+         break;
+      case 46:
+         api_display_colourpicker(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

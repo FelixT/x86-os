@@ -2,6 +2,7 @@
 #include <stdbool.h>
 
 #include "prog.h"
+#include "../lib/string.h"
 
 typedef struct {
    uint8_t filename[11];
@@ -17,46 +18,6 @@ typedef struct {
    uint16_t firstClusterNo;
    uint32_t fileSize; // bytes
 } __attribute__((packed)) fat_dir_t;
-
-void strcpy(char* dest, char* src) {
-   int i = 0;
-
-   while(src[i] != '\0') {
-      dest[i] = src[i];
-      i++;
-   }
-   dest[i] = '\0';
-}
-
-int strlen(char* str) {
-   int len = 0;
-   while(str[len] != '\0')
-      len++;
-   return len;
-}
-
-void uinttostr(uint32_t num, char* out) {
-   if(num == 0) {
-      out[0] = '0';
-      out[1] = '\0';
-      return;
-   }
-
-   // get number length in digits
-   uint32_t tmp = num;
-   int length = 0;
-   while(tmp > 0) {
-      length++;
-      tmp/=10;
-   }
-   
-   out[length] = '\0';
-
-   for(int i = 0; i < length; i++) {
-      out[length-i-1] = '0' + num%10;
-      num/=10;
-   }
-}
 
 volatile windowobj_t *wo_path_o;
 volatile windowobj_t *wo_text_o;
@@ -111,7 +72,8 @@ void save_func() {
 }
 
 void _start(int argc, char **args) {
-   write_str("Text\n");
+   set_window_title("Text Edit");
+   
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)resize);
    clear();
@@ -145,7 +107,18 @@ void _start(int argc, char **args) {
    wo_text_o = wo_text;
 
    if(argc == 1 && *args[0] != '\0') {
-      load_file(args[0]);
+      if(args[0][0] != '/') {
+         // relative path
+         char path[256];
+         getwd(path);
+         if(!strcmp(path, "/"))
+            strcat(path, "/");
+         strcat(path, args[0]);
+         load_file(path);
+      } else {
+         // absolute path
+         load_file(args[0]);
+      }
    }
 
    redraw();

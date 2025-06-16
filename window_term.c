@@ -184,7 +184,7 @@ void window_term_clear(void *window) {
 
 void term_cmd_help() {
    window_term_printf("\n");
-   window_term_printf("CLEAR, MOUSE, TASKS\n");
+   window_term_printf("CLEAR, MOUSE, TASKS, LAUNCH path\n");
    window_term_printf("PROG1, PROG2\n");
    window_term_printf("TEST, DESKTOP\n");
    window_term_printf("MEM <x>, DMPMEM x <y>\n");
@@ -217,12 +217,12 @@ void term_cmd_tasks() {
    for(int i = 0; i < TOTAL_TASKS; i++) {
       window_term_printf("\n%i: ", i);
       if(tasks[i].enabled) {
-         window_term_printf("Enabled <window %i>", tasks[i].window);
+         window_term_printf("Enabled <w%i %s>", tasks[i].window, gui_get_windows()[tasks[i].window].title);
          if(tasks[i].in_routine)
          window_term_printf(" <routine %s>", tasks[i].routine_name);
          if(tasks[i].privileged)
             window_term_printf(" privileged");
-         window_term_printf(" eip %h\n", tasks[i].registers.eip);
+         window_term_printf(" eip 0x%h", tasks[i].registers.eip);
       } else {
          window_term_printf("Disabled");
       }

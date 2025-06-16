@@ -35,11 +35,12 @@ typedef struct task_state_t {
    uint16_t no_allocated;
    bool in_syscall;
    uint16_t syscall_no;
+   char working_dir[256]; // current working directory
 } task_state_t;
 
 #define TOTAL_STACK_SIZE 0x0010000
 #define TASK_STACK_SIZE 0x0001000
-#define TOTAL_TASKS 5
+#define TOTAL_TASKS 8
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged);
 void launch_task(int index, registers_t *regs, bool focus);

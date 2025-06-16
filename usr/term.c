@@ -3,6 +3,8 @@
 #include "../lib/string.h"
 #include "prog_fat.h"
 
+char path[256] = "/";
+
 void printf(char *format, ...) {
    char *buffer = (char*)malloc(512);
    va_list args;
@@ -25,13 +27,14 @@ void term_cmd_help() {
    printf("FILES, TEXT <path>\n");
    printf("FAT <path>, FATNEW path\n");
    printf("FATDIR cluster, FATFILE cluster\n");
+   printf("LS, CD path, TOUCH file, PWD\n");
    printf("DMPMEM x <y>\n");
    printf("FONT path\n");
 }
 
 void term_cmd_clear() {
    clear();
-   printf("Terminal emulator\n");
+   printf("User Terminal at %s\n", path);
 }
 
 void term_cmd_files() {
@@ -61,6 +64,25 @@ uint32_t argtouint(char *str) {
    return num;
 }
 
+void argtofullpath(char *buf, char *arg) {
+   if(arg[0] == '/') {
+      strcpy(buf, arg);
+   } else {
+      buf[0] = '\0';
+      strcat(buf, path);
+      if(!strcmp(buf, "/"))
+         strcat(buf, "/");
+      strcat(buf, arg);
+   }
+}
+
+void tolower(char *c) {
+   for(int i = 0; i < strlen(c); i++) {
+      if(c[i] >= 'A' && c[i] <= 'Z')
+         c[i] += ('a'-'A');
+   }
+}
+
 void printdir(fat_dir_t *items, int size) {
    for(int i = 0; i < size; i++) {
       // print dir entry
@@ -72,9 +94,11 @@ void printdir(fat_dir_t *items, int size) {
       char extension[4];
       strcpy_fixed((char*)fileName, (char*)items[i].filename, 8);
       strcpy_fixed((char*)extension, (char*)items[i].filename+8, 3);
+      tolower((char*)fileName);
+      tolower((char*)extension);
       strsplit((char*)fileName, NULL, (char*)fileName, ' '); // null terminate at first space
       strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
-      printf("%s%s%s:",fileName,(extension[0] != '\0') ? "." : "", extension);
+      printf("%s%s%s ", fileName, (extension[0] != '\0') ? "." : "", extension);
       if((items[i].attributes & 0x10) == 0x10) // directory
          printf("DIR");
       else
@@ -126,13 +150,9 @@ void term_cmd_font(char *arg) {
 }
 
 void term_cmd_viewbmp(char *arg) {
-   int argc = 1;
-   char **args = NULL;
-   args = (char**)malloc(sizeof(char*) * 1);
-   char *path = (char*)malloc(strlen(arg));
-   strcpy(path, arg);
-   args[0] = path;
-   launch_task("/sys/bmpview.elf", argc, args);
+   char **args = (char**)malloc(sizeof(char*) * 1);
+   args[0] = arg;
+   launch_task("/sys/bmpview.elf", 1, args);
 }
 
 void term_cmd_fatfile(char *arg) {
@@ -191,12 +211,14 @@ void term_cmd_fatnew(char *arg) {
 }
 
 void term_cmd_launch(char *arg) {
-   launch_task(arg, 0, NULL);
+   char fullpath[256];
+   argtofullpath(fullpath, arg);
+   launch_task(fullpath, 0, NULL);
 }
 
 void term_cmd_text(char *arg) {
-      char **args = (char**)malloc(sizeof(char*) * 1);
-      args[0] = arg;
+   char **args = (char**)malloc(sizeof(char*) * 1);
+   args[0] = arg;
    launch_task("/sys/text.elf", 1, args);
 }
 
@@ -211,6 +233,92 @@ void term_cmd_rgbhex(char *arg) {
    int b = stoi(third);
    int n = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
    printf("0x%h\n", n);
+}
+
+void term_cmd_ls(char *arg) {
+   char *p = arg;
+   if(strcmp(p, ""))
+      p = path;
+
+   fat_dir_t *items = NULL;
+   int size = 0;
+   if(strcmp(p, "/") || strcmp(p, "")) {
+      // root
+      items = (fat_dir_t*)fat_read_root();
+      fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
+      size = fat_bpb->noRootEntries;
+      free((uint32_t)fat_bpb, sizeof(fat_bpb_t));
+      printdir(items, size);
+      free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
+   } else {
+
+      fat_dir_t *entry = (fat_dir_t*)fat_parse_path(p, true);
+      if(entry == NULL)
+         return;
+      if(entry->attributes & 0x10) {
+         int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
+         fat_dir_t *items = (fat_dir_t*)fat_read_dir(entry->firstClusterNo);
+         printdir(items, size);
+         fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
+         free((uint32_t)items, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
+         free((uint32_t)fat_bpb, sizeof(fat_bpb_t));
+      }
+      free((uint32_t)entry, sizeof(fat_dir_t));
+
+   }
+}
+
+void term_cmd_cd(char *arg) {
+   if(strcmp(arg, "..") || strcmp(arg, "../")) {
+      // go up one directory
+      int len = strlen(path);
+      for(int i = len-1; i >= 0; i--) {
+         if(path[i] == '/') {
+            path[i] = '\0';
+            break;
+         }
+      }
+   } else if(strcmp(arg, ".") || arg[0] == '\0' || strcmp(arg, "./")) {
+      // do nothing
+   } else if(arg[0] == '/') {
+      // absolute path
+      strcpy(path, arg);
+   } else{
+      if(!strcmp(path, "/"))
+         strcat(path, "/");
+      strcat(path, arg);
+   }
+   if(strcmp(path, "")) {
+      strcat(path, "/");
+   }
+   chdir(path);
+   printf("Changed directory to %s\n", path);
+}
+
+void term_cmd_touch(char *arg) {
+   char path[256];
+
+   if(arg[0] == '/') {
+      // absolute path
+      strcpy(path, arg);
+   } else {
+      // relative path
+      strcpy(path, "/");
+      getwd(path);
+      if(!strcmp(path, "/"))
+         strcat(path, "/");
+      strcat(path, arg);
+   }
+
+   fat_new_file(path);
+}
+
+void term_cmd_pwd() {
+   char *wd = (char*)malloc(256);
+   getwd(wd);
+   printf("%s\n", wd);
+   free((uint32_t)wd, 256);
+   return;
 }
 
 void checkcmd(char *buffer) {
@@ -250,6 +358,14 @@ void checkcmd(char *buffer) {
       term_cmd_text(arg);
    else if(strcmp(command, "RGBHEX"))
       term_cmd_rgbhex(arg);
+   else if(strcmp(command, "LS"))
+      term_cmd_ls(arg);
+   else if(strcmp(command, "CD"))
+      term_cmd_cd(arg);
+   else if(strcmp(command, "TOUCH"))
+      term_cmd_touch(arg);
+   else if(strcmp(command, "PWD"))
+      term_cmd_pwd();
    else
       term_cmd_default(command);
 
@@ -259,10 +375,14 @@ void checkcmd(char *buffer) {
 }
 
 void _start() {
-      // clear the screen
-      //clear();
+      set_window_title("User Terminal");
 
-      write_str("UsrTerm\n");
+      char *wd = (char*)malloc(256);
+      getwd(wd);
+      strcpy(path, wd);
+      free((uint32_t)wd, 256);
+
+      printf("User Terminal at %s\n", path);
 
       override_term_checkcmd((uint32_t)(&checkcmd));
 

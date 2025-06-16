@@ -205,6 +205,8 @@ void inttostr(int num, char* out) {
       length++;
       tmp/=10;
    }
+   if(negative)
+      length++; // for the negative sign
    
    out[length] = '\0';
 
@@ -212,6 +214,9 @@ void inttostr(int num, char* out) {
       out[length-i-1] = '0' + num%10;
       num/=10;
    }
+
+   if(negative)
+      out[0] = '-';
 }
 
 char *strcat(char *dest, const char *src) {
@@ -287,4 +292,19 @@ char *strchr(const char *str, int c) {
       str++;
    }
    return NULL;
+}
+
+uint32_t hextouint(char *str) {
+   uint32_t u = 0;
+
+   while(*str != '\0') {
+      if(*str >= '0' && *str <= '9')
+         u = (u << 4) + (*str - '0');
+      else if(*str >= 'A' && *str <= 'F')
+         u = (u << 4) + (*str - 'A' + 10);
+      else if(*str >= 'a' && *str <= 'f')
+         u = (u << 4) + (*str - 'a' + 10);
+      str++;
+   }
+   return u;
 }

@@ -17,10 +17,14 @@ void window_settings_draw(void *w) {
    int index = get_window_index_from_pointer(window);
    window_settings_t *settings = window->state;
    if(!settings) return;
-   if(settings->selected == (gui_window_t*)w)
+   if(settings->selected == (gui_window_t*)w) {
+      strcpy(window->title, "System Settings");
       window_writestrat("System settings:", window->txtcolour, 10, 10, index);
-   else if(settings->selected) {
-      window_writestrat("Window settings:", window->txtcolour, 10, 10, index);
+   } else if(settings->selected) {
+      strcpy(window->title, "Window Settings");
+      char title[256];
+      sprintf(title, "Window settings for %s", settings->selected->title);
+      window_writestrat(title, window->txtcolour, 10, 10, index);
    }
    window_writestrat("Desktop Background Colour", window->txtcolour, 10, 40, index);
    window_writestrat("Desktop Background Image", window->txtcolour, 10, 70, index);
@@ -38,26 +42,6 @@ void window_settings_redraw(void *w) {
 
 extern uint16_t gui_bg;
 
-uint32_t hextouint(char *str) {
-   uint32_t u = 0;
-
-   while(*str != '\0') {
-      if(*str >= '0' && *str <= '9')
-         u = (u << 4) + (*str - '0');
-      else if(*str >= 'A' && *str <= 'F')
-         u = (u << 4) + (*str - 'A' + 10);
-      else if(*str >= 'a' && *str <= 'f')
-         u = (u << 4) + (*str - 'a' + 10);
-      str++;
-   }
-   return u;
-}
-
-void window_settings_set_bgcolour(void *w) {
-   gui_bg = (uint16_t)hextouint(((windowobj_t*)w)->text);
-   gui_redrawall();
-}
-
 void window_settings_update(window_settings_t *settings) {
    if(settings->selected == settings->window)
       window_settings_draw(settings->selected);
@@ -65,18 +49,78 @@ void window_settings_update(window_settings_t *settings) {
    window_draw(settings->selected);
 }
 
+// callback from text windowobj
+void window_settings_set_bgcolour(void *w) {
+   gui_bg = (uint16_t)hextouint(((windowobj_t*)w)->text);
+   gui_redrawall();
+}
+
+// callback from colourpicker
+void window_settings_set_bgcolour_callback(uint16_t colour) {
+   window_settings_t *settings = (window_settings_t*)getSelectedWindow()->state;
+   gui_bg = colour;
+   uinttohexstr(colour, settings->d_bgcolour_wo->text);
+   gui_redrawall();
+}
+
+extern uint16_t default_window_bgcolour;
+extern uint16_t default_window_txtcolour;
+
+// callback from text windowobj
 void window_settings_set_window_bgcolour(void *w) {
    window_settings_t *settings = (window_settings_t*)getSelectedWindow()->state;
    gui_window_t *window = settings->selected;
-   window->bgcolour = (uint16_t)hextouint(((windowobj_t*)w)->text);
+   uint16_t colour = (uint16_t)hextouint(((windowobj_t*)w)->text);
+   window->bgcolour = colour;
    window_clearbuffer(settings->selected, settings->selected->bgcolour);
+
+   if(settings->selected == settings->window) {
+      // update system settings
+      default_window_bgcolour = colour;
+   }
    window_settings_update(settings);
 }
 
+// callback from colourpicker
+void window_settings_set_window_bgcolour_callback(uint16_t colour) {
+   window_settings_t *settings = (window_settings_t*)getSelectedWindow()->state;
+   gui_window_t *window = settings->selected;
+   window->bgcolour = colour;
+   window_clearbuffer(settings->selected, settings->selected->bgcolour);
+   uinttohexstr(colour, settings->w_bgcolour_wo->text);
+
+   if(settings->selected == settings->window) {
+      // update system settings
+      default_window_bgcolour = colour;
+   }
+   window_settings_update(settings);
+}
+
+// callback from text windowobj
 void window_settings_set_window_txtcolour(void *w) {
    window_settings_t *settings = (window_settings_t*)getSelectedWindow()->state;
    gui_window_t *window = settings->selected;
-   window->txtcolour = (uint16_t)hextouint(((windowobj_t*)w)->text);
+   uint16_t colour = (uint16_t)hextouint(((windowobj_t*)w)->text);
+   window->txtcolour = colour;
+
+   if(settings->selected == settings->window) {
+      // update system settings
+      default_window_txtcolour = colour;
+   }
+   window_settings_update(settings);
+}
+
+// callback from colourpicker
+void window_settings_set_window_txtcolour_callback(uint16_t colour) {
+   window_settings_t *settings = (window_settings_t*)getSelectedWindow()->state;
+   gui_window_t *window = settings->selected;
+   window->txtcolour = colour;
+   uinttohexstr(colour, settings->w_txtcolour_wo->text);
+
+   if(settings->selected == settings->window) {
+      // update system settings
+      default_window_txtcolour = colour;
+   }
    window_settings_update(settings);
 }
 
@@ -100,10 +144,36 @@ void window_settings_bgimg_callback(char *path) {
    window_settings_set_bgimg(wo);
 }
 
-void window_settings_browesebg(void *w) {
+void window_settings_browesebg(void *w, void *regs) {
+   (void)w;
+   (void)regs;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_popup_filepicker(getWindow(popup), parent, &window_settings_bgimg_callback);
+}
+
+void window_settings_pickdbgcolour(void *w, void *regs) {
+   (void)w;
+   (void)regs;
+   gui_window_t *parent = getSelectedWindow();
+   int popup = windowmgr_add();
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_bgcolour_callback);
+}
+
+void window_settings_pickbgcolour(void *w, void *regs) {
+   (void)regs;
+   (void)w;
+   gui_window_t *parent = getSelectedWindow();
+   int popup = windowmgr_add();
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_bgcolour_callback);
+}
+
+void window_settings_picktxtcolour(void *w, void *regs) {
+   (void)regs;
+   (void)w;
+   gui_window_t *parent = getSelectedWindow();
+   int popup = windowmgr_add();
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_txtcolour_callback);
 }
 
 window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *selected) {
@@ -140,6 +210,19 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    uinttohexstr(gui_bg, d_bgcolour_wo->text);
    d_bgcolour_wo->textpos = strlen(d_bgcolour_wo->text);
    window->window_objects[window->window_object_count++] = d_bgcolour_wo;
+
+   // pick button
+   windowobj_t *d_bgpickbtn = (windowobj_t*)malloc(sizeof(windowobj_t));
+   windowobj_init(d_bgpickbtn, &window->surface);
+   d_bgpickbtn->type = WO_BUTTON;
+   d_bgpickbtn->x = 355;
+   d_bgpickbtn->y = y;
+   d_bgpickbtn->width = 50;
+   d_bgpickbtn->height = 20;
+   d_bgpickbtn->text = malloc(strlen("Pick")+1);
+   strcpy(d_bgpickbtn->text, "Pick");
+   d_bgpickbtn->click_func = &window_settings_pickdbgcolour;
+   window->window_objects[window->window_object_count++] = d_bgpickbtn;
 
    y += 30;
    windowobj_init(d_bgimg_wo, &window->surface);
@@ -181,6 +264,19 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    w_bgcolour_wo->textpos = strlen(w_bgcolour_wo->text);
    window->window_objects[window->window_object_count++] = w_bgcolour_wo;
 
+   // pick button
+   windowobj_t *bgpickbtn = (windowobj_t*)malloc(sizeof(windowobj_t));
+   windowobj_init(bgpickbtn, &window->surface);
+   bgpickbtn->type = WO_BUTTON;
+   bgpickbtn->x = 355;
+   bgpickbtn->y = y;
+   bgpickbtn->width = 50;
+   bgpickbtn->height = 20;
+   bgpickbtn->text = malloc(strlen("Pick")+1);
+   strcpy(bgpickbtn->text, "Pick");
+   bgpickbtn->click_func = &window_settings_pickbgcolour;
+   window->window_objects[window->window_object_count++] = bgpickbtn;
+
    y += 30;
    windowobj_init(w_txtcolour_wo, &window->surface);
    w_txtcolour_wo->type = WO_TEXT;
@@ -193,6 +289,19 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    uinttohexstr(selected->txtcolour, w_txtcolour_wo->text);
    w_txtcolour_wo->textpos = strlen(w_txtcolour_wo->text);
    window->window_objects[window->window_object_count++] = w_txtcolour_wo;
+
+   // pick button
+   windowobj_t *txtpickbtn = (windowobj_t*)malloc(sizeof(windowobj_t));
+   windowobj_init(txtpickbtn, &window->surface);
+   txtpickbtn->type = WO_BUTTON;
+   txtpickbtn->x = 355;
+   txtpickbtn->y = y;
+   txtpickbtn->width = 50;
+   txtpickbtn->height = 20;
+   txtpickbtn->text = malloc(strlen("Pick")+1);
+   strcpy(txtpickbtn->text, "Pick");
+   txtpickbtn->click_func = &window_settings_picktxtcolour;
+   window->window_objects[window->window_object_count++] = txtpickbtn;
 
    windowobj_redraw(window, d_bgcolour_wo);
    windowobj_redraw(window, d_bgimg_wo);

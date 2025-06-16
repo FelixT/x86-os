@@ -26,6 +26,7 @@ typedef struct gui_window_t {
    bool closed;
 	bool dragged;
    bool resized;
+   bool resizable;
    int toolbar_pos; // index in toolbar
    uint16_t bgcolour; // default
    uint16_t txtcolour; // default

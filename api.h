@@ -43,5 +43,10 @@ void api_queue_event(registers_t *regs);
 void api_register_windowobj(registers_t *regs);
 void api_launch_task(registers_t *regs);
 void api_set_sys_font(registers_t *regs);
+void api_set_window_title(registers_t *regs);
+void api_set_working_dir(registers_t *regs);
+void api_get_working_dir(registers_t *regs);
+void api_display_popup(registers_t *regs);
+void api_display_colourpicker(registers_t *regs);
 
 #endif

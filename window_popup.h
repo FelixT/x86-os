@@ -15,7 +15,13 @@ typedef struct window_popup_filepicker_t {
    gui_window_t *parent;
 } window_popup_filepicker_t;
 
+typedef struct window_popup_colourpicker_t {
+   void (*callback_func)(uint16_t colour);
+   gui_window_t *parent;
+} window_popup_colourpicker_t;
+
 void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text);
 window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_window_t *parent, void *callback);
+window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback);
 
 #endif

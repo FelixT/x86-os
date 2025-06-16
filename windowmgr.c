@@ -17,6 +17,9 @@ gui_window_t *selectedWindow = NULL;
 
 gui_window_t *gui_windows;
 
+uint16_t default_window_bgcolour = 0xFFFF;
+uint16_t default_window_txtcolour = 0;
+
 extern surface_t surface; // screen
 
 bool desktop_enabled = false;
@@ -132,9 +135,12 @@ bool window_init(gui_window_t *window) {
    window->minimised = false;
    window->closed = false;
    window->dragged = false;
-   window->bgcolour = COLOUR_WHITE;
-   window->txtcolour = COLOUR_BLACK;
+   window->bgcolour = default_window_bgcolour;
+   window->txtcolour = default_window_txtcolour;
    window->state = NULL;
+   window->resizable = true;
+   window->resized = false;
+   window->toolbar_pos = -1;
 
    window_resetfuncs(window);
    // no window objects
@@ -160,7 +166,7 @@ bool window_init(gui_window_t *window) {
    surface.buffer = (uint32_t)window->framebuffer;
    window->surface = surface;
 
-   window_clearbuffer(window, COLOUR_WHITE);
+   window_clearbuffer(window, default_window_bgcolour);
 
    return true;
 }
@@ -219,11 +225,11 @@ void window_draw_outline(gui_window_t *window) {
    draw_rect(&surface, COLOUR_TITLEBAR, window->x, window->y, window->width, TITLEBAR_HEIGHT);
    // shading
    for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
-      draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-24);
+      draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-26);
    // titlebar text, centred
    int titleWidth = gui_gettextwidth(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
-   draw_rect(&surface, COLOUR_TITLEBAR, titleX-4, window->y+3, titleWidth+8, getFont()->height+getFont()->padding*2+2);
+   draw_rect(&surface, COLOUR_TITLEBAR, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
    draw_string(&surface, window->title, rgb16(210,210,210), titleX, window->y+6);
    draw_string(&surface, window->title, 0, titleX, window->y+5);
 
@@ -588,21 +594,27 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
       if(selectedWindow->drag_func == NULL) return;
       if(relX == 0 && relY == 0) return;
    
-      if(!gui_interrupt_switchtask(regs)) return;
-      // calling function as task
       int windowX = gui_mouse_x - selectedWindow->x;
       int windowY = gui_mouse_y - (selectedWindow->y + TITLEBAR_HEIGHT);
 
       if(windowX < 0 || windowY < 0 || windowX >= selectedWindow->width || windowY >= selectedWindow->height - TITLEBAR_HEIGHT)
          return;
 
-      uint32_t *args = malloc(sizeof(uint32_t) * 2);
-      args[1] = windowX;
-      args[0] = windowY;
-   
-      task_call_subroutine(regs, "dragged", (uint32_t)(selectedWindow->drag_func), args, 2);
-   
-      return;
+      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+         // call as kernel
+         getSelectedWindow()->drag_func(windowX, windowY);
+      } else {
+         // calling function as task
+         if(!gui_interrupt_switchtask(regs)) return;
+
+         uint32_t *args = malloc(sizeof(uint32_t) * 2);
+         args[1] = windowX;
+         args[0] = windowY;
+      
+         task_call_subroutine(regs, "dragged", (uint32_t)(selectedWindow->drag_func), args, 2);
+      
+         return;
+      }
    }
 
    // restore dotted outline
@@ -679,24 +691,26 @@ bool windowmgr_click(void *regs, int x, int y) {
    // only call click routine when already the focused window
    if(selectedWindow != prevSelected) return true;
    
-   // switch to task
-   gui_interrupt_switchtask(regs);
-   if(get_current_task_window() != getSelectedWindowIndex())
-      return true; // no task
-
    if(selectedWindow->click_func == NULL) return true;
 
-   // calling function as task
-   uint32_t *args = malloc(sizeof(uint32_t) * 2);
-   args[1] = x - selectedWindow->x;
-   args[0] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-
-   if((y - (selectedWindow->y + TITLEBAR_HEIGHT)) >= 0) {
-      task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 2);
+   // switch to task
+   gui_interrupt_switchtask(regs);
+   if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+      // call as kernel
+      getSelectedWindow()->click_func(x - selectedWindow->x, y - (selectedWindow->y + TITLEBAR_HEIGHT));
    } else {
-      // clicked titlebar, don't call routine
-      free((uint32_t)args, sizeof(uint32_t) * 2);
+      // calling as task
+      uint32_t *args = malloc(sizeof(uint32_t) * 2);
+      args[1] = x - selectedWindow->x;
+      args[0] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
+      map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+
+      if((y - (selectedWindow->y + TITLEBAR_HEIGHT)) >= 0) {
+         task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 2);
+      } else {
+         // clicked titlebar, don't call routine
+         free((uint32_t)args, sizeof(uint32_t) * 2);
+      }
    }
 
    return true;
@@ -704,7 +718,11 @@ bool windowmgr_click(void *regs, int x, int y) {
 
 void windowmgr_rightclick(void *regs, int x, int y) {
    (void)(regs);
-   //setSelectedWindowIndex(-1);
+   if(selectedWindow == NULL || !(x - selectedWindow->x >= 0 && x - selectedWindow->x < selectedWindow->width
+   && y - selectedWindow->y >= 0 && y - selectedWindow->y < selectedWindow->height)) {
+      setSelectedWindowIndex(-1);
+      gui_redrawall();
+   }
    // draw menu
    default_menu.visible = true;
    default_menu.x = x;
@@ -875,7 +893,7 @@ void windowmgr_mousemove(int x, int y) {
       }
 
       // if just outside to the bottom right, display resize cursor
-      if(relX >= selectedWindow->width - 1 && relX < selectedWindow->width + 5
+      if(selectedWindow->resizable && relX >= selectedWindow->width - 1 && relX < selectedWindow->width + 5
       && relY >= selectedWindow->height - 1 - TITLEBAR_HEIGHT && relY < selectedWindow->height + 5 - TITLEBAR_HEIGHT) {
          cursor_resize = true;
       } else {
@@ -914,8 +932,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width;
       args[0] = height - TITLEBAR_HEIGHT;
-      map(gettasks()[task].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-      map(gettasks()[task].page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, 1, 1);
+      for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size)/0x1000; i++)
+         map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
    }
    
