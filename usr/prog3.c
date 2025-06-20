@@ -13,7 +13,7 @@ void timer_callback() {
 }
 
 void _start() {
-    write_str("Timer test program\n");
+    set_window_title("Prog3");
 
     queue_event((uint32_t)(&timer_callback), 50);
     queue_event((uint32_t)(&timer_callback), 100);

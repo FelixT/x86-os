@@ -45,7 +45,6 @@ void free(uint32_t offset, int bytes);
 void memory_init();
 void *malloc(int bytes);
 void *resize(uint32_t offset, int oldsize, int newsize);
-void memset(void *dest, uint8_t ch, int bytes);
 void memcpy(void *dest, const void *src, int bytes);
 int memcmp(const void *a, const void *b, int bytes);
 void memcpy_fast(void *dest, const void *src, size_t bytes);

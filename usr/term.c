@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "../lib/string.h"
 #include "prog_fat.h"
+#include "lib/stdio.h"
 
 char path[256] = "/";
 
@@ -9,10 +10,23 @@ void printf(char *format, ...) {
    char *buffer = (char*)malloc(512);
    va_list args;
    va_start(args, format);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 512, format, args);
    va_end(args);
    write_str(buffer);
    free((uint32_t)buffer, 512);
+}
+
+void get_abs_path(char *out, char *inpath) {
+   if(inpath[0] == '/') {
+      // absolute path
+      strcpy(out, inpath);
+   } else {
+      // relative path
+      getwd(out);
+      if(!strcmp(out, "/"))
+         strcat(out, "/");
+      strcat(out, inpath);
+   }
 }
 
 void term_cmd_default(char *command) {
@@ -27,7 +41,8 @@ void term_cmd_help() {
    printf("FILES, TEXT <path>\n");
    printf("FAT <path>, FATNEW path\n");
    printf("FATDIR cluster, FATFILE cluster\n");
-   printf("LS, CD path, TOUCH file, PWD\n");
+   printf("LS, CD path, PWD\n");
+   printf("CAT path, TOUCH path\n");
    printf("DMPMEM x <y>\n");
    printf("FONT path\n");
 }
@@ -298,17 +313,7 @@ void term_cmd_cd(char *arg) {
 void term_cmd_touch(char *arg) {
    char path[256];
 
-   if(arg[0] == '/') {
-      // absolute path
-      strcpy(path, arg);
-   } else {
-      // relative path
-      strcpy(path, "/");
-      getwd(path);
-      if(!strcmp(path, "/"))
-         strcat(path, "/");
-      strcat(path, arg);
-   }
+   get_abs_path(path, arg);
 
    fat_new_file(path);
 }
@@ -319,6 +324,59 @@ void term_cmd_pwd() {
    printf("%s\n", wd);
    free((uint32_t)wd, 256);
    return;
+}
+
+void term_cmd_cat(char *arg) {
+   char path[256];
+   get_abs_path(path, arg);
+   FILE *f = fopen(path, "r");
+   if(!f) {
+      printf("File %s not found\n");
+      return;
+   }
+   printf("Opened file '%s' with size %u\n", path, f->size);
+   char *buf = (char*)malloc(f->size+1);
+   if(!fread(buf, f->size, 1, f)) {
+      printf("Couldn't read file\n");
+      return;
+   }
+   buf[f->content_size] = '\0';
+   printf("%s\n", buf);
+   free((uint32_t)buf, f->size);
+   fclose(f);
+   free((uint32_t)f, sizeof(FILE));
+   printf("Closed file\n");
+}
+
+void term_cmd_fappend(char *arg) {
+   char path[256];
+   char patharg[256];
+   char buffer[256];
+   strsplit(patharg, buffer, arg, ' ');
+   get_abs_path(path, patharg);
+   
+   FILE *f = fopen(path, "a");
+   printf("Opened file '%s' with size %u\n", path, f->size);
+   fwrite(buffer, strlen(buffer), 1, f);
+   fclose(f);
+   free((uint32_t)f, sizeof(FILE));
+   printf("Closed file\n");
+}
+
+void term_cmd_fwrite(char *arg) {
+   char path[256];
+   char patharg[256];
+   char buffer[256];
+   strsplit(patharg, buffer, arg, ' ');
+   get_abs_path(path, patharg);
+   
+   FILE *f = fopen(path, "w");
+   printf("Opened file '%s' with size %u\n", path, f->size);
+   fwrite(buffer, strlen(buffer), 1, f);
+   printf("Wrote %u bytes\n", f->content_size);
+   fclose(f);
+   free((uint32_t)f, sizeof(FILE));
+   printf("Closed file\n");
 }
 
 void checkcmd(char *buffer) {
@@ -366,6 +424,12 @@ void checkcmd(char *buffer) {
       term_cmd_touch(arg);
    else if(strcmp(command, "PWD"))
       term_cmd_pwd();
+   else if(strcmp(command, "CAT"))
+      term_cmd_cat(arg);
+   else if(strcmp(command, "FAPPEND"))
+      term_cmd_fappend(arg);
+   else if(strcmp(command, "FWRITE"))
+      term_cmd_fwrite(arg);
    else
       term_cmd_default(command);
 

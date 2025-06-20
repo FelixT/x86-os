@@ -35,7 +35,7 @@ void free(uint32_t offset, int bytes) {
       }
    }
    
-   #ifdef MEM_DEBUG
+   #if MEM_DEBUG
    // fill free memory with 'FREE' in ascii
    char freeASCII[6] = "FREE ";
    for(int x = 0; x < noBlocks*MEM_BLOCK_SIZE; x++) {
@@ -49,7 +49,7 @@ void memory_init() {
    for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
       memory_status[i].allocated = false;
    }
-   #ifdef MEM_DEBUG
+   #if MEM_DEBUG
    // fill free memory with 'FREE' in ascii
    char freeASCII[6] = "FREE ";
    for(int i = 0; i < KERNEL_HEAP_SIZE; i++) {
@@ -92,7 +92,7 @@ void *malloc(int bytes) {
       memory_status[i].allocated = true;
    }
 
-   #ifdef MEM_DEBUG
+   #if MEM_DEBUG
    // fill allocated memory with 'ALLC' in ascii
    char allcASCII[6] = "ALLC ";
    for(int i = 0; i < noBlocks*MEM_BLOCK_SIZE; i++) {
@@ -123,62 +123,6 @@ void *resize(uint32_t offset, int oldsize, int newsize) {
 
 mem_segment_status_t *memory_get_table() {
    return &memory_status[0];
-}
-
-void memset(void *dest, uint8_t ch, int count) {
-   // faster memset using fancy assembly
-   // Use stosb for small blocks (under 16 bytes)
-   if(count < 16) {
-      asm volatile (
-         "rep stosb"
-         :
-         : "D" (dest), "a" (ch), "c" (count)
-         : "memory", "cc"
-      );
-      return;
-   }
-    
-   // For larger blocks, use stosd (4 bytes at a time)
-   uint32_t value = ch;
-   value |= value << 8;
-   value |= value << 16;  // Replicate the byte across all 4 bytes
-   
-   // Handle unaligned prefix bytes
-   int pre = (4 - ((uintptr_t)dest & 3)) & 3;
-   if(pre > 0) {
-      if(pre > count) pre = count;
-      asm volatile (
-         "rep stosb"
-         :
-         : "D" (dest), "a" (ch), "c" (pre)
-         : "memory", "cc"
-      );
-      dest = (char*)dest + pre;
-      count -= pre;
-   }
-   
-   // Handle the bulk with stosd (4 bytes at a time)
-   size_t dwords = count / 4;
-   if(dwords > 0) {
-      asm volatile (
-         "rep stosl"
-         :
-         : "D" (dest), "a" (value), "c" (dwords)
-         : "memory", "cc"
-      );
-      dest = (char*)dest + (dwords * 4);
-      count &= 3;
-   }
-   
-   // Handle trailing bytes
-   if(count > 0) {
-      asm volatile (
-         "rep stosb" :
-         : "D" (dest), "a" (ch), "c" (count)
-         : "memory", "cc"
-      );
-   }
-
 }
 
 void memcpy(void *dest, const void *src, int bytes) {

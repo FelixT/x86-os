@@ -3,7 +3,7 @@ global font7
 font7:
 
 ; size
-db 76
+db 79
 ; width
 db 5
 ; height
@@ -28,8 +28,11 @@ db '>'
 db '<'
 db '_'
 db ','
+db '%'
 db 27 ; cursor outline
 db 28 ; cursor fill
+db 29 ; cursor resize outline
+db 30 ; cursor resize fill
 db '0'
 db '1'
 db '2'
@@ -213,6 +216,15 @@ font_comma:
    db 01000b
    db 00000b
 
+; %
+db 11001b
+db 11010b
+db 00100b
+db 01000b
+db 10000b
+db 01011b
+db 10011b
+
 global font_cursor_outline
 font_cursor_outline:
    db 10000b
@@ -232,6 +244,25 @@ font_cursor_fill:
    db 01000b
    db 00000b
    db 00000b
+
+
+; cursor resize ouline
+db 10001b
+db 11011b
+db 01110b
+db 11111b
+db 01110b
+db 11011b
+db 10001b
+
+; cursor resize fill
+db 01010b
+db 10101b
+db 10001b
+db 10001b
+db 10001b
+db 10101b
+db 01010b
 
 global font_0
 font_0:

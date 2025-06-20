@@ -56,7 +56,7 @@ void font_load(fontfile_t *file) {
 
 void font_init() {
    font_load((fontfile_t*)(&font7));
-   default_font.padding = 2;
+   default_font.padding = 1;
    default_font.padding_y = 3;
 }
 

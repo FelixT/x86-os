@@ -5,7 +5,7 @@
 #include "fat.h"
 
 typedef struct window_popup_dialog_t {
-   
+   gui_window_t *parent;
 } window_popup_dialog_t;
 
 typedef struct window_popup_filepicker_t {

@@ -2,6 +2,7 @@
 #include "window.h"
 #include "windowmgr.h"
 #include "paging.h"
+#include "events.h"
 
 uint32_t USR_CODE_SEG = 8*3;
 uint32_t USR_DATA_SEG = 8*4;
@@ -16,6 +17,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    // clear stack
 
    tasks[index].enabled = false;
+   tasks[index].paused = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
    tasks[index].prog_start = entry;
    tasks[index].prog_entry = entry;
@@ -60,7 +62,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
 bool task_exists() {
    for(int i = 0; i < TOTAL_TASKS; i++) {
-      if(tasks[i].enabled) return true;
+      if(tasks[i].enabled && !tasks[i].paused) return true;
    }
    return false;
 }
@@ -70,6 +72,18 @@ int get_free_task_index() {
       if(!tasks[i].enabled) return i;
       
    return -1;
+}
+
+void pause_task(int index, registers_t *regs) {
+   if(index < 0 || index >= TOTAL_TASKS) return;
+   if(!tasks[index].enabled) {
+      debug_printf("Task %u already ended\n", index);
+      return;
+   }
+
+   tasks[index].paused = true;
+   if(index == get_current_task() || !task_exists())
+      if(regs != NULL) switch_task(regs);
 }
 
 void end_task(int index, registers_t *regs) {
@@ -82,7 +96,7 @@ void end_task(int index, registers_t *regs) {
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
    if(tasks[index].in_routine)
-      debug_printf("Task was in routine %s\n", tasks[index].routine_name);
+      debug_printf("Task was in %sroutine %s\n", (tasks[index].routine_return_window>=0 ? "queued " : " "), tasks[index].routine_name);
 
    if(tasks[index].in_syscall)
       debug_printf("Task was in syscall %i\n", tasks[index].syscall_no);
@@ -181,7 +195,7 @@ void switch_task(registers_t *regs) {
       do {
          current_task++;
          current_task%=TOTAL_TASKS;
-      } while(!tasks[current_task].enabled);
+      } while(!tasks[current_task].enabled || tasks[current_task].paused);
 
       if(!tasks[current_task].enabled)
          debug_writestr("Task isn't enabled!\n");
@@ -197,11 +211,7 @@ void switch_task(registers_t *regs) {
 }
 
 bool switch_to_task(int index, registers_t *regs) {
-   /*window_writestr("Switching from task ", 0, 0);
-   window_writenum(current_task, 0, 0);
-   window_writestr(" to ", 0, 0);
-   window_writenum(index, 0, 0);
-   window_writestr("\n", 0, 0);*/
+   //debug_printf("Switching from task %i to %i\n", current_task, index);
 
    if(!tasks[index].enabled) {
       window_writestr("Task switch failed: task ", 0, 0);
@@ -216,7 +226,8 @@ bool switch_to_task(int index, registers_t *regs) {
    current_task = index;
 
    // swap page
-   swap_pagedir(tasks[current_task].page_dir);
+   if(page_get_current() != tasks[current_task].page_dir)
+      swap_pagedir(tasks[current_task].page_dir);
 
    // restore registers
    *regs = tasks[current_task].registers;
@@ -232,6 +243,10 @@ int get_current_task_window() {
    return tasks[current_task].window;
 }
 
+int get_task_window(int task) {
+   return tasks[task].window;
+}
+
 int get_current_task() {
    return current_task;
 }
@@ -244,17 +259,59 @@ int get_task_from_window(int windowIndex) {
    return -1;
 }
 
+typedef struct {
+   char *name;
+   uint32_t addr; // subroutine addr
+   uint32_t *args;
+   int argc;
+   int task;
+} task_event_t;
+
+void task_execute_queued_subroutine(void *regs, void *msg) {
+   // callback from queued event
+   task_event_t *event = (task_event_t*)msg;
+   if(tasks[current_task].in_routine) {
+      // queue back up again
+      events_add(15, &task_execute_queued_subroutine, (void*)event, -1);
+   } else {
+
+      if(!switch_to_task(event->task, regs)) return;
+
+      task_call_subroutine(regs, event->name, event->addr, event->args, event->argc);
+      tasks[event->task].routine_return_window = getSelectedWindowIndex();
+
+      debug_printf("Launching queued routine %s for task %i window %i\n", event->name, get_current_task(), get_current_task_window());
+      debug_printf("Arguments are ");
+      for(int i = 0; i < event->argc; i++) {
+         debug_printf("%i <0x%h> ", i, event->args[i]);
+      }
+      debug_printf("\n");
+
+      if(get_current_task_window() != getSelectedWindowIndex()) {
+         setSelectedWindowIndex(get_current_task_window());
+      }
+   }
+}
+
 void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
 
-   if(tasks[current_task].in_routine || !tasks[current_task].enabled) {
-      /*debug_writestr("Task ");
-      debug_writeuint(current_task);
-      if(tasks[current_task].in_routine)
-         debug_writestr(" is already in a subroutine, returning.\n");
-      if(!tasks[current_task].enabled)
-         debug_writestr(" not enabled.\n");*/
-         if(!strcmp(name, "resize"))
-            return;
+   if(tasks[current_task].in_routine) {
+      if(strcmp(name, tasks[current_task].routine_name))
+         return; // don't queue up same event until current handler is done
+      if(strstartswith(tasks[current_task].routine_name, "wo") && strcmp(tasks[current_task].routine_name+2, name))
+         return; // wo event overrides main event
+      task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
+      event->name = name;
+      event->addr = addr;
+      event->args = args;
+      event->argc = argc;
+      event->task = current_task;
+      events_add(5, &task_execute_queued_subroutine, (void*)event, -1);
+      //   return;
+      return;
+   } else if(!tasks[current_task].enabled) {
+      debug_printf("Task %i is ended, exiting subroutine");
+      return;
    }
 
    strcpy(tasks[current_task].routine_name, name);
@@ -262,6 +319,7 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
    // save registers
 
    tasks[current_task].routine_return_regs = *regs;
+   tasks[current_task].routine_return_window = -1;
 
    tasks[current_task].routine_args = args;
    tasks[current_task].routine_argc = argc;
@@ -293,6 +351,13 @@ void task_subroutine_end(registers_t *regs) {
    free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t*));
 
    tasks[current_task].in_routine = false;
+
+   if(tasks[current_task].routine_return_window >= 0)
+      setSelectedWindowIndex(tasks[current_task].routine_return_window);
+
+   if(tasks[current_task].paused) {
+      switch_task(regs); // yield
+   }
 }
 
 void tss_init() {

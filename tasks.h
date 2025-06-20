@@ -16,6 +16,7 @@
 
 typedef struct task_state_t {
    bool enabled;
+   bool paused; // task won't be scheduled
    uint32_t stack_top; // address
    uint32_t prog_start; // physical addr of start of program
    uint32_t prog_entry; // addr of program entry point, may be different from prog_start
@@ -26,6 +27,7 @@ typedef struct task_state_t {
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;
    registers_t routine_return_regs;
+   int routine_return_window; // switch to this window after routine
    uint32_t *routine_args;
    int routine_argc;
    bool in_routine;
@@ -52,9 +54,12 @@ bool switch_to_task(int index, registers_t *regs);
 void tasks_launch_binary(registers_t *regs, char *path);
 void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args);
 
+void pause_task(int index, registers_t *regs);
+
 task_state_t *gettasks();
 
 int get_current_task_window();
+int get_task_window(int task);
 int get_current_task();
 int get_task_from_window(int windowIndex);
 int get_free_task_index();

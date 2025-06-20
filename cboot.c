@@ -37,7 +37,7 @@ void cboot_printf(char *format, ...) {
    char *buffer = (char*)malloc(512);
    va_list args;
    va_start(args, format);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 512, format, args);
    va_end(args);
    cboot_writestr(buffer);
    free((uint32_t)buffer, 512);
@@ -66,7 +66,7 @@ void debug_printf(char *format, ...) {
     char *buffer = (char*)malloc(512);
    va_list args;
    va_start(args, format);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 512, format, args);
    va_end(args);
    cboot_writestr(buffer);
    free((uint32_t)buffer, 512);
@@ -77,7 +77,7 @@ void gui_printf(char *format, uint16_t colour, ...) {
     char *buffer = (char*)malloc(512);
    va_list args;
    va_start(args, colour);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 512, format, args);
    va_end(args);
    cboot_writestr(buffer);
    free((uint32_t)buffer, 512);
@@ -115,7 +115,8 @@ void cboot() {
    for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
       if(memory_get_table()[i].allocated) used++;
    }
-   cboot_printf("Loaded at %u\nAllocated %i/%i", bytes, used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE);
+   cboot_printf("Loaded at 0x%h", bytes);
+   cboot_printf("Allocated %i/%i", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE);
 
    cboot_printf("Copying to 0x%h", KERNEL_START);
    memcpy_fast((void*)KERNEL_START, bytes, size);

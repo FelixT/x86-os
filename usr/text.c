@@ -2,6 +2,7 @@
 #include <stdbool.h>
 
 #include "prog.h"
+#include "prog_wo.h"
 #include "../lib/string.h"
 
 typedef struct {
@@ -22,6 +23,8 @@ typedef struct {
 volatile windowobj_t *wo_path_o;
 volatile windowobj_t *wo_text_o;
 volatile windowobj_t *wo_status_o;
+volatile windowobj_t *wo_save_o;
+volatile windowobj_t *wo_open_o;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)fb;
@@ -43,7 +46,7 @@ void set_status(char *status) {
 void load_file(char *filepath) {
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath, true);
    if(entry == NULL) {
-      set_status("File not found");
+      display_popup("Error", "File not found");
       wo_text_o->textpos = 0;
       wo_text_o->text[wo_text_o->textpos] = '\0';
       return;
@@ -61,13 +64,27 @@ void path_return() {
    end_subroutine();
 }
 
-void save_func() {
+void save_func(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
    set_status("Saving...");
 
    fat_write_file(wo_path_o->text, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
 
    set_status("Saved");
 
+   end_subroutine();
+}
+
+void filepicker_return(char *path) {
+   load_file(path);
+   end_subroutine();
+}
+
+void open_func(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
+   display_filepicker(&filepicker_return);
    end_subroutine();
 }
 
@@ -81,20 +98,37 @@ void _start(int argc, char **args) {
    int width = get_width();
    int height = get_height();
 
-   windowobj_t *wo_save = register_windowobj(WO_BUTTON, 5, 2, 34, 13);
+   int x = 5;
+   int padding = 2;
+
+   windowobj_t *wo_save = register_windowobj(WO_BUTTON, x, 2, 34, 13);
    wo_save->text = (char*)malloc(1);
    strcpy(wo_save->text, "Save");
    wo_save->textvalign = true;
    wo_save->click_func = &save_func;
+   wo_save_o = wo_save;
 
-   windowobj_t *wo_path = register_windowobj(WO_TEXT, 40, 2, 2*(width-10)/3, 13);
+   x += wo_save->width + padding;
+
+   windowobj_t *wo_open = register_windowobj(WO_BUTTON, x, 2, 34, 13);
+   wo_open->text = (char*)malloc(1);
+   strcpy(wo_open->text, "Open");
+   wo_open->textvalign = true;
+   wo_open->click_func = &open_func;
+   wo_open_o = wo_open;
+
+   x += wo_open->width + padding;
+
+   windowobj_t *wo_path = register_windowobj(WO_TEXT, x, 2, 2*(width-10)/3, 13);
    wo_path->text = (char*)malloc(1);
    strcpy(wo_path->text, "<New file>");
    wo_path->textvalign = true;
    wo_path->return_func = &path_return;
    wo_path_o = wo_path;
 
-   windowobj_t *wo_status = register_windowobj(WO_TEXT, 42+2*(width-10)/3, 2, (width-10)/3 - 42, 13);
+   x += wo_path->width + padding;
+
+   windowobj_t *wo_status = register_windowobj(WO_TEXT, x, 2, (width-10)/3 - 80, 13);
    wo_status->text = (char*)malloc(1);
    wo_status->text[0] = '\0';
    wo_status->textvalign = true;

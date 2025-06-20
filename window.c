@@ -116,20 +116,33 @@ void window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
    window_writestr(out, colour, windowIndex);
 }
 
+void *memmove(void *dest, const void *src, size_t n) {
+    unsigned char *d = (unsigned char *)dest;
+    const unsigned char *s = (const unsigned char *)src;
+    
+   if(d < s) {
+      while(n--) {
+         *d++ = *s++;
+      }
+   } else if(d > s) {
+      d += n;
+      s += n;
+      while(n--) {
+         *--d = *--s;
+      }
+   }   
+   return dest;
+}
+
 
 void window_scroll(gui_window_t *window) {
    uint16_t *terminal_buffer = window->framebuffer;
 
    int scrollY = getFont()->height+getFont()->padding_y;
-   for(int y = scrollY; y < window->height - TITLEBAR_HEIGHT; y++) {
-      for(int x = window->x; x < window->x + window->width; x++) {
-         int srcIndex = y*(int)window->width+x;
-         int outIndex = (y-scrollY)*window->width+x;
-         if(srcIndex >= 0 && srcIndex < (int)gui_get_width()*(int)gui_get_height()
-         && outIndex >= 0 && outIndex < window->width*(window->height-TITLEBAR_HEIGHT))
-            terminal_buffer[outIndex] = terminal_buffer[srcIndex];
-      }
-   }
+   int copy_height = window->height - TITLEBAR_HEIGHT - scrollY;
+   int copy_width = window->width;
+
+   memmove(terminal_buffer, terminal_buffer + scrollY * window->width, copy_height * copy_width * sizeof(uint16_t));
    // clear bottom
    int newY = window->height - (scrollY + TITLEBAR_HEIGHT);
    draw_rect(&(window->surface), window->bgcolour, 0, newY, window->width, scrollY);

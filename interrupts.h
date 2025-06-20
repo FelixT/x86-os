@@ -59,6 +59,7 @@ typedef struct {
 void idt_init();
 void register_irq(int index, void (*handler)(registers_t *regs));
 void timer_handler(registers_t *regs);
+void timer_set_hz(int hz);
 void keyboard_handler(registers_t *regs);
 void mouse_handler(registers_t *regs);
 void software_handler(registers_t *regs);

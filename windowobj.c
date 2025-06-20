@@ -74,6 +74,7 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
 }
 
+extern bool mouse_held;
 void windowobj_draw(void *windowobj) {
 
    windowobj_t *wo = (windowobj_t*)windowobj;
@@ -90,6 +91,7 @@ void windowobj_draw(void *windowobj) {
    if(wo->type == WO_BUTTON) {
       bg = rgb16(200, 200, 200);
 
+      wo->clicked = wo->clicked && mouse_held;
       if(wo->clicked) {
          bg = rgb16(185, 185, 185);
          text = rgb16(40, 40, 40);

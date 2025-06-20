@@ -11,18 +11,43 @@
 void window_popup_init(gui_window_t *window, gui_window_t *parent) {
    window->keypress_func = NULL;
    window->draw_func = NULL;
-   strcpy(window->title, parent->title); // take name from parent
+   if(parent != NULL)
+      strcpy(window->title, parent->title); // take name from parent
 }
 
 // define default popups - common mini-progs
 
+void window_popup_dialog_close(void *windowobj, void *regs) {
+   (void)windowobj;
+   (void)regs;
+   gui_window_t *window = getSelectedWindow();
+   window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
+   int index = get_window_index_from_pointer(window);
+   int parent_index = get_window_index_from_pointer(dialog->parent);
+   // self destruct
+   window_close(NULL, index);
+   setSelectedWindowIndex(parent_index);
+}
+
 void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text) {
+   if(parent != NULL)
+      parent->children[parent->child_count++] = window;
+   
    window_resize(NULL, window, 260, 95);
 
    window_popup_init(window, parent);
    // add default window objects
 
    strcpy(window->title, "Dialog");
+   if(parent != NULL) {
+      window->x = parent->x + 50;
+      window->y = parent->y + 50;
+   }
+
+   window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
+   dialog->parent = parent;
+   window->state = (void*)dialog;
+   window->state_size = sizeof(window_popup_dialog_t);
 
    // dialog text
    int y = 15;
@@ -34,8 +59,8 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
    wo_txt->width = 220;
    wo_txt->height = 20;
    wo_txt->text = malloc(500);
+   wo_txt->disabled = true;
    strcpy(wo_txt->text, text);
-   //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
    window->window_objects[window->window_object_count++] = wo_txt;
 
    // ok button
@@ -49,7 +74,7 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
    wo_okbtn->height = 20;
    wo_okbtn->text = malloc(strlen("OK") + 1);
    strcpy(wo_okbtn->text, "OK");
-   //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
+   wo_okbtn->click_func = &window_popup_dialog_close;
    window->window_objects[window->window_object_count++] = wo_okbtn;
 
    /*// cancel button
@@ -93,12 +118,44 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
    }
 
    if(fp->currentdir != NULL && (fp->currentdir->attributes & 0x10) == 0) {
-      // self destruct
-      window_close(NULL, getSelectedWindowIndex());
+
 
       // clicked on file
+      int fp_window = getSelectedWindowIndex();
+
       setSelectedWindowIndex(get_window_index_from_pointer(fp->parent));
-      fp->callback_func(fp->wo_path->text);
+
+      void (*callback)(char *) = fp->callback_func;;
+      char *path = malloc(256);
+      strcpy(path, fp->wo_path->text);
+
+      // self destruct
+      window_close(NULL, fp_window);
+
+      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+         // call as kernel
+         callback(path);
+         free((uint32_t)path, 256);
+         getSelectedWindow()->needs_redraw = true;
+         window_draw(getSelectedWindow());
+      } else {
+         if(!gui_interrupt_switchtask(regs)) return;
+         // calling function as task
+         uint32_t *args = malloc(sizeof(uint32_t) * 1);
+         args[0] = (uint32_t)path;
+         map(page_get_current(), (uint32_t)path, (uint32_t)path, 1, 1);
+         map(page_get_current(), (uint32_t)args, (uint32_t)args, 1, 1);
+      
+         debug_printf("Calling filepicker callback %h with path %s\n", callback, path);
+
+         task_call_subroutine(regs, "filepickerreturn", (uint32_t)callback, args, 1);
+      
+         getSelectedWindow()->needs_redraw = true;
+         window_draw(getSelectedWindow());
+
+         return;
+      }
+
       return;
    }
 
@@ -109,6 +166,8 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
    window->window_object_count = 1;
 
    window_clearbuffer(window, window->bgcolour);
+
+   int width = 240;
 
    fat_dir_t *items;
    int size;
@@ -125,6 +184,7 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
    int y = 18;
    for(int i = 0; i < size; i++) {
       if(items[i].filename[0] == 0) break;
+      if(i == 0) continue;
       bool hidden = (items[i].attributes & 0x02) == 0x02;
       bool dotentry = items[i].filename[0] == 0x2E;
       if(hidden & !dotentry) continue; // ignore
@@ -134,7 +194,7 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
       wo_file->type = WO_BUTTON;
       wo_file->x = 1;
       wo_file->y = y;
-      wo_file->width = 190;
+      wo_file->width = width;
       wo_file->height = 16;
       wo_file->text = malloc(13);
       // filename
@@ -160,12 +220,28 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
 
 }
 
+void window_popup_filepicker_free(void *window) {
+   gui_window_t *w = (gui_window_t*)window;
+   window_popup_filepicker_t *fp = (window_popup_filepicker_t*)w->state;
+   free((uint32_t)fp->currentdir, sizeof(fat_dir_t));
+   free((uint32_t)fp, sizeof(window_popup_filepicker_t));
+   w->state = NULL;
+}
+
 window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_window_t *parent, void *callback) {
-   window_resize(NULL, window, 200, 160);
+   parent->children[parent->child_count++] = window;
+
+   window_resize(NULL, window, 244, 200);
    window_popup_init(window, parent);
    strcpy(window->title, "File Browser");
 
-   window->state = malloc(sizeof(window_popup_filepicker_t));
+   window->x = parent->x + 50;
+   window->y = parent->y + 50;
+   int width = 240;
+
+   window->state_size = sizeof(window_popup_filepicker_t);
+   window->state = malloc(window->state_size);
+   window->state_free = &window_popup_filepicker_free;
    window_popup_filepicker_t *fp = (window_popup_filepicker_t*)window->state;
    fp->currentdir = NULL;
    fp->callback_func = callback;
@@ -176,7 +252,7 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
    fp->wo_path->type = WO_TEXT;
    fp->wo_path->x = 1;
    fp->wo_path->y = y;
-   fp->wo_path->width = 190;
+   fp->wo_path->width = width;
    fp->wo_path->height = 16;
    fp->wo_path->texthalign = false;
    fp->wo_path->disabled = true;
@@ -189,6 +265,7 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
    fat_dir_t *items = fat_read_root();
    for(int i = 0; i < fat_get_bpb().noRootEntries; i++) {
       if(items[i].filename[0] == 0) break;
+      if(i == 0) continue;
       bool hidden = (items[i].attributes & 0x02) == 0x02;
       bool dotentry = items[i].filename[0] == 0x2E;
       if(hidden & !dotentry) continue; // ignore
@@ -198,7 +275,7 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
       wo_file->type = WO_BUTTON;
       wo_file->x = 1;
       wo_file->y = y;
-      wo_file->width = 190;
+      wo_file->width = width;
       wo_file->height = 16;
       wo_file->text = malloc(13);
       wo_file->text[12] = '\0';
@@ -236,7 +313,7 @@ void window_popup_colourpicker_click(int x, int y) {
       gui_window_t *window = getSelectedWindow();
 
       // calculate colour
-      uint16_t colour = window->framebuffer[(y+50)*window->width + (x+5)];
+      uint16_t colour = window->framebuffer[(y+30)*window->width + (x+5)];
       char hex[7];
       sprintf(hex, "%h", colour);
       windowobj_t *wo_col = window->window_objects[0];
@@ -257,42 +334,56 @@ void window_popup_colourpicker_return(void *windowobj, void *regs) {
    gui_window_t *window = getSelectedWindow();
    window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
    uint16_t colour = (uint16_t)hextouint(window->window_objects[0]->text);
+   void (*callback)(uint16_t) = cp->callback_func;
+
+   setSelectedWindowIndex(get_window_index_from_pointer(cp->parent));
+
+   // self destruct
+   window_close(NULL, get_window_index_from_pointer(window));
+   
+   if(getSelectedWindow() == NULL) return;
 
    // call callback function
-   if(cp->callback_func != NULL) {
-      setSelectedWindowIndex(get_window_index_from_pointer(cp->parent));
+   if(callback != NULL) {
+
       if(get_task_from_window(getSelectedWindowIndex()) == -1) {
          // call as kernel
-         cp->callback_func(colour);
+         debug_printf("Calling colourpicker callback %h with colour %h\n", callback, colour);
+         callback(colour);
       } else {
          if(!gui_interrupt_switchtask(regs)) return;
          // calling function as task
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)colour;
       
-         debug_printf("Calling colourpicker callback %h with colour %h\n", cp->callback_func, colour);
+         debug_printf("Calling colourpicker callback %h with colour %h\n", callback, colour);
 
-         task_call_subroutine(regs, "colourpickerreturn", (uint32_t)cp->callback_func, args, 1);
-      
-         return;
+         task_call_subroutine(regs, "colourpickerreturn", (uint32_t)callback, args, 1);
       }
+
+      getSelectedWindow()->needs_redraw = true;
+      window_draw(getSelectedWindow());
    }
 
-   // close popup
-   //window_close(NULL, get_window_index_from_pointer(cp->parent));
 }
 
 // init
 window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback) {
+   parent->children[parent->child_count++] = window;
+
    window_resize(NULL, window, 320, 340);
    window_popup_init(window, parent);
    strcpy(window->title, "Colour Picker");
+
+   window->x = parent->x + 50;
+   window->y = parent->y + 50;
 
    window->click_func = &window_popup_colourpicker_click;
    window->drag_func = &window_popup_colourpicker_click;
 
    window->resizable = false;
-   window->state = malloc(sizeof(window_popup_colourpicker_t));
+   window->state_size = sizeof(window_popup_colourpicker_t);
+   window->state = malloc(window->state_size);
    window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
    cp->callback_func = callback;
    cp->parent = parent;

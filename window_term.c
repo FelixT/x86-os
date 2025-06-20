@@ -18,7 +18,7 @@ void window_term_printf(char *format, ...) {
    char *buffer = malloc(512);
    va_list args;
    va_start(args, format);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 512, format, args);
    va_end(args);
    gui_window_t *selected = getSelectedWindow();
    gui_printf(buffer, selected->txtcolour);
@@ -50,7 +50,7 @@ uint32_t window_term_argtouint(char *str) {
 
 void window_term_keypress(char key, void *window) {
    if((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') || (key >= '0' && key <= '9') || (key == ' ')
-   || (key == '/') || (key == '.')) {
+   || (key == '/') || (key == '.') || (key == '-')) {
 
       // write to current window
       gui_window_t *selected = (gui_window_t*)window;
@@ -86,20 +86,29 @@ void window_term_return(void *regs, void *window) {
 
    window_newline(selected);
 
-   if(selected->checkcmd_func != NULL) {
+   if(selected->read_func != NULL) {
       gui_interrupt_switchtask(regs);
       char *buffer = (char*)malloc(selected->text_index+1);
       strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
       buffer[selected->text_index] = '\0';
-      uint32_t *args = malloc(sizeof(uint32_t) * 1);
-      args[0] = (uint32_t)buffer;
-      // map both to prog
-      map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-      map(gettasks()[get_current_task()].page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1);
+      selected->read_func(regs, buffer);
+   }
+   if(selected->checkcmd_func != &window_term_checkcmd) {
+      if(selected->checkcmd_func != NULL) {
+         gui_interrupt_switchtask(regs);
+         char *buffer = (char*)malloc(selected->text_index+1);
+         strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
+         buffer[selected->text_index] = '\0';
+         uint32_t *args = malloc(sizeof(uint32_t) * 1);
+         args[0] = (uint32_t)buffer;
+         // map both to prog
+         map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+         map(gettasks()[get_current_task()].page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1);
 
-      task_call_subroutine(regs, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
+         task_call_subroutine(regs, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
+      }
    } else {
-      window_checkcmd(regs, selected); // default term behaviour
+      window_term_checkcmd(regs, selected); // default term behaviour
    }
 
    // windowbuffer has changed (i.e. resized)
@@ -190,7 +199,6 @@ void term_cmd_help() {
    window_term_printf("MEM <x>, DMPMEM x <y>\n");
    window_term_printf("BG colour, BGIMG path\n");
    window_term_printf("PADDING size, REDRAWALL, RESIZE x y\n");
-   window_term_printf("WINDOWBG colour, WINDOWTXT colour\n");
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -219,9 +227,11 @@ void term_cmd_tasks() {
       if(tasks[i].enabled) {
          window_term_printf("Enabled <w%i %s>", tasks[i].window, gui_get_windows()[tasks[i].window].title);
          if(tasks[i].in_routine)
-         window_term_printf(" <routine %s>", tasks[i].routine_name);
+            window_term_printf(" <routine %s>", tasks[i].routine_name);
          if(tasks[i].privileged)
             window_term_printf(" privileged");
+         if(tasks[i].paused)
+            window_term_printf(" paused");
          window_term_printf(" eip 0x%h", tasks[i].registers.eip);
       } else {
          window_term_printf("Disabled");
@@ -238,13 +248,12 @@ void term_cmd_prog2(void *regs) {
 }
 
 void term_cmd_test() {
-   extern uint32_t kernel_end;
    uint32_t framebuffer = (uint32_t)gui_get_framebuffer();
    
-   window_term_printf("\nKernel: 0x%h - 0x%h <size 0x%h>", 0x7e00, &kernel_end, &kernel_end - 0x7e00);
+   window_term_printf("\nKernel: 0x%h - 0x%h <size 0x%h>", KERNEL_START, KERNEL_END, KERNEL_END - KERNEL_START);
    window_term_printf("\nKernel stack 0x%h - 0x%h <size 0x%h>", STACKS_START, TOS_KERNEL, TOS_KERNEL - STACKS_START);
    window_term_printf("\nProgram stack 0x%h - 0x%h <size 0x%h>", TOS_KERNEL, TOS_PROGRAM, TOS_PROGRAM - TOS_KERNEL);
-   window_term_printf("\nKernel heap 0x%h - 0x%h <size 0x%h>", HEAP_KERNEL, HEAP_KERNEL_END, HEAP_KERNEL_END - HEAP_KERNEL);
+   window_term_printf("\nHeap 0x%h - 0x%h <size 0x%h>", HEAP_KERNEL, HEAP_KERNEL_END, HEAP_KERNEL_END - HEAP_KERNEL);
    window_term_printf("\nFramebuffer 0x%h - 0x%h <size 0x%h>", framebuffer, framebuffer + gui_get_framebuffer_size(), gui_get_framebuffer_size());
 }
 
@@ -329,7 +338,12 @@ void term_cmd_dmpmem(char *arg) {
       bytes = stoi((char*)arg2);
    }
    int addr = window_term_argtouint((char*)arg);
-   window_term_printf("%i bytes at %i\n", bytes, addr);
+   window_term_printf("%i bytes at 0x%h\n", bytes, addr);
+
+   if(page_getphysical(page_get_current(), addr) == (uint32_t)-1) {
+      window_term_printf("Address not mapped\n");
+      return;
+   }
 
    char *buf = malloc(rowlen);
    buf[rowlen] = '\0';
@@ -373,7 +387,8 @@ void term_cmd_default(char *command) {
    window_term_printf(": UNRECOGNISED", 4);
 }
 
-void window_checkcmd(void *regs, gui_window_t *selected) {
+void window_term_checkcmd(void *regs, void *window) {
+   gui_window_t *selected = (gui_window_t*)window;
    //char *command = selected->text_buffer;
    selected->text_buffer[selected->text_index] = '\0';
 

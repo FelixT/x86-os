@@ -85,8 +85,6 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
 
    // copy program to new location and assign virtual memory for each segment
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {
-      debug_printf("Header %i\n", i);
-
       if(prog_header->segment_type != 1) {
          // if not LOAD
          prog_header++;
@@ -95,6 +93,8 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
 
       uint32_t file_offset = prog_header->p_offset;
       uint32_t vmem_offset = prog_header->p_vaddr - vmem_start;
+
+      debug_printf("Header %i vaddr 0x%h size 0x%h\n", i, prog_header->p_vaddr, prog_header->p_memsz);
 
       // copy
       memcpy_fast(&newProg[vmem_offset], &prog[file_offset], (int)prog_header->p_filesz);

@@ -75,7 +75,7 @@ void gui_printf(char *format, uint16_t colour, ...) {
    va_list args;
    va_start(args, colour);
    char buffer[256];
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 256, format, args);
    gui_writestr(buffer, colour);
    va_end(args);
 }
@@ -134,6 +134,8 @@ void gui_init_meat(registers_t *regs, void *msg) {
    desktop_init();
    gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
+   gui_writestr("\nSet up timer\n", COLOUR_ORANGE);
+   timer_set_hz(30);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
@@ -149,7 +151,7 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
-   surface.buffer-=128; // ??????? horrible alignment issue
+   //surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);
@@ -183,8 +185,6 @@ void gui_redrawall() {
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
 }
-
-void mouse_enable();
 
 extern bool switching;
 bool gui_interrupt_switchtask(void *regs) {

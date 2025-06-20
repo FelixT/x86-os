@@ -1,5 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include "../lib/string.h"
+
 
 #include "prog.h"
 #include "prog_fat.h"
@@ -15,25 +17,6 @@ volatile int no_items;
 volatile int offset;
 
 char cur_path[200];
-
-int strlen(char* str) {
-   int len = 0;
-   while(str[len] != '\0')
-      len++;
-   return len;
-}
-
-bool strcmp(char* str1, char* str2) {
-   int len = strlen(str1);
-   if(len != strlen(str2))
-      return false;
-
-   for(int i = 0; i < len; i++)
-      if(str1[i] != str2[i])
-         return false;
-
-   return true;
-}
 
 char tolower(char c) {
    if(c >= 'A' && c <= 'Z')
@@ -77,11 +60,11 @@ void display_items() {
       // draw
       if((cur_items[i].attributes & 0x10) == 0x10) {
          // directory
-         bmp_draw((uint8_t*)folder_icon, x, y, 1);
+         bmp_draw((uint8_t*)folder_icon, x, y, 1, true);
          write_strat(fileName, x + 25, y + 7);
       } else {
          // file
-         bmp_draw((uint8_t*)file_icon, x, y, 1);
+         bmp_draw((uint8_t*)file_icon, x, y, 1, true);
          write_strat(fileName, x + 25, y + 7);
 
          if(extension[0] != ' ') {
@@ -98,6 +81,11 @@ void display_items() {
    }
 
    // draw path
+   for(int y = (int)height - 15; y < (int)height; y++) {
+      for(int x = 0; x < (int)width; x++) {
+         framebuffer[y*width+x] = 0xFFFF;
+      }
+   }
    write_strat(cur_path, 5, height - 12);
 }
 
@@ -147,7 +135,6 @@ void click(int x, int y) {
 
    // see where we clicked
    int position = (y-5)/25;
-   //debug_write_uint(no_items);
 
    if(cur_items == NULL) end_subroutine();
 

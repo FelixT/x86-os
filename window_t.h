@@ -28,6 +28,7 @@ typedef struct gui_window_t {
    bool resized;
    bool resizable;
    int toolbar_pos; // index in toolbar
+   bool disabled;
    uint16_t bgcolour; // default
    uint16_t txtcolour; // default
    uint16_t *framebuffer; // width*(height-titlebar_height)
@@ -50,9 +51,16 @@ typedef struct gui_window_t {
    //void (*write_func)(void *window, char *string);
    void (*resize_func)(uint32_t fb, uint32_t w, uint32_t h);
    void (*mouserelease_func)();
-   void (*checkcmd_func)(char *buffer); // override terminal behaviour
+   void (*checkcmd_func)(void *regs, void *window); // override terminal behaviour
+   void (*read_func)(void *regs, char *buffer); // kernel override terminal behaviour
+   char *read_buffer; // buffer for read_func, used by terminal
 
    void *state;
+   int state_size;
+   void (*state_free)(void *window);
+
+   void *children[10]; // child windows, used for popup windows
+   int child_count;
 } gui_window_t;
 
 #endif

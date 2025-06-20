@@ -3,6 +3,7 @@
 
 #include "prog.h"
 #include "prog_bmp.h"
+#include "prog_wo.h"
 
 volatile uint8_t *image;
 
@@ -11,7 +12,7 @@ int y = 0;
 
 void timer_callback() {
     //clear();
-    bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1);
+    bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1, false);
     redraw();
 
     queue_event((uint32_t)(&timer_callback), 6);
@@ -39,7 +40,7 @@ void strcpy(char* dest, char* src) {
 }
 
 void _start() {
-    write_str("Prog4\n");
+    set_window_title("Prog4");
     override_draw((uint32_t)NULL);
 
     fat_dir_t *entry = (fat_dir_t*)fat_parse_path("/bmp/file20.bmp", true);

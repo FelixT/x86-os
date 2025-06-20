@@ -45,5 +45,6 @@ uint32_t page_getphysical(page_dir_entry_t *dir, uint32_t vaddr);
 page_dir_entry_t *page_get_kernel_pagedir();
 void swap_pagedir(page_dir_entry_t *dir);
 page_dir_entry_t *new_page();
+page_dir_entry_t *page_get_current();
 
 #endif

@@ -25,6 +25,16 @@ void strcpy(char* dest, char* src) {
    dest[i] = '\0';
 }
 
+void strncpy(char* dest, const char* src, size_t size) {
+   int i = 0;
+
+   while((size_t)i < size && src[i] != '\0') {
+      dest[i] = src[i];
+      i++;
+   }
+   dest[i] = '\0';
+}
+
 void strcpy_fixed(char* dest, char* src, int length) {
    for(int i = 0; i < length; i++)
       dest[i] = src[i];
@@ -219,6 +229,28 @@ void inttostr(int num, char* out) {
       out[0] = '-';
 }
 
+int strtoint(char *str) {
+   int result = 0;
+   int sign = 1;
+   
+   // skip whitespace
+   while (*str == ' ') str++;
+   
+   if(*str == '-') {
+      sign = -1;
+      str++;
+   } else if(*str == '+') {
+      str++;
+   }
+   
+   while(*str >= '0' && *str <= '9') {
+      result = result * 10 + (*str - '0');
+      str++;
+   }
+   
+   return sign * result;
+}
+
 char *strcat(char *dest, const char *src) {
    char *ptr = dest;
    while(*ptr) ptr++;
@@ -227,13 +259,14 @@ char *strcat(char *dest, const char *src) {
    return dest;
 }
 
-void vsprintf(char *buffer, char *format, va_list args) {
+void vsnprintf(char *buffer, size_t size, char *format, va_list args) {
    char *pfmt = format;
    char x[2] = "x";
 
    buffer[0] = '\0';
 
-   while(*pfmt) {
+   int i = 0;
+   while((size_t)i < size && *pfmt) {
       if(*pfmt == '%' && *(pfmt + 1)) {
          pfmt++;
          switch (*pfmt) {
@@ -274,6 +307,7 @@ void vsprintf(char *buffer, char *format, va_list args) {
          strcat(buffer, x);
       }
       pfmt++;
+      i++;
    }
 
 }
@@ -281,7 +315,14 @@ void vsprintf(char *buffer, char *format, va_list args) {
 void sprintf(char *buffer, char *format, ...) {
    va_list args;
    va_start(args, format);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, INT32_MAX, format, args);
+   va_end(args);
+}
+
+void snprintf(char *buffer, size_t size, char *format, ...) {
+   va_list args;
+   va_start(args, format);
+   vsnprintf(buffer, size, format, args);
    va_end(args);
 }
 
@@ -307,4 +348,60 @@ uint32_t hextouint(char *str) {
       str++;
    }
    return u;
+}
+
+void memset(void *dest, uint8_t ch, int count) {
+   // faster memset using fancy assembly
+   // Use stosb for small blocks (under 16 bytes)
+   if(count < 16) {
+      asm volatile (
+         "rep stosb"
+         :
+         : "D" (dest), "a" (ch), "c" (count)
+         : "memory", "cc"
+      );
+      return;
+   }
+    
+   // For larger blocks, use stosd (4 bytes at a time)
+   uint32_t value = ch;
+   value |= value << 8;
+   value |= value << 16;  // Replicate the byte across all 4 bytes
+   
+   // Handle unaligned prefix bytes
+   int pre = (4 - ((uintptr_t)dest & 3)) & 3;
+   if(pre > 0) {
+      if(pre > count) pre = count;
+      asm volatile (
+         "rep stosb"
+         :
+         : "D" (dest), "a" (ch), "c" (pre)
+         : "memory", "cc"
+      );
+      dest = (char*)dest + pre;
+      count -= pre;
+   }
+   
+   // Handle the bulk with stosd (4 bytes at a time)
+   size_t dwords = count / 4;
+   if(dwords > 0) {
+      asm volatile (
+         "rep stosl"
+         :
+         : "D" (dest), "a" (value), "c" (dwords)
+         : "memory", "cc"
+      );
+      dest = (char*)dest + (dwords * 4);
+      count &= 3;
+   }
+   
+   // Handle trailing bytes
+   if(count > 0) {
+      asm volatile (
+         "rep stosb" :
+         : "D" (dest), "a" (ch), "c" (count)
+         : "memory", "cc"
+      );
+   }
+
 }

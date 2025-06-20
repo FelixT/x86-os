@@ -12,9 +12,10 @@ enum windowobj_type {
    WO_MENU
 };
 
-typedef struct windowobj_menuitem_t {
+typedef struct windowobj_menu_t {
    char text[20];
    void (*func)();
+   bool disabled;
 } windowobj_menu_t;
 
 typedef struct windowobj_t {

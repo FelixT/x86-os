@@ -164,7 +164,7 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
 }
 
 void ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *buf, int size) {
-   debug_printf("Writing %u bytes to 0x%h\n", size, addr);
+   //debug_printf("Writing %u bytes to 0x%h\n", size, addr);
    if(size%512 != 0) {
       debug_writestr("Must read a multiple of 512 bytes\n");
       return;

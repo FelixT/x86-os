@@ -6,9 +6,11 @@
 #include "lib/string.h"
 #include "bmp.h"
 #include "windowobj.h"
+#include "events.h"
 
 #include "window_term.h"
 #include "window_settings.h"
+#include "window_popup.h"
 #include <stdarg.h>
 
 int windowCount = 0;
@@ -29,6 +31,9 @@ uint8_t *icon_files = NULL;
 
 extern bool mouse_heldright;
 windowobj_t default_menu; // right click menu
+
+// would be much better as a linked link
+gui_window_t *render_order[100];
 
 void debug_writestr(char *str) {
    if(windowCount == 0) return;
@@ -52,7 +57,7 @@ void debug_printf(char *format, ...) {
    char *buffer = malloc(512);
    va_list args;
    va_start(args, format);
-   vsprintf(buffer, format, args);
+   vsnprintf(buffer, 512, format, args);
    va_end(args);
    debug_writestr(buffer);
    free((uint32_t)buffer, 512);
@@ -71,6 +76,35 @@ int getSelectedWindowIndex() {
    return gui_selected_window;
 }
 
+// move selected window to front of render order
+void update_render_order() {
+   if(selectedWindow == NULL) return;
+
+   // Check if selectedWindow is already in the array
+int found = -1;
+for(int i = 0; i < windowCount; i++) {
+    if(render_order[i] == selectedWindow) {
+        found = i;
+        break;
+    }
+}
+
+if(found == -1) {
+    // Not in array - add to front, shift everything back
+    for(int i = windowCount; i > 0; i--) {
+        render_order[i] = render_order[i-1];
+    }
+    render_order[0] = selectedWindow;
+} else if(found > 0) {
+    // In array but not at front - shift it to front
+    gui_window_t *temp = render_order[found];
+    for(int i = found; i > 0; i--) {
+        render_order[i] = render_order[i-1];
+    }
+    render_order[0] = temp;
+}
+}
+
 void setSelectedWindowIndex(int index) {
    if(selectedWindow != NULL)
       selectedWindow->active = false;
@@ -81,6 +115,8 @@ void setSelectedWindowIndex(int index) {
       selectedWindow = &gui_windows[index];
       selectedWindow->active = true;
    }
+
+   update_render_order();
 }
 
 int getWindowCount() {
@@ -100,6 +136,13 @@ void window_close(void *regs, int windowIndex) {
    gui_window_t *window = getWindow(windowIndex);
    if(window->closed) return;
 
+   if(windowIndex == 0) {
+      // debug window
+      int popup = windowmgr_add();
+      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window");
+      return;
+   }
+
    if(windowIndex == getSelectedWindowIndex())
       setSelectedWindowIndex(-1);
 
@@ -116,6 +159,47 @@ void window_close(void *regs, int windowIndex) {
    }
    free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
    window->framebuffer = NULL;
+
+   // free window objects
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      if(wo != NULL) {
+         if(wo->text != NULL) {
+            free((uint32_t)wo->text, strlen(wo->text)+1);
+            wo->text = NULL;
+         }
+         free((uint32_t)window->window_objects[i], sizeof(windowobj_t));
+         window->window_objects[i] = NULL;
+      }
+   }
+
+   // free state
+   if(window->state != NULL) {
+      if(window->state_free != NULL) {
+         window->state_free(window);
+      } else {
+         free((uint32_t)window->state, window->state_size);
+         window->state = NULL;
+      }
+   }
+
+   // remove from render order
+   for(int i = 0; i < windowCount; i++) {
+      if(render_order[i] == window) {
+         for(int j = i; j < windowCount-1; j++) {
+            render_order[j] = render_order[j+1];
+         }
+         render_order[windowCount-1] = NULL;
+         break;
+      }
+   }
+
+   // take children with them
+   for(int i = 0; i < window->child_count; i++) {
+      if(window->children[i] != NULL) {
+         window_close(regs, get_window_index_from_pointer(window->children[i]));
+      }
+   }
 
    gui_redrawall();
 }
@@ -138,8 +222,10 @@ bool window_init(gui_window_t *window) {
    window->bgcolour = default_window_bgcolour;
    window->txtcolour = default_window_txtcolour;
    window->state = NULL;
+   window->state_free = NULL;
    window->resizable = true;
    window->resized = false;
+   window->disabled = false;
    window->toolbar_pos = -1;
 
    window_resetfuncs(window);
@@ -179,13 +265,13 @@ void window_resetfuncs(gui_window_t *window) {
    window->uparrow_func = &window_term_uparrow;
    window->downarrow_func = &window_term_downarrow;
    window->draw_func = &window_term_draw;
+   window->checkcmd_func = &window_term_checkcmd;
 
    // other functions without default behaviour
    window->click_func = NULL;
    window->drag_func = NULL;
    window->resize_func = NULL;
    window->mouserelease_func = NULL;
-   window->checkcmd_func = NULL;
 }
 
 int windowmgr_add() {
@@ -205,6 +291,8 @@ int windowmgr_add() {
       setSelectedWindowIndex(index);
       gui_windows[index].x = index * 20;
       gui_windows[index].y = index * 20;
+
+      toolbar_draw();
 
       return index;
    } else {
@@ -299,6 +387,15 @@ void window_draw_content(gui_window_t *window) {
    window_draw_content_region(window, 0, 0, window->width, window->height - TITLEBAR_HEIGHT);
 }
 
+void window_disable(gui_window_t *window) {
+   for(int y = 0; y < window->height - TITLEBAR_HEIGHT; y+=2) {
+      for(int x = 0; x < window->width; x+=2) {
+         window->framebuffer[y * window->width + x] = rgb16(150, 150, 150);
+      }
+   }
+   window->disabled = true;
+}
+ 
 void window_draw(gui_window_t *window) {
 
    if(window->dragged || window->resized)
@@ -342,6 +439,22 @@ void windowmgr_getproperties() {
    int new = windowmgr_add();
    gui_window_t *window = getWindow(new);
    window->state = (void*)window_settings_init(window, selected);
+   window->state_size = sizeof(window_settings_t);
+}
+
+void windowmgr_closeselected_callback(registers_t *regs, void *msg) {
+   int index = (int)msg;
+   debug_printf("Closing window %i\n", index);
+   window_close(regs, index);
+}
+
+void windowmgr_closeselected() {
+   // close selected window
+   int index = getSelectedWindowIndex();
+   if(index == -1) return; // no window selected
+   events_add(1, &windowmgr_closeselected_callback, (void*)index, -1);
+   setSelectedWindowIndex(-1);
+   gui_redrawall();
 }
 
 void windowmgr_init() {
@@ -349,6 +462,8 @@ void windowmgr_init() {
    // bug is just that resize func doesn't work i think
    gui_windows = malloc(sizeof(gui_window_t) * 64);
    memset(gui_windows, 0, sizeof(gui_window_t) * 64);
+   for(int i = 0; i < 100; i++)
+      render_order[i] = NULL;
    // Init with one (debug) window
    window_init(&gui_windows[0]);
    strcpy(gui_windows[0].title, "Debug Log");
@@ -357,6 +472,7 @@ void windowmgr_init() {
    gui_windows[0].y = 100;
    setSelectedWindowIndex(0);
    windowCount++;
+   render_order[0] = &gui_windows[0];
    window_draw(&gui_windows[0]);
 
    // set up default menu
@@ -368,9 +484,13 @@ void windowmgr_init() {
    default_menu.menuitems = malloc(sizeof(windowobj_menu_t) * 10);
    strcpy(default_menu.menuitems[0].text, "Settings");
    default_menu.menuitems[0].func = &windowmgr_getproperties;
+   default_menu.menuitems[0].disabled = false;
+   strcpy(default_menu.menuitems[1].text, "Close");
+   default_menu.menuitems[1].func = &windowmgr_closeselected;
+   default_menu.menuitems[1].disabled = false;
    //strcpy(default_menu.menuitems[1].text, "Test2");
    //default_menu.menuitems[1].func = NULL;
-   default_menu.menuitem_count = 1;
+   default_menu.menuitem_count = 2;
 }
 
 void toolbar_draw() {
@@ -380,20 +500,26 @@ void toolbar_draw() {
    // padding = 2px
    for(int i = 0; i < getWindowCount(); i++) {
       if(getWindow(i)->closed) continue;
-      int bg = COLOUR_TASKBAR_ENTRY;
-      if(getWindow(i)->minimised)
-         bg = COLOUR_LIGHT_GREY;
-      if(getWindow(i)->active)
-         bg = COLOUR_DARK_GREY;
-      int textWidth = gui_gettextwidth(6);
+
+      int bg = COLOUR_LIGHT_GREY;
+      int fg = COLOUR_DARK_GREY;
+      if(getWindow(i)->minimised) {
+         bg = COLOUR_TOOLBAR_ENTRY;
+         fg = COLOUR_BLACK;
+      }
+      if(getWindow(i)->active) {
+         bg = COLOUR_LIGHTLIGHT_GREY;
+         fg = COLOUR_BLACK;
+      }
+      int textWidth = gui_gettextwidth(10);
       int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
-      char text[7] = "   ";
-      strcpy_fixed(text, getWindow(i)->title, 6);
+      char text[11] = "       ";
+      strcpy_fixed(text, getWindow(i)->title, 10);
       int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
       int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
       gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
-      gui_writestrat(text, COLOUR_WHITE, itemX+textX, itemY+TOOLBAR_PADDING/2);
-      draw_line(&surface, 0, itemX, itemY+TOOLBAR_ITEM_HEIGHT,false,TOOLBAR_ITEM_WIDTH);
+      gui_writestrat(text, fg, itemX+textX, itemY+TOOLBAR_PADDING/2);
+      draw_line(&surface, COLOUR_TOOLBAR_BORDER, itemX, itemY+TOOLBAR_ITEM_HEIGHT,false,TOOLBAR_ITEM_WIDTH);
       getWindow(i)->toolbar_pos = toolbarPos;
       toolbarPos++;
    }
@@ -406,6 +532,7 @@ void windowmgr_uparrow(registers_t *regs, gui_window_t *window) {
 
    if(window->uparrow_func == NULL) return;
 
+   gui_interrupt_switchtask(regs);
    int taskIndex = get_current_task();
    task_state_t *task = &gettasks()[taskIndex];
 
@@ -424,6 +551,7 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
 
    if(window->downarrow_func == NULL) return;
 
+   gui_interrupt_switchtask(regs);
    int taskIndex = get_current_task();
    task_state_t *task = &gettasks()[taskIndex];
 
@@ -623,10 +751,10 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    if(window->dragged) {
       window->x += relX;
       window->y -= relY;
-      if(window->x < 0)
-         window->x = 0;
-      if(window->x + window->width > (int)surface.width)
-         window->x = surface.width - window->width;
+      if(window->x < 1)
+         window->x = 1;
+      if(window->x + window->width + 2 > (int)surface.width)
+         window->x = surface.width - window->width - 2;
       if(window->y < 0)
          window->y = 0;
       if(window->y + window->height > (int)surface.height - TOOLBAR_HEIGHT)
@@ -674,7 +802,10 @@ bool windowmgr_click(void *regs, int x, int y) {
       // check other windows
       setSelectedWindowIndex(-1);
       for(int i = 0; i < getWindowCount(); i++) {
-         if(clicked_on_window(regs, i, x, y)) break;
+         if(render_order[i] == NULL) continue;
+         int index = get_window_index_from_pointer(render_order[i]);
+
+         if(clicked_on_window(regs, index, x, y)) break;
       }
       if(selectedWindow) {
          // clicked_on_window sets dragged to true, so window content would be hidden on draw
@@ -727,16 +858,17 @@ void windowmgr_rightclick(void *regs, int x, int y) {
    default_menu.visible = true;
    default_menu.x = x;
    default_menu.y = y;
+   if(default_menu.y > surface.height - default_menu.height - TOOLBAR_HEIGHT) {
+      // menu would be off screen, move up
+      default_menu.y = surface.height - default_menu.height - TOOLBAR_HEIGHT;
+   }
 }
 
 void windowmgr_draw() {
-   // draw windows in reverse index order, then selected on top
    for(int i = getWindowCount()-1; i >= 0; i--) {
-      if(i != getSelectedWindowIndex())
-         window_draw(getWindow(i));
+      if(render_order[i] == NULL) continue;
+      window_draw(render_order[i]);
    }
-   if(selectedWindow != NULL)
-      window_draw(selectedWindow);
 
    windowobj_draw(&default_menu);
 }
@@ -804,7 +936,7 @@ void desktop_draw() {
    draw_string(&surface, "FileMgr", 0xFFFF, x, y);
    y += 10 + getFont()->height;
    bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
-   y += 10 + bmp_get_height(icon_files);
+   y += 10 + bmp_get_height(icon_window);
    draw_string(&surface, "UsrTerm", 0xFFFF, x, y);
    y += 10 + getFont()->height;
    bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
@@ -932,7 +1064,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width;
       args[0] = height - TITLEBAR_HEIGHT;
-      for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size)/0x1000; i++)
+      for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size+0xFFF)/0x1000; i++)
          map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
    }

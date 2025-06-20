@@ -10,6 +10,6 @@ void window_term_backspace(void *window);
 void window_term_uparrow(void *window);
 void window_term_downarrow(void *window);
 void window_term_draw(void *window);
-void window_checkcmd(void *regs, gui_window_t *window);
+void window_term_checkcmd(void *regs, void *window);
 
 #endif

@@ -439,7 +439,6 @@ void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    uint16_t curCluster = clusterNo;
    while(bytesWritten < size) {
       // Calculate the first sector of this cluster
-      debug_printf("Writing to cluster %u\n", curCluster);
       uint32_t diskSector = ((curCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
       uint32_t sectorAddr = baseAddr + diskSector * fat_bpb->bytesPerSector;
       uint32_t toWrite = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;

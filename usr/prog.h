@@ -1,7 +1,9 @@
-#include <stdint.h>
-#include "../windowobj.h"
+#ifndef PROG_H
+#define PROG_H
 
-#define NULL ( (void *) 0)
+#include <stdint.h>
+#include <stddef.h>
+#include "../windowobj.h"
 
 static inline void write_str(char *str) {
    asm volatile(
@@ -224,14 +226,15 @@ static inline void fat_new_file(char *path) {
    );
 }
 
-static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale) {
+static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is_transparent) {
    asm volatile (
       "int $0x30;"
       :: "a" (21),
       "b" ((uint32_t)bmp),
       "c" ((uint32_t)x),
       "d" ((uint32_t)y),
-      "S" ((uint32_t)scale)
+      "S" ((uint32_t)scale),
+      "D" ((uint32_t)white_is_transparent)
    );
 }
 
@@ -277,11 +280,11 @@ static inline uint32_t *fat_read_dir(int firstClusterNo) {
    return (uint32_t*)addr;
 }
 
-static inline void debug_write_uint(int num) {
+static inline void debug_write_str(char *str) {
    asm volatile(
       "int $0x30"
-      :: "a" (26),
-      "b" (num)
+      :: "a" (49),
+      "b" (str)
    );
 }
 
@@ -334,26 +337,6 @@ static inline void queue_event(uint32_t callback, int delta) {
       "b" ((uint32_t)callback),
       "c" ((uint32_t)delta)
    );
-}
-
-static inline windowobj_t *register_windowobj(int type, int x, int y, int width, int height) {
-   uint32_t addr;
-    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
-      : "a" (31)
-   );
-   windowobj_t *wo = (windowobj_t*)addr;
-   wo->type = type;
-   wo->x = x;
-   wo->y = y;
-   wo->width = width;
-   wo->height = height;
-   if(type != WO_BUTTON) {
-      wo->texthalign = false;
-      wo->textvalign = false;
-   }
-   return wo;
 }
 
 static inline void launch_task(char *path, int argc, char **args) {
@@ -415,6 +398,22 @@ static inline void display_colourpicker(void *callback) {
    );
 }
 
+static inline void display_filepicker(void *callback) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (48),
+      "b" ((uint32_t)callback)
+   );
+}
+
+static inline void read(char *buf) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (47),
+      "b" ((uint32_t)buf)
+   );
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(uint32_t addr) {
@@ -424,3 +423,5 @@ static inline void override_term_checkcmd(uint32_t addr) {
       "b" ((uint32_t)addr)
    );
 }
+
+#endif

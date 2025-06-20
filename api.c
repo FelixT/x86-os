@@ -78,7 +78,7 @@ void api_return_framebuffer(registers_t *regs) {
    regs->ebx = framebuffer;
    uint32_t size = gui_get_windows()[get_current_task_window()].framebuffer_size;
    // map to task
-   for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size)/0x1000; i++) {
+   for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size+0xFFF)/0x1000; i++) {
       map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
    }
 }
@@ -186,7 +186,9 @@ void api_malloc(registers_t *regs) {
    //task->no_allocated++;*/
 
    // identity map
-   map(task->page_dir, (uint32_t)mem, (uint32_t)mem, 1, 1);
+   for(uint32_t i = (uint32_t)mem/0x1000; i < ((uint32_t)mem+regs->ebx+0xFFF)/0x1000; i++) {
+      map(task->page_dir, i*0x1000, i*0x1000, 1, 1);
+   }
 
    regs->ebx = (uint32_t)mem;
 
@@ -212,7 +214,7 @@ void api_fat_get_bpb(registers_t *regs) {
 void api_fat_read_root(registers_t *regs) {
    // out: ebx
    fat_dir_t *items = fat_read_root();
-   for(uint32_t i = (uint32_t)items/0x1000; i < ((uint32_t)items+sizeof(fat_dir_t)*fat_get_bpb().noRootEntries)/0x1000; i++) {
+   for(uint32_t i = (uint32_t)items/0x1000; i < ((uint32_t)items+sizeof(fat_dir_t)*fat_get_bpb().noRootEntries+0xFFF)/0x1000; i++) {
       map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
    }
 
@@ -234,8 +236,11 @@ void api_fat_read_file(registers_t *regs) {
    // IN: ecx = file size
    // OUT: ebx = addr of file content buffer
 
+   // todo: chunk this in events
+
    uint8_t *content = fat_read_file(regs->ebx, regs->ecx);
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)content, (uint32_t)content, 1, 1);
+   for(uint32_t i = (uint32_t)content/0x1000; i < ((uint32_t)content+regs->ecx+0xFFF)/0x1000; i++)
+      map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
    regs->ebx = (uint32_t)content;
 }
 
@@ -261,7 +266,7 @@ void api_draw_bmp(registers_t *regs) {
    // IN: esi = scale
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
 
-   bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, false, regs->esi);
+   bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, regs->edi, regs->esi);
 }
 
 void api_clear_window(registers_t *regs) {
@@ -355,6 +360,7 @@ void api_set_window_title(registers_t *regs) {
 
    // redraw window
    gui_draw_window(get_current_task_window());
+   toolbar_draw();
 }
 
 void api_set_working_dir(registers_t *regs) {
@@ -387,5 +393,39 @@ void api_display_colourpicker(registers_t *regs) {
 
    gui_window_t *parent = getWindow(get_current_task_window());
    int popup = windowmgr_add();
+   debug_printf("Displaying colourpicker\n");
    window_popup_colourpicker(getWindow(popup), parent, (void*)regs->ebx);
+}
+
+void api_display_filepicker(registers_t *regs) {
+   // IN: ebx = callback function (argument is char *path)
+
+   gui_window_t *parent = getWindow(get_current_task_window());
+   int popup = windowmgr_add();
+   window_popup_filepicker(getWindow(popup), parent, (void*)regs->ebx);
+}
+
+void api_read_callback(void *regs, char *buffer) {
+   (void)regs;
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+
+   window->read_func = NULL;
+   strcpy(window->read_buffer, buffer);
+   gettasks()[get_current_task()].paused = false;
+}
+
+void api_read(registers_t *regs) {
+   // IN: ebx = char* buffer
+   // OUT: buffer is populated
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   window->read_func = &api_read_callback;
+   window->read_buffer = (char*)regs->ebx;
+   gettasks()[get_current_task()].paused = true;
+   switch_task(regs); // yield
+}
+
+void api_debug_write_str(registers_t *regs) {
+   debug_printf("t%iw%i: ", get_current_task(), get_current_task_window(), getSelectedWindowIndex());
+   debug_printf((char*)regs->ebx);
+   debug_printf("\n");
 }

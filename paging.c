@@ -119,7 +119,7 @@ page_dir_entry_t *new_page() {
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)
       map(dir, i*0x1000, (v_offset+i)*0x1000, 0, 0);
    // identity map framebuffer
-   for(uint32_t i = (uint32_t)gui_get_framebuffer()/0x1000; i < ((uint32_t)gui_get_framebuffer()+gui_get_framebuffer_size())/0x1000; i++)
+   for(uint32_t i = (uint32_t)gui_get_framebuffer()/0x1000; i < ((uint32_t)gui_get_framebuffer()+gui_get_framebuffer_size()+0xFFF)/0x1000; i++)
       map(dir, i*0x1000, i*0x1000, 0, 0);
 
    return dir;
@@ -169,4 +169,8 @@ page_dir_entry_t *page_get_kernel_pagedir() {
 void swap_pagedir(page_dir_entry_t *dir) {
    current_page_dir = dir;
    load_page_dir((uint32_t*)&dir[0] - (V_KERNEL_START - KERNEL_START));
+}
+
+page_dir_entry_t *page_get_current() {
+   return current_page_dir;
 }

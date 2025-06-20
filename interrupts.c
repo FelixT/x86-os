@@ -8,6 +8,7 @@
 #include "ata.h"
 #include "windowmgr.h"
 #include "memory.h"
+#include "window_popup.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -265,6 +266,15 @@ void software_handler(registers_t *regs) {
       case 46:
          api_display_colourpicker(regs);
          break;
+      case 47:
+         api_read(regs);
+         break;
+      case 48:
+         api_display_filepicker(regs);
+         break;
+      case 49:
+         api_debug_write_str(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -275,8 +285,6 @@ void software_handler(registers_t *regs) {
 
 void keyboard_handler(registers_t *regs) {
    unsigned char scan_code = inb(0x60);
-
-   if(videomode == 1) gui_interrupt_switchtask(regs);
 
    if(videomode == 0) {
 
@@ -335,6 +343,24 @@ void mouse_handler(registers_t *regs) {
 
 int timer_i = 0;
 
+void timer_set_hz(int hz) {
+   // set pit to ~new hz
+   int divisor = 1193180 / hz;
+    
+   asm volatile (
+      "movb $0x36, %%al\n\t"
+      "outb %%al, $0x43\n\t"      
+      
+      "movl %0, %%eax\n\t"
+      "outb %%al, $0x40\n\t"
+      "shrl $8, %%eax\n\t"
+      "outb %%al, $0x40"
+      :
+      : "r"(divisor)              
+      : "eax"
+   );
+}
+
 void timer_handler(registers_t *regs) {
 
    if(videomode == 0) {
@@ -360,6 +386,29 @@ void timer_handler(registers_t *regs) {
    timer_i++;
    timer_i%=10000000;
 
+}
+
+void closewindow_event(registers_t *regs, void *msg) {
+   window_close(regs, (int)msg);
+}
+
+void endtask_callback(void *wo, void *regs) {
+   // callback for close window dialog
+   (void)wo;
+   int task = strtoint(getSelectedWindow()->window_objects[0]->text+strlen("Task "));
+   events_add(5, &closewindow_event, (void*)get_task_window(task), -1);
+   end_task(task, regs);
+}
+
+void show_endtask_dialog(int int_no, registers_t *regs) {
+   int popup = windowmgr_add();
+   char buffer[50];
+   sprintf(buffer, "Task %i paused due to exception %i", get_current_task(), int_no);
+   window_popup_dialog(getWindow(popup), getWindow(get_current_task_window()), buffer);
+   window_disable(getWindow(get_current_task_window()));
+   getWindow(popup)->window_objects[1]->click_func = &endtask_callback;
+   strcpy(getWindow(popup)->window_objects[1]->text, "Exit");
+   pause_task(get_current_task(), regs);
 }
 
 void exception_handler(int int_no, registers_t *regs) {
@@ -423,11 +472,13 @@ void exception_handler(int int_no, registers_t *regs) {
             //while(true);
          }
 
-         gui_drawrect(gui_rgb16(255, 0, 0), 60, 0, 8*2, 11);
-         gui_writenumat(int_no, gui_rgb16(255, 200, 200), 60, 0);
+         char buffer[200];
+         gui_drawrect(gui_rgb16(180, 0, 0), 60, 0, 8*2, 11);
+         gui_writenumat(int_no, gui_rgb16(255, 200, 200), 62, 2);
 
-         gui_drawrect(gui_rgb16(255, 0, 0), 200, 0, 8*8, 11);
-         gui_writenumat(regs->eip, gui_rgb16(255, 200, 200), 200, 0);
+         sprintf(buffer, "0x%h", regs->eip);
+         gui_drawrect(gui_rgb16(180, 0, 0), 120, 0, 8*8, 11);
+         gui_writestrat(buffer, gui_rgb16(255, 200, 200), 122, 2);
       
          window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
          window_writenum(get_current_task(), 0, 0);
@@ -437,8 +488,15 @@ void exception_handler(int int_no, registers_t *regs) {
 
          window_resetfuncs(gui_get_windows(get_current_task_window()));
 
-         end_task(get_current_task(), regs);
+         show_endtask_dialog(int_no, regs);
       }
+
+      // show debug window for exceptions
+      /*setSelectedWindowIndex(0);
+      gui_window_t *window = getSelectedWindow();
+      window->minimised = false;
+      window->needs_redraw = true;
+      window_draw(window);*/
          
    } else {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
