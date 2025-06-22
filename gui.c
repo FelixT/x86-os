@@ -135,7 +135,7 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
    gui_writestr("\nSet up timer\n", COLOUR_ORANGE);
-   timer_set_hz(30);
+   timer_set_hz(300);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;

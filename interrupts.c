@@ -275,6 +275,9 @@ void software_handler(registers_t *regs) {
       case 49:
          api_debug_write_str(regs);
          break;
+      case 50:
+         api_fat_new_dir(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -368,7 +371,7 @@ void timer_handler(registers_t *regs) {
    } else {
       gui_showtimer(timer_i%10);
 
-      if(timer_i%2 == 0) {
+      if(timer_i%20 == 0) {
          gui_draw();
       }
 
@@ -396,7 +399,7 @@ void endtask_callback(void *wo, void *regs) {
    // callback for close window dialog
    (void)wo;
    int task = strtoint(getSelectedWindow()->window_objects[0]->text+strlen("Task "));
-   events_add(5, &closewindow_event, (void*)get_task_window(task), -1);
+   events_add(35, &closewindow_event, (void*)get_task_window(task), -1);
    end_task(task, regs);
 }
 

@@ -43,12 +43,11 @@ void _start() {
     set_window_title("Prog4");
     override_draw((uint32_t)NULL);
 
-    fat_dir_t *entry = (fat_dir_t*)fat_parse_path("/bmp/file20.bmp", true);
-    if(entry == NULL) {
+    uint8_t *image = (uint8_t*)fat_read_file("/bmp/file20.bmp");
+    if(image == NULL) {
         write_str("File icon not found\n");
         exit(0);
     }
-    image = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
 
     clear();
 

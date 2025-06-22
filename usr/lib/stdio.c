@@ -66,7 +66,7 @@ FILE* fopen(const char* filename, const char* mode) {
             free((uint32_t)file->path, 512);
             return NULL;
         }
-        file->buffer = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+        file->buffer = (uint8_t*)fat_read_file(file->path);
         file->size = entry->fileSize;
         file->content_size = entry->fileSize;
         file->position = 0;
@@ -87,7 +87,7 @@ FILE* fopen(const char* filename, const char* mode) {
             free((uint32_t)file->path, 512);
             return NULL;
         }
-        file->buffer = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+        file->buffer = (uint8_t*)fat_read_file(file->path);
         file->size = entry->fileSize + 0x1000;
         uint8_t *newbuf = (uint8_t*)malloc(file->size);
         memcpy(newbuf, file->buffer, entry->fileSize);

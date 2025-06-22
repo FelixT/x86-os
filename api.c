@@ -231,17 +231,22 @@ void api_fat_parse_path(registers_t *regs) {
    regs->ebx = (uint32_t)entry;
 }
 
+void api_fat_read_file_callback(void *regs, int task) {
+   gettasks()[task].paused = false;
+   switch_to_task(task, regs);
+}
+
 void api_fat_read_file(registers_t *regs) {
-   // IN: ebx = first cluster no
-   // IN: ecx = file size
-   // OUT: ebx = addr of file content buffer
-
-   // todo: chunk this in events
-
-   uint8_t *content = fat_read_file(regs->ebx, regs->ecx);
-   for(uint32_t i = (uint32_t)content/0x1000; i < ((uint32_t)content+regs->ecx+0xFFF)/0x1000; i++)
-      map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
-   regs->ebx = (uint32_t)content;
+   // IN: ebx = path
+   // OUT: ebx = addr of file content buffer, null on fail
+   fat_dir_t *entry = fat_parse_path((char*)regs->ebx, true);
+   if(!entry) {
+      regs->ebx = 0;
+   } else {
+      regs->ebx = (uint32_t)fat_read_file_chunked(entry->firstClusterNo, entry->fileSize, &api_fat_read_file_callback, get_current_task());
+      gettasks()[get_current_task()].paused = true;
+      switch_task(regs); // yield
+   }
 }
 
 void api_get_get_dir_size(registers_t *regs) {
@@ -428,4 +433,9 @@ void api_debug_write_str(registers_t *regs) {
    debug_printf("t%iw%i: ", get_current_task(), get_current_task_window(), getSelectedWindowIndex());
    debug_printf((char*)regs->ebx);
    debug_printf("\n");
+}
+
+void api_fat_new_dir(registers_t *regs) {
+   // IN: ebx - dir path
+   fat_new_dir((char*)regs->ebx);
 }

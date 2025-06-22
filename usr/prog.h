@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "../windowobj.h"
+#include <stdbool.h>
 
 static inline void write_str(char *str) {
    asm volatile(
@@ -194,15 +194,14 @@ static inline uint32_t *fat_parse_path(char *path, bool isfile) {
    return (uint32_t*)addr;
 }
 
-static inline uint32_t *fat_read_file(uint16_t firstClusterNo, uint32_t fileSize) {
+static inline uint32_t *fat_read_file(char *path) {
    uint32_t addr;
 
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (addr)
       : "a" (20),
-      "b" ((uint32_t)firstClusterNo),
-      "c" (fileSize)
+      "b" ((uint32_t)path)
    );
 
    return (uint32_t*)addr;
@@ -222,6 +221,14 @@ static inline void fat_new_file(char *path) {
    asm volatile (
       "int $0x30;"
       :: "a" (41),
+      "b" ((uint32_t)path)
+   );
+}
+
+static inline void fat_new_dir(char *path) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (50),
       "b" ((uint32_t)path)
    );
 }

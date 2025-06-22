@@ -40,9 +40,9 @@ void term_cmd_help() {
    printf("LAUNCH path\n");
    printf("FILES, TEXT <path>\n");
    printf("FAT <path>, FATNEW path\n");
-   printf("FATDIR cluster, FATFILE cluster\n");
+   printf("FATDIR cluster, FREAD path\n");
    printf("LS, CD path, PWD\n");
-   printf("CAT path, TOUCH path\n");
+   printf("CAT path, TOUCH path, MKDIR path\n");
    printf("DMPMEM x <y>\n");
    printf("FONT path\n");
 }
@@ -115,12 +115,9 @@ void printdir(fat_dir_t *items, int size) {
       strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
       printf("%s%s%s ", fileName, (extension[0] != '\0') ? "." : "", extension);
       if((items[i].attributes & 0x10) == 0x10) // directory
-         printf("DIR");
+         printf("DIR\n");
       else
-         printf("%u",items[i].fileSize);
-      
-      printf(" <%i>\n", items[i].firstClusterNo);
-
+         printf("<%u bytes>\n",items[i].fileSize);
    }
 }
 
@@ -170,10 +167,11 @@ void term_cmd_viewbmp(char *arg) {
    launch_task("/sys/bmpview.elf", 1, args);
 }
 
-void term_cmd_fatfile(char *arg) {
-   int cluster = stoi(arg);
-   uint8_t *file = (uint8_t*)fat_read_file((uint16_t)cluster, 0);
-   printf("File loaded into %u / 0x%h\n", (uint32_t)file, (uint32_t)file);
+void term_cmd_fread(char *arg) {
+   char path[256];
+   get_abs_path(path, arg);
+   uint8_t *file = (uint8_t*)fat_read_file(path);
+   printf("File loaded into 0x%h\n", (uint32_t)file);
 }
 
 void term_cmd_fatdir(char *arg) {
@@ -379,6 +377,13 @@ void term_cmd_fwrite(char *arg) {
    printf("Closed file\n");
 }
 
+void term_cmd_mkdir(char *arg) {
+   char path[256];
+   get_abs_path(path, arg);
+
+   fat_new_dir(path);
+}
+
 void checkcmd(char *buffer) {
 
    char command[10];
@@ -394,8 +399,8 @@ void checkcmd(char *buffer) {
       term_cmd_fat(arg);
    else if(strcmp(command, "FATDIR"))
       term_cmd_fatdir(arg);
-   else if(strcmp(command, "FATFILE"))
-      term_cmd_fatfile(arg);
+   else if(strcmp(command, "FREAD"))
+      term_cmd_fread(arg);
    else if(strcmp(command, "FATNEW"))
       term_cmd_fatnew(arg);
    else if(strcmp(command, "FILES"))
@@ -430,6 +435,8 @@ void checkcmd(char *buffer) {
       term_cmd_fappend(arg);
    else if(strcmp(command, "FWRITE"))
       term_cmd_fwrite(arg);
+   else if(strcmp(command, "MKDIR"))
+      term_cmd_mkdir(arg);
    else
       term_cmd_default(command);
 

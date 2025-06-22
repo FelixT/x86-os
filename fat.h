@@ -68,5 +68,7 @@ int fat_get_dir_size(uint16_t clusterNo);
 void fat_write_file(char *path, uint8_t *buffer, uint32_t size);
 void fat_new_file(char *path, uint8_t *buffer, uint32_t size);
 fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir);
+bool fat_new_dir(char *path);
+uint8_t* fat_read_file_chunked(uint16_t clusterNo, uint32_t size, void *callback, int task);
 
 #endif

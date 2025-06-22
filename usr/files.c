@@ -150,6 +150,7 @@ void click(int x, int y) {
    if((cur_items[index].attributes & 0x10) == 0x10) {
       // directory
       // free((uint32_t)cur_items, no_items*32);
+      offset = 0;
       if(cur_items[index].firstClusterNo == 0) {
          read_root();
       } else {
@@ -264,19 +265,17 @@ void _start(int argc, char **args) {
    cur_items = NULL;
    no_items = 0;
    offset = 0;
-   fat_dir_t *entry = (fat_dir_t*)fat_parse_path("/bmp/file20.bmp", true);
-   if(entry == NULL) {
+   file_icon = (uint8_t*)fat_read_file("/bmp/file20.bmp");
+   if(file_icon == NULL) {
       write_str("File icon not found\n");
       exit(0);
    }
-   file_icon = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
 
-   entry = (fat_dir_t*)fat_parse_path("/bmp/folder20.bmp", true);
-   if(entry == NULL) {
+   folder_icon = (uint8_t*)fat_read_file("/bmp/folder20.bmp");
+   if(folder_icon == NULL) {
       write_str("Folder icon not found\n");
       exit(0);
    }
-   folder_icon = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
 
    framebuffer = (uint16_t*)get_framebuffer();
 

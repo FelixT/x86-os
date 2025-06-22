@@ -140,6 +140,9 @@ void window_close(void *regs, int windowIndex) {
       // debug window
       int popup = windowmgr_add();
       window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window");
+      getWindow(windowIndex)->minimised = true;
+      getWindow(windowIndex)->active = false;
+      setSelectedWindowIndex(-1);
       return;
    }
 

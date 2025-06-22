@@ -51,5 +51,6 @@ void api_display_colourpicker(registers_t *regs);
 void api_display_filepicker(registers_t *regs);
 void api_read(registers_t *regs);
 void api_debug_write_str(registers_t *regs);
+void api_fat_new_dir(registers_t *regs);
 
 #endif

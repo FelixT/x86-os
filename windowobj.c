@@ -215,7 +215,7 @@ void windowobj_click(void *regs, void *windowobj) {
       windowobj_click_event_t *event = (windowobj_click_event_t*)malloc(sizeof(windowobj_click_event_t));
       event->wo = wo;
       event->window = getSelectedWindow();
-      events_add(2, &windowobj_unclick, (void*)event, -1);
+      events_add(30, &windowobj_unclick, (void*)event, -1);
    }
 
    if(wo->type == WO_MENU) {

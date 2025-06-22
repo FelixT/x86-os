@@ -4,6 +4,7 @@
 #include "prog.h"
 #include "prog_wo.h"
 #include "../lib/string.h"
+#include "lib/wo_api.h"
 
 typedef struct {
    uint8_t filename[11];
@@ -31,9 +32,15 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    clear();
    wo_text_o->width = w - 10;
    wo_text_o->height = h - 20;
-   wo_path_o->width = 2*(w-10)/3;
-   wo_status_o->x = 42+2*(w-10)/3;
-   wo_status_o->width = (w-10)/3 - 42;
+
+   int padding = 2;
+   int x = wo_open_o->x + wo_open_o->width + padding;
+   wo_path_o->width = (((w - 10) - x) * 2) / 3;
+   x += wo_path_o->width + padding;
+
+   wo_status_o->width = wo_path_o->width/2;
+   wo_status_o->x = x;
+
    redraw();
    end_subroutine();
 }
@@ -53,7 +60,7 @@ void load_file(char *filepath) {
    }
    strcpy(wo_path_o->text, filepath);
    wo_path_o->textpos = strlen(filepath);
-   wo_text_o->text = (char*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+   wo_text_o->text = (char*)fat_read_file(filepath);
    uinttostr(entry->fileSize, wo_status_o->text);
    wo_text_o->textpos = entry->fileSize;
    wo_text_o->text[wo_text_o->textpos] = '\0';
@@ -101,44 +108,29 @@ void _start(int argc, char **args) {
    int x = 5;
    int padding = 2;
 
-   windowobj_t *wo_save = register_windowobj(WO_BUTTON, x, 2, 34, 13);
-   wo_save->text = (char*)malloc(1);
-   strcpy(wo_save->text, "Save");
-   wo_save->textvalign = true;
-   wo_save->click_func = &save_func;
-   wo_save_o = wo_save;
+   wo_save_o = create_button(x, 2, "Save");
+   wo_save_o->click_func = &save_func;
+   x += wo_save_o->width + padding;
 
-   x += wo_save->width + padding;
+   wo_open_o = create_button(x, 2, "Open");
+   wo_open_o->click_func = &open_func;
+   x += wo_open_o->width + padding;
 
-   windowobj_t *wo_open = register_windowobj(WO_BUTTON, x, 2, 34, 13);
-   wo_open->text = (char*)malloc(1);
-   strcpy(wo_open->text, "Open");
-   wo_open->textvalign = true;
-   wo_open->click_func = &open_func;
-   wo_open_o = wo_open;
+   wo_path_o = create_text(x, 2, "<New file>");
+   wo_path_o->width = (((width - 10) - x) * 2) / 3;
+   wo_path_o->return_func = &path_return;
+   wo_path_o->textvalign = true;
+   x += wo_path_o->width + padding;
 
-   x += wo_open->width + padding;
+   wo_status_o = create_text(x, 2, "");
+   wo_status_o->width = wo_path_o->width/2;
+   wo_status_o->textvalign = true;
+   wo_status_o->texthalign = true;
 
-   windowobj_t *wo_path = register_windowobj(WO_TEXT, x, 2, 2*(width-10)/3, 13);
-   wo_path->text = (char*)malloc(1);
-   strcpy(wo_path->text, "<New file>");
-   wo_path->textvalign = true;
-   wo_path->return_func = &path_return;
-   wo_path_o = wo_path;
-
-   x += wo_path->width + padding;
-
-   windowobj_t *wo_status = register_windowobj(WO_TEXT, x, 2, (width-10)/3 - 80, 13);
-   wo_status->text = (char*)malloc(1);
-   wo_status->text[0] = '\0';
-   wo_status->textvalign = true;
-   wo_status_o = wo_status;
-
-   windowobj_t *wo_text = register_windowobj(WO_TEXT, 5, 17, width - 10, height - 20);
-   wo_text->type = WO_TEXT;
-   wo_text->text = (char*)malloc(0x1000);
-   wo_text->text[0] = '\0';
-   wo_text_o = wo_text;
+   wo_text_o = create_text(5, 17, "");
+   //resize() // resize text buffer
+   wo_text_o->width = width - 10;
+   wo_text_o->height = height - 20;
 
    if(argc == 1 && *args[0] != '\0') {
       if(args[0][0] != '/') {

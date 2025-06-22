@@ -272,7 +272,7 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
    task_event_t *event = (task_event_t*)msg;
    if(tasks[current_task].in_routine) {
       // queue back up again
-      events_add(15, &task_execute_queued_subroutine, (void*)event, -1);
+      events_add(30, &task_execute_queued_subroutine, (void*)event, -1);
    } else {
 
       if(!switch_to_task(event->task, regs)) return;
@@ -306,7 +306,7 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
       event->args = args;
       event->argc = argc;
       event->task = current_task;
-      events_add(5, &task_execute_queued_subroutine, (void*)event, -1);
+      events_add(10, &task_execute_queued_subroutine, (void*)event, -1);
       //   return;
       return;
    } else if(!tasks[current_task].enabled) {

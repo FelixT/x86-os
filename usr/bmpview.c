@@ -251,14 +251,14 @@ bool bmp_check() {
 void open_file(char *p) {
    clear();
    strcpy(path, p);
-   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
-   if(entry == NULL) {
+   bmp = (uint8_t*)fat_read_file(path);
+   if(bmp == NULL) {
       display_popup("Error", "File not found\n");
       exit(0);
    }
-   bmp = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+
    info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
-   if(bmp_check(info))
+   if(bmp_check())
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
 
    end_subroutine();
@@ -354,9 +354,9 @@ void _start(int argc, char **args) {
    override_resize((uint32_t)&resize);
    clear();
    
-   bmp = (uint8_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+   bmp = (uint8_t*)fat_read_file(path);
    info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
-   if(bmp_check(info))
+   if(bmp_check())
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
 
    framebuffer = (uint16_t*)get_framebuffer();
