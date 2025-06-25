@@ -585,10 +585,9 @@ bool fat_new_dir(char *path) {
 
 typedef struct {
    uint16_t clusterNo;
-   uint32_t size; // read size
-   bool readEntireFile;
+   uint32_t size; // read/buffer size
+   uint32_t sizeDisk;
    uint8_t *buffer;
-   uint32_t bufferSize;
    void *callback;
    int currentCluster;
    int readCount; // no clusters read
@@ -600,6 +599,8 @@ typedef struct {
 void fat_read_file_callback(registers_t *regs, void *msg) {
    fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
 
+   switch_to_task(state->task, regs); // switch page dir
+
    // read all sectors of cluster
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
       uint32_t currentClusterSector = ((state->currentCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
@@ -610,21 +611,15 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
          uint32_t memOffset = fat_bpb->bytesPerSector * (state->readCount*fat_bpb->sectorsPerCluster + i);
          // copy to master buffer
          for(int b = 0; b < fat_bpb->bytesPerSector; b++) {
-            if(!state->readEntireFile && state->readBytes >= state->size) {
+            if(state->readBytes >= state->size) {
                free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
                (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
                free((uint32_t)state, sizeof(fat_read_file_state_t));
+               switch_task(regs); // yield, tasks still paused
                return;
             }
             state->buffer[memOffset + b] = buf[b];
             state->readBytes++;
-
-            if(state->readBytes >= state->bufferSize) {
-               free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-               (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
-               free((uint32_t)state, sizeof(fat_read_file_state_t));
-               return;
-            }
          }
       }
 
@@ -642,6 +637,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
          // bad cluster
          debug_printf("FAT error: Hit bad cluster\n");
          free((uint32_t)state, sizeof(fat_read_file_state_t));
+         switch_task(regs); // yield
          return;
       } else { 
          state->currentCluster = tableVal; // table value is the next cluster
@@ -650,18 +646,18 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
    
    }
 
+   switch_task(regs); // yield
    events_add(1, &fat_read_file_callback, (void*)state, -1);
    
 }
 
-uint8_t *fat_read_file_chunked(uint16_t clusterNo, uint32_t size, void *callback, int task) {
+void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t size, void *callback, int task) {
    
    fat_read_file_state_t *state = (fat_read_file_state_t*)malloc(sizeof(fat_read_file_state_t));
    state->clusterNo = clusterNo;
    state->size = size;
    state->callback = callback;
    state->task = task;
-   state->readEntireFile = (size == 0);
 
    // read entire fat table
    uint32_t fatTableAddr = baseAddr + fat_bpb->noReservedSectors*fat_bpb->bytesPerSector;
@@ -684,24 +680,22 @@ uint8_t *fat_read_file_chunked(uint16_t clusterNo, uint32_t size, void *callback
 
    uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
 
-   state->bufferSize = (state->readEntireFile) ? fileSizeDisk : size;
-   state->buffer = malloc(state->bufferSize);
+   state->sizeDisk = fileSizeDisk;
+   state->buffer = buffer;
    state->currentCluster = state->clusterNo;
    state->readCount = 0;
    state->readBytes = 0;
 
-   debug_printf("Buffer size %u task %u\n", state->bufferSize, state->task);
+   debug_printf("Buffer size %u task %u\n", state->size, state->task);
 
    // map to task
-   if(task > -1) {
-      for(uint32_t i = (uint32_t)state->buffer/0x1000; i < ((uint32_t)state->buffer+state->bufferSize+0xFFF)/0x1000; i++)
+   /*if(task > -1) {
+      for(uint32_t i = (uint32_t)state->buffer/0x1000; i < ((uint32_t)state->buffer+state->size+0xFFF)/0x1000; i++)
          map(gettasks()[task].page_dir, i*0x1000, i*0x1000, 1, 1);
-   }
+   }*/
 
    // kick off read event chain
    events_add(1, &fat_read_file_callback, (void*)state, -1);
-
-   return state->buffer;
 }
 
 

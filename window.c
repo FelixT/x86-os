@@ -104,6 +104,12 @@ void window_writestr(char *c, uint16_t colour, int windowIndex) {
       window_drawchar(c[i++], colour, windowIndex);
 }
 
+void window_writestrn(char *c, size_t size, uint16_t colour, int windowIndex) {
+   size_t i = 0;
+   while(c[i] != '\0' && i < size)
+      window_drawchar(c[i++], colour, windowIndex);
+}
+
 void window_writenum(int num, uint16_t colour, int windowIndex) {
    char out[20];
    inttostr(num, out);

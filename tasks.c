@@ -29,6 +29,8 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].in_syscall = false;
    tasks[index].page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
    tasks[index].no_allocated = 0;
+
+   tasks[index].fd_count = 0;
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
@@ -40,17 +42,27 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
 void launch_task(int index, registers_t *regs, bool focus) {
    current_task = index;
 
-   tasks[current_task].registers.ds = USR_DATA_SEG | 3;
-   tasks[current_task].registers.cs = USR_CODE_SEG | 3; // user code segment
+   task_state_t *task = &tasks[current_task];
 
-   tasks[current_task].registers.eflags = regs->eflags;
-   tasks[current_task].registers.useresp = tasks[current_task].stack_top; // stack_top
-   tasks[current_task].registers.ss = USR_DATA_SEG | 3;
+   task->registers.ds = USR_DATA_SEG | 3;
+   task->registers.cs = USR_CODE_SEG | 3; // user code segment
+   task->registers.eflags = regs->eflags;
+   task->registers.useresp = tasks[current_task].stack_top; // stack_top
+   task->registers.ss = USR_DATA_SEG | 3;
 
    int tmpwindow = getSelectedWindowIndex();
    tasks[current_task].window = windowmgr_add();
    if(!focus) setSelectedWindowIndex(tmpwindow);
 
+   // setup stdio
+   fs_file_t *stdin = fs_open("/dev/stdin");
+   fs_file_t *stdout = fs_open("/dev/stdout");
+   fs_file_t *stderr = fs_open("/dev/stderr");
+   task->file_descriptors[0] = stdin;
+   task->file_descriptors[1] = stdout;
+   task->file_descriptors[2] = stderr;
+   task->fd_count = 3;
+   
    debug_printf("Launching task %u\n", index);
 
    tasks[current_task].enabled = true;
@@ -178,10 +190,6 @@ void tasks_init(registers_t *regs) {
    //free((uint32_t)prog, entry->fileSize);
 
    switching = true;
-
-   /*window_writestr("Entry at ", 0, 0);
-   window_writenum(regs->eip, 0, 0);
-   window_writestr("\n", 0, 0);*/
 }
 
 void switch_task(registers_t *regs) {
@@ -249,6 +257,10 @@ int get_task_window(int task) {
 
 int get_current_task() {
    return current_task;
+}
+
+task_state_t *get_current_task_state() {
+   return &tasks[current_task];
 }
 
 int get_task_from_window(int windowIndex) {

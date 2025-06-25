@@ -13,6 +13,7 @@
 #include "registers_t.h"
 #include "elf.h"
 #include "paging.h"
+#include "fs.h"
 
 typedef struct task_state_t {
    bool enabled;
@@ -38,6 +39,10 @@ typedef struct task_state_t {
    bool in_syscall;
    uint16_t syscall_no;
    char working_dir[256]; // current working directory
+   uint32_t heap_start; // heap/end of ds (vmem location)
+   uint32_t heap_end;
+   fs_file_t *file_descriptors[64];
+   int fd_count;
 } task_state_t;
 
 #define TOTAL_STACK_SIZE 0x0010000
@@ -61,6 +66,7 @@ task_state_t *gettasks();
 int get_current_task_window();
 int get_task_window(int task);
 int get_current_task();
+task_state_t *get_current_task_state();
 int get_task_from_window(int windowIndex);
 int get_free_task_index();
 

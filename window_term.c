@@ -49,8 +49,9 @@ uint32_t window_term_argtouint(char *str) {
 }
 
 void window_term_keypress(char key, void *window) {
-   if((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') || (key >= '0' && key <= '9') || (key == ' ')
-   || (key == '/') || (key == '.') || (key == '-')) {
+   if((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')
+    || key == ' ' || key == '/' || key == '.' || key == '-' || key == '(' || key == ')' || key == '<' || key == '>'
+    || key == '=' || key == '+') {
 
       // write to current window
       gui_window_t *selected = (gui_window_t*)window;

@@ -98,20 +98,45 @@ char scan_to_char(int scan_code, bool caps) {
    char upperThird[13] = "ASDFGHJKL;'#";
    char upperFourth[12] = "\\ZXCVBNM,./";
 
+   char shiftFirst[13] = "!@#$%^&*()_+";
+   char shiftSecond[13] = "QWERTYUIOP{}";
+   char shiftThird[13] = "ASDFGHJKL:\"~";
+   char shiftFourth[12] = "|ZXCVBNM<>?";
+
    char c = '\0';
 
-   if(scan_code >= 2 && scan_code <= 13)
-      c = upperFirst[scan_code-2];
-   if(scan_code >= 16 && scan_code <= 27)
-      c = upperSecond[scan_code-16];
-   if(scan_code >= 30 && scan_code <= 41)
-      c = upperThird[scan_code-30];
-   if(scan_code >= 43 && scan_code <= 53)
-      c = upperFourth[scan_code-43];
+   if(scan_code >= 2 && scan_code <= 13) {
+      if(caps) {
+         c = shiftFirst[scan_code-2];
+      } else {
+         c = upperFirst[scan_code-2];
+      }
+   }
+   if(scan_code >= 16 && scan_code <= 27) {
+      if(caps) {
+         c = shiftSecond[scan_code-16];
+      } else {
+         c = upperSecond[scan_code-16];
+      }
+   }
+   if(scan_code >= 30 && scan_code <= 41) {
+      if(caps) {
+         c = shiftThird[scan_code-30];
+      } else {
+         c = upperThird[scan_code-30];
+      }
+   }
+   if(scan_code >= 43 && scan_code <= 53) {
+      if(caps) {
+         c = shiftFourth[scan_code-43];
+      } else {
+         c = upperFourth[scan_code-43];
+      }
+   }
    if(scan_code == 57)
       c = ' ';
 
-   if(!caps && c >= 'A' && c <= 'Z')
+   if(!caps && !caps && c >= 'A' && c <= 'Z')
       c += ('a' - 'A');
 
    return c;
@@ -277,6 +302,15 @@ void software_handler(registers_t *regs) {
          break;
       case 50:
          api_fat_new_dir(regs);
+         break;
+      case 51:
+         api_sbrk(regs);
+         break;
+      case 52:
+         api_open(regs);
+         break;
+      case 53:
+         api_write(regs);
          break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);

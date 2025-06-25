@@ -2,8 +2,8 @@
 global font7
 font7:
 
-; size
-db 79
+; siz2
+db 83
 ; width
 db 5
 ; height
@@ -22,10 +22,14 @@ db '-'
 db '+'
 db '/'
 db ':'
+db ';'
+db '='
 db 39 ; apostrophe
 db '.'
 db '>'
 db '<'
+db '('
+db ')'
 db '_'
 db ','
 db '%'
@@ -156,6 +160,24 @@ font_colon:
    db 00100b
    db 00000b
 
+;font_semicolon:
+   db 00000b
+   db 00100b
+   db 00100b
+   db 00000b
+   db 00100b
+   db 01000b
+   db 00000b
+
+;font_equals
+   db 00000b
+   db 00000b
+   db 01110b
+   db 00000b
+   db 01110b
+   db 00000b
+   db 00000b
+
 global font_apostrophe
 font_apostrophe:
    db 00000b
@@ -195,6 +217,24 @@ font_lessthan:
    db 00100b
    db 00010b
    db 00000b
+
+;font_leftbracket
+   db 00110b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 00110b
+
+;font_rightbracket
+   db 11000b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 11000b
 
 global font_underscore
 font_underscore:

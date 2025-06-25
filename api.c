@@ -10,6 +10,7 @@
 #include "font.h"
 #include "windowmgr.h"
 #include "window_popup.h"
+#include "fs.h"
 
 void api_write_string(registers_t *regs) {
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
@@ -243,7 +244,12 @@ void api_fat_read_file(registers_t *regs) {
    if(!entry) {
       regs->ebx = 0;
    } else {
-      regs->ebx = (uint32_t)fat_read_file_chunked(entry->firstClusterNo, entry->fileSize, &api_fat_read_file_callback, get_current_task());
+      uint8_t *buffer = (uint8_t*)malloc(entry->fileSize);
+      for(uint32_t i = (uint32_t)buffer/0x1000; i < ((uint32_t)buffer+entry->fileSize+0xFFF)/0x1000; i++) {
+         map(get_current_task_state()->page_dir, i*0x1000, i*0x1000, 1, 1);
+      }
+      fat_read_file_chunked(entry->firstClusterNo, buffer, entry->fileSize, &api_fat_read_file_callback, get_current_task());
+      regs->ebx = (uint32_t)buffer;
       gettasks()[get_current_task()].paused = true;
       switch_task(regs); // yield
    }
@@ -410,25 +416,6 @@ void api_display_filepicker(registers_t *regs) {
    window_popup_filepicker(getWindow(popup), parent, (void*)regs->ebx);
 }
 
-void api_read_callback(void *regs, char *buffer) {
-   (void)regs;
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-
-   window->read_func = NULL;
-   strcpy(window->read_buffer, buffer);
-   gettasks()[get_current_task()].paused = false;
-}
-
-void api_read(registers_t *regs) {
-   // IN: ebx = char* buffer
-   // OUT: buffer is populated
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-   window->read_func = &api_read_callback;
-   window->read_buffer = (char*)regs->ebx;
-   gettasks()[get_current_task()].paused = true;
-   switch_task(regs); // yield
-}
-
 void api_debug_write_str(registers_t *regs) {
    debug_printf("t%iw%i: ", get_current_task(), get_current_task_window(), getSelectedWindowIndex());
    debug_printf((char*)regs->ebx);
@@ -438,4 +425,173 @@ void api_debug_write_str(registers_t *regs) {
 void api_fat_new_dir(registers_t *regs) {
    // IN: ebx - dir path
    fat_new_dir((char*)regs->ebx);
+}
+
+void api_sbrk(registers_t *regs) {
+   // change heap size
+
+   // IN: ebx - int increment/delta
+   int delta = (int)regs->ebx;
+   task_state_t *task = &gettasks()[get_current_task()];
+   int old_heapsize = (int)(task->heap_end - task->heap_start);
+   int new_heapsize = old_heapsize + delta;
+   debug_printf("Resizing task %u heap from %u to %u\n", get_current_task(), old_heapsize, new_heapsize);
+
+   // check if we're moving into a new page directory that needs to be mapped or freed
+   uint32_t old_end = page_align_up(task->heap_start + old_heapsize);
+   uint32_t new_end = page_align_up(task->heap_start + new_heapsize);
+   if(new_end > old_end) {
+      // expand
+      int delta_pages = (new_end - old_end)/0x1000;
+      debug_printf("Expand by %u pages\n", delta_pages);
+      uint32_t physical = (uint32_t)malloc(delta_pages*0x1000); // hmm
+      if(!physical) {
+         debug_printf("Out of memory\n");
+      }
+      for(uint32_t i = 0; i < (uint32_t)delta_pages*0x1000; i+=0x1000)
+         map(task->page_dir, physical+i, old_end+i, 1, 1);
+
+   } else if(new_end < old_end) {
+      // shrink
+      int delta_pages = (old_end - new_end)/0x1000;
+
+      debug_printf("Shrink by %u pages\n", delta_pages);
+
+      uint32_t *physical_addrs = NULL;
+      if (delta_pages > 0) {
+         physical_addrs = malloc(delta_pages * sizeof(uint32_t));
+         if(physical_addrs) {
+            for (int i = 0; i < delta_pages; i++) {
+               uint32_t virt = (uint32_t)task->heap_end - (i + 1) * 0x1000;
+               physical_addrs[i] = page_getphysical(task->page_dir, virt);
+            }
+         }
+      }
+
+      for (uint32_t i = 0; i < (uint32_t)delta_pages * 0x1000; i += 0x1000) {
+         uint32_t virt_addr = task->heap_end - 0x1000;
+         unmap(task->page_dir, virt_addr);
+         task->heap_end = virt_addr;
+      }
+        
+        // Free physical memory
+      if(physical_addrs) {
+         for(int i = 0; i < delta_pages; i++) {
+            if(physical_addrs[i]) {
+               free((uint32_t)physical_addrs[i], 0x1000);
+            }
+         }
+         free((uint32_t)physical_addrs, sizeof(uint32_t*));
+      }
+   }
+
+   task->heap_end = task->heap_start + new_heapsize;
+   regs->ebx = old_end;
+
+}
+
+void api_open(registers_t *regs) {
+   // IN: ebx - char* path
+   // OUT: ebx - int fd
+   fs_file_t *file = fs_open((char*)regs->ebx);
+   if(!file) {
+      regs->ebx = -1;
+      debug_printf("api_open: file not found\n");
+      return;
+   }
+   task_state_t *task = get_current_task_state();
+   int fd = task->fd_count;
+   task->file_descriptors[task->fd_count++] = file;
+   regs->ebx = fd;
+}
+
+void api_read_stdin_callback(void *regs, char *buffer) {
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+
+   window->read_func = NULL;
+   strcpy(window->read_buffer, buffer);
+   gettasks()[get_current_task()].paused = false;
+   ((registers_t*)regs)->ebx = strlen(window->read_buffer)+1; // return length
+}
+
+void api_read_fd_callback(registers_t *regs, int task) {
+   debug_printf("Read callback\n");
+   gettasks()[task].paused = false;
+   switch_to_task(task, regs); // wake
+}
+
+void api_read(registers_t *regs) {
+   // IN: ebx - int fd
+   // IN: ecx - char *buf
+   // IN: size_t count
+   // OUT: size_t bytes read
+   task_state_t *task = get_current_task_state();
+   int fd = regs->ebx;
+   char *buf = (char*)regs->ecx;
+   size_t count = regs->edx;
+
+   if(fd < 0 || fd >= task->fd_count) {
+      debug_printf("read: fd not found\n");
+      regs->ebx = -1;
+      return;
+   }
+   if(!task->file_descriptors[fd]->active) {
+      debug_printf("read: fd inactive\n");
+      regs->ebx = -1;
+      return;
+   }
+
+   if(fd == 0) {
+      // read from stdin
+      gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+      window->read_func = &api_read_stdin_callback;
+      window->read_buffer = buf;
+      gettasks()[get_current_task()].paused = true;
+      switch_task(regs); // yield
+   } else if(fd > 0 && fd < 3) {
+      // stdout/stderr - can only write to these
+   } else if(fd >= 3) {
+      // read from file descriptor
+      if(fd >= task->fd_count) {
+         debug_printf("api_read: fd not found\n");
+         regs->ebx = -1;
+         return;
+      }
+      if(!fs_read(task->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task())) {
+         regs->ebx = 0;
+         return;
+      } else {
+         regs->ebx = count;
+      }
+      task->paused = true;
+   }
+
+}
+
+void api_write(registers_t *regs) {
+   // IN: ebx - int fd
+   // IN: ecx - uint8_t *buffer
+   // IN: edx - size_t size
+   task_state_t *task = get_current_task_state();
+   int fd = regs->ebx;
+   uint8_t *buffer = (uint8_t*)regs->ecx;
+   size_t size = (size_t)regs->edx;
+   if(fd < 0 || fd > task->fd_count) {
+      regs->ebx = -1;
+   } else {
+      fs_write(task->file_descriptors[fd], buffer, size);
+   }
+}
+
+void api_fsize(registers_t *regs) {
+   // stub
+   // IN: ebx - int fd
+   // OUT: ebx - filesize
+   task_state_t *task = get_current_task_state();
+   int fd = regs->ebx;
+   if(fd < 0 || fd > task->fd_count) {
+      regs->ebx = -1;
+   } else {
+      regs->ebx = task->file_descriptors[fd]->file_size;
+   }
 }

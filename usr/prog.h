@@ -413,13 +413,56 @@ static inline void display_filepicker(void *callback) {
    );
 }
 
-static inline void read(char *buf) {
+static inline int open(char *path) {
+   int fd;
    asm volatile (
-      "int $0x30;"
-      :: "a" (47),
-      "b" ((uint32_t)buf)
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (fd)
+      : "a" (52),
+      "b" ((uint32_t)path)
    );
+   return fd;
 }
+
+static inline int read(int fd, char *buf, size_t count) {
+   int c;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (c)
+      : "a" (47),
+      "b" ((uint32_t)fd),
+      "c" ((uint32_t)buf),
+      "d" ((uint32_t)count)
+   );
+   return c;
+}
+
+static inline int write(int fd, char *buf, size_t count) {
+   int c;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (c)
+      : "a" (53),
+      "b" ((uint32_t)fd),
+      "c" ((uint32_t)buf),
+      "d" ((uint32_t)count)
+   );
+   return c;
+}
+
+static inline uint32_t *sbrk(uint32_t increment) {
+   uint32_t addr;
+
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (addr)
+      : "a" (51),
+      "b" ((uint32_t)increment)
+   );
+
+   return (void*)addr;
+}
+
 
 // terminal override
 

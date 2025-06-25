@@ -47,4 +47,12 @@ void swap_pagedir(page_dir_entry_t *dir);
 page_dir_entry_t *new_page();
 page_dir_entry_t *page_get_current();
 
+static inline uint32_t page_align_up(uint32_t addr) {
+   return (addr + 0xFFF) & ~0xFFF;
+}
+
+static inline uint32_t page_align_down(uint32_t addr) {
+   return addr & ~(0x1000 - 1);
+}
+
 #endif

@@ -17,6 +17,7 @@ void window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex);
 void window_clearbuffer(gui_window_t *window, uint16_t colour);
 void window_writeuint(uint32_t num, uint16_t colour, int windowIndex);
 void window_writestr(char *c, uint16_t colour, int windowIndex);
+void window_writestrn(char *c, size_t size, uint16_t colour, int windowIndex);
 void window_drawchar(char c, uint16_t colour, int windowIndex);
 void window_writenum(int num, uint16_t colour, int windowIndex);
 void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);

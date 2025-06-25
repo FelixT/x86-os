@@ -81,6 +81,9 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    for(uint32_t i = 0; i < vmem_size; i+=0x1000)
       map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1);
 
+   uint32_t heap_start = page_align_up(vmem_end);
+   debug_printf("Heap start 0x%h\n", heap_start);
+
    debug_printf("Start 0x%h\n", page_getphysical(dir, elf_header->entry));
 
    // copy program to new location and assign virtual memory for each segment
@@ -110,10 +113,13 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    int task_index = get_free_task_index();
 
    create_task_entry(task_index, elf_header->entry, (vmem_end - vmem_start), false);
-   gettasks()[task_index].vmem_start = vmem_start;
-   gettasks()[task_index].vmem_end = vmem_end;
-   gettasks()[task_index].prog_start = (uint32_t)newProg;
-   gettasks()[task_index].page_dir = dir;
+   task_state_t *task = &gettasks()[task_index];
+   task->vmem_start = vmem_start;
+   task->vmem_end = vmem_end;
+   task->prog_start = (uint32_t)newProg;
+   task->page_dir = dir;
+   task->heap_start = heap_start;
+   task->heap_end = heap_start;
    launch_task(task_index, regs, true);
 
    // push args
@@ -123,9 +129,5 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    ((uint32_t*)regs->useresp)[0] = argc; // int argc
    regs->useresp -= 4;
    ((uint32_t*)regs->useresp)[0] = vmem_start; // push dummy (mapped) return addr
-
-   /*debug_writestr("\nStarting at: ");
-   debug_writehex(elf_header->entry);
-   debug_writestr("\n");*/
 
 }

@@ -43,7 +43,7 @@ void _start() {
     set_window_title("Prog4");
     override_draw((uint32_t)NULL);
 
-    uint8_t *image = (uint8_t*)fat_read_file("/bmp/file20.bmp");
+    image = (uint8_t*)fat_read_file("/bmp/file20.bmp");
     if(image == NULL) {
         write_str("File icon not found\n");
         exit(0);
