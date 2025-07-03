@@ -52,7 +52,11 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
    int tmpwindow = getSelectedWindowIndex();
    tasks[current_task].window = windowmgr_add();
-   if(!focus) setSelectedWindowIndex(tmpwindow);
+   if(!focus) { 
+      setSelectedWindowIndex(tmpwindow);
+   } else {
+      window_draw_outline(getSelectedWindow(), false);
+   }
 
    // setup stdio
    fs_file_t *stdin = fs_open("/dev/stdin");
@@ -156,6 +160,7 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    int index = get_free_task_index();
    create_task_entry(index, progAddr, entry->fileSize, false);
    launch_task(index, regs, false);
+   gui_redrawall();
 }
 
 void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args) {

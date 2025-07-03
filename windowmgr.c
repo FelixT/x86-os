@@ -140,6 +140,7 @@ void window_close(void *regs, int windowIndex) {
       // debug window
       int popup = windowmgr_add();
       window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window");
+      window_draw_outline(getSelectedWindow(), false);
       getWindow(windowIndex)->minimised = true;
       getWindow(windowIndex)->active = false;
       setSelectedWindowIndex(-1);
@@ -311,7 +312,27 @@ void window_focus() {
 
 }
 
-void window_draw_outline(gui_window_t *window) {
+void window_draw_outline(gui_window_t *window, bool occlude) {
+   if(window->minimised) return;
+
+   if(occlude) {
+      for(int i = 0; i < getWindowCount(); i++) {
+         if(render_order[i] == NULL)
+            continue;
+         if(render_order[i] == window)
+            break;
+         if(render_order[i]->minimised)
+            continue;
+         
+         gui_window_t *win = render_order[i];
+         if(window->x - 1 < win->x + win->width
+         && window->x + window->width + 1 > win->x
+         && window->y - 1 < win->y + win->height
+         && window->y + window->height + 1 > win->y)
+            return;
+      }
+   }
+
    // titlebar
    draw_rect(&surface, COLOUR_TITLEBAR, window->x, window->y, window->width, TITLEBAR_HEIGHT);
    // shading
@@ -329,29 +350,31 @@ void window_draw_outline(gui_window_t *window) {
    draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, window->y+2);
 
    draw_line(&surface, rgb16(170,170,170), window->x, window->y+TITLEBAR_HEIGHT-1, false, window->width);
+
+   if(window != selectedWindow) {
+      draw_dottedrect(&surface, rgb16(80, 80, 80), window->x-1, window->y-1, window->width+2, window->height+2, NULL, false);
+   } else {
+      // drop shadow if selected
+      draw_line(&surface, COLOUR_DARK_GREY, window->x+window->width+1, window->y+3, true, window->height-1);
+      draw_line(&surface, COLOUR_DARK_GREY, window->x+3, window->y+window->height+1, false, window->width-1);
+
+      // outline
+      draw_unfilledrect(&surface, gui_rgb16(80,80,80), window->x - 1, window->y - 1, window->width + 2, window->height + 2);
+   }
 }
 
+extern bool gui_cursor_shown;
+extern int gui_mouse_x;
+extern int gui_mouse_y;
 void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height) {
    if(window->framebuffer == NULL) return;
-
-   gui_window_t *selected = getSelectedWindow();
 
    int winX = window->x;
    int winY = window->y + TITLEBAR_HEIGHT;
    int winW = window->width;
    int winH = window->height - TITLEBAR_HEIGHT;
 
-   int selX = 0, selY = 0, selW = 0, selH = 0;
-   bool checkOcclusion = selected && selected != window;
-
-   if(checkOcclusion) {
-      selX = selected->x;
-      selY = selected->y;
-      selW = selected->width;
-      selH = selected->height;
-   }
-
-   // Clamp drawing to window content bounds
+   // clamp drawing to window content bounds
    int maxY = offsetY + height;
    int maxX = offsetX + width;
    if(maxY > winH) maxY = winH;
@@ -360,7 +383,23 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
    uint16_t *fb = gui_get_framebuffer();
    uint16_t *winfb = window->framebuffer;
 
-   if(!checkOcclusion && offsetX == 0 && width == winW) {
+   bool occlude = false;
+   for(int i = 0; i < 100 && render_order[i] != NULL; i++) {
+      if(render_order[i] == window)
+         break;
+      
+      gui_window_t *win = render_order[i];
+      if(win->minimised) continue;
+      if(!(window->x >= win->x + win->width
+         || window->x + window->width + 2 <= win->x
+         || window->y >= win->y + win->height
+         || window->y + window->height + 2 <= win->y)) {
+         occlude = true;
+         break;
+      }
+   }
+
+   if(!occlude && offsetX == 0 && width == winW) {
       // fast path: copy entire row
       for(int y = offsetY; y < maxY; y++) {
          int screenY = winY + y;
@@ -373,8 +412,22 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
          for(int x = offsetX; x < maxX; x++) {
             int screenX = winX + x;
 
-            // skip pixels covered by selected window
-            if(checkOcclusion && screenX >= selX && screenX < selX + selW && screenY >= selY && screenY < selY + selH)
+            bool occluded = false;
+            for(int i = 0; i < 100 && render_order[i] != NULL; i++) {
+               if(render_order[i] == window) {
+                  break;
+               }
+               
+               gui_window_t *win = render_order[i];
+               if(win->minimised) continue;
+               if(screenX >= win->x - 1 && screenX < win->x + win->width + 1
+               && screenY >= win->y - 1 && screenY < win->y + win->height + 1) {
+                  occluded = true;
+                  break;
+               }
+            }
+
+            if(occluded)
                continue;
 
             int screenIndex = screenY * surface.width + screenX;
@@ -384,6 +437,16 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
          }
       }
    }
+
+   // redraw cursor if it disappeared
+   if(width > getFont()->width && height > getFont()->height
+   && gui_mouse_x >= window->x + offsetX && gui_mouse_x <= window->x + offsetX + width
+   && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY && gui_mouse_y <= window->y + TITLEBAR_HEIGHT + offsetY + height) {
+      gui_cursor_shown = false;
+      gui_cursor_save_bg();
+      gui_cursor_draw();
+   }
+
 }
 
 void window_draw_content(gui_window_t *window) {
@@ -408,32 +471,20 @@ void window_draw(gui_window_t *window) {
       return;
 
    if(window->needs_redraw || window == selectedWindow) {
-      // draw window content/framebuffer
-      window_draw_outline(window);
+      window_draw_outline(window, true);
       // call window objects draw funcs
       for(int i = 0; i < window->window_object_count; i++) {
          windowobj_t *wo = window->window_objects[i];
          if(wo != NULL) wo->draw_func(wo);
       }
+      // draw window content/framebuffer
       window_draw_content(window);
-
-      if(window != selectedWindow)
-         draw_dottedrect(&surface, rgb16(80, 80, 80), window->x-1, window->y-1, window->width+2, window->height+2, NULL, false);
 
       window->needs_redraw = false;
    }
 
-   if(window == selectedWindow) {
-      // drop shadow if selected
-      draw_line(&surface, COLOUR_DARK_GREY, window->x+window->width+1, window->y+3, true, window->height-1);
-      draw_line(&surface, COLOUR_DARK_GREY, window->x+3, window->y+window->height+1, false, window->width-1);
-
-      // outline
-      draw_unfilledrect(&surface, gui_rgb16(80,80,80), window->x - 1, window->y - 1, window->width + 2, window->height + 2);
-
-      if(window->draw_func != NULL)
-         (*(window->draw_func))(window);
-   }
+   if(window == selectedWindow && window->draw_func != NULL)
+      (*(window->draw_func))(window);
 }
 
 void windowmgr_getproperties() {
@@ -441,6 +492,7 @@ void windowmgr_getproperties() {
    gui_window_t *selected = getSelectedWindow();
    int new = windowmgr_add();
    gui_window_t *window = getWindow(new);
+   window_draw_outline(window, false);
    window->state = (void*)window_settings_init(window, selected);
    window->state_size = sizeof(window_settings_t);
 }
@@ -664,6 +716,7 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
       if(relY < TITLEBAR_HEIGHT && relX > window->width - (getFont()->width+3)*2 && relX < window->width - (getFont()->width+3)) {
          window->minimised = true;
          setSelectedWindowIndex(-1);
+         gui_redrawall();
          return false;
       }
 
@@ -771,7 +824,9 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    window->needs_redraw = true;
 
    // draw dotted outline
+   gui_cursor_restore_bg();
    draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, (int*)draw_buffer, false);
+   //gui_cursor_draw();
 }
 
 extern bool cursor_resize;
@@ -877,10 +932,12 @@ void windowmgr_draw() {
 }
 
 void windowmgr_redrawall() {
-   for(int i = 0; i < getWindowCount(); i++)
-      getWindow(i)->needs_redraw = true;
-
-   windowmgr_draw();
+   for(int i = getWindowCount()-1; i >= 0; i--) {
+      if(render_order[i] == NULL) continue;
+      render_order[i]->needs_redraw = true;
+      window_draw(render_order[i]);
+      window_draw_outline(render_order[i], false);
+   }
 }
 
 extern uint16_t gui_bg;
@@ -968,9 +1025,10 @@ void desktop_click(registers_t *regs, int x, int y) {
    icony += 10*2 + iconheight + getFont()->height;
    iconheight = bmp_get_height(icon_files);
 
-   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight)
+   if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
       windowmgr_add();
-
+      window_draw_outline(getSelectedWindow(), false);
+   }
 }
 
 void windowmgr_mousemove(int x, int y) {

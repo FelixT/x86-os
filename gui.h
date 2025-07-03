@@ -100,6 +100,7 @@ void gui_drawline(uint16_t colour, int x, int y, bool vertical, int length);
 void gui_drawcharat(char c, uint16_t colour, int x, int y);
 void gui_cursor_draw();
 void gui_cursor_save_bg();
+void gui_cursor_restore_bg();
 
 bool gui_interrupt_switchtask(void *regs);
 void gui_keypress(void *regs, char scan_code);

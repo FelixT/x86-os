@@ -43,6 +43,8 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
       window->x = parent->x + 50;
       window->y = parent->y + 50;
    }
+   if(window->y + window->height > (int)gui_get_height())
+      window->y = gui_get_height() - window->height;
 
    window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
@@ -237,6 +239,8 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
 
    window->x = parent->x + 50;
    window->y = parent->y + 50;
+   if(window->y + window->height > (int)gui_get_height())
+      window->y = gui_get_height() - window->height;
    int width = 240;
 
    window->state_size = sizeof(window_popup_filepicker_t);
@@ -377,6 +381,8 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
 
    window->x = parent->x + 50;
    window->y = parent->y + 50;
+   if(window->y + window->height > (int)gui_get_height())
+      window->y = gui_get_height() - window->height;
 
    window->click_func = &window_popup_colourpicker_click;
    window->drag_func = &window_popup_colourpicker_click;

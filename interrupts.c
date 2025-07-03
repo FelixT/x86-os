@@ -403,9 +403,10 @@ void timer_handler(registers_t *regs) {
    if(videomode == 0) {
       terminal_writenumat(timer_i%10, 79);
    } else {
-      gui_showtimer(timer_i%10);
+      //if(timer_i%1000)
+      //   gui_showtimer(timer_i%10);
 
-      if(timer_i%20 == 0) {
+      if(timer_i%15 == 0) {
          gui_draw();
       }
 
@@ -444,8 +445,11 @@ void show_endtask_dialog(int int_no, registers_t *regs) {
    window_popup_dialog(getWindow(popup), getWindow(get_current_task_window()), buffer);
    window_disable(getWindow(get_current_task_window()));
    getWindow(popup)->window_objects[1]->click_func = &endtask_callback;
+   strcpy(getWindow(popup)->title, "Error");
    strcpy(getWindow(popup)->window_objects[1]->text, "Exit");
    pause_task(get_current_task(), regs);
+   toolbar_draw();
+   window_draw_outline(getWindow(popup), false);
 }
 
 void exception_handler(int int_no, registers_t *regs) {

@@ -18,3 +18,9 @@ windowobj_t *create_text(int x, int y, char *text) {
    wo->text = newtext;
    return wo;
 }
+
+void set_text(windowobj_t *wo, char *text) {
+   strcpy(wo->text, text);
+   wo->textpos = strlen(text);
+   wo->cursor_textpos = wo->textpos;
+}

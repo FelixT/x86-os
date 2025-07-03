@@ -26,6 +26,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->textpos = 0;
    windowobj->textvalign = true;
    windowobj->texthalign = true;
+   windowobj->cursor_textpos = 0;
    windowobj->cursorx = windowobj->textpadding + 1;
    windowobj->cursory = windowobj->textpadding + 1;
    windowobj->menuitem_count = 0;
@@ -54,6 +55,12 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
       x = (wo->width - font_width(strlen(wo->text)))/2;
    }
 
+   if(wo->cursor_textpos == 0) {
+      wo->cursorx = x;
+      wo->cursory = y + getFont()->height - 2;
+   }
+
+   // draw all characers of string... no scrolling implemented yet
    for(int i = 0; i < strlen(wo->text); i++) {
       char c = wo->text[i];
       if(c == '\n') {
@@ -62,16 +69,20 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
       } else {
          draw_char(wo->window_surface, c, colour, wo->x + x, wo->y + y);
          x += wo->textpadding + getFont()->width;
+
+         // wrapping
+         if(x + wo->textpadding + getFont()->width > wo->width) {
+            y += wo->textpadding + getFont()->height;
+            x = wo->textpadding + 1;
+         }
       }
 
-      if(x + wo->textpadding + getFont()->width > wo->width) {
-         y += wo->textpadding + getFont()->height;
-         x = wo->textpadding + 1;
+      if(i+1 == wo->cursor_textpos) {
+         wo->cursorx = x;
+         wo->cursory = y + getFont()->height - 2;
       }
+
    }
-   wo->cursorx = x;
-   wo->cursory = y + getFont()->height - 2;
-
 }
 
 extern bool mouse_held;
@@ -178,7 +189,8 @@ void windowobj_draw(void *windowobj) {
 }
 
 void windowobj_redraw(void *window, void *windowobj) {
-   if(((gui_window_t*)window)->dragged || ((gui_window_t*)window)->resized) return;
+   gui_window_t *w = (gui_window_t*)window;
+   if(w->dragged || w->resized) return;
    windowobj_t *wo = (windowobj_t*)windowobj;
    window_draw_content_region((gui_window_t*)window, wo->x, wo->y, wo->width, wo->height);
 }
@@ -198,18 +210,14 @@ void windowobj_unclick(void *regs, void *event) {
    e->wo->clicked = false;
    windowobj_draw(e->wo);
    window_draw_content_region(e->window, e->wo->x, e->wo->y, e->wo->width, e->wo->height + getFont()->height);
-   if(gui_mouse_x >= e->window->x + e->wo->x && gui_mouse_x <= e->window->x + e->wo->x + e->wo->width
-   && gui_mouse_y >= e->window->y + e->wo->y && gui_mouse_y <= e->window->y + TITLEBAR_HEIGHT + e->wo->y + e->wo->height) {
-      gui_cursor_shown = false;
-      gui_cursor_save_bg();
-      gui_cursor_draw();
-   }
    free((uint32_t)event, sizeof(windowobj_click_event_t));
 }
 
 void windowobj_click(void *regs, void *windowobj) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
+   if(wo->disabled) return;
+   
    wo->clicked = true;
    if(wo->type == WO_BUTTON) {
       windowobj_click_event_t *event = (windowobj_click_event_t*)malloc(sizeof(windowobj_click_event_t));
@@ -233,7 +241,7 @@ void windowobj_click(void *regs, void *windowobj) {
          ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
       } else {
          gui_interrupt_switchtask(regs);
-         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 2);
+         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 0);
       }
    }
 }
@@ -266,6 +274,51 @@ void windowobj_hover(void *windowobj, int x, int y) {
 extern char scan_to_char(int scan_code, bool caps);
 extern bool keyboard_shift;
 extern bool keyboard_caps;
+
+void windowobj_move_cursor_vertical(windowobj_t *wo, int direction) {
+    // direction: -1 for up, 1 for down
+    
+    int line_starts[100];
+    int line_count = 1;
+    line_starts[0] = 0;
+    
+    int x = wo->textpadding + 1;
+    for(int i = 0; i < wo->textpos; i++) {
+      if(wo->text[i] == '\n') {
+         line_starts[line_count++] = i + 1;
+         x = wo->textpadding + 1;
+      } else {
+         x += wo->textpadding + getFont()->width;
+         if(x + wo->textpadding + getFont()->width > wo->width) {
+            line_starts[line_count++] = i + 1;
+            x = wo->textpadding + 1;
+         }
+      }
+   }
+   int current_line = 0;
+   for(int i = 0; i < line_count; i++) {
+      if(wo->cursor_textpos >= line_starts[i])
+         current_line = i;
+   }
+   int target_line = current_line + direction;
+   if(target_line < 0 || target_line >= line_count)
+      return;
+    
+   int offset_x = wo->cursor_textpos - line_starts[current_line];
+   int target_line_start = line_starts[target_line];
+   int target_line_end = (target_line + 1 < line_count) ? line_starts[target_line + 1] - 1 : wo->textpos;
+    
+   if(target_line_end > target_line_start && wo->text[target_line_end - 1] == '\n')
+      target_line_end--;
+    
+   int target_line_length = target_line_end - target_line_start;
+   if(offset_x > target_line_length) {
+      offset_x = target_line_length;
+   }
+    
+   wo->cursor_textpos = target_line_start + offset_x;
+   windowobj_draw(wo);
+}
 
 void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    windowobj_t *wo = (windowobj_t*)windowobj;
@@ -300,17 +353,33 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
          }
          break;
       case 14: // backspace
-         if(wo->textpos>0) wo->textpos--;
-         wo->text[wo->textpos] = '\0';
-         windowobj_draw(windowobj);
+         if(wo->cursor_textpos > 0 && wo->textpos > 0) {
+            for(int i = wo->cursor_textpos - 1; i < wo->textpos - 1; i++) {
+               wo->text[i] = wo->text[i + 1];
+            }
+            wo->textpos--;
+            wo->cursor_textpos--;
+            wo->text[wo->textpos] = '\0';
+            windowobj_draw(windowobj);
+         }
          break;
       case 72: // up arrow
+         windowobj_move_cursor_vertical(wo, -1);
          break;
       case 80: // down arrow
+         windowobj_move_cursor_vertical(wo, 1);
          break;
-      case 203: // left arrow
+      case 75: // left arrow
+         if(wo->cursor_textpos > 0) {
+            wo->cursor_textpos--;
+         }
+         windowobj_draw(wo);
          break;
-      case 205: // right arrow
+      case 77: // right arrow
+         if(wo->cursor_textpos < wo->textpos) {
+            wo->cursor_textpos++;
+         }
+         windowobj_draw(wo);
          break;
       case 0x3A:
          keyboard_caps = !keyboard_caps;
@@ -322,19 +391,25 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
 
    if(c == 0) return;
 
-   wo->text[wo->textpos++] = c;
+   for(int i = wo->textpos; i > wo->cursor_textpos; i--) {
+      wo->text[i] = wo->text[i - 1];
+   }
+
+   wo->text[wo->cursor_textpos] = c;
+   wo->textpos++;
    wo->text[wo->textpos] = '\0';
 
-   // draw char, assuming no aligns
    if(c == '\n') {
       // cover current cursor
       draw_rect(wo->window_surface, 0xFFFF, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
       wo->cursory += getFont()->height + wo->textpadding;
       wo->cursorx = wo->textpadding + 1;
+      wo->cursor_textpos++;
    } else {
       draw_rect(wo->window_surface, rgb16(255, 255, 255), wo->x + wo->cursorx, wo->y + wo->cursory - getFont()->height + 2, getFont()->width, getFont()->height);
       draw_char(wo->window_surface, c, 0, wo->x + wo->cursorx, wo->y + wo->cursory - getFont()->height + 2);
       wo->cursorx += getFont()->width + wo->textpadding;
+      wo->cursor_textpos++;
       if(wo->cursorx + getFont()->width + wo->textpadding > wo->width) {
          wo->cursory += getFont()->height + wo->textpadding;
          wo->cursorx = wo->textpadding + 1;

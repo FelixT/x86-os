@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../lib/string.h"
+#include "lib/wo_api.h"
 
 
 #include "prog.h"
@@ -17,6 +18,9 @@ volatile int no_items;
 volatile int offset;
 
 char cur_path[200];
+
+windowobj_t *upbtn;
+windowobj_t *downbtn;
 
 char tolower(char c) {
    if(c >= 'A' && c <= 'Z')
@@ -39,10 +43,16 @@ void display_items() {
       bool hidden = (cur_items[i].attributes & 0x02) == 0x02;
       bool dotentry = cur_items[i].filename[0] == 0x2E;
 
-      if(hidden & !dotentry) continue; // ignore
+      if(hidden & !dotentry) {
+         cur_items[i].zero = -1;
+         continue; // ignore
+      }
       
       offsetLeft--;
-      if(offsetLeft >= 0) continue;
+      if(offsetLeft >= 0) {
+         cur_items[i].zero = -1;
+         continue;
+      }
 
       cur_items[i].zero = position;
 
@@ -249,6 +259,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
    width = w;
    height = h;
+   upbtn->x = w - 18;
+   downbtn->x = w - 18;
+   downbtn->y = h - downbtn->height;
 
    display_items();
    redraw();
@@ -290,6 +303,13 @@ void _start(int argc, char **args) {
    read_root();
    display_items();
    redraw();
+
+   upbtn = create_button(width - 18, 0, "Up");
+   upbtn->width = 18;
+   upbtn->click_func = &uparrow;
+   downbtn = create_button(width - 18, height - upbtn->height, "Dn");
+   downbtn->click_func = &downarrow;
+   downbtn->width = 18;
 
    // main program loop
    while(1 == 1) {

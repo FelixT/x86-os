@@ -113,11 +113,25 @@ void printdir(fat_dir_t *items, int size) {
       tolower((char*)extension);
       strsplit((char*)fileName, NULL, (char*)fileName, ' '); // null terminate at first space
       strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
-      printf("%s%s%s ", fileName, (extension[0] != '\0') ? "." : "", extension);
+      printf(" %s%s%s ", fileName, (extension[0] != '\0') ? "." : "", extension);
       if((items[i].attributes & 0x10) == 0x10) // directory
          printf("DIR\n");
-      else
-         printf("<%u bytes>\n",items[i].fileSize);
+      else {
+         // file
+         uint32_t size = items[i].fileSize;
+         char type[4];
+         strcpy(type, "b");
+         if(size > 1000) {
+            strcpy(type, "kb");
+            size /= 1000;
+            if(size > 1000) {
+               strcpy(type, "mb");
+               size /= 1000;
+            }
+         }
+         printf("<%u %s>\n", size, type);
+         
+      }
    }
 }
 

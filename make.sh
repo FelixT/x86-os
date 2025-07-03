@@ -23,7 +23,7 @@ nasm irq.asm -f elf32 -o o/irq.o
 
 
 for file in $c_files; do
-   $GCC -c $file.c -o o/$file.o -ffreestanding -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
+   $GCC -c $file.c -o o/$file.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-common -mgeneral-regs-only -nostdlib -lgcc
 done
 
 $GCC -c cmain.cpp -o o/cmain.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-common -mgeneral-regs-only -nostdlib -g -lgcc
@@ -44,7 +44,7 @@ $GCC -c usr/lib/stdio.c -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-on
 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/prog3.c -o o/prog3.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/prog4.c -o o/prog4.elf 
-$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf o/lib/string.o
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf o/lib/string.o o/lib/wo_api.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/bmpview.c -o o/bmpview.elf o/lib/wo_api.o o/lib/string.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o

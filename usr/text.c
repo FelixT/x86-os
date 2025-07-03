@@ -45,11 +45,6 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    end_subroutine();
 }
 
-void set_status(char *status) {
-   strcpy(wo_status_o->text, status);
-   wo_status_o->textpos = strlen(status);
-}
-
 void load_file(char *filepath) {
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath, true);
    if(entry == NULL) {
@@ -58,11 +53,14 @@ void load_file(char *filepath) {
       wo_text_o->text[wo_text_o->textpos] = '\0';
       return;
    }
-   strcpy(wo_path_o->text, filepath);
-   wo_path_o->textpos = strlen(filepath);
-   wo_text_o->text = (char*)fat_read_file(filepath);
+   set_text((windowobj_t*)wo_path_o, filepath);
    uinttostr(entry->fileSize, wo_status_o->text);
+   wo_text_o->textpos = strlen(wo_status_o->text);
+   wo_text_o->cursor_textpos = wo_text_o->textpos;
+
+   wo_text_o->text = (char*)fat_read_file(filepath);
    wo_text_o->textpos = entry->fileSize;
+   wo_text_o->cursor_textpos = entry->fileSize;
    wo_text_o->text[wo_text_o->textpos] = '\0';
 }
 
@@ -74,11 +72,11 @@ void path_return() {
 void save_func(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   set_status("Saving...");
+   set_text((windowobj_t*)wo_status_o, "Saving...");
 
    fat_write_file(wo_path_o->text, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
 
-   set_status("Saved");
+   set_text((windowobj_t*)wo_status_o, "Saved");
 
    end_subroutine();
 }

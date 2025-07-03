@@ -339,8 +339,6 @@ void _start(int argc, char **args) {
       }
    }
 
-   write_str(path);
-   write_str("\n");
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
    if(entry == NULL) {
       display_popup("Error", "File not found\n");

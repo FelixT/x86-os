@@ -135,7 +135,7 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
    gui_writestr("\nSet up timer\n", COLOUR_ORANGE);
-   timer_set_hz(300);
+   timer_set_hz(400);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
@@ -151,7 +151,7 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
-   surface.buffer-=128; // ??????? horrible alignment issue
+   //surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);
@@ -265,10 +265,10 @@ void gui_cursor_restore_bg() {
 }
 
 void gui_draw(void) {
-   gui_cursor_restore_bg(); // Always restore old cursor first
+   gui_cursor_restore_bg();
    windowmgr_draw();
 
-   gui_cursor_save_bg();    // Save new background before drawing cursor
+   gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
 }
 
@@ -294,10 +294,10 @@ void mouse_update(int relX, int relY) {
    gui_mouse_x = (gui_mouse_x + surface.width) % surface.width;
    gui_mouse_y = (gui_mouse_y + surface.height) % surface.height;
 
-   gui_cursor_restore_bg(); // restore pixels under old cursor location
+   gui_cursor_restore_bg();
    windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
 
-   gui_cursor_save_bg();    // save new background at new position
+   gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();
 }
 

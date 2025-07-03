@@ -10,7 +10,7 @@
 
 void ata_delay(uint16_t ioPort) {
    // create 400ns delay through 4 alternative status queries
-   for(int i = 0; i < 4; i++) {
+   for(volatile int i = 0; i < 4; i++) {
       inb(ioPort + ATA_PORT_CONTROL_OFFSET + ATA_CTRL_REG_ALT_STATUS);
    }
 }
@@ -93,12 +93,18 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
    outb(ioPort + ATA_REG_COMMAND, cmd);
 
    ata_delay(ioPort);
-   uint8_t status = inb(ioPort + ATA_REG_STATUS);
-   // poll until no longer busy
-   while((status = inb(ioPort + ATA_REG_STATUS)) & ATA_STATUS_BIT_BSY);
-
+   
    // poll until ready & DRQ is set, or until error
-   while(!((status = inb(ioPort + ATA_REG_STATUS)) & ATA_STATUS_BIT_DRQ) && !(status & ATA_STATUS_BIT_ERR));
+   volatile uint8_t status;
+   do {
+      status = inb(ioPort + ATA_REG_STATUS);
+      asm volatile("pause" ::: "memory");
+   } while(status & ATA_STATUS_BIT_BSY);
+   do {
+      status = inb(ioPort + ATA_REG_STATUS);
+      asm volatile("pause" ::: "memory");
+   } while(!(status & ATA_STATUS_BIT_DRQ) && !(status & ATA_STATUS_BIT_ERR));
+   
    if(status & ATA_STATUS_BIT_ERR) {
       gui_writestr("ATA DRIVE ERROR 2.\n", 0);
       uint8_t error = inb(ioPort + ATA_REG_ERROR);
@@ -118,9 +124,11 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
 
    if(write) {
       outb(ioPort + ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
-      while(inb(ioPort + ATA_REG_STATUS) & ATA_STATUS_BIT_BSY);
-  }
-
+      do {
+         status = inb(ioPort + ATA_REG_STATUS);
+         asm volatile("pause" ::: "memory");
+      } while(status & ATA_STATUS_BIT_BSY);
+   }
 }
 
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes) {

@@ -330,10 +330,10 @@ void api_launch_task(registers_t *regs) {
    if(argc > 0 && args != NULL) {
       for(int i = 0; i < argc; i++) {
          // map args to task
-         map(task->page_dir, (uint32_t)*(args[i]), (uint32_t)*(args[i]), 1, 1);
+         map(task->page_dir, (uint32_t)args[i], (uint32_t)args[i], 1, 1);
       }
    }
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+   map(task->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
 }
 
 void api_fat_write_file(registers_t *regs) {
@@ -397,6 +397,7 @@ void api_display_popup(registers_t *regs) {
    int popup = windowmgr_add();
    window_popup_dialog(getWindow(popup), parent, message);
    strcpy(getWindow(popup)->title, title);
+   window_draw_outline(getWindow(popup), false);
 }
 
 void api_display_colourpicker(registers_t *regs) {
@@ -406,6 +407,7 @@ void api_display_colourpicker(registers_t *regs) {
    int popup = windowmgr_add();
    debug_printf("Displaying colourpicker\n");
    window_popup_colourpicker(getWindow(popup), parent, (void*)regs->ebx);
+   window_draw_outline(getWindow(popup), false);
 }
 
 void api_display_filepicker(registers_t *regs) {
@@ -414,6 +416,7 @@ void api_display_filepicker(registers_t *regs) {
    gui_window_t *parent = getWindow(get_current_task_window());
    int popup = windowmgr_add();
    window_popup_filepicker(getWindow(popup), parent, (void*)regs->ebx);
+   window_draw_outline(getWindow(popup), false);
 }
 
 void api_debug_write_str(registers_t *regs) {

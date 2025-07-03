@@ -18,7 +18,7 @@ surface_t surface;
 
 int size = 128000;
 
-extern uint8_t vbe_mode_info_structure;
+extern uint8_t vbe_mode_info_structure[256];
 
 int gui_font_y = 5;
 

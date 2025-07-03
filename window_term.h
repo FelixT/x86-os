@@ -3,6 +3,8 @@
 
 #include "window_t.h"
 
+#define CMD_BUFFER_LENGTH 64
+
 // default, terminal style window behaviour
 void window_term_return(void *regs, void *window);
 void window_term_keypress(char key, void *window);

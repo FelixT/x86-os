@@ -39,7 +39,8 @@ typedef struct windowobj_t {
    bool clicked;
    bool visible;
    bool disabled;
-   int textpos;
+   int textpos; // text length
+   int cursor_textpos; // position in text cursor is at
    int cursorx;
    int cursory;
    int menuselected;

@@ -378,6 +378,7 @@ void term_cmd_padding(char *arg) {
 void term_cmd_settings() {
    int new = windowmgr_add();
    gui_window_t *selected = getWindow(new);
+   window_draw_outline(selected, false);
    window_settings_init(selected, NULL);
 }
 

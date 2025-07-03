@@ -141,6 +141,7 @@ void window_settings_bgimg_callback(char *path) {
    windowobj_t *wo = ((window_settings_t*)getSelectedWindow()->state)->d_bgimg_wo;
    strcpy(wo->text, path);
    wo->textpos = strlen(wo->text);
+   wo->cursor_textpos =  wo->textpos;
    window_settings_set_bgimg(wo);
 }
 
@@ -150,6 +151,7 @@ void window_settings_browesebg(void *w, void *regs) {
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_popup_filepicker(getWindow(popup), parent, &window_settings_bgimg_callback);
+   window_draw_outline(getWindow(popup), false);
 }
 
 void window_settings_pickdbgcolour(void *w, void *regs) {
@@ -158,6 +160,7 @@ void window_settings_pickdbgcolour(void *w, void *regs) {
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_bgcolour_callback);
+   window_draw_outline(getWindow(popup), false);
 }
 
 void window_settings_pickbgcolour(void *w, void *regs) {
@@ -166,6 +169,7 @@ void window_settings_pickbgcolour(void *w, void *regs) {
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_bgcolour_callback);
+   window_draw_outline(getWindow(popup), false);
 }
 
 void window_settings_picktxtcolour(void *w, void *regs) {
@@ -174,6 +178,7 @@ void window_settings_picktxtcolour(void *w, void *regs) {
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_txtcolour_callback);
+   window_draw_outline(getWindow(popup), false);
 }
 
 window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *selected) {
@@ -211,6 +216,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
    uinttohexstr(gui_bg, d_bgcolour_wo->text);
    d_bgcolour_wo->textpos = strlen(d_bgcolour_wo->text);
+   d_bgcolour_wo->cursor_textpos = d_bgcolour_wo->textpos;
    window->window_objects[window->window_object_count++] = d_bgcolour_wo;
 
    // pick button
@@ -236,6 +242,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    d_bgimg_wo->text = malloc(100);
    strcpy(d_bgimg_wo->text, "/bmp/bg16.bmp");
    d_bgimg_wo->textpos = strlen(d_bgimg_wo->text);
+   d_bgimg_wo->cursor_textpos = d_bgimg_wo->textpos;
    d_bgimg_wo->return_func = &window_settings_set_bgimg;
    //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
    window->window_objects[window->window_object_count++] = d_bgimg_wo;
@@ -264,6 +271,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    w_bgcolour_wo->return_func = &window_settings_set_window_bgcolour;
    uinttohexstr(selected->bgcolour, w_bgcolour_wo->text);
    w_bgcolour_wo->textpos = strlen(w_bgcolour_wo->text);
+   w_bgcolour_wo->cursor_textpos = w_bgcolour_wo->textpos;
    window->window_objects[window->window_object_count++] = w_bgcolour_wo;
 
    // pick button
@@ -290,6 +298,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
    w_txtcolour_wo->return_func = &window_settings_set_window_txtcolour;
    uinttohexstr(selected->txtcolour, w_txtcolour_wo->text);
    w_txtcolour_wo->textpos = strlen(w_txtcolour_wo->text);
+   w_txtcolour_wo->cursor_textpos = w_txtcolour_wo->textpos;
    window->window_objects[window->window_object_count++] = w_txtcolour_wo;
 
    // pick button
