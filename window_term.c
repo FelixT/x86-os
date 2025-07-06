@@ -262,10 +262,9 @@ void term_cmd_fat() {
    fat_setup();
 }
 
-extern bool desktop_enabled;
 void term_cmd_desktop() {
-   if(desktop_enabled)
-      desktop_enabled = false;
+   if(windowmgr_get_settings()->desktop_enabled)
+      windowmgr_get_settings()->desktop_enabled = false;
    else
       desktop_init();
 }

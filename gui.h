@@ -76,7 +76,9 @@ uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 #define COLOUR_TOOLBAR_ENTRY gui_rgb16(120, 120, 120)
 #define COLOUR_TOOLBAR_BORDER gui_rgb16(20, 20, 20)
 #define COLOUR_TOOLBAR gui_rgb16(165, 165, 165)
-#define COLOUR_TITLEBAR gui_rgb16(200, 200, 200)
+#define COLOUR_TITLEBAR_CLASSIC 0xCE59 //gui_rgb16(200, 200, 200)
+#define COLOUR_TITLEBAR_COLOUR1 0xDF1B
+#define COLOUR_TITLEBAR_COLOUR2 0xB5B6
 #define COLOUR_WHITE gui_rgb16(255, 255, 255)
 #define COLOUR_BLACK gui_rgb16(0, 0, 0)
 #define COLOUR_CYAN gui_rgb16(0, 128, 138)

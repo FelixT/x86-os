@@ -31,6 +31,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->cursory = windowobj->textpadding + 1;
    windowobj->menuitem_count = 0;
    windowobj->menuitems = NULL;
+   windowobj->menuhovered = -1;
    windowobj->menuselected = -1;
    windowobj->visible = true;
    
@@ -115,7 +116,13 @@ void windowobj_draw(void *windowobj) {
          dark = tmp;
       }
 
-      draw_rect(wo->window_surface, bg, wo->x, wo->y, wo->width, wo->height);
+      windowmgr_settings_t *wm_settings = windowmgr_get_settings();
+      if(wm_settings->theme == 1) {
+         // gradient button
+         draw_rect_gradient(wo->window_surface, wm_settings->titlebar_colour, wm_settings->titlebar_colour2, wo->x, wo->y, wo->width, wo->height, wm_settings->titlebar_gradientstyle);
+      } else {
+         draw_rect(wo->window_surface, bg, wo->x, wo->y, wo->width, wo->height);
+      }
 
       draw_line(wo->window_surface, dark,  wo->x, wo->y, true,  wo->height);
       draw_line(wo->window_surface, dark,  wo->x, wo->y, false, wo->width);
@@ -152,6 +159,10 @@ void windowobj_draw(void *windowobj) {
       if(wo->menuselected >= 0) {
          // draw selected item
          draw_rect(wo->window_surface, rgb16(200, 200, 200), wo->x + 1, wo->y + 1 + (wo->menuselected * (getFont()->height + 4)), wo->width - 2, getFont()->height + 4);
+      }
+      if(wo->menuhovered >= 0) {
+         // draw selected item
+         draw_rect(wo->window_surface, rgb16(220, 220, 220), wo->x + 1, wo->y + 1 + (wo->menuhovered * (getFont()->height + 4)), wo->width - 2, getFont()->height + 4);
       }
       draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
 
@@ -227,10 +238,11 @@ void windowobj_click(void *regs, void *windowobj) {
    }
 
    if(wo->type == WO_MENU) {
-      if(wo->menuselected >= 0) {
-         windowobj_menu_t *item = &wo->menuitems[wo->menuselected];
+      if(wo->menuhovered >= 0) {
+         windowobj_menu_t *item = &wo->menuitems[wo->menuhovered];
          if(item->func != NULL)
             item->func();
+         wo->menuselected = wo->menuhovered;
       }
    }
 
@@ -252,12 +264,12 @@ void windowobj_hover(void *windowobj, int x, int y) {
    bool hovering = wo->hovering;
    bool redraw = false;
    if(wo->type == WO_MENU) {
-      int prevselected = wo->menuselected;
-      wo->menuselected = y / (getFont()->height + 4);
-      if(wo->menuselected < 0 || wo->menuselected >= wo->menuitem_count)
-         wo->menuselected = -1;
+      int prevhover = wo->menuhovered;
+      wo->menuhovered = y / (getFont()->height + 4);
+      if(wo->menuhovered < 0 || wo->menuhovered >= wo->menuitem_count)
+         wo->menuhovered = -1;
 
-      if(prevselected != wo->menuselected)
+      if(prevhover != wo->menuhovered)
          redraw = true;
    }
 
@@ -328,9 +340,9 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    if(wo->type == WO_MENU) {
       // handle uparrow/downarrow
       if(scan_code == 72) {
-         if(wo->menuselected > 0) wo->menuselected--;
+         if(wo->menuhovered > 0) wo->menuhovered--;
       } else if(scan_code == 80) {
-         if(wo->menuselected < wo->menuitem_count-1) wo->menuselected++;
+         if(wo->menuhovered < wo->menuitem_count-1) wo->menuhovered++;
       }
       windowobj_draw(wo);
       return;

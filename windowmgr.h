@@ -6,6 +6,17 @@
 #include "window_t.h"
 #include "registers_t.h"
 
+typedef struct {
+   uint16_t default_window_bgcolour;
+   uint16_t default_window_txtcolour;
+   bool desktop_enabled;
+   char desktop_bgimg[256]; // path
+   uint16_t titlebar_colour;
+   int theme; // 0 = classic, 1 = gradient
+   uint16_t titlebar_colour2; // used for gradient
+   int titlebar_gradientstyle; // 0 = horizontal, 1 = vertical
+} windowmgr_settings_t;
+
 int windowmgr_add();
 bool window_init(gui_window_t *window);
 int getSelectedWindowIndex();
@@ -42,5 +53,6 @@ int get_window_index_from_pointer(gui_window_t *window);
 void window_resetfuncs(gui_window_t *window);
 void window_disable(gui_window_t *window);
 void window_draw_outline(gui_window_t *window, bool occlude);
+windowmgr_settings_t *windowmgr_get_settings();
 
 #endif

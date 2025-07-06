@@ -50,6 +50,7 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
    dialog->parent = parent;
    window->state = (void*)dialog;
    window->state_size = sizeof(window_popup_dialog_t);
+   window->resizable = false;
 
    // dialog text
    int y = 15;

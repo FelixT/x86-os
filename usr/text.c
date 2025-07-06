@@ -74,9 +74,21 @@ void save_func(void *wo, void *regs) {
    (void)regs;
    set_text((windowobj_t*)wo_status_o, "Saving...");
 
-   fat_write_file(wo_path_o->text, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
-
-   set_text((windowobj_t*)wo_status_o, "Saved");
+   int err = fat_write_file(wo_path_o->text, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
+   if(err < 0) {
+      if(err == -1) {
+         display_popup("Error", "File not found");
+      } else if(err == -2) {
+         display_popup("Error", "No free clusters");
+      } else if(err == -3) {
+         display_popup("Error", "Error updating directory entry");
+      } else {
+         display_popup("Error", "Unknown error");
+      }
+      set_text((windowobj_t*)wo_status_o, "Error");
+   } else {
+      set_text((windowobj_t*)wo_status_o, "Saved");
+   }
 
    end_subroutine();
 }
@@ -110,17 +122,18 @@ void _start(int argc, char **args) {
    wo_save_o->click_func = &save_func;
    x += wo_save_o->width + padding;
 
-   wo_open_o = create_button(x, 2, "Open");
+   wo_open_o = create_button(x, 2, "Browse");
    wo_open_o->click_func = &open_func;
    x += wo_open_o->width + padding;
 
-   wo_path_o = create_text(x, 2, "<New file>");
+   wo_path_o = create_text(x, 2, "<path>");
    wo_path_o->width = (((width - 10) - x) * 2) / 3;
    wo_path_o->return_func = &path_return;
    wo_path_o->textvalign = true;
    x += wo_path_o->width + padding;
 
-   wo_status_o = create_text(x, 2, "");
+   wo_status_o = create_text(x, 2, "New");
+   wo_status_o->disabled = true;
    wo_status_o->width = wo_path_o->width/2;
    wo_status_o->textvalign = true;
    wo_status_o->texthalign = true;

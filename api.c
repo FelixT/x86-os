@@ -340,8 +340,9 @@ void api_fat_write_file(registers_t *regs) {
    // IN: ebx = path
    // IN: ecx = buffer
    // IN: edx = size
+   // OUT ebx = 0 on success, < 0 error code on failure
 
-   fat_write_file((char*)regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
+   regs->ebx = fat_write_file((char*)regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
 }
 
 void api_fat_new_file(registers_t *regs) {

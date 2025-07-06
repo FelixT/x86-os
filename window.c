@@ -13,6 +13,7 @@
 #include "events.h"
 #include "draw.h"
 #include "windowmgr.h"
+#include "windowobj.h"
 
 surface_t window_getsurface(int windowIndex) {
    gui_window_t *window = &(gui_get_windows()[windowIndex]);
@@ -168,4 +169,65 @@ void window_newline(gui_window_t* window) {
    // immediately output each line
    window->needs_redraw=true;
    window_draw_content(window); // call windowmgr and tell it to redraw
+}
+
+// windowobj functions
+
+windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text, void (*func)(void *window, void *regs)) {
+   windowobj_t *button = malloc(sizeof(windowobj_t));
+   windowobj_init(button, &window->surface);
+   button->type = WO_BUTTON;
+   button->x = x;
+   button->y = y;
+   button->width = 50;
+   button->height = 14;
+   if(text) {
+      char *newtext = (char*)malloc(strlen(text));
+      strcpy(newtext, text);
+      button->text = newtext;
+   }
+   button->text = text;
+   button->click_func = func;
+   window->window_objects[window->window_object_count++] = button;
+   windowobj_draw(button);
+
+   return button;
+}
+
+windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text) {
+   windowobj_t *textobj = malloc(sizeof(windowobj_t));
+   windowobj_init(textobj, &window->surface);
+   textobj->type = WO_TEXT;
+   textobj->x = x;
+   textobj->y = y;
+   textobj->width = 100;
+   textobj->height = 14;
+   if(text) {
+      int len = strlen(text);
+      char *newtext = (char*)malloc(len + 1);
+      strcpy(newtext, text);
+      textobj->text = newtext;
+      textobj->textpos = len;
+      textobj->cursor_textpos = len;
+   }
+   window->window_objects[window->window_object_count++] = textobj;
+   windowobj_draw(textobj);
+
+   return textobj;
+}
+
+windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_menu_t *menuitems, int menuitem_count) {
+   windowobj_t *menu = malloc(sizeof(windowobj_t));
+   windowobj_init(menu, &window->surface);
+   menu->type = WO_MENU;
+   menu->x = x;
+   menu->y = y;
+   menu->width = 100;
+   menu->height = 30;
+   menu->menuitems = menuitems;
+   menu->menuitem_count = menuitem_count;
+   window->window_objects[window->window_object_count++] = menu;
+   windowobj_draw(menu);
+
+   return menu;
 }

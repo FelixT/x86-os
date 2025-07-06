@@ -207,14 +207,19 @@ static inline uint32_t *fat_read_file(char *path) {
    return (uint32_t*)addr;
 }
 
-static inline void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
+static inline int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
+   int err;
+
    asm volatile (
-      "int $0x30;"
-      :: "a" (33),
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (err)
+      : "a" (33),
       "b" ((uint32_t)path),
       "c" ((uint32_t)buffer),
       "d" ((uint32_t)size)
    );
+
+   return err;
 }
 
 static inline void fat_new_file(char *path) {

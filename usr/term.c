@@ -44,7 +44,7 @@ void term_cmd_help() {
    printf("LS, CD path, PWD\n");
    printf("CAT path, TOUCH path, MKDIR path\n");
    printf("DMPMEM x <y>\n");
-   printf("FONT path\n");
+   printf("FONT path, RGBHEX r g b\n");
 }
 
 void term_cmd_clear() {

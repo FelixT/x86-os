@@ -22,5 +22,8 @@ void window_drawchar(char c, uint16_t colour, int windowIndex);
 void window_writenum(int num, uint16_t colour, int windowIndex);
 void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
 void window_newline(gui_window_t* window);
+windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text, void (*func)(void *window, void *regs));
+windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text);
+windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_menu_t *menuitems, int menuitem_count);
 
 #endif

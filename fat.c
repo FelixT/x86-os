@@ -388,11 +388,11 @@ void fat_new_file(char *path, uint8_t *buffer, uint32_t size) {
    return;
 }
 
-void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
+int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    fat_dir_t *dir = fat_parse_path(path, true);
    if(dir == NULL) {
       debug_printf("Error: file not found for path '%s'\n", path);
-      return;
+      return -1;
    }
 
    uint32_t clusterNo = dir->firstClusterNo;
@@ -406,14 +406,16 @@ void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
       int freed = fat_shrink_cluster_chain(clusterNo, oldsize, size);
       if(freed < 0) {
          debug_printf("Error shrinking cluster chain\n");
-         return;
+         free((uint32_t)dir, sizeof(fat_dir_t));
+         return -2;
       }
       debug_printf("Freed %u clusters\n", freed);
    } else if(size > oldsize) {
       int allocated = fat_extend_cluster_chain(clusterNo, oldsize, size);
       if(allocated < 0) {
          debug_printf("Error extending cluster chain\n");
-         return;
+         free((uint32_t)dir, sizeof(fat_dir_t));
+         return -2;
       }
       debug_printf("Allocated %u clusters\n", allocated);
    }
@@ -464,10 +466,16 @@ void fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
    fat_dir_t *parentDir = fat_parse_path(path, false);
    debug_printf("Updating file '%s' in directory %u\n", path, parentDir->firstClusterNo);
-   if(!fat_update_in_dir(parentDir->firstClusterNo, name, extension, dir))
+   if(!fat_update_in_dir(parentDir->firstClusterNo, name, extension, dir)) {
       debug_printf("Error updating directory entry\n");
+      free((uint32_t)dir, sizeof(fat_dir_t));
+      free((uint32_t)parentDir, sizeof(fat_dir_t));
+      return -3;
+   }
 
-   free((uint32_t)dir, sizeof(fat_dir_t));   
+   free((uint32_t)dir, sizeof(fat_dir_t));
+   free((uint32_t)parentDir, sizeof(fat_dir_t));
+   return 0;
 }
 
 bool fat_new_dir(char *path) {

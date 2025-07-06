@@ -45,6 +45,7 @@ typedef struct windowobj_t {
    int cursory;
    int menuselected;
    int menuitem_count;
+   int menuhovered;
    windowobj_menu_t *menuitems;
 } windowobj_t;
 

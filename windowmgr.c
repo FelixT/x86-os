@@ -19,12 +19,18 @@ gui_window_t *selectedWindow = NULL;
 
 gui_window_t *gui_windows;
 
-uint16_t default_window_bgcolour = 0xFFFF;
-uint16_t default_window_txtcolour = 0;
-
 extern surface_t surface; // screen
 
-bool desktop_enabled = false;
+windowmgr_settings_t wm_settings = {
+   .default_window_bgcolour = 0xFFFF,
+   .default_window_txtcolour = 0x0000,
+   .desktop_enabled = false,
+   .titlebar_colour = 0xDF1B,
+   .titlebar_colour2 = 0xB5B6,
+   .titlebar_gradientstyle = 1, // vertical
+   .theme = 1
+};
+
 uint8_t *icon_window = NULL;
 uint8_t *gui_bgimage = NULL;
 uint8_t *icon_files = NULL;
@@ -80,29 +86,26 @@ int getSelectedWindowIndex() {
 void update_render_order() {
    if(selectedWindow == NULL) return;
 
-   // Check if selectedWindow is already in the array
-int found = -1;
-for(int i = 0; i < windowCount; i++) {
-    if(render_order[i] == selectedWindow) {
-        found = i;
-        break;
-    }
-}
+   int found = -1;
+   for(int i = 0; i < windowCount; i++) {
+      if(render_order[i] == selectedWindow) {
+         found = i;
+         break;
+      }
+   }
 
-if(found == -1) {
-    // Not in array - add to front, shift everything back
-    for(int i = windowCount; i > 0; i--) {
-        render_order[i] = render_order[i-1];
-    }
-    render_order[0] = selectedWindow;
-} else if(found > 0) {
-    // In array but not at front - shift it to front
-    gui_window_t *temp = render_order[found];
-    for(int i = found; i > 0; i--) {
-        render_order[i] = render_order[i-1];
-    }
-    render_order[0] = temp;
-}
+   if(found == -1) {
+      for(int i = windowCount; i > 0; i--) {
+         render_order[i] = render_order[i-1];
+      }
+      render_order[0] = selectedWindow;
+   } else if(found > 0) {
+      gui_window_t *temp = render_order[found];
+      for(int i = found; i > 0; i--) {
+         render_order[i] = render_order[i-1];
+      }
+      render_order[0] = temp;
+   }
 }
 
 void setSelectedWindowIndex(int index) {
@@ -223,8 +226,8 @@ bool window_init(gui_window_t *window) {
    window->minimised = false;
    window->closed = false;
    window->dragged = false;
-   window->bgcolour = default_window_bgcolour;
-   window->txtcolour = default_window_txtcolour;
+   window->bgcolour = wm_settings.default_window_bgcolour;
+   window->txtcolour = wm_settings.default_window_txtcolour;
    window->state = NULL;
    window->state_free = NULL;
    window->resizable = true;
@@ -256,7 +259,7 @@ bool window_init(gui_window_t *window) {
    surface.buffer = (uint32_t)window->framebuffer;
    window->surface = surface;
 
-   window_clearbuffer(window, default_window_bgcolour);
+   window_clearbuffer(window, wm_settings.default_window_bgcolour);
 
    return true;
 }
@@ -334,14 +337,24 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
    }
 
    // titlebar
-   draw_rect(&surface, COLOUR_TITLEBAR, window->x, window->y, window->width, TITLEBAR_HEIGHT);
-   // shading
-   for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
-      draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-26);
-   // titlebar text, centred
+
+   // centered text
    int titleWidth = gui_gettextwidth(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
-   draw_rect(&surface, COLOUR_TITLEBAR, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
+
+   if(wm_settings.theme == 1) {
+      // gradient titlebar
+      draw_rect_gradient(&surface, wm_settings.titlebar_colour, wm_settings.titlebar_colour2, window->x, window->y, window->width, TITLEBAR_HEIGHT, wm_settings.titlebar_gradientstyle);
+   } else {
+      // classic titlebar
+      draw_rect(&surface, wm_settings.titlebar_colour, window->x, window->y, window->width, TITLEBAR_HEIGHT);
+      // shading
+      for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
+         draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-26);
+      // rectangle behind title
+      draw_rect(&surface, wm_settings.titlebar_colour, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
+   }
+   // draw text
    draw_string(&surface, window->title, rgb16(210,210,210), titleX, window->y+6);
    draw_string(&surface, window->title, 0, titleX, window->y+5);
 
@@ -515,6 +528,7 @@ void windowmgr_closeselected() {
 void windowmgr_init() {
    // assigned fixed memory for 64 windows for now to reduce bugs
    // bug is just that resize func doesn't work i think
+   strcpy(wm_settings.desktop_bgimg, "/bmp/bg16.bmp");
    gui_windows = malloc(sizeof(gui_window_t) * 64);
    memset(gui_windows, 0, sizeof(gui_window_t) * 64);
    for(int i = 0; i < 100; i++)
@@ -549,7 +563,13 @@ void windowmgr_init() {
 }
 
 void toolbar_draw() {
-   gui_drawrect(COLOUR_TOOLBAR, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT);
+   if(wm_settings.theme == 1) {
+      // gradient toolbar
+      draw_rect_gradient(&surface, wm_settings.titlebar_colour, wm_settings.titlebar_colour2, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT, wm_settings.titlebar_gradientstyle);
+   } else {
+      // classic toolbar
+      gui_drawrect(COLOUR_TOOLBAR, 0, surface.height-TOOLBAR_HEIGHT, surface.width, TOOLBAR_HEIGHT);
+   }
 
    int toolbarPos = 0;
    // padding = 2px
@@ -557,13 +577,16 @@ void toolbar_draw() {
       if(getWindow(i)->closed) continue;
 
       int bg = COLOUR_LIGHT_GREY;
+      int bg2 = rgb16(175, 175, 175);
       int fg = COLOUR_DARK_GREY;
       if(getWindow(i)->minimised) {
          bg = COLOUR_TOOLBAR_ENTRY;
-         fg = COLOUR_BLACK;
+         bg2 = rgb16(100, 100, 100);
+         fg = COLOUR_WHITE;
       }
       if(getWindow(i)->active) {
-         bg = COLOUR_LIGHTLIGHT_GREY;
+         bg = COLOUR_WHITE;
+         bg2 = COLOUR_LIGHTLIGHT_GREY;
          fg = COLOUR_BLACK;
       }
       int textWidth = gui_gettextwidth(10);
@@ -572,7 +595,11 @@ void toolbar_draw() {
       strcpy_fixed(text, getWindow(i)->title, 10);
       int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
       int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
-      gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
+      if(wm_settings.theme == 1) {
+         draw_rect_gradient(&surface, bg, bg2, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT, windowmgr_get_settings()->titlebar_gradientstyle);
+      } else {
+         gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
+      }
       gui_writestrat(text, fg, itemX+textX, itemY+TOOLBAR_PADDING/2);
       draw_line(&surface, COLOUR_TOOLBAR_BORDER, itemX, itemY+TOOLBAR_ITEM_HEIGHT,false,TOOLBAR_ITEM_WIDTH);
       getWindow(i)->toolbar_pos = toolbarPos;
@@ -623,6 +650,7 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
 
 bool keyboard_shift = false;
 bool keyboard_caps = false;
+bool keyboard_alt = false;
 void windowmgr_keypress(void *regs, int scan_code) {
    // check desktop window objects
    if(default_menu.visible) {
@@ -630,10 +658,49 @@ void windowmgr_keypress(void *regs, int scan_code) {
       return;
    }
 
-   if(selectedWindow == NULL) return;
-
    bool released = scan_code & 0x80;
    scan_code = scan_code & 0x7F;
+
+   // check modifiers
+   if(scan_code == 0x38) {
+      // alt
+      keyboard_alt = !released;
+   } else if(scan_code == 0x0F) {
+      if(keyboard_alt) {
+         // alt+tab
+         if(selectedWindow != NULL) {
+            // find next in render order
+            bool foundsel = false;
+            bool found = false;
+            int first = -1;
+            for(int i = 0; i < windowCount; i++) {
+               if(render_order[i] != NULL && first == -1)
+                  first = i;
+               if(render_order[i] == selectedWindow) {
+                  foundsel = true;
+               } else if(foundsel && render_order[i] != NULL) {
+                  setSelectedWindowIndex(get_window_index_from_pointer(render_order[i]));
+                  found = true;
+                  break;
+               }
+            }
+            if(!found && first != -1)
+               setSelectedWindowIndex(get_window_index_from_pointer(render_order[first]));
+         } else {
+            for(int i = 0; i < windowCount; i++) {
+               if(render_order[i] != NULL) {
+                  setSelectedWindowIndex(get_window_index_from_pointer(render_order[i]));
+                  break;
+               }
+            }
+         }
+
+         if(selectedWindow)
+            selectedWindow->minimised = false;
+      }
+   }
+
+   if(selectedWindow == NULL) return;
 
    if(scan_code == 0x2A || scan_code == 0x36)
       keyboard_shift = !released;
@@ -962,7 +1029,7 @@ void desktop_init() {
    }
 
    if(gui_bgimage == NULL) {
-      fat_dir_t *entry = fat_parse_path("/bmp/bg16.bmp", true);
+      fat_dir_t *entry = fat_parse_path(wm_settings.desktop_bgimg, true);
       if(entry == NULL) {
          debug_writestr("BG not found\n");
          return;
@@ -972,7 +1039,7 @@ void desktop_init() {
       gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
    }
 
-   desktop_enabled = true;
+   wm_settings.desktop_enabled = true;
 }
 
 void desktop_setbgimg(uint8_t *img) {
@@ -981,7 +1048,7 @@ void desktop_setbgimg(uint8_t *img) {
 }
 
 void desktop_draw() {
-   if(!desktop_enabled) return;
+   if(!wm_settings.desktop_enabled) return;
 
    int32_t width = bmp_get_width(gui_bgimage);
    int32_t height = bmp_get_height(gui_bgimage);
@@ -1006,7 +1073,7 @@ void desktop_draw() {
 }
 
 void desktop_click(registers_t *regs, int x, int y) {
-   if(!desktop_enabled) return;
+   if(!wm_settings.desktop_enabled) return;
 
    int icony = 10;
    int iconheight = bmp_get_height(icon_window);
@@ -1043,8 +1110,8 @@ void windowmgr_mousemove(int x, int y) {
             default_menu.hover_func((void*)&default_menu, relX_wo, relY_wo);
          return;
       } else {
-         if(default_menu.menuselected != -1 || default_menu.hovering) {
-            default_menu.menuselected = -1;
+         if(default_menu.menuhovered != -1 || default_menu.hovering) {
+            default_menu.menuhovered = -1;
             default_menu.hovering = false;
             windowobj_draw(&default_menu);
          }
@@ -1068,12 +1135,12 @@ void windowmgr_mousemove(int x, int y) {
             bool inside = relX_wo > 0 && relX_wo < wo->width && relY_wo > 0 && relY_wo < wo->height;
         
             if(inside) {
-               if(!wo->hovering) {
+               if(!wo->hovering || wo->type == WO_MENU) {
                   //wo->hovering = true;
                   if(wo->hover_func)
                      wo->hover_func((void*)wo, relX_wo, relY_wo);
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
-                }
+               }
             } else {
                if(wo->hovering) {
                   wo->hovering = false;
@@ -1140,4 +1207,8 @@ void window_mouserelease(registers_t *regs, gui_window_t *window) {
       switch_to_task(task, regs);
       task_call_subroutine(regs, "mouserelease", (uint32_t)(window->mouserelease_func), NULL, 0);
    }   
+}
+
+windowmgr_settings_t *windowmgr_get_settings() {
+   return &wm_settings;
 }
