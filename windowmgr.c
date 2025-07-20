@@ -169,15 +169,8 @@ void window_close(void *regs, int windowIndex) {
 
    // free window objects
    for(int i = 0; i < window->window_object_count; i++) {
-      windowobj_t *wo = window->window_objects[i];
-      if(wo != NULL) {
-         if(wo->text != NULL) {
-            free((uint32_t)wo->text, strlen(wo->text)+1);
-            wo->text = NULL;
-         }
-         free((uint32_t)window->window_objects[i], sizeof(windowobj_t));
-         window->window_objects[i] = NULL;
-      }
+      windowobj_free(window->window_objects[i]);
+      window->window_objects[i] = NULL;
    }
 
    // free state
@@ -234,6 +227,8 @@ bool window_init(gui_window_t *window) {
    window->resized = false;
    window->disabled = false;
    window->toolbar_pos = -1;
+   window->scrolledY = 0;
+   window->scrollbar = NULL;
 
    window_resetfuncs(window);
    // no window objects
@@ -802,14 +797,14 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
       }
 
       // check if we clicked on window object
-      relY -= TOOLBAR_HEIGHT;
+      relY -= TITLEBAR_HEIGHT;
 
       int clicked_index = -1;
       for(int i = 0; i < selectedWindow->window_object_count; i++) {
          windowobj_t *wo = selectedWindow->window_objects[i];
-         if(relX > wo->x && relX < wo->x + wo->width
-         && relY > wo->y && relY < wo->y + wo->height) {
-            windowobj_click(regs, (void*)wo);
+         if(relX >= wo->x && relX < wo->x + wo->width
+         && relY >= wo->y && relY < wo->y + wo->height) {
+            windowobj_click(regs, (void*)wo, relX - wo->x, relY - wo->y);
             windowobj_redraw((void*)selectedWindow, (void*)wo);
             clicked_index = i;
             break;
@@ -842,7 +837,6 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    if(selectedWindow == NULL || !selectedWindow->active) return;
 
    if(!selectedWindow->dragged && !selectedWindow->resized) {
-      if(selectedWindow->drag_func == NULL) return;
       if(relX == 0 && relY == 0) return;
    
       int windowX = gui_mouse_x - selectedWindow->x;
@@ -851,6 +845,18 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
       if(windowX < 0 || windowY < 0 || windowX >= selectedWindow->width || windowY >= selectedWindow->height - TITLEBAR_HEIGHT)
          return;
 
+      // check windowobjs
+      for(int i = 0; i < selectedWindow->window_object_count; i++) {
+         windowobj_t *wo = selectedWindow->window_objects[i];
+         int woX = windowX - wo->x;
+         int woY = windowY - wo->y;
+         if(woX < 0 || woY < 0 || woX >= wo->width || woY >= wo->height)
+            continue;
+         windowobj_dragged(wo, woX, woY, relX, relY);
+      }
+
+      // call drag func
+      if(selectedWindow->drag_func == NULL) return;
       if(get_task_from_window(getSelectedWindowIndex()) == -1) {
          // call as kernel
          getSelectedWindow()->drag_func(windowX, windowY);
@@ -912,7 +918,7 @@ bool windowmgr_click(void *regs, int x, int y) {
       // clicked on menu
       if(x >= default_menu.x && x <= default_menu.x + default_menu.width
       && y >= default_menu.y && y <= default_menu.y + default_menu.height) {
-         windowobj_click(regs, (void*)&default_menu);
+         windowobj_click(regs, (void*)&default_menu, 0, 0); // unused x, y
          default_menu.visible = false;
          gui_redrawall();
          return true;
@@ -1135,7 +1141,7 @@ void windowmgr_mousemove(int x, int y) {
             bool inside = relX_wo > 0 && relX_wo < wo->width && relY_wo > 0 && relY_wo < wo->height;
         
             if(inside) {
-               if(!wo->hovering || wo->type == WO_MENU) {
+               if(!wo->hovering || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_SCROLLBAR) {
                   //wo->hovering = true;
                   if(wo->hover_func)
                      wo->hover_func((void*)wo, relX_wo, relY_wo);
@@ -1144,6 +1150,11 @@ void windowmgr_mousemove(int x, int y) {
             } else {
                if(wo->hovering) {
                   wo->hovering = false;
+
+                  for(int i = 0; i < wo->child_count; i++) {
+                     ((windowobj_t*)(wo->children[i]))->hovering = false;
+                  }
+
                   if(wo->draw_func)
                      wo->draw_func((void*)wo);
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
@@ -1182,6 +1193,31 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    window->surface.width = width;
    window->surface.height = height - TITLEBAR_HEIGHT;
 
+   if(window->scrollbar != NULL) {
+      // resize scrollbar
+      window->scrollbar->x = width - 14;
+      window->scrollbar->height = height - TITLEBAR_HEIGHT;
+      int scrollareaheight = (height - TITLEBAR_HEIGHT - 28);
+      windowobj_t *scroller = window->scrollbar->children[0];
+      if(window->scrollable_content_height == 0)
+         scroller->height = 0;
+      else
+         scroller->height = (scrollareaheight * window->scrollbar->height) / window->scrollable_content_height;
+      if(scroller->height < 10) scroller->height = 10;
+      if(scroller->height >= scrollareaheight) {
+         scroller->height = scrollareaheight;
+         scroller->y = 14;
+      }
+      windowobj_t *downbtn = window->scrollbar->children[2];
+      downbtn->y = height - TITLEBAR_HEIGHT - 14;
+
+      window->scrollbar->visible = window->height - TITLEBAR_HEIGHT < window->scrollable_content_height;
+      if(!window->scrollbar->visible)
+         window_reset_scroll();
+
+      debug_printf("%i %i\n", window->scrollbar->visible, window->scrollable_content_height);
+   }
+
    // call resize func if exists
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
@@ -1206,7 +1242,17 @@ void window_mouserelease(registers_t *regs, gui_window_t *window) {
    if(task > -1 && window->mouserelease_func) {
       switch_to_task(task, regs);
       task_call_subroutine(regs, "mouserelease", (uint32_t)(window->mouserelease_func), NULL, 0);
-   }   
+   }
+
+   // check windowobjs
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      if(wo->clicked) {
+         int relX = gui_mouse_x - window->x - wo->x;
+         int relY = gui_mouse_y - window->y - TITLEBAR_HEIGHT - wo->y;
+         if(windowobj_release((void*)regs, (void*)wo, relX, relY)) return;
+      }
+   }
 }
 
 windowmgr_settings_t *windowmgr_get_settings() {

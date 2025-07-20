@@ -38,7 +38,7 @@ void ata_identify(bool primaryBus, bool masterDrive) {
    // send identify cmd and read status
    outb(ioPort + ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
    uint8_t status = inb(ioPort + ATA_REG_STATUS);
-   gui_writenum(status, 0);
+   debug_printf("Status %i\n", status);
 
    if(status) {
       // poll until no longer busy
@@ -57,14 +57,11 @@ void ata_identify(bool primaryBus, bool masterDrive) {
          buf[i] = inw(ioPort + ATA_REG_DATA);
       }
 
-      gui_writestr(": ", 0);
       uint32_t sectors = buf[60] + (buf[61]<<16); // hd size in 512 byte sectors
-      gui_writeuint(sectors, 0);
-      //uint32_t size = ()
-      //gui_writenum(buf[])
+      debug_printf("Sectors: %u\n", sectors);
 
    } else {
-      gui_writestr("ATA DRIVE DOES NOT EXIST.", 0);
+      debug_printf("ATA DRIVE DOES NOT EXIST.\n", 0);
       // doesn't exist...
    }
 

@@ -12,6 +12,10 @@
 #include "window_popup.h"
 #include "fs.h"
 
+gui_window_t *api_get_window() {
+   return &gui_get_windows()[get_current_task_window()];
+}
+
 void api_write_string(registers_t *regs) {
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
    // write ebx
@@ -588,7 +592,6 @@ void api_write(registers_t *regs) {
 }
 
 void api_fsize(registers_t *regs) {
-   // stub
    // IN: ebx - int fd
    // OUT: ebx - filesize
    task_state_t *task = get_current_task_state();
@@ -598,4 +601,14 @@ void api_fsize(registers_t *regs) {
    } else {
       regs->ebx = task->file_descriptors[fd]->file_size;
    }
+}
+
+void api_create_scrollbar(registers_t *regs) {
+   // IN: ebx - callback (int deltaY, int offsetY)
+   window_create_scrollbar(api_get_window(), (void*)regs->ebx);
+}
+
+void api_set_scrollable_height(registers_t *regs) {
+   // IN: ebx - height
+   window_set_scrollable_height(api_get_window(), regs->ebx);
 }

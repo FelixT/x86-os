@@ -128,7 +128,7 @@ void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y) {
 
 void draw_string(surface_t *surface, char* c, uint16_t colour, int x, int y) {
    int i = 0;
-   while(c[i] != '\0') {
+   while(c[i] != '\0' && c[i] != '\n') {
       draw_char(surface, c[i++], colour, x, y);
       x+=getFont()->width+getFont()->padding;
    }

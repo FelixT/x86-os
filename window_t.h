@@ -13,7 +13,7 @@ typedef struct gui_window_t {
    int x;
    int y;
    int width;
-   int height; // includes 10px titlebar
+   int height; // includes 17px titlebar (titlebar_height)
    char text_buffer[TEXT_BUFFER_LENGTH];
    char *cmd_history[CMD_HISTORY_LENGTH];
    int cmd_history_pos;
@@ -33,6 +33,9 @@ typedef struct gui_window_t {
    uint16_t txtcolour; // default
    uint16_t *framebuffer; // width*(height-titlebar_height)
    uint32_t framebuffer_size;
+   int scrollable_content_height; // excludes titlebar height
+   int scrolledY;
+   windowobj_t *scrollbar;
 
    surface_t surface;
 

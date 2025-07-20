@@ -9,9 +9,9 @@
 // kernel is loaded into 100mb
 
 // physical memory layout
-#define KERNEL_SIZE 0x20000 // kernel binary size (~ the real size of 128k)
+#define KERNEL_SIZE 0x40000 // kernel binary size (~ the real size of 258k)
 
-#define KERNEL_START 0x06400000 // loaded to here in bootloader1
+#define KERNEL_START 0x06380000 // loaded to here in bootloader1
 #define KERNEL_END 0x06420000 // KERNEL_START + KERNEL_SIZE
 
 #define STACKS_START 0x40000
@@ -29,7 +29,7 @@
 // kernel mapped to highest half of memory (0xC0000000-0xFFFFFFFF)
 
 // physical -> virtual offset is 0xbffe8000 (V_KERNEL_START-KERNEL_START)
-#define V_KERNEL_START 0x06400000
+#define V_KERNEL_START 0x06380000
 #define V_KERNEL_END 0x06420000 // V_KERNEL_START + 0x20000 (kernel size 0x20000)
 #define V_KSTACK_START 0x06420000 // V_KERNEL_END -> V_KERNEL_START + 0x20000 (kernel size 0x20000)
 #define V_TOS_KERNEL 0x06422000 // V_STACKS_START + 0x2000 (k stack size 0x2000)

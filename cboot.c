@@ -1,7 +1,7 @@
 // bootloader 1 loader
 // located in memory at 0x7e00 size 63.5k
 // init text mode terminal, interrupts, ata
-// loads kernel to 0x06400000 (KERNEL_START)
+// loads kernel to 0x06380000 (KERNEL_START)
 // just go ahead and load the kernel to the 'higher half location'
 // which simplies enabling paging (can identity map)
 
@@ -16,7 +16,7 @@ extern uint8_t videomode;
 
 surface_t surface;
 
-int size = 128000;
+int size = 256000;
 
 extern uint8_t vbe_mode_info_structure[256];
 

@@ -50,12 +50,14 @@ char path[256];
 
 windowobj_t *clearbtn_wo;
 windowobj_t *colourbtn_wo;
-windowobj_t *toolbtn_wo;
 windowobj_t *zoominbtn_wo;
 windowobj_t *zoomtext_wo;
 windowobj_t *zoomoutbtn_wo;
 windowobj_t *openbtn_wo;
 windowobj_t *writebtn_wo;
+windowobj_t *toolminusbtn_wo;
+windowobj_t *toolsizetext_wo;
+windowobj_t *toolplusbtn_wo;
 int size = 1; 
 int scale = 1;
 int colour = 0;
@@ -68,7 +70,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    int y = height - 15;
    clearbtn_wo->y = y;
    colourbtn_wo->y = y;
-   toolbtn_wo->y = y;
+   toolplusbtn_wo->y = y;
+   toolsizetext_wo->y = y;
+   toolminusbtn_wo->y = y;
    zoomoutbtn_wo->y = y;
    zoomtext_wo->y = y;
    zoominbtn_wo->y = y;
@@ -189,6 +193,18 @@ void tool_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
    size++;
+   uinttostr(size, toolsizetext_wo->text);
+
+   end_subroutine();
+
+}
+
+void toolminus_click(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
+   size--;
+   if(size < 1) size = 1;
+   uinttostr(size, toolsizetext_wo->text);
 
    end_subroutine();
 
@@ -282,6 +298,8 @@ void write_click(void *wo, void *regs) {
 
    bmp_header_t *header = (bmp_header_t*)bmp;
    
+   height -= 15; // remove bottom bar
+
    int maxX = info->width; // bitmap width (not scaled)
    if(width/scale < maxX)
       maxX = width/scale;
@@ -314,6 +332,8 @@ void write_click(void *wo, void *regs) {
 
    uint32_t size = header->dataOffset + rowSize * info->height;
    fat_write_file(path, bmp, size);
+
+   height += 15; // restore
 
    end_subroutine();
 }
@@ -369,9 +389,22 @@ void _start(int argc, char **args) {
    clearbtn_wo->click_func = &clear_click;
    x += clearbtn_wo->width + margin;
 
-   toolbtn_wo = create_button(x, y, "Size");
-   toolbtn_wo->click_func = &tool_click;
-   x += toolbtn_wo->width + margin;
+   toolminusbtn_wo = create_button(x, y, "-");
+   toolminusbtn_wo->width = 20;
+   toolminusbtn_wo->click_func = &toolminus_click;
+   x += toolminusbtn_wo->width;
+
+   toolsizetext_wo = create_text(x, y, "1");
+   toolsizetext_wo->width = 20;
+   toolsizetext_wo->texthalign = true;
+   toolsizetext_wo->textvalign = true;
+   toolsizetext_wo->textpadding = 0;
+   x += toolsizetext_wo->width;
+
+   toolplusbtn_wo = create_button(x, y, "+");
+   toolplusbtn_wo->width = 20;
+   toolplusbtn_wo->click_func = &tool_click;
+   x += toolplusbtn_wo->width + margin;
 
    colourbtn_wo = create_button(x, y, "Colour");
    colourbtn_wo->click_func = &colour_click;
@@ -380,13 +413,13 @@ void _start(int argc, char **args) {
    zoomoutbtn_wo = create_button(x, y,  "-");
    zoomoutbtn_wo->width = 20;
    zoomoutbtn_wo->click_func = &zoomout_click;
-   x += zoomoutbtn_wo->width + margin;
+   x += zoomoutbtn_wo->width;
 
    zoomtext_wo = create_text(x, y, "100%");
    zoomtext_wo->width = 40;
    zoomtext_wo->texthalign = true;
    zoomtext_wo->textvalign = true;
-   x += zoomtext_wo->width + margin;
+   x += zoomtext_wo->width;
 
    zoominbtn_wo = create_button(x, y, "+");
    zoominbtn_wo->width = 20;

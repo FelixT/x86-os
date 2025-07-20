@@ -2,11 +2,11 @@ ENTRY(start_32)
 OUTPUT_FORMAT(elf32-i386)
 
 MEMORY {
-    ram (rwx) : ORIGIN = 0x06400000, LENGTH = 127K
+    ram (rwx) : ORIGIN = 0x06380000, LENGTH = 256K
 }
 
 SECTIONS {
-    . = 0x06400000;
+    . = 0x06380000;
 
     .text BLOCK(4K) : ALIGN(4K) {
         *(.text)

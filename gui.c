@@ -137,6 +137,13 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("\nSet up timer\n", COLOUR_ORANGE);
    timer_set_hz(400);
 
+   // reload font, it gets cut off(??)
+   fat_dir_t *entry = fat_parse_path("/font/7.fon", true);
+   fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+   font_load(file);
+   free((uint32_t)entry, sizeof(fat_dir_t));
+   //free((uint32_t)file, entry->fileSize);
+
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
    setSelectedWindowIndex(-1);
@@ -151,7 +158,7 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
-   //surface.buffer-=128; // ??????? horrible alignment issue
+   surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);

@@ -19,9 +19,6 @@ volatile int offset;
 
 char cur_path[200];
 
-windowobj_t *upbtn;
-windowobj_t *downbtn;
-
 char tolower(char c) {
    if(c >= 'A' && c <= 'Z')
       c += ('a'-'A');
@@ -58,37 +55,54 @@ void display_items() {
 
       char fileName[9];
       char extension[4];
+      char fullName[13];
 
-      for(int x = 0; x < 8; x++)
-         fileName[x] = tolower(cur_items[i].filename[x]);
+      for(int j = 0; j < 8; j++)
+         fileName[j] = tolower(cur_items[i].filename[j]);
       fileName[8] = '\0';
 
-      for(int x = 0; x < 3; x++)
-         extension[x] = tolower(cur_items[i].filename[x+8]);
+      for(int j = 0; j < 3; j++)
+         extension[j] = tolower(cur_items[i].filename[j+8]);
       extension[3] = '\0';
+
+      strsplit(fullName, NULL, fileName, ' ');
+      if(extension[0] != ' ') {
+         strcat(fullName, ".");
+         strcat(fullName, extension);
+      }
 
       // draw
       if((cur_items[i].attributes & 0x10) == 0x10) {
          // directory
          bmp_draw((uint8_t*)folder_icon, x, y, 1, true);
-         write_strat(fileName, x + 25, y + 7);
+         write_strat(fileName, x + 27, y + 7);
       } else {
          // file
          bmp_draw((uint8_t*)file_icon, x, y, 1, true);
-         write_strat(fileName, x + 25, y + 7);
+         write_strat(fullName, x + 27, y + 7);
 
-         if(extension[0] != ' ') {
-            write_strat(extension, x + 105, y + 7);
-            write_strat(extension, x + 105, y + 7);
-
-            write_numat(cur_items[i].fileSize, x + 150, y + 7);
+         uint32_t size = cur_items[i].fileSize;
+         char type[4];
+         strcpy(type, "b");
+         if(size > 1000) {
+            strcpy(type, "kb");
+            size /= 1000;
+            if(size > 1000) {
+               strcpy(type, "mb");
+               size /= 1000;
+            }
          }
+         char sizeStr[20];
+         sprintf(sizeStr, "<%u %s>", size, type);
+         write_strat(sizeStr, x + 150, y + 7);
       }
 
 
       y += 25;
       position++;
    }
+
+   set_content_height(y + 25*offset + 40);
 
    // draw path
    for(int y = (int)height - 15; y < (int)height; y++) {
@@ -142,6 +156,8 @@ void downarrow() {
 void click(int x, int y) {
 
    (void)(x);
+   if(x > (int)width - 20)
+      end_subroutine();
 
    // see where we clicked
    int position = (y-5)/25;
@@ -259,10 +275,16 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
    width = w;
    height = h;
-   upbtn->x = w - 18;
-   downbtn->x = w - 18;
-   downbtn->y = h - downbtn->height;
 
+   display_items();
+   redraw();
+   end_subroutine();
+}
+
+void scroll(int deltaY, int offsetY) {
+   (void)deltaY;
+   offset = (offsetY + 24) / 25;
+   if(offset >= no_items) offset = no_items - 1;
    display_items();
    redraw();
    end_subroutine();
@@ -292,6 +314,7 @@ void _start(int argc, char **args) {
 
    framebuffer = (uint16_t*)get_framebuffer();
 
+   create_scrollbar(&scroll);
    override_uparrow((uint32_t)&uparrow);
    override_downarrow((uint32_t)&downarrow);
    override_click((uint32_t)&click);
@@ -303,13 +326,6 @@ void _start(int argc, char **args) {
    read_root();
    display_items();
    redraw();
-
-   upbtn = create_button(width - 18, 0, "Up");
-   upbtn->width = 18;
-   upbtn->click_func = &uparrow;
-   downbtn = create_button(width - 18, height - upbtn->height, "Dn");
-   downbtn->click_func = &downarrow;
-   downbtn->width = 18;
 
    // main program loop
    while(1 == 1) {

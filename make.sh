@@ -9,6 +9,8 @@ c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging
 o_files="o/start_32.o o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/lib/string.o o/api.o o/windowobj.o o/window_term.o o/window_settings.o o/window_popup.o o/fs.o"
 boot_o_files="o/boot1.o o/memory.o o/ata.o o/cboot.o o/font.o o/draw.o o/terminal.o o/lib/string.o"
 
+rm -r o/*
+
 mkdir -p o
 mkdir -p o/lib
 mkdir -p fs_root
@@ -76,11 +78,11 @@ cat o/boot.bin o/boot1.bin > o/hd1.bin
 dd if=/dev/zero of=o/hd2.bin bs=64000 count=1 status=none
 dd if=o/hd1.bin of=o/hd2.bin bs=64000 count=1 conv=notrunc status=none
 
-# add kernel at 64k, pad entire bootloader+kernel to 256k
+# add kernel at 64k, pad entire bootloader+kernel to 512k
 #cat o/hd2.bin > o/main.bin
 cat o/hd2.bin o/kernel.bin > o/main.bin
-dd if=/dev/zero of=o/hd3.bin bs=256000 count=1 status=none
-dd if=o/main.bin of=o/hd3.bin bs=256000 count=1 conv=notrunc status=none
+dd if=/dev/zero of=o/hd3.bin bs=512000 count=1 status=none
+dd if=o/main.bin of=o/hd3.bin bs=512000 count=1 conv=notrunc status=none
 
 # create FAT16 filesystem
 # mkfs.fat from (brew install dosfstools)
@@ -94,7 +96,7 @@ cp -R fs_root/ /Volumes/FATFS
 # unmount
 hdiutil eject /Volumes/FATFS
 
-# add fs at 256000
+# add fs at 512000
 cat o/hd3.bin fs.img > hd.bin
 chmod 644 hd.bin
 

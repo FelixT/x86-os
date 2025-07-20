@@ -95,8 +95,10 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
 
 }
 
-void window_popup_filepicker_click(void *windowobj, void *regs) {
+void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int relY) {
    (void)regs;
+   (void)relX;
+   (void)relY;
    windowobj_t *wo = (windowobj_t*)windowobj;
    window_popup_filepicker_t *fp = (window_popup_filepicker_t*)getSelectedWindow()->state;
    if(strcmp(wo->text, ".")) {
@@ -149,8 +151,6 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
          map(page_get_current(), (uint32_t)path, (uint32_t)path, 1, 1);
          map(page_get_current(), (uint32_t)args, (uint32_t)args, 1, 1);
       
-         debug_printf("Calling filepicker callback %h with path %s\n", callback, path);
-
          task_call_subroutine(regs, "filepickerreturn", (uint32_t)callback, args, 1);
       
          getSelectedWindow()->needs_redraw = true;
@@ -162,15 +162,16 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
       return;
    }
 
-   // remove existing windowobjs except path
+   // remove existing windowobjs except path and scrollbar
    gui_window_t *window = getSelectedWindow();
-   for(int i = 1; i < window->window_object_count; i++)
+   for(int i = 2; i < window->window_object_count; i++) {
       free((uint32_t)window->window_objects[i], sizeof(windowobj_t));
-   window->window_object_count = 1;
+   }
+   window->window_object_count = 2;
 
    window_clearbuffer(window, window->bgcolour);
 
-   int width = 240;
+   int width = 220;
 
    fat_dir_t *items;
    int size;
@@ -211,13 +212,14 @@ void window_popup_filepicker_click(void *windowobj, void *regs) {
          strcpy_fixed(wo_file->text+strlen(wo_file->text), (char*)&(items[i].filename[8]), 3);
          if(strchr(wo_file->text, ' '))
             strchr(wo_file->text, ' ')[0] = '\0';
-      }      
-      wo_file->click_func = &window_popup_filepicker_click;
+      }
+      wo_file->release_func = &window_popup_filepicker_click;
       wo_file->texthalign = false;
       window->window_objects[window->window_object_count++] = wo_file;
 
       y+=17;
    }
+   window_set_scrollable_height(window, y);
 
    //free((uint32_t)items, sizeof(fat_dir_t*)*fat_get_dir_size(fp->currentdir->firstClusterNo));
 
@@ -242,7 +244,9 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
    window->y = parent->y + 50;
    if(window->y + window->height > (int)gui_get_height())
       window->y = gui_get_height() - window->height;
-   int width = 240;
+   int width = 220;
+
+   window_create_scrollbar(window, NULL);
 
    window->state_size = sizeof(window_popup_filepicker_t);
    window->state = malloc(window->state_size);
@@ -296,12 +300,13 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
          if(strchr(wo_file->text, ' '))
             strchr(wo_file->text, ' ')[0] = '\0';
       }
-      wo_file->click_func = &window_popup_filepicker_click;
+      wo_file->release_func = &window_popup_filepicker_click;
       wo_file->texthalign = false;
       window->window_objects[window->window_object_count++] = wo_file;
 
       y+=17;
    }
+   window_set_scrollable_height(window, y);
 
    free((uint32_t)items, sizeof(fat_dir_t)*fat_get_bpb().noRootEntries);
 
@@ -333,8 +338,10 @@ void window_popup_colourpicker_click(int x, int y) {
    }
 }
 
-void window_popup_colourpicker_return(void *windowobj, void *regs) {
+void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y) {
    (void)windowobj;
+   (void)x;
+   (void)y;
    //windowobj_t *wo = (windowobj_t*)windowobj;
    gui_window_t *window = getSelectedWindow();
    window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
@@ -353,16 +360,12 @@ void window_popup_colourpicker_return(void *windowobj, void *regs) {
 
       if(get_task_from_window(getSelectedWindowIndex()) == -1) {
          // call as kernel
-         debug_printf("Calling colourpicker callback %h with colour %h\n", callback, colour);
          callback(colour);
       } else {
          if(!gui_interrupt_switchtask(regs)) return;
          // calling function as task
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)colour;
-      
-         debug_printf("Calling colourpicker callback %h with colour %h\n", callback, colour);
-
          task_call_subroutine(regs, "colourpickerreturn", (uint32_t)callback, args, 1);
       }
 
@@ -419,7 +422,7 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
    wo_okbtn->height = 16;
    wo_okbtn->text = malloc(strlen("OK") + 1);
    strcpy(wo_okbtn->text, "OK");
-   wo_okbtn->click_func = &window_popup_colourpicker_return;
+   wo_okbtn->release_func = &window_popup_colourpicker_return;
    window->window_objects[window->window_object_count++] = wo_okbtn;
 
    // draw colour square border

@@ -55,5 +55,7 @@ void api_fat_new_dir(registers_t *regs);
 void api_sbrk(registers_t *regs);
 void api_open(registers_t *regs);
 void api_write(registers_t *regs);
+void api_create_scrollbar(registers_t *regs);
+void api_set_scrollable_height(registers_t *regs);
 
 #endif

@@ -468,6 +468,21 @@ static inline uint32_t *sbrk(uint32_t increment) {
    return (void*)addr;
 }
 
+static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY)) {
+   asm volatile (
+      "int $0x30"
+      :: "a" (54),
+      "b" ((uint32_t)callback)
+   );
+}
+
+static inline void set_content_height(uint32_t height) {
+   asm volatile (
+      "int $0x30"
+      :: "a" (55),
+      "b" (height)
+   );
+}
 
 // terminal override
 

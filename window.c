@@ -231,3 +231,228 @@ windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_me
 
    return menu;
 }
+
+void window_default_scroll(int deltaY) {
+   // scroll every object by deltaY
+   for(int i = 0; i < getSelectedWindow()->window_object_count; i++) {
+      windowobj_t *wo = getSelectedWindow()->window_objects[i];
+      if(wo->type != WO_SCROLLBAR) {
+         wo->y -= deltaY;
+      }
+   }
+   window_clearbuffer(getSelectedWindow(), getSelectedWindow()->bgcolour);
+   window_draw(getSelectedWindow());
+}
+
+void window_scroll_do_callback(void *regs, void *callback, int deltaY, int offsetY) {
+   if(callback) {
+      // todo: call as prog
+      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+         // kernel
+         (*(void(*)(int, int))callback)(deltaY, offsetY);
+      } else {
+         gui_interrupt_switchtask(regs);
+         uint32_t *args = malloc(sizeof(int) * 2);
+         args[1] = deltaY;
+         args[0] = offsetY;
+
+         task_call_subroutine(regs, "scroll", (uint32_t)(callback), args, 2);
+      }
+   } else {
+      window_default_scroll(deltaY);
+   }
+}
+
+void window_scroll_callback(void *wo, void *regs, int x, int y) {
+   windowobj_t *scroller = (windowobj_t*)wo;
+   (void)regs;
+   (void)x;
+   (void)y;
+
+   int scrollArea = getSelectedWindow()->height - TITLEBAR_HEIGHT - 28;
+   int scrollPercent = (scroller->y - 14) * 100 / (scrollArea - scroller->height);
+   int hiddenY = getSelectedWindow()->scrollable_content_height - getSelectedWindow()->height - TITLEBAR_HEIGHT;
+   if(hiddenY == 0) return;
+   int scrolledY = scrollPercent * hiddenY / 100;
+
+   int scrollPixels = scrolledY - getSelectedWindow()->scrolledY;
+   getSelectedWindow()->scrolledY = scrolledY;
+   if(scrollPixels == 0) return;
+
+   windowobj_t *scrollbar = (windowobj_t*)scroller->parent;
+   window_scroll_do_callback(regs, scrollbar->return_func, scrollPixels, scrolledY);
+}
+
+void window_scroll_up_callback(void *wo, void *regs) {
+   (void)regs;
+   // scroll up by 10 pixels
+   int deltaY = -10;
+   if(getSelectedWindow()->scrolledY + deltaY < 0) {
+      deltaY = -getSelectedWindow()->scrolledY; // don't scroll past the top
+   }
+
+   getSelectedWindow()->scrolledY += deltaY;
+   // update scroller position
+   windowobj_t *scrollbar = ((windowobj_t*)wo)->parent;
+   windowobj_t *scroller = (windowobj_t*)scrollbar->children[0];
+   int scrollarea = getSelectedWindow()->height - TITLEBAR_HEIGHT - 28;
+   int hiddenHeight = getSelectedWindow()->scrollable_content_height - (getSelectedWindow()->height - TITLEBAR_HEIGHT);
+   if(hiddenHeight <= 0)
+      return;
+
+   scroller->y = 14 + (getSelectedWindow()->scrolledY * (scrollarea - scroller->height)) / (getSelectedWindow()->scrollable_content_height - getSelectedWindow()->height - TITLEBAR_HEIGHT);
+   if(scroller->y < 14)
+      scroller->y = 14;
+
+   window_scroll_do_callback(regs, scrollbar->return_func, deltaY, getSelectedWindow()->scrolledY);
+}
+
+void window_scroll_down_callback(void *wo, void *regs) {
+   (void)regs;
+   // scroll down by 10 pixels
+   int deltaY = 10;
+   if(getSelectedWindow()->scrolledY + deltaY > getSelectedWindow()->scrollable_content_height - getSelectedWindow()->height - TITLEBAR_HEIGHT) {
+      deltaY = getSelectedWindow()->scrollable_content_height - getSelectedWindow()->height - TITLEBAR_HEIGHT - getSelectedWindow()->scrolledY; // don't scroll past the bottom
+   }
+
+   getSelectedWindow()->scrolledY += deltaY;
+   // update scroller position
+   windowobj_t *scrollbar = ((windowobj_t*)wo)->parent;
+   windowobj_t *scroller = (windowobj_t*)scrollbar->children[0];
+   int scrollarea = getSelectedWindow()->height - TITLEBAR_HEIGHT - 28;
+   int hiddenHeight = getSelectedWindow()->scrollable_content_height - (getSelectedWindow()->height - TITLEBAR_HEIGHT);
+   if(hiddenHeight <= 0)
+      return;
+   scroller->y = 14 + (getSelectedWindow()->scrolledY * (scrollarea - scroller->height)) / (getSelectedWindow()->scrollable_content_height - getSelectedWindow()->height - TITLEBAR_HEIGHT);
+   if(scroller->y > scrollarea - scroller->height + 14)
+      scroller->y = scrollarea - scroller->height + 14;
+
+   debug_printf("Hidden height: %i, Scrolled Y: %i, Scroller Y: %i\n", hiddenHeight, getSelectedWindow()->scrolledY, scroller->y);
+
+   window_scroll_do_callback(regs, scrollbar->return_func, deltaY, getSelectedWindow()->scrolledY);
+}
+
+void window_reset_scroll() {
+   gui_window_t *window = getSelectedWindow();
+   if(window->scrollbar == NULL) return;
+   if(window->scrolledY > 0) {
+      window_default_scroll(-window->scrolledY);
+      window->scrolledY = 0;
+      windowobj_t *scroller = window->scrollbar->children[0];
+      scroller->y = 14;
+   }
+}
+
+windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int deltaY, int offsetY)) {
+   // create scrollbar on right side of window
+   int x = window->width - 14;
+   int y = 0;
+   int height = window->height - TITLEBAR_HEIGHT;
+   
+   windowobj_t *scrollbar = malloc(sizeof(windowobj_t));
+   windowobj_init(scrollbar, &window->surface);
+   scrollbar->type = WO_SCROLLBAR;
+   scrollbar->x = x;
+   scrollbar->y = y;
+   scrollbar->width = 14;
+   scrollbar->height = height;
+   scrollbar->return_func = (void*)callback;
+
+   char buf[2];
+   buf[1] = '\0';
+
+   // up button
+   windowobj_t *upbtn = malloc(sizeof(windowobj_t));
+   windowobj_init(upbtn, &window->surface);
+   upbtn->type = WO_BUTTON;
+   upbtn->x = 0;
+   upbtn->y = 0;
+   upbtn->width = 14;
+   upbtn->height = 14;
+   buf[0] = 0x80; // uparrow
+   char *text = (char*)malloc(2);
+   strcpy(text, buf);
+   upbtn->text = text;
+   upbtn->parent = scrollbar;
+   upbtn->click_func = &window_scroll_up_callback;
+
+   // down button
+   windowobj_t *downbtn = malloc(sizeof(windowobj_t));
+   windowobj_init(downbtn, &window->surface);
+   downbtn->type = WO_BUTTON;
+   downbtn->x = 0;
+   downbtn->y = height - 14;
+   downbtn->width = 14;
+   downbtn->height = 14;
+   buf[0] = 0x81; // down
+   text = (char*)malloc(2);
+   strcpy(text, buf);
+   downbtn->text = text;
+   downbtn->parent = scrollbar;
+   downbtn->click_func = &window_scroll_down_callback;
+
+   // scroller
+   windowobj_t *scroller = malloc(sizeof(windowobj_t));
+   windowobj_init(scroller, &window->surface);
+   scroller->type = WO_SCROLLER;
+   scroller->x = 0;
+   scroller->y = 14;
+   scroller->width = 14;
+   scroller->parent = scrollbar;
+   // work out height
+   int scrollareaheight = (window->height - TITLEBAR_HEIGHT - 28);
+   if(window->scrollable_content_height)
+      scroller->height = (scrollareaheight * window->height - TITLEBAR_HEIGHT) / window->scrollable_content_height;
+   else
+      scroller->height = 0;
+   if(scroller->height < 10) scroller->height = 10;
+   if(scroller->height > scrollareaheight) scroller->height = scrollareaheight;
+
+   buf[0] = '=';
+   text = (char*)malloc(2);
+   strcpy(text, buf);
+   scroller->text = text;
+   scroller->parent = scrollbar;
+   scroller->release_func = &window_scroll_callback;
+
+   scrollbar->children[0] = scroller;
+   scrollbar->children[1] = upbtn;
+   scrollbar->children[2] = downbtn;
+   scrollbar->child_count = 3;
+
+   window->scrollbar = scrollbar;
+   window->window_objects[window->window_object_count++] = scrollbar;
+
+   if(window->scrollable_content_height > window->height - TITLEBAR_HEIGHT) {
+      windowobj_draw(scrollbar);
+   } else {
+      scrollbar->visible = false;
+   }
+
+   return scrollbar;
+}
+
+void window_set_scrollable_height(gui_window_t *window, int height) {
+   window->scrollable_content_height = height;
+   if(window->scrollbar != NULL) {
+
+      windowobj_t *scroller = (windowobj_t*)window->scrollbar->children[0];
+      // work out height
+      int scrollareaheight = (window->height - TITLEBAR_HEIGHT - 28);
+      if(window->scrollable_content_height)
+         scroller->height = (scrollareaheight * window->height - TITLEBAR_HEIGHT) / window->scrollable_content_height;
+      else
+         scroller->height = 0;
+      if(scroller->height < 10) scroller->height = 10;
+      if(scroller->height > scrollareaheight) scroller->height = scrollareaheight;
+      
+      if(window->scrollable_content_height > window->height - TITLEBAR_HEIGHT) {
+         window->scrollbar->visible = true;
+         windowobj_draw(window->scrollbar);
+      } else {
+         window->scrollbar->visible = false;
+      }
+   }
+
+   //window_reset_scroll();
+}

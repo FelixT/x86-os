@@ -34,12 +34,16 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->menuhovered = -1;
    windowobj->menuselected = -1;
    windowobj->visible = true;
+   windowobj->child_count = 0;
+   windowobj->parent = NULL;
    
    // default funcs
    windowobj->draw_func = &windowobj_draw;
    windowobj->click_func = NULL;
    windowobj->hover_func = &windowobj_hover;
    windowobj->return_func = NULL;
+   windowobj->release_func = NULL;
+   windowobj->drag_func = NULL;
 }
 
 
@@ -90,9 +94,16 @@ extern bool mouse_held;
 void windowobj_draw(void *windowobj) {
 
    windowobj_t *wo = (windowobj_t*)windowobj;
+   windowobj_t *parent = (windowobj_t*)wo->parent;
 
    if(wo->type == WO_DISABLED) return;
-   if(wo->visible == false) return;
+   if(!wo->visible || (parent != NULL && !parent->visible)) return;
+
+   // draw relative to parent
+   if(parent != NULL) {
+      wo->x += parent->x;
+      wo->y += parent->y;
+   }
    
    uint16_t bg = rgb16(255, 255, 255);
    uint16_t border = rgb16(120, 120, 120);
@@ -100,7 +111,7 @@ void windowobj_draw(void *windowobj) {
    uint16_t light = rgb16(235, 235, 235);
    uint16_t dark = rgb16(145, 145, 145);
 
-   if(wo->type == WO_BUTTON) {
+   if(wo->type == WO_BUTTON || wo->type == WO_SCROLLER) {
       bg = rgb16(200, 200, 200);
 
       wo->clicked = wo->clicked && mouse_held;
@@ -119,7 +130,10 @@ void windowobj_draw(void *windowobj) {
       windowmgr_settings_t *wm_settings = windowmgr_get_settings();
       if(wm_settings->theme == 1) {
          // gradient button
-         draw_rect_gradient(wo->window_surface, wm_settings->titlebar_colour, wm_settings->titlebar_colour2, wo->x, wo->y, wo->width, wo->height, wm_settings->titlebar_gradientstyle);
+         if(wo->hovering)
+            draw_rect_gradient(wo->window_surface, wm_settings->titlebar_colour2, wm_settings->titlebar_colour, wo->x, wo->y, wo->width, wo->height, wm_settings->titlebar_gradientstyle);
+         else
+            draw_rect_gradient(wo->window_surface, wm_settings->titlebar_colour, wm_settings->titlebar_colour2, wo->x, wo->y, wo->width, wo->height, wm_settings->titlebar_gradientstyle);
       } else {
          draw_rect(wo->window_surface, bg, wo->x, wo->y, wo->width, wo->height);
       }
@@ -150,7 +164,7 @@ void windowobj_draw(void *windowobj) {
       if(wo->clicked) {
          border = 0;
       } else if(wo->hovering) {
-         bg = rgb16(240, 240, 240);
+         bg = rgb16(245, 245, 245);
          border = rgb16(40, 40, 40);
          text = rgb16(40, 40, 40);
       }
@@ -160,9 +174,9 @@ void windowobj_draw(void *windowobj) {
          // draw selected item
          draw_rect(wo->window_surface, rgb16(200, 200, 200), wo->x + 1, wo->y + 1 + (wo->menuselected * (getFont()->height + 4)), wo->width - 2, getFont()->height + 4);
       }
-      if(wo->menuhovered >= 0) {
-         // draw selected item
-         draw_rect(wo->window_surface, rgb16(220, 220, 220), wo->x + 1, wo->y + 1 + (wo->menuhovered * (getFont()->height + 4)), wo->width - 2, getFont()->height + 4);
+      if(wo->hovering && wo->menuhovered >= 0 && wo->menuselected != wo->menuhovered) {
+         // draw hovered item
+         draw_rect(wo->window_surface, rgb16(230, 230, 230), wo->x + 1, wo->y + 1 + (wo->menuhovered * (getFont()->height + 4)), wo->width - 2, getFont()->height + 4);
       }
       draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
 
@@ -171,6 +185,11 @@ void windowobj_draw(void *windowobj) {
          windowobj_menu_t *item = &wo->menuitems[i];
          draw_string(wo->window_surface, item->text, text, wo->x + 4, wo->y + 4 + (i * (getFont()->height + 4)));
       }
+   } else if(wo->type == WO_SCROLLBAR) {
+      bg = rgb16(244, 244, 244);
+      if(wo->hovering)
+         bg = rgb16(234, 234, 234);
+      draw_rect(wo->window_surface, bg, wo->x, wo->y, wo->width, wo->height);
    } else {
       if(wo->clicked) {
          border = 0;
@@ -185,7 +204,7 @@ void windowobj_draw(void *windowobj) {
 
    }
 
-   if(wo->type == WO_BUTTON && !wo->clicked) {
+   if((wo->type == WO_BUTTON || wo->type == WO_SCROLLER) && !wo->clicked) {
       wo->y++;
       windowobj_drawstr(wo, rgb16(215, 215, 215));
       wo->y--;
@@ -197,6 +216,17 @@ void windowobj_draw(void *windowobj) {
       draw_rect(wo->window_surface, text, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
    }
    
+   // draw children
+   for(int i = 0; i < wo->child_count; i++) {
+      // update x,y to be relative to this windowobj
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      windowobj_draw(child);
+   }
+
+   if(wo->parent != NULL) {
+      wo->x -= ((windowobj_t*)wo->parent)->x;
+      wo->y -= ((windowobj_t*)wo->parent)->y;
+   }
 }
 
 void windowobj_redraw(void *window, void *windowobj) {
@@ -206,36 +236,56 @@ void windowobj_redraw(void *window, void *windowobj) {
    window_draw_content_region((gui_window_t*)window, wo->x, wo->y, wo->width, wo->height);
 }
 
-typedef struct {
-   windowobj_t *wo;
-   gui_window_t *window;
-} windowobj_click_event_t;
-
 extern int gui_mouse_x;
 extern int gui_mouse_y;
 extern bool gui_cursor_shown;
-void windowobj_unclick(void *regs, void *event) {
-   (void)regs;
-   windowobj_click_event_t *e = (windowobj_click_event_t*)event;
-   if(!e->window->active) return;
-   e->wo->clicked = false;
-   windowobj_draw(e->wo);
-   window_draw_content_region(e->window, e->wo->x, e->wo->y, e->wo->width, e->wo->height + getFont()->height);
-   free((uint32_t)event, sizeof(windowobj_click_event_t));
+
+bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
+   // unclick
+   windowobj_t *wo = (windowobj_t*)windowobj;
+   if(!wo->visible || (wo->parent != NULL && !((windowobj_t*)wo->parent)->visible)) return false;
+
+   if(wo->type != WO_TEXT) {
+      wo->clicked = false;
+      windowobj_draw(wo);
+      window_draw_content_region(getSelectedWindow(), wo->x, wo->y, wo->width, wo->height + getFont()->height);
+   }
+
+   // check if we clicked on a child
+   for(int i = 0; i < wo->child_count; i++) {
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      if(child->clicked) {
+         windowobj_release(regs, (void*)child, relX - child->x, relY - child->y);
+         return true; // stop at first clicked
+      }
+   }
+
+   if(wo->type != WO_SCROLLER && !(relX >= 0 && relX < wo->width
+   && relY >= 0 && relY < wo->height)) return false;
+   // clicked inside the object
+
+   if(wo->release_func != NULL) {
+      // well user progs defo shouldn't be able to create scrollers
+      if(get_task_from_window(getSelectedWindowIndex()) == -1
+      || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
+         // kernel
+         wo->release_func(windowobj, regs, relX, relY);
+      } else {
+         // task
+         gui_interrupt_switchtask(regs);
+         task_call_subroutine(regs, "worelease", (uint32_t)(wo->release_func), NULL, 0);
+      }
+   }
+   return true;
 }
 
-void windowobj_click(void *regs, void *windowobj) {
+void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
    if(wo->disabled) return;
+   if(!wo->visible || (wo->parent != NULL && !((windowobj_t*)wo->parent)->visible)) return;
    
    wo->clicked = true;
-   if(wo->type == WO_BUTTON) {
-      windowobj_click_event_t *event = (windowobj_click_event_t*)malloc(sizeof(windowobj_click_event_t));
-      event->wo = wo;
-      event->window = getSelectedWindow();
-      events_add(30, &windowobj_unclick, (void*)event, -1);
-   }
 
    if(wo->type == WO_MENU) {
       if(wo->menuhovered >= 0) {
@@ -246,8 +296,20 @@ void windowobj_click(void *regs, void *windowobj) {
       }
    }
 
+   // check if we clicked on a child
+   for(int i = 0; i < wo->child_count; i++) {
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      if(relX >= child->x && relX < child->x + child->width
+      && relY >= child->y && relY < child->y + child->height
+      && child->visible) {
+         windowobj_click(regs, (void*)child, relX - child->x, relY - child->y);
+         return; // stop at first child clicked
+      }
+   }
+
    if(wo->click_func != NULL) {
-      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+      if(get_task_from_window(getSelectedWindowIndex()) == -1
+      || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
          // kernel
          // supply with regs so we can switch task
          ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
@@ -261,6 +323,8 @@ void windowobj_click(void *regs, void *windowobj) {
 void windowobj_hover(void *windowobj, int x, int y) {
    (void)x;
    windowobj_t *wo = (windowobj_t*)windowobj;
+   if(!wo->visible || (wo->parent != NULL && !((windowobj_t*)wo->parent)->visible)) return;
+
    bool hovering = wo->hovering;
    bool redraw = false;
    if(wo->type == WO_MENU) {
@@ -278,6 +342,23 @@ void windowobj_hover(void *windowobj, int x, int y) {
       redraw = true;
    }
 
+   for(int i = 0; i < wo->child_count; i++) {
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      if(x >= child->x && x < child->x + child->width
+      && y >= child->y && y < child->y + child->height
+      && child->visible) {
+         // hover over child
+         if(child->hover_func != NULL)
+            child->hover_func(child, x - child->x, y - child->y);
+         redraw = true;
+      } else {
+         if(child->hovering) {
+            child->hovering = false;
+            redraw = true;
+         }
+      }
+   }
+
    if(redraw)
       windowobj_draw(wo);
 
@@ -288,14 +369,14 @@ extern bool keyboard_shift;
 extern bool keyboard_caps;
 
 void windowobj_move_cursor_vertical(windowobj_t *wo, int direction) {
-    // direction: -1 for up, 1 for down
+   // direction: -1 for up, 1 for down
     
-    int line_starts[100];
-    int line_count = 1;
-    line_starts[0] = 0;
+   int line_starts[100];
+   int line_count = 1;
+   line_starts[0] = 0;
     
-    int x = wo->textpadding + 1;
-    for(int i = 0; i < wo->textpos; i++) {
+   int x = wo->textpadding + 1;
+   for(int i = 0; i < wo->textpos; i++) {
       if(wo->text[i] == '\n') {
          line_starts[line_count++] = i + 1;
          x = wo->textpadding + 1;
@@ -430,4 +511,51 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
 
    // draw cursor
    draw_rect(wo->window_surface, 0, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
+}
+
+void windowobj_dragged(void *windowobj, int x, int y, int relX, int relY) {
+   windowobj_t *wo = (windowobj_t*)windowobj;
+   if(!wo->visible || (wo->parent != NULL && !((windowobj_t*)wo->parent)->visible)) return;
+
+   if(wo->drag_func != NULL) {
+      wo->drag_func(windowobj, x, y);
+   }
+
+   if(wo->type == WO_SCROLLER && wo->parent != NULL) {
+      wo->y -= relY;
+      if(wo->y < 14)
+         wo->y = 14;
+      if(wo->y + wo->height > ((windowobj_t*)wo->parent)->height - 14)
+         wo->y = ((windowobj_t*)wo->parent)->height - 14 - wo->height;
+   }
+
+   // check children
+   for(int i = 0; i < wo->child_count; i++) {
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      if(x >= child->x && x < child->x + child->width
+      && y >= child->y && y < child->y + child->height
+      && child->visible) {
+         // drag child
+         windowobj_dragged(child, x - child->x, y - child->y, relX, relY);
+         return; // stop at first child dragged
+      }
+   }
+}
+
+void windowobj_free(windowobj_t *wo) {
+   //free text
+   if(wo->text != NULL) {
+      free((uint32_t)wo->text, strlen(wo->text)+1);
+      wo->text = NULL;
+   }
+   // free children
+   for(int i = 0; i < wo->child_count; i++) {
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      if(child != NULL) {
+         windowobj_free(child);
+         wo->children[i] = NULL;
+      }
+   }
+   // free windowobj
+   free((uint32_t)wo, sizeof(windowobj_t));
 }
