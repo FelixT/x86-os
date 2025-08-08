@@ -318,6 +318,9 @@ void software_handler(registers_t *regs) {
       case 55:
          api_set_scrollable_height(regs);
          break;
+      case 56:
+         api_scroll_to(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

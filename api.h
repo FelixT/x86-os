@@ -57,5 +57,6 @@ void api_open(registers_t *regs);
 void api_write(registers_t *regs);
 void api_create_scrollbar(registers_t *regs);
 void api_set_scrollable_height(registers_t *regs);
+void api_scroll_to(registers_t *regs);
 
 #endif

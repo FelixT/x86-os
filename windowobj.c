@@ -46,7 +46,6 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->drag_func = NULL;
 }
 
-
 void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
    if(wo->text == NULL) return;
@@ -233,7 +232,7 @@ void windowobj_redraw(void *window, void *windowobj) {
    gui_window_t *w = (gui_window_t*)window;
    if(w->dragged || w->resized) return;
    windowobj_t *wo = (windowobj_t*)windowobj;
-   window_draw_content_region((gui_window_t*)window, wo->x, wo->y, wo->width, wo->height);
+   window_draw_content_region((gui_window_t*)window, wo->x < 0 ? 0 : wo->x, wo->y < 0 ? 0 : wo->y, wo->width, wo->height);
 }
 
 extern int gui_mouse_x;
@@ -441,8 +440,14 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
                wo->return_func(wo);
             else // usr
                task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), NULL, 0);
+
+            // still do default behaviour
+            c = '\n';
          } else {
             c = '\n';
+         }
+         if(wo->oneline) {
+            c = 0;
          }
          break;
       case 14: // backspace

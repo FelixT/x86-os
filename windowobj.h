@@ -43,6 +43,7 @@ typedef struct windowobj_t {
    bool clicked;
    bool visible;
    bool disabled;
+   bool oneline; // no return behaviour unless overriden
    int textpos; // text length
    int cursor_textpos; // position in text cursor is at
    int cursorx;

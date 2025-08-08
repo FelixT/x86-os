@@ -476,11 +476,23 @@ static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY)) {
    );
 }
 
-static inline void set_content_height(uint32_t height) {
+static inline uint32_t set_content_height(uint32_t height) {
+   uint32_t width;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (width)
+      : "a" (55),
+      "b" (height)
+   );
+
+   return width;
+}
+
+static inline void scroll_to(uint32_t y) {
    asm volatile (
       "int $0x30"
-      :: "a" (55),
-      "b" (height)
+      :: "a" (56),
+      "b" (y)
    );
 }
 

@@ -171,8 +171,6 @@ void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int re
 
    window_clearbuffer(window, window->bgcolour);
 
-   int width = 220;
-
    fat_dir_t *items;
    int size;
    if(fp->currentdir != NULL && fp->currentdir->firstClusterNo > 0) {
@@ -185,6 +183,7 @@ void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int re
       strcpy(fp->wo_path->text, "/");
       fp->currentdir = NULL;
    }
+   int width = window->width - 2;
    int y = 18;
    for(int i = 0; i < size; i++) {
       if(items[i].filename[0] == 0) break;
@@ -219,7 +218,13 @@ void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int re
 
       y+=17;
    }
-   window_set_scrollable_height(window, y);
+   window_set_scrollable_height(regs, window, y);
+   if(window->scrollbar->visible) {
+      for(int i = 2; i < window->window_object_count; i++) {
+         window->window_objects[i]->width -= 14; // scrollbar width
+      }
+   }
+   window->window_objects[1]->width = width - (window->scrollbar->visible ? 14 : 0);
 
    //free((uint32_t)items, sizeof(fat_dir_t*)*fat_get_dir_size(fp->currentdir->firstClusterNo));
 
@@ -244,7 +249,7 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
    window->y = parent->y + 50;
    if(window->y + window->height > (int)gui_get_height())
       window->y = gui_get_height() - window->height;
-   int width = 220;
+   int width = window->width - 2;
 
    window_create_scrollbar(window, NULL);
 
@@ -306,7 +311,13 @@ window_popup_filepicker_t *window_popup_filepicker(gui_window_t *window, gui_win
 
       y+=17;
    }
-   window_set_scrollable_height(window, y);
+   window_set_scrollable_height(NULL, window, y);
+   if(window->scrollbar->visible) {
+      for(int i = 2; i < window->window_object_count; i++) {
+         window->window_objects[i]->width -= 14; // scrollbar width
+      }
+   }
+   window->window_objects[1]->width = width - (window->scrollbar->visible ? 14 : 0);
 
    free((uint32_t)items, sizeof(fat_dir_t)*fat_get_bpb().noRootEntries);
 

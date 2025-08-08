@@ -27,12 +27,22 @@ volatile windowobj_t *wo_status_o;
 volatile windowobj_t *wo_save_o;
 volatile windowobj_t *wo_open_o;
 
+volatile int content_height = 0;
+
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)fb;
    clear();
-   wo_text_o->width = w - 10;
-   wo_text_o->height = h - 20;
+   if(wo_text_o->cursory < h - 20)
+      wo_text_o->height = h - 20;
+   else if(wo_text_o->height < 100)
+      wo_text_o->height = 100; // minimum height
+   else
+      wo_text_o->height = wo_text_o->cursory + 12;
+   int old_content_height = content_height;
+   content_height = wo_text_o->height + 20;
+   w = set_content_height(content_height);
 
+   wo_text_o->width = w - 10;
    int padding = 2;
    int x = wo_open_o->x + wo_open_o->width + padding;
    wo_path_o->width = (((w - 10) - x) * 2) / 3;
@@ -41,6 +51,18 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_status_o->width = wo_path_o->width/2;
    wo_status_o->x = x;
 
+   redraw();
+   end_subroutine();
+}
+
+void return_fn(void *wo) {
+   if(wo_text_o->cursory > wo_text_o->height - 2) {
+      wo_text_o->height = wo_text_o->cursory + 12;
+      content_height = wo_text_o->height + 25;
+      set_content_height(content_height);
+      scroll_to(wo_text_o->cursory);
+   }
+   clear();
    redraw();
    end_subroutine();
 }
@@ -62,6 +84,7 @@ void load_file(char *filepath) {
    wo_text_o->textpos = entry->fileSize;
    wo_text_o->cursor_textpos = entry->fileSize;
    wo_text_o->text[wo_text_o->textpos] = '\0';
+   wo_text_o->return_func = return_fn; // see what happens
 }
 
 void path_return() {
@@ -112,8 +135,12 @@ void _start(int argc, char **args) {
    override_resize((uint32_t)resize);
    clear();
 
+   create_scrollbar(NULL);
+
    int width = get_width();
    int height = get_height();
+   content_height = height;
+   set_content_height(content_height);
 
    int x = 5;
    int padding = 2;
@@ -130,6 +157,7 @@ void _start(int argc, char **args) {
    wo_path_o->width = (((width - 10) - x) * 2) / 3;
    wo_path_o->return_func = &path_return;
    wo_path_o->textvalign = true;
+   wo_path_o->oneline = true;
    x += wo_path_o->width + padding;
 
    wo_status_o = create_text(x, 2, "New");

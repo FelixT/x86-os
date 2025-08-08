@@ -521,9 +521,12 @@ void windowmgr_closeselected() {
 }
 
 void windowmgr_init() {
+   // settings
+   strcpy(wm_settings.desktop_bgimg, "/bmp/bg16.bmp");
+   strcpy(wm_settings.font_path, "/font/7.fon");
+
    // assigned fixed memory for 64 windows for now to reduce bugs
    // bug is just that resize func doesn't work i think
-   strcpy(wm_settings.desktop_bgimg, "/bmp/bg16.bmp");
    gui_windows = malloc(sizeof(gui_window_t) * 64);
    memset(gui_windows, 0, sizeof(gui_window_t) * 64);
    for(int i = 0; i < 100; i++)
@@ -1226,7 +1229,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       switch_to_task(task, regs);
       uint32_t *args = malloc(sizeof(uint32_t) * 3);
       args[2] = (uint32_t)window->framebuffer;
-      args[1] = width;
+      args[1] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
       args[0] = height - TITLEBAR_HEIGHT;
       for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size+0xFFF)/0x1000; i++)
          map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);

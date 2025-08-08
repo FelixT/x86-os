@@ -26,7 +26,8 @@ windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text
 windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text);
 windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_menu_t *menuitems, int menuitem_count);
 windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int deltaY, int offsetY));
-void window_set_scrollable_height(gui_window_t *window, int height);
+void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int height);
 void window_reset_scroll();
+void window_scroll_to(int y);
 
 #endif

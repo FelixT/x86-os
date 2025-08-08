@@ -90,7 +90,8 @@ void api_return_framebuffer(registers_t *regs) {
 
 void api_return_window_width(registers_t *regs) {
    // get window framebuffer width in ebx
-   regs->ebx = gui_get_windows()[get_current_task_window()].width;
+   gui_window_t *window = api_get_window();
+   regs->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
 }
 
 void api_return_window_height(registers_t *regs) {
@@ -610,5 +611,14 @@ void api_create_scrollbar(registers_t *regs) {
 
 void api_set_scrollable_height(registers_t *regs) {
    // IN: ebx - height
-   window_set_scrollable_height(api_get_window(), regs->ebx);
+   // OUT: ebx - new window width (not including scrollbar)
+   gui_window_t *window = api_get_window();
+   window_set_scrollable_height(regs, window, regs->ebx);
+   regs->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
+}
+
+void api_scroll_to(registers_t *regs) {
+   // IN: ebx - y
+   setSelectedWindowIndex(get_current_task_window());
+   window_scroll_to(regs->ebx);
 }

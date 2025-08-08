@@ -15,6 +15,7 @@ typedef struct {
    int theme; // 0 = classic, 1 = gradient
    uint16_t titlebar_colour2; // used for gradient
    int titlebar_gradientstyle; // 0 = horizontal, 1 = vertical
+   char font_path[256];
 } windowmgr_settings_t;
 
 int windowmgr_add();
