@@ -65,13 +65,14 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
       wo->cursory = y + getFont()->height - 2;
    }
 
-   // draw all characers of string... no scrolling implemented yet
+   // draw characters, skip off screen
    for(int i = 0; i < strlen(wo->text); i++) {
       char c = wo->text[i];
       if(c == '\n') {
          y += wo->textpadding + getFont()->height;
          x = wo->textpadding + 1;
       } else {
+         if(wo->y + y + getFont()->height < 0 || wo->y + y > wo->window_surface->height) continue;
          draw_char(wo->window_surface, c, colour, wo->x + x, wo->y + y);
          x += wo->textpadding + getFont()->width;
 

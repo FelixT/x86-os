@@ -272,8 +272,9 @@ void click(int x, int y) {
 }
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
+   (void)w;
    framebuffer = (uint16_t*)fb;
-   width = w;
+   width = get_surface().width;
    height = h;
 
    display_items();
@@ -312,7 +313,7 @@ void _start(int argc, char **args) {
       exit(0);
    }
 
-   framebuffer = (uint16_t*)get_framebuffer();
+   framebuffer = (uint16_t*)(get_surface().buffer);
 
    create_scrollbar(&scroll);
    override_uparrow((uint32_t)&uparrow);
@@ -320,7 +321,7 @@ void _start(int argc, char **args) {
    override_click((uint32_t)&click);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
-   width = get_width();
+   width = get_surface().width;
    height = get_height();
 
    read_root();

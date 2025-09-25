@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "../surface_t.h"
+
 static inline void write_str(char *str) {
    asm volatile(
       "int $0x30"
@@ -36,16 +38,14 @@ static inline void write_uint(uint32_t num) {
    );
 }
 
-static inline uint32_t get_framebuffer() {
-   uint32_t output;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (output)
-      : "a" (7)
-   );
-
-   return output;
+static inline surface_t get_surface(void) {
+    surface_t surface;
+    asm volatile (
+        "int $0x30"
+        : "=b" (surface.buffer), "=c" (surface.width), "=d" (surface.height)
+        : "a" (7)
+    );
+    return surface;
 }
 
 static inline void write_newline() {

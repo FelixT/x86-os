@@ -78,14 +78,16 @@ void api_print_stack() {
 }
 
 void api_return_framebuffer(registers_t *regs) {
-   // get framebuffer in ebx
+   // get framebuffer in ebx, width in ecx, height in edx
    uint32_t framebuffer = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
-   regs->ebx = framebuffer;
    uint32_t size = gui_get_windows()[get_current_task_window()].framebuffer_size;
    // map to task
    for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size+0xFFF)/0x1000; i++) {
       map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
    }
+   regs->ebx = framebuffer;
+   regs->ecx = api_get_window()->surface.width;
+   regs->edx = api_get_window()->surface.height;
 }
 
 void api_return_window_width(registers_t *regs) {
