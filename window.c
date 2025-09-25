@@ -19,7 +19,7 @@ surface_t window_getsurface(int windowIndex) {
    gui_window_t *window = &(gui_get_windows()[windowIndex]);
    surface_t surface;
    surface.width = window->width;
-   surface.height = window->height;
+   surface.height = window->height - TITLEBAR_HEIGHT;
    surface.buffer = (uint32_t)window->framebuffer;
    return surface;
 }
@@ -236,7 +236,7 @@ void window_default_scroll(int deltaY) {
    // scroll every object by deltaY
    for(int i = 0; i < getSelectedWindow()->window_object_count; i++) {
       windowobj_t *wo = getSelectedWindow()->window_objects[i];
-      if(wo->type != WO_SCROLLBAR) {
+      if(wo != NULL && wo->type != WO_SCROLLBAR) {
          wo->y -= deltaY;
       }
    }
@@ -355,22 +355,22 @@ void window_reset_scroll() {
 
 void window_scroll_to(int y) {
    gui_window_t *window = getSelectedWindow();
-   if(window->scrollbar == NULL) return;
-
+   if(!window || !window->scrollbar) return;
+   
    int scrollableHeight = window->scrollable_content_height - (window->height - TITLEBAR_HEIGHT);
    if(scrollableHeight <= 0) return;
-
-   int scrolledY = y * scrollableHeight / (window->height - TITLEBAR_HEIGHT);
+   
+   int scrolledY = y;
    if(scrolledY < 0) scrolledY = 0;
    if(scrolledY > scrollableHeight) scrolledY = scrollableHeight;
-
+   
    int deltaY = scrolledY - window->scrolledY;
    window->scrolledY = scrolledY;
-
+   
    windowobj_t *scroller = (windowobj_t*)window->scrollbar->children[0];
    int scrollarea = window->height - TITLEBAR_HEIGHT - 28;
    scroller->y = 14 + (window->scrolledY * (scrollarea - scroller->height)) / scrollableHeight;
-
+   
    window_scroll_do_callback(NULL, window->scrollbar->return_func, deltaY, window->scrolledY);
 }
 
@@ -432,7 +432,7 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    scroller->parent = scrollbar;
    // work out height
    int scrollareaheight = window->height - TITLEBAR_HEIGHT - 28;
-   if(window->scrollable_content_height)
+   if(window->scrollable_content_height > 0)
       scroller->height = (scrollareaheight * (window->height - TITLEBAR_HEIGHT)) / window->scrollable_content_height;
    else
       scroller->height = 0;

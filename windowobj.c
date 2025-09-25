@@ -36,6 +36,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->visible = true;
    windowobj->child_count = 0;
    windowobj->parent = NULL;
+   windowobj->oneline = false;
    
    // default funcs
    windowobj->draw_func = &windowobj_draw;
@@ -93,6 +94,8 @@ extern bool mouse_held;
 void windowobj_draw(void *windowobj) {
 
    windowobj_t *wo = (windowobj_t*)windowobj;
+   if(wo == NULL) return;
+
    windowobj_t *parent = (windowobj_t*)wo->parent;
 
    if(wo->type == WO_DISABLED) return;

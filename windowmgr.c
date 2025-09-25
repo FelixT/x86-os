@@ -209,7 +209,7 @@ bool window_init(gui_window_t *window) {
    window->x = 20;
    window->y = 20;
    window->width = 440;
-   window->height = 320;
+   window->height = 300;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = getFont()->padding;
@@ -250,7 +250,7 @@ bool window_init(gui_window_t *window) {
    
    surface_t surface;
    surface.width = window->width;
-   surface.height = window->height;
+   surface.height = window->height - TITLEBAR_HEIGHT;
    surface.buffer = (uint32_t)window->framebuffer;
    window->surface = surface;
 

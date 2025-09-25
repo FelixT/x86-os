@@ -102,7 +102,7 @@ void display_items() {
       position++;
    }
 
-   set_content_height(y + 25*offset + 40);
+   set_content_height(y + 25*offset + 10);
 
    // draw path
    for(int y = (int)height - 15; y < (int)height; y++) {

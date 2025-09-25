@@ -465,15 +465,56 @@ void exception_handler(int int_no, registers_t *regs) {
 
    if(int_no < 32) {
 
+      uint32_t cpl = regs->cs & 0x3;
+      bool kernel = cpl == 0;
+
+      if(kernel) {
+         debug_printf("Exception %i in kernel mode with eip %i", int_no, regs->eip);
+
+         page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
+
+         if(page_getphysical(dir, regs->eip) != (uint32_t)-1) {
+            window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+            debug_writehex(page_getphysical(dir, regs->eip));
+            window_writestr("> ", gui_rgb16(255, 100, 100), 0);
+
+            debug_printf("offset 0x%h\n", regs->eip - KERNEL_START);
+            // show hexdump
+            int bytes = 32;
+            int rowlen = 8;
+            
+            char *buf = malloc(rowlen);
+            buf[rowlen] = '\0';
+            uint8_t *mem = (uint8_t*)regs->eip;
+            for(int i = 0; i < bytes; i++) {
+               if(mem[i] <= 0x0F)
+                  debug_printf("0");
+               debug_printf("%h ", mem[i]);
+               buf[i%rowlen] = mem[i];
+
+               if((i%rowlen) == (rowlen-1) || i==(bytes-1)) {
+                  for(int x = 0; x < rowlen; x++) {
+                     if(buf[x] != '\n')
+                        debug_printf("%c", buf[x]);
+                  }
+                  debug_printf("\n");
+               }
+            }
+            free((uint32_t)buf, rowlen);
+
+         }
+      }
+
+      if(get_current_task() < 0) {
+         debug_printf("Exception %i with task %i\n", int_no, get_current_task());
+         return;
+      }
+
       // https://wiki.osdev.org/Exceptions
       if(videomode == 1) {
 
          if(int_no == 14) {
             // page error
-            if(get_current_task() < 0) {
-               debug_printf("Page fault in kernel mode with task %i\n", get_current_task);
-               return;
-            }
             page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
 
             uint32_t addr;
@@ -491,8 +532,12 @@ void exception_handler(int int_no, registers_t *regs) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);
                debug_writehex(page_getphysical(dir, regs->eip));
                window_writestr(">", gui_rgb16(255, 100, 100), 0);
+
+               uint32_t offset = page_getphysical(dir, regs->eip) - gettasks()[get_current_task()].prog_start;
+               debug_printf(" offset 0x%h, ", offset);
             }
-            window_writestr(", ebp ", gui_rgb16(255, 100, 100), 0);
+
+            window_writestr("ebp ", gui_rgb16(255, 100, 100), 0);
             debug_writehex(regs->ebp);
             if(page_getphysical(dir, regs->ebp) != (uint32_t)-1) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);
@@ -518,8 +563,6 @@ void exception_handler(int int_no, registers_t *regs) {
 
             window_writestr("\n", 0, 0);
 
-
-            //while(true);
          }
 
          char buffer[200];
@@ -529,24 +572,26 @@ void exception_handler(int int_no, registers_t *regs) {
          sprintf(buffer, "0x%h", regs->eip);
          gui_drawrect(gui_rgb16(180, 0, 0), 120, 0, 8*8, 11);
          gui_writestrat(buffer, gui_rgb16(255, 200, 200), 122, 2);
-      
-         window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
-         window_writenum(get_current_task(), 0, 0);
-         window_writestr(" ended due to exception ", gui_rgb16(255, 100, 100), 0);
-         window_writenum(int_no, 0, 0);
-         window_writestr("\n", 0, 0);
 
-         window_resetfuncs(gui_get_windows(get_current_task_window()));
+         if(kernel) {
+            // show debug window and panic
+            setSelectedWindowIndex(0);
+            gui_window_t *window = getSelectedWindow();
+            window->minimised = false;
+            window->needs_redraw = true;
+            window_draw(window);
+            while(true) {};
+         } else {
+            window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
+            window_writenum(get_current_task(), 0, 0);
+            window_writestr(" paused due to exception ", gui_rgb16(255, 100, 100), 0);
+            window_writenum(int_no, 0, 0);
+            window_writestr("\n", 0, 0);
 
-         show_endtask_dialog(int_no, regs);
+            window_resetfuncs(gui_get_windows(get_current_task_window()));
+            show_endtask_dialog(int_no, regs); // + pauses task
+         }
       }
-
-      // show debug window for exceptions
-      /*setSelectedWindowIndex(0);
-      gui_window_t *window = getSelectedWindow();
-      window->minimised = false;
-      window->needs_redraw = true;
-      window_draw(window);*/
          
    } else {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
