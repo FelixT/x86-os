@@ -40,6 +40,8 @@ void term_cmd_help() {
    printf("LAUNCH path\n");
    printf("FILES, TEXT <path>\n");
    printf("FAT <path>, FATNEW path\n");
+   printf("FAPPEND <path> <buffer>\n");
+   printf("FWRITE <path> <buffer>\n");
    printf("FATDIR cluster, FREAD path\n");
    printf("LS, CD path, PWD\n");
    printf("CAT path, TOUCH path, MKDIR path\n");

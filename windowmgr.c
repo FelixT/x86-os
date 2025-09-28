@@ -142,7 +142,7 @@ void window_close(void *regs, int windowIndex) {
    if(windowIndex == 0) {
       // debug window
       int popup = windowmgr_add();
-      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window");
+      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window", false, NULL);
       window_draw_outline(getSelectedWindow(), false);
       getWindow(windowIndex)->minimised = true;
       getWindow(windowIndex)->active = false;
@@ -448,8 +448,8 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
 
    // redraw cursor if it disappeared
    if(width > getFont()->width && height > getFont()->height
-   && gui_mouse_x >= window->x + offsetX && gui_mouse_x <= window->x + offsetX + width
-   && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY && gui_mouse_y <= window->y + TITLEBAR_HEIGHT + offsetY + height) {
+   && gui_mouse_x >= window->x + offsetX && gui_mouse_x <= window->x + offsetX + width && gui_mouse_x + getFont()->width <= window->width
+   && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY && gui_mouse_y <= window->y + TITLEBAR_HEIGHT + offsetY + height && gui_mouse_y + getFont()->height <= window->height) {
       gui_cursor_shown = false;
       gui_cursor_save_bg();
       gui_cursor_draw();
@@ -496,7 +496,10 @@ void window_draw(gui_window_t *window) {
 }
 
 void windowmgr_getproperties() {
-   // selected 
+   default_menu.menuselected = -1;
+   default_menu.menuhovered = -1;
+
+   // show selected window settings 
    gui_window_t *selected = getSelectedWindow();
    int new = windowmgr_add();
    gui_window_t *window = getWindow(new);
@@ -512,6 +515,9 @@ void windowmgr_closeselected_callback(registers_t *regs, void *msg) {
 }
 
 void windowmgr_closeselected() {
+   default_menu.menuselected = -1;
+   default_menu.menuhovered = -1;
+
    // close selected window
    int index = getSelectedWindowIndex();
    if(index == -1) return; // no window selected
@@ -1162,6 +1168,20 @@ void windowmgr_mousemove(int x, int y) {
                      wo->draw_func((void*)wo);
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
                }
+            }
+         }
+      } else {
+         // set all window objs as not hovered
+         for(int i = 0; i < selectedWindow->window_object_count; i++) {
+            windowobj_t *wo = selectedWindow->window_objects[i];
+            if(wo->hovering) {
+               wo->hovering = false;
+               for(int i = 0; i < wo->child_count; i++) {
+                  ((windowobj_t*)(wo->children[i]))->hovering = false;
+               }
+               if(wo->draw_func)
+                  wo->draw_func((void*)wo);
+               windowobj_redraw((void*)selectedWindow, (void*)wo);
             }
          }
       }

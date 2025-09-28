@@ -37,7 +37,12 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->child_count = 0;
    windowobj->parent = NULL;
    windowobj->oneline = false;
-   
+   windowobj->bordered = true;
+   windowobj->colour_bg = COLOUR_WHITE;
+   windowobj->colour_border = rgb16(120, 120, 120);
+   windowobj->colour_bg_hover = rgb16(240, 240, 240);
+   windowobj->colour_border_hover = rgb16(40, 40, 40);
+
    // default funcs
    windowobj->draw_func = &windowobj_draw;
    windowobj->click_func = NULL;
@@ -72,8 +77,9 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
          y += wo->textpadding + getFont()->height;
          x = wo->textpadding + 1;
       } else {
-         if(wo->y + y + getFont()->height < 0 || wo->y + y > wo->window_surface->height) continue;
-         draw_char(wo->window_surface, c, colour, wo->x + x, wo->y + y);
+         if(wo->y + y + getFont()->height >= 0 && wo->y + y <= wo->window_surface->height) {
+            draw_char(wo->window_surface, c, colour, wo->x + x, wo->y + y);
+         }
          x += wo->textpadding + getFont()->width;
 
          // wrapping
@@ -108,8 +114,8 @@ void windowobj_draw(void *windowobj) {
       wo->y += parent->y;
    }
    
-   uint16_t bg = rgb16(255, 255, 255);
-   uint16_t border = rgb16(120, 120, 120);
+   uint16_t bg = wo->colour_bg;
+   uint16_t border = wo->colour_border;
    uint16_t text = 0;
    uint16_t light = rgb16(235, 235, 235);
    uint16_t dark = rgb16(145, 145, 145);
@@ -181,7 +187,8 @@ void windowobj_draw(void *windowobj) {
          // draw hovered item
          draw_rect(wo->window_surface, rgb16(230, 230, 230), wo->x + 1, wo->y + 1 + (wo->menuhovered * (getFont()->height + 4)), wo->width - 2, getFont()->height + 4);
       }
-      draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
+      if(wo->bordered)
+         draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
 
       // draw menu items
       for(int i = 0; i < wo->menuitem_count; i++) {
@@ -197,13 +204,14 @@ void windowobj_draw(void *windowobj) {
       if(wo->clicked) {
          border = 0;
       } else if(wo->hovering) {
-         bg = rgb16(240, 240, 240);
-         border = rgb16(40, 40, 40);
+         bg = wo->colour_bg_hover;
+         border = wo->colour_border_hover;;
          text = rgb16(40, 40, 40);
       }
 
       draw_rect(wo->window_surface, bg, wo->x, wo->y, wo->width, wo->height);
-      draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
+      if(wo->bordered)
+         draw_unfilledrect(wo->window_surface, border, wo->x, wo->y, wo->width, wo->height);
 
    }
 

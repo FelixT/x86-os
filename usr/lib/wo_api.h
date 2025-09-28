@@ -5,8 +5,8 @@
 
 #include "../../windowobj.h"
 
-windowobj_t *create_button(int x, int y, char *text);
-windowobj_t *create_text(int x, int y, char *text);
+windowobj_t *create_button(windowobj_t *parent, int x, int y, char *text);
+windowobj_t *create_text(windowobj_t *parent, int x, int y, char *text);
 void set_text(windowobj_t *wo, char *text);
 
 #endif

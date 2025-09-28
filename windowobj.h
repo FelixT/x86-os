@@ -52,6 +52,11 @@ typedef struct windowobj_t {
    int menuitem_count;
    int menuhovered;
    windowobj_menu_t *menuitems;
+   bool bordered;
+   uint16_t colour_border;
+   uint16_t colour_bg;
+   uint16_t colour_border_hover;
+   uint16_t colour_bg_hover;
 
    void *children[10];
    int child_count;

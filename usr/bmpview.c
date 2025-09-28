@@ -245,19 +245,19 @@ void colour_click(void *wo, void *regs) {
 bool bmp_check() {
    // check if supported
    if(bmp[0] != 'B' || bmp[1] != 'M') {
-      display_popup("Error", "File isn't a BMP\n");
+      display_popup("Error", "File isn't a BMP\n", false, NULL);
       return false;
    }
    if(info->bpp != 8 && info->bpp != 16) {
-      display_popup("Error", "BPP not 8bit or 16bit\n");
+      display_popup("Error", "BPP not 8bit or 16bit\n", false, NULL);
       return false;
    }
    if(info->bpp == 8 && info->compressionMethod != 0) {
-      display_popup("Error", "Compression method not BI_RGB for 8bit bmp\n");
+      display_popup("Error", "Compression method not BI_RGB for 8bit bmp\n", false, NULL);
       return false;
    }
    if(info->bpp == 16 && info->compressionMethod != 3) {
-      display_popup("Error", "Compression method not BI_BITFIELDS for 16bit bmp\n");
+      display_popup("Error", "Compression method not BI_BITFIELDS for 16bit bmp\n", false, NULL);
       return false;
    }
    return true;
@@ -269,7 +269,7 @@ void open_file(char *p) {
    strcpy(path, p);
    bmp = (uint8_t*)fat_read_file(path);
    if(bmp == NULL) {
-      display_popup("Error", "File not found\n");
+      display_popup("Error", "File not found\n", false, NULL);
       exit(0);
    }
 
@@ -291,7 +291,7 @@ void write_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
    if(info->bpp != 16) {
-      display_popup("Error", "Can only save 16bit bitmaps\n");
+      display_popup("Error", "Can only save 16bit bitmaps\n", false, NULL);
       end_subroutine();
       return;
    }
@@ -361,7 +361,7 @@ void _start(int argc, char **args) {
 
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
    if(entry == NULL) {
-      display_popup("Error", "File not found\n");
+      display_popup("Error", "File not found\n", false, NULL);
       exit(0);
    }
 
@@ -377,7 +377,7 @@ void _start(int argc, char **args) {
    if(bmp_check())
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
 
-   framebuffer = (uint16_t*)get_framebuffer();
+   framebuffer = (uint16_t*)(get_surface().buffer);
    width = get_width();
    height = get_height();
 
@@ -385,52 +385,52 @@ void _start(int argc, char **args) {
    int margin = 5;
    int x = margin;
    int y = height - 15;
-   clearbtn_wo = create_button(x, y, "Clear");
+   clearbtn_wo = create_button(NULL, x, y, "Clear");
    clearbtn_wo->click_func = &clear_click;
    x += clearbtn_wo->width + margin;
 
-   toolminusbtn_wo = create_button(x, y, "-");
+   toolminusbtn_wo = create_button(NULL, x, y, "-");
    toolminusbtn_wo->width = 20;
    toolminusbtn_wo->click_func = &toolminus_click;
    x += toolminusbtn_wo->width;
 
-   toolsizetext_wo = create_text(x, y, "1");
+   toolsizetext_wo = create_text(NULL, x, y, "1");
    toolsizetext_wo->width = 20;
    toolsizetext_wo->texthalign = true;
    toolsizetext_wo->textvalign = true;
    toolsizetext_wo->textpadding = 0;
    x += toolsizetext_wo->width;
 
-   toolplusbtn_wo = create_button(x, y, "+");
+   toolplusbtn_wo = create_button(NULL, x, y, "+");
    toolplusbtn_wo->width = 20;
    toolplusbtn_wo->click_func = &tool_click;
    x += toolplusbtn_wo->width + margin;
 
-   colourbtn_wo = create_button(x, y, "Colour");
+   colourbtn_wo = create_button(NULL, x, y, "Colour");
    colourbtn_wo->click_func = &colour_click;
    x += colourbtn_wo->width + margin;
 
-   zoomoutbtn_wo = create_button(x, y,  "-");
+   zoomoutbtn_wo = create_button(NULL, x, y,  "-");
    zoomoutbtn_wo->width = 20;
    zoomoutbtn_wo->click_func = &zoomout_click;
    x += zoomoutbtn_wo->width;
 
-   zoomtext_wo = create_text(x, y, "100%");
+   zoomtext_wo = create_text(NULL, x, y, "100%");
    zoomtext_wo->width = 40;
    zoomtext_wo->texthalign = true;
    zoomtext_wo->textvalign = true;
    x += zoomtext_wo->width;
 
-   zoominbtn_wo = create_button(x, y, "+");
+   zoominbtn_wo = create_button(NULL, x, y, "+");
    zoominbtn_wo->width = 20;
    zoominbtn_wo->click_func = &zoomin_click;
    x += zoominbtn_wo->width + margin;
 
-   openbtn_wo = create_button(x, y, "Open");
+   openbtn_wo = create_button(NULL, x, y, "Open");
    openbtn_wo->click_func = &open_click;
    x += openbtn_wo->width + margin;
 
-   writebtn_wo = create_button(x, y, "Write");
+   writebtn_wo = create_button(NULL, x, y, "Write");
    writebtn_wo->click_func = &write_click;
 
 

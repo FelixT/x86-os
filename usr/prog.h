@@ -393,12 +393,14 @@ static inline void getwd(char *buf) {
    );
 }
 
-static inline void display_popup(char *title, char *message) {
+static inline void display_popup(char *title, char *message, bool output, void* callback) {
    asm volatile (
       "int $0x30;"
       :: "a" (45),
       "b" ((uint32_t)title),
-      "c" ((uint32_t)message)
+      "c" ((uint32_t)message),
+      "d" ((uint32_t)output),
+      "S" ((uint32_t)callback)
    );
 }
 

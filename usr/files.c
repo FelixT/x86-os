@@ -3,9 +3,9 @@
 #include "../lib/string.h"
 #include "lib/wo_api.h"
 
-
 #include "prog.h"
 #include "prog_fat.h"
+#include "prog_wo.h"
 
 volatile uint16_t *framebuffer;
 volatile uint32_t width;
@@ -17,12 +17,29 @@ volatile fat_dir_t *cur_items;
 volatile int no_items;
 volatile int offset;
 
-char cur_path[200];
+char cur_path[512];
+windowobj_t *wo_menu;
+windowobj_t *wo_path;
+windowobj_t *wo_newfile;
+windowobj_t *wo_newfolder;
 
 char tolower(char c) {
    if(c >= 'A' && c <= 'Z')
       c += ('a'-'A');
    return c;
+}
+
+void get_abs_path(char *out, char *inpath) {
+   if(inpath[0] == '/') {
+      // absolute path
+      strcpy(out, inpath);
+   } else {
+      // relative path
+      strcpy(out, cur_path);
+      if(!strcmp(out, "/"))
+         strcat(out, "/");
+      strcat(out, inpath);
+   }
 }
 
 void display_items() {
@@ -104,13 +121,7 @@ void display_items() {
 
    set_content_height(y + 25*offset + 10);
 
-   // draw path
-   for(int y = (int)height - 15; y < (int)height; y++) {
-      for(int x = 0; x < (int)width; x++) {
-         framebuffer[y*width+x] = 0xFFFF;
-      }
-   }
-   write_strat(cur_path, 5, height - 12);
+   set_text(wo_path, cur_path);
 }
 
 void read_root() {
@@ -156,8 +167,17 @@ void downarrow() {
 void click(int x, int y) {
 
    (void)(x);
-   if(x > (int)width - 20)
+   // clicked scrollbar
+   if(x > (int)width - 20) {
       end_subroutine();
+      return;
+   }
+
+   // clicked menu
+   if(y > height - 20) {
+      end_subroutine();
+      return;
+   }
 
    // see where we clicked
    int position = (y-5)/25;
@@ -277,6 +297,12 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    width = get_surface().width;
    height = h;
 
+   wo_menu->width = w;
+   wo_menu->y = height - 20;
+   wo_path->width = w - 120;
+   wo_newfile->x = w - 115;
+   wo_newfolder->x = w - 63;
+
    display_items();
    redraw();
    end_subroutine();
@@ -288,6 +314,48 @@ void scroll(int deltaY, int offsetY) {
    if(offset >= no_items) offset = no_items - 1;
    display_items();
    redraw();
+   end_subroutine();
+}
+
+void add_file_callback(char *filename) {
+   if(filename && !strcmp(filename, "")) {
+      debug_write_str(filename);
+      char path[512];
+      get_abs_path(path, filename);
+      debug_write_str(path);
+      fat_new_file(path);
+      // refresh
+      no_items = fat_get_dir_size(cur_items[0].firstClusterNo);
+      cur_items = (fat_dir_t*)fat_read_dir(cur_items[0].firstClusterNo);
+      display_items();
+   }
+   end_subroutine();
+}
+
+void add_file(void *wo, void *regs) {
+   (void)wo;
+   display_popup("Name", "Enter filename", true, &add_file_callback);
+   end_subroutine();
+}
+
+void add_folder_callback(char *name) {
+   if(name && !strcmp(name, "")) {
+      debug_write_str(name);
+      char path[512];
+      get_abs_path(path, name);
+      debug_write_str(path);
+      fat_new_dir(path);
+      // refresh
+      no_items = fat_get_dir_size(cur_items[0].firstClusterNo);
+      cur_items = (fat_dir_t*)fat_read_dir(cur_items[0].firstClusterNo);
+      display_items();
+   }
+   end_subroutine();
+}
+
+void add_folder(void *wo, void *regs) {
+   (void)wo;
+   display_popup("Name", "Enter folder name", true, &add_folder_callback);
    end_subroutine();
 }
 
@@ -323,6 +391,20 @@ void _start(int argc, char **args) {
    override_resize((uint32_t)&resize);
    width = get_surface().width;
    height = get_height();
+
+   int displayedwidth = get_width();
+
+   wo_menu = register_windowobj(WO_CANVAS, 0, height - 20, displayedwidth, 20);
+   wo_menu->bordered = false;
+   wo_path = create_text(wo_menu, 5, 3, "/");
+   wo_path->width = displayedwidth - 120;
+   wo_newfile = create_button(wo_menu, displayedwidth - 114, 3, "+ File");
+   wo_newfile->width = 50;
+   wo_newfile->click_func = &add_file;
+
+   wo_newfolder = create_button(wo_menu, displayedwidth - 63, 3, "+ Folder");
+   wo_newfolder->width = 62;
+   wo_newfolder->click_func = &add_folder;
 
    read_root();
    display_items();

@@ -413,8 +413,6 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_prog2(regs);
    else if(strcmp(command, "TEST"))
       term_cmd_test();
-   //else if(strcmp(command, "FAT"))
-   //   term_cmd_fat();
    else if(strcmp(command, "DESKTOP"))
       term_cmd_desktop();
    else if(strcmp(command, "REDRAWALL"))
@@ -425,12 +423,6 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_launch(regs, (char*)arg);
    else if(strcmp(command, "RESIZE"))
       term_cmd_resize(regs, selected, (char*)arg);
-   //else if(strcmp(command, "FATDIR"))
-   //   term_cmd_fatdir((char*)arg);
-   //else if(strcmp(command, "FATFILE"))
-   //   term_cmd_fatfile((char*)arg);
-   //else if(strcmp(command, "FATNEW"))
-   //   term_cmd_fatnew((char*)arg);
    else if(strcmp(command, "BGIMG"))
       term_cmd_bgimg((char*)arg);
    else if(strcmp(command, "BG"))

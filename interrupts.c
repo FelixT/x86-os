@@ -321,6 +321,9 @@ void software_handler(registers_t *regs) {
       case 56:
          api_scroll_to(regs);
          break;
+      case 57:
+         api_windowobj_add_child(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -451,7 +454,7 @@ void show_endtask_dialog(int int_no, registers_t *regs) {
    int popup = windowmgr_add();
    char buffer[50];
    sprintf(buffer, "Task %i paused due to exception %i", get_current_task(), int_no);
-   window_popup_dialog(getWindow(popup), getWindow(get_current_task_window()), buffer);
+   window_popup_dialog(getWindow(popup), getWindow(get_current_task_window()), buffer, false, NULL);
    window_disable(getWindow(get_current_task_window()));
    getWindow(popup)->window_objects[1]->click_func = &endtask_callback;
    strcpy(getWindow(popup)->title, "Error");
@@ -588,7 +591,7 @@ void exception_handler(int int_no, registers_t *regs) {
             window_writenum(int_no, 0, 0);
             window_writestr("\n", 0, 0);
 
-            window_resetfuncs(gui_get_windows(get_current_task_window()));
+            window_resetfuncs(&(gui_get_windows()[get_current_task_window()]));
             show_endtask_dialog(int_no, regs); // + pauses task
          }
       }

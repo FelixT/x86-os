@@ -251,8 +251,8 @@ void api_fat_read_file(registers_t *regs) {
    if(!entry) {
       regs->ebx = 0;
    } else {
-      uint8_t *buffer = (uint8_t*)malloc(entry->fileSize);
-      for(uint32_t i = (uint32_t)buffer/0x1000; i < ((uint32_t)buffer+entry->fileSize+0xFFF)/0x1000; i++) {
+      uint8_t *buffer = (uint8_t*)malloc(entry->fileSize+1);
+      for(uint32_t i = (uint32_t)buffer/0x1000; i < ((uint32_t)buffer+entry->fileSize+1+0xFFF)/0x1000; i++) {
          map(get_current_task_state()->page_dir, i*0x1000, i*0x1000, 1, 1);
       }
       fat_read_file_chunked(entry->firstClusterNo, buffer, entry->fileSize, &api_fat_read_file_callback, get_current_task());
@@ -306,7 +306,8 @@ void api_queue_event(registers_t *regs) {
 }
 
 void api_register_windowobj(registers_t *regs) {
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   // OUT: ebx = windowobj
+   gui_window_t *window = api_get_window();
 
    windowobj_t *wo = malloc(sizeof(windowobj_t));
    windowobj_init(wo, &window->surface);
@@ -314,6 +315,27 @@ void api_register_windowobj(registers_t *regs) {
    map(gettasks()[get_current_task()].page_dir, (uint32_t)wo, (uint32_t)wo, 1, 1);
 
    regs->ebx = (uint32_t)wo;
+}
+
+void api_windowobj_add_child(registers_t *regs) {
+   // IN: ebx = parent windowobj
+   // OUT: ebx = child windowobj
+   gui_window_t *window = api_get_window();
+   windowobj_t *parent = (windowobj_t*)regs->ebx;
+   windowobj_t *child = NULL;
+
+   for(int i = 0; i < window->window_object_count; i++) {
+      if(window->window_objects[i] == parent) {
+         child = malloc(sizeof(windowobj_t));
+         windowobj_init(child, &window->surface);
+         parent->children[parent->child_count++] = child;
+         child->parent = parent;
+         map(gettasks()[get_current_task()].page_dir, (uint32_t)child, (uint32_t)child, 1, 1);
+      }
+   }
+
+
+   regs->ebx = (uint32_t)child;
 }
 
 void api_launch_task(registers_t *regs) {
@@ -396,14 +418,18 @@ void api_get_working_dir(registers_t *regs) {
 void api_display_popup(registers_t *regs) {
    // IN: ebx = title
    // IN: ecx = message
+   // IN: edx = output
+   // IN: esi = return_func(char *output)
 
    // program loses control of dialog after its created
 
    char *title = (char*)regs->ebx;
    char *message = (char*)regs->ecx;
+   bool output = (bool)regs->edx;
+   void *return_func = (void*)regs->esi;
    gui_window_t *parent = getWindow(get_current_task_window());
    int popup = windowmgr_add();
-   window_popup_dialog(getWindow(popup), parent, message);
+   window_popup_dialog(getWindow(popup), parent, message, output, return_func);
    strcpy(getWindow(popup)->title, title);
    window_draw_outline(getWindow(popup), false);
 }

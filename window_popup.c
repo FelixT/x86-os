@@ -18,22 +18,66 @@ void window_popup_init(gui_window_t *window, gui_window_t *parent) {
 // define default popups - common mini-progs
 
 void window_popup_dialog_close(void *windowobj, void *regs) {
-   (void)windowobj;
    (void)regs;
    gui_window_t *window = getSelectedWindow();
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    int index = get_window_index_from_pointer(window);
    int parent_index = get_window_index_from_pointer(dialog->parent);
+   // store output if exists
+   windowobj_t *wo = (windowobj_t*)windowobj;
+   bool ok_clicked = strcmp(wo->text, "Ok");
+   char *output = NULL;
+   if(ok_clicked && dialog->callback_func) {
+      if(dialog->wo_output) {
+         output = malloc(strlen(dialog->wo_output->text));
+         strcpy(output, dialog->wo_output->text);
+         debug_printf("Return string %s\n", output);
+      }
+      
+   }
    // self destruct
    window_close(NULL, index);
    setSelectedWindowIndex(parent_index);
+
+   // launch callback if exists
+   if(dialog->callback_func == NULL || !ok_clicked)
+      return;
+
+   if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+      // call as kernel
+      dialog->callback_func(output);
+      free((uint32_t)output, strlen(output));
+      getSelectedWindow()->needs_redraw = true;
+      window_draw(getSelectedWindow());
+   } else {
+      if(!gui_interrupt_switchtask(regs))
+         return;
+      // calling function as task
+      uint32_t *args = malloc(sizeof(uint32_t) * 1);
+      args[0] = (uint32_t)output;
+      uint32_t start_page = (uint32_t)output / 0x1000;
+      uint32_t end_page = ((uint32_t)output + strlen(output) + 0xFFF) / 0x1000;
+      for(uint32_t i = start_page; i < end_page; i++)
+         map(page_get_current(), i*0x1000, i*0x1000, 1, 1);
+      map(page_get_current(), (uint32_t)args, (uint32_t)args, 1, 1);
+   
+      task_call_subroutine(regs, "popupreturn", (uint32_t)dialog->callback_func, args, 1);
+   
+      getSelectedWindow()->needs_redraw = true;
+      window_draw(getSelectedWindow());
+   }
 }
 
-void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text) {
+// void return_func(char *output)
+void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text, bool output, void *return_func) {
    if(parent != NULL)
       parent->children[parent->child_count++] = window;
    
-   window_resize(NULL, window, 260, 95);
+   int height = 95;
+   if(output)
+      height += 30;
+   
+   window_resize(NULL, window, 260, height);
 
    window_popup_init(window, parent);
    // add default window objects
@@ -48,50 +92,32 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text)
 
    window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
+   dialog->wo_output = NULL;
+   dialog->callback_func = return_func;
    window->state = (void*)dialog;
    window->state_size = sizeof(window_popup_dialog_t);
    window->resizable = false;
 
-   // dialog text
+   // dialog message
    int y = 15;
-   windowobj_t *wo_txt = malloc(sizeof(windowobj_t));
-   windowobj_init(wo_txt, &window->surface);
-   wo_txt->type = WO_TEXT;
-   wo_txt->x = 15;
-   wo_txt->y = y;
-   wo_txt->width = 220;
-   wo_txt->height = 20;
-   wo_txt->text = malloc(500);
-   wo_txt->disabled = true;
-   strcpy(wo_txt->text, text);
-   window->window_objects[window->window_object_count++] = wo_txt;
+   windowobj_t *wo_msg = window_create_text(window, 15, y, text);
+   wo_msg->width = 220;
+   wo_msg->height = 20;
+   wo_msg->disabled = true;
+
+   if(output) {
+      y += 30;
+      dialog->wo_output = window_create_text(window, 15, y, "");
+      dialog->wo_output->width = 140;
+   }
 
    // ok button
    y += 30;
-   windowobj_t *wo_okbtn = malloc(sizeof(windowobj_t));
-   windowobj_init(wo_okbtn, &window->surface);
-   wo_okbtn->type = WO_BUTTON;
-   wo_okbtn->x = 15;
-   wo_okbtn->y = y;
-   wo_okbtn->width = 110;
-   wo_okbtn->height = 20;
-   wo_okbtn->text = malloc(strlen("OK") + 1);
-   strcpy(wo_okbtn->text, "OK");
-   wo_okbtn->click_func = &window_popup_dialog_close;
-   window->window_objects[window->window_object_count++] = wo_okbtn;
+   windowobj_t *wo_okbtn = window_create_button(window, 15, y, "Ok", &window_popup_dialog_close);
 
-   /*// cancel button
-   windowobj_t *wo_cancelbtn = malloc(sizeof(windowobj_t));
-   windowobj_init(wo_cancelbtn, &window->surface);
-   wo_cancelbtn->type = WO_BUTTON;
-   wo_cancelbtn->x = 130;
-   wo_cancelbtn->y = y;
-   wo_cancelbtn->width = 110;
-   wo_cancelbtn->height = 20;
-   wo_cancelbtn->text = malloc(strlen("Cancel") + 1);
-   strcpy(wo_cancelbtn->text, "Cancel");
-   //d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
-   window->window_objects[window->window_object_count++] = wo_cancelbtn;*/
+   if(output) {
+      windowobj_t *wo_cancelbtn = window_create_button(window, 15 + wo_okbtn->width + 10, y, "Cancel", &window_popup_dialog_close);
+   }
 
 }
 
@@ -123,14 +149,12 @@ void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int re
    }
 
    if(fp->currentdir != NULL && (fp->currentdir->attributes & 0x10) == 0) {
-
-
       // clicked on file
       int fp_window = getSelectedWindowIndex();
 
       setSelectedWindowIndex(get_window_index_from_pointer(fp->parent));
 
-      void (*callback)(char *) = fp->callback_func;;
+      void (*callback)(char *) = fp->callback_func;
       char *path = malloc(256);
       strcpy(path, fp->wo_path->text);
 
