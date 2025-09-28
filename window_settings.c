@@ -205,7 +205,9 @@ void window_settings_pickdbgcolour(void *w, void *regs) {
    (void)regs;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
-   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_bgcolour_callback);
+   window_settings_t *settings = (window_settings_t*)parent->state;
+   uint16_t colour = (uint16_t)hextouint(settings->d_bgcolour_wo->text);
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_bgcolour_callback, colour);
    window_draw_outline(getWindow(popup), false);
 }
 
@@ -214,7 +216,9 @@ void window_settings_pickbgcolour(void *w, void *regs) {
    (void)w;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
-   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_bgcolour_callback);
+   window_settings_t *settings = (window_settings_t*)parent->state;
+   uint16_t colour = (uint16_t)hextouint(settings->w_bgcolour_wo->text);
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_bgcolour_callback, colour);
    window_draw_outline(getWindow(popup), false);
 }
 
@@ -223,7 +227,9 @@ void window_settings_picktxtcolour(void *w, void *regs) {
    (void)w;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
-   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_txtcolour_callback);
+   window_settings_t *settings = (window_settings_t*)parent->state;
+   uint16_t colour = (uint16_t)hextouint(settings->w_txtcolour_wo->text);
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_txtcolour_callback, colour);
    window_draw_outline(getWindow(popup), false);
 }
 
@@ -297,7 +303,9 @@ void window_settings_pick_theme_colour(void *w, void *regs) {
    (void)w;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
-   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_theme_colour_callback);
+   window_settings_t *settings = (window_settings_t*)parent->state;
+   uint16_t colour = (uint16_t)hextouint(settings->theme_colour_wo->text);
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_theme_colour_callback, colour);
    window_draw_outline(getWindow(popup), false);
 }
 
@@ -306,7 +314,9 @@ void window_settings_pick_theme_colour2(void *w, void *regs) {
    (void)w;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
-   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_theme_colour2_callback);
+   window_settings_t *settings = (window_settings_t*)parent->state;
+   uint16_t colour = (uint16_t)hextouint(settings->theme_colour2_wo->text);
+   window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_theme_colour2_callback, colour);
    window_draw_outline(getWindow(popup), false);
 }
 
@@ -378,12 +388,14 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       // desktop background colour
       uinttohexstr(gui_bg, text);
       settings->d_bgcolour_wo = window_create_text(window, x, y, text);
+      settings->d_bgcolour_wo->oneline = true;
       settings->d_bgcolour_wo->return_func = &window_settings_set_bgcolour;
       settings->d_bgcolourpick_wo = window_create_button(window, x2, y, "Pick", &window_settings_pickdbgcolour);
 
       // desktop background image
       y += 25;
       settings->d_bgimg_wo = window_create_text(window, x, y, windowmgr_get_settings()->desktop_bgimg);
+      settings->d_bgimg_wo->oneline = true;
       settings->d_bgimg_wo->return_func = &window_settings_set_bgimg;
       settings->d_bgimgpick_wo = window_create_button(window, x2, y, "Browse", &window_settings_browesebg);
 
@@ -391,6 +403,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 25;
       uinttohexstr(selected->bgcolour, text);
       settings->w_bgcolour_wo = window_create_text(window, x, y, text);
+      settings->w_bgcolour_wo->oneline = true;
       settings->w_bgcolour_wo->return_func = &window_settings_set_window_bgcolour;
       settings->w_bgcolourpick_wo = window_create_button(window, x2, y, "Pick", &window_settings_pickbgcolour);
 
@@ -398,6 +411,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 25;
       uinttohexstr(selected->txtcolour, text);
       settings->w_txtcolour_wo = window_create_text(window, x, y, text);
+      settings->w_txtcolour_wo->oneline = true;
       settings->w_txtcolour_wo->return_func = &window_settings_set_window_txtcolour;
       settings->w_txtcolourpick_wo = window_create_button(window, x2, y, "Pick", &window_settings_picktxtcolour);
 
@@ -405,6 +419,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 25;
       uinttostr(getFont()->padding, text);
       settings->theme_txtpadding_wo = window_create_text(window, x, y, text);
+      settings->theme_txtpadding_wo->oneline = true;
       settings->theme_txtpadding_wo->return_func = &window_settings_set_txtpadding;
 
       // theme menu
@@ -435,6 +450,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 35;
       uinttohexstr(windowmgr_get_settings()->titlebar_colour, text);
       settings->theme_colour_wo = window_create_text(window, x, y, text);
+      settings->theme_colour_wo->oneline = true;
       settings->theme_colour_wo->return_func = &window_settings_set_theme_colour;
       settings->theme_colourpick_wo = window_create_button(window, x2, y, "Pick", &window_settings_pick_theme_colour);
 
@@ -442,12 +458,14 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 25;
       uinttohexstr(windowmgr_get_settings()->titlebar_colour2, text);
       settings->theme_colour2_wo = window_create_text(window, x, y, text);
+      settings->theme_colour2_wo->oneline = true;
       settings->theme_colour2_wo->return_func = &window_settings_set_theme_colour2;
       settings->theme_colour2pick_wo = window_create_button(window, x2, y, "Pick", &window_settings_pick_theme_colour2);
 
       // font
       y += 25;
       settings->theme_fontpath_wo = window_create_text(window, x, y, windowmgr_get_settings()->font_path);
+      settings->theme_fontpath_wo->oneline = true;
       settings->theme_fontpath_wo->return_func = &window_settings_set_font;
       settings->theme_fontpathpick_wo = window_create_button(window, x2, y, "Browse", &window_settings_browesefont);
 
@@ -474,6 +492,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       // window background colour
       uinttohexstr(selected->bgcolour, text);
       settings->w_bgcolour_wo = window_create_text(window, x, y, text);
+      settings->w_bgcolour_wo->oneline = true;
       settings->w_bgcolour_wo->return_func = &window_settings_set_window_bgcolour;
       window_create_button(window, x2, y, "Pick", &window_settings_pickbgcolour);
 
@@ -481,6 +500,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 25;
       uinttohexstr(selected->txtcolour, text);
       settings->w_txtcolour_wo = window_create_text(window, x, y, text);
+      settings->w_txtcolourpick_wo->oneline = true;
       settings->w_txtcolour_wo->return_func = &window_settings_set_window_txtcolour;
       window_create_button(window, x2, y, "Pick", &window_settings_picktxtcolour);
 

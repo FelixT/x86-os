@@ -404,11 +404,12 @@ static inline void display_popup(char *title, char *message, bool output, void* 
    );
 }
 
-static inline void display_colourpicker(void *callback) {
+static inline void display_colourpicker(uint16_t colour, void *callback) {
    asm volatile (
       "int $0x30;"
       :: "a" (46),
-      "b" ((uint32_t)callback)
+      "b" ((uint32_t)colour),
+      "c" ((uint32_t)callback)
    );
 }
 

@@ -104,19 +104,24 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
    wo_msg->width = 220;
    wo_msg->height = 20;
    wo_msg->disabled = true;
+   wo_msg->bordered = false;
 
    if(output) {
       y += 30;
-      dialog->wo_output = window_create_text(window, 15, y, "");
+      dialog->wo_output = window_create_text(window, 60, y, "");
       dialog->wo_output->width = 140;
    }
 
    // ok button
    y += 30;
-   windowobj_t *wo_okbtn = window_create_button(window, 15, y, "Ok", &window_popup_dialog_close);
+   int x = 15;
+   if(output) {
+      x = 75;
+   }
+   windowobj_t *wo_okbtn = window_create_button(window, x, y, "Ok", &window_popup_dialog_close);
 
    if(output) {
-      windowobj_t *wo_cancelbtn = window_create_button(window, 15 + wo_okbtn->width + 10, y, "Cancel", &window_popup_dialog_close);
+      windowobj_t *wo_cancelbtn = window_create_button(window, x + wo_okbtn->width + 10, y, "Cancel", &window_popup_dialog_close);
    }
 
 }
@@ -411,7 +416,7 @@ void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y)
 }
 
 // init
-window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback) {
+window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback, uint16_t colour) {
    parent->children[parent->child_count++] = window;
 
    window_resize(NULL, window, 320, 340);
@@ -442,7 +447,7 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
    wo_col->width = 190;
    wo_col->height = 16;
    wo_col->text = malloc(10);
-   strcpy(wo_col->text, "FFFFFF");
+   uinttohexstr(colour, wo_col->text);
    wo_col->texthalign = false;
    wo_col->disabled = true;
    window->window_objects[window->window_object_count++] = wo_col;
@@ -462,6 +467,12 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
 
    // draw colour square border
    draw_unfilledrect(&window->surface, rgb16(0, 0, 0), 264, 29, 52, 52); // border
+   // draw colour square
+   for(int x = 0; x < 50; x++) {
+      for(int y = 0; y < 50; y++) {
+         window->framebuffer[(y + 30) * window->width + (x + 265)] = colour;
+      }
+   }
    // draw the colour picker at (5, 50)
    draw_unfilledrect(&window->surface, rgb16(0, 0, 0), 4, 29, 258, 258); // border
    int xoffset = 5;

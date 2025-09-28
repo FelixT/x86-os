@@ -165,10 +165,15 @@ void windowobj_draw(void *windowobj) {
       }
 
       draw_rect(wo->window_surface, bg, wo->x + 1, wo->y + 1, wo->width - 2, wo->height - 2);
-      draw_line(wo->window_surface, dark,  wo->x, wo->y, false, wo->width);
-      draw_line(wo->window_surface, dark,  wo->x, wo->y, true,  wo->height);
-      draw_line(wo->window_surface, light, wo->x, wo->y + wo->height - 1, false, wo->width);
-      draw_line(wo->window_surface, light, wo->x + wo->width - 1, wo->y, true, wo->height);
+      if(wo->bordered) {
+         draw_line(wo->window_surface, dark,  wo->x, wo->y, false, wo->width);
+         draw_line(wo->window_surface, dark,  wo->x, wo->y, true,  wo->height);
+         draw_line(wo->window_surface, light, wo->x, wo->y + wo->height - 1, false, wo->width);
+         draw_line(wo->window_surface, light, wo->x + wo->width - 1, wo->y, true, wo->height);
+      } else {
+         draw_line(wo->window_surface, bg,  wo->x, wo->y, false, wo->width);
+         draw_line(wo->window_surface, bg,  wo->x, wo->y, true,  wo->height);
+      }
    } else if(wo->type == WO_MENU) {
       if(wo->clicked) {
          border = 0;
@@ -453,8 +458,8 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
             else // usr
                task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), NULL, 0);
 
-            // still do default behaviour
-            c = '\n';
+            if(!wo->oneline) // still do default behaviour
+               c = '\n';
          } else {
             c = '\n';
          }

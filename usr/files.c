@@ -396,7 +396,7 @@ void _start(int argc, char **args) {
 
    wo_menu = register_windowobj(WO_CANVAS, 0, height - 20, displayedwidth, 20);
    wo_menu->bordered = false;
-   wo_path = create_text(wo_menu, 5, 3, "/");
+   wo_path = create_text(wo_menu, 4, 3, "/");
    wo_path->width = displayedwidth - 120;
    wo_newfile = create_button(wo_menu, displayedwidth - 114, 3, "+ File");
    wo_newfile->width = 50;

@@ -325,7 +325,7 @@ void api_windowobj_add_child(registers_t *regs) {
    windowobj_t *child = NULL;
 
    for(int i = 0; i < window->window_object_count; i++) {
-      if(window->window_objects[i] == parent) {
+      if(window->window_objects[i] == parent) { // only works for 1 level of inheritance
          child = malloc(sizeof(windowobj_t));
          windowobj_init(child, &window->surface);
          parent->children[parent->child_count++] = child;
@@ -333,7 +333,6 @@ void api_windowobj_add_child(registers_t *regs) {
          map(gettasks()[get_current_task()].page_dir, (uint32_t)child, (uint32_t)child, 1, 1);
       }
    }
-
 
    regs->ebx = (uint32_t)child;
 }
@@ -347,11 +346,27 @@ void api_launch_task(registers_t *regs) {
    int argc = (int)regs->ecx;
    char **args = (char**)regs->edx;  
    
+   // copy args
+   char **copied_args = NULL;
+    if(argc > 0 && args != NULL) {
+        copied_args = malloc(sizeof(char*) * argc);
+        for(int i = 0; i < argc; i++) {
+            if(args[i] != NULL) {
+               size_t len = strlen(args[i]);
+               copied_args[i] = malloc(len + 1);
+               strcpy(copied_args[i], args[i]);
+            } else {
+               copied_args[i] = NULL;
+            }
+        }
+    }
+
    task_state_t *parenttask = &gettasks()[get_current_task()];
 
+   debug_printf("In subroutine %s\n", parenttask->routine_name);
    task_subroutine_end(regs);
 
-   tasks_launch_elf(regs, path, argc, args);
+   tasks_launch_elf(regs, path, argc, copied_args);
    task_state_t *task = &gettasks()[get_current_task()];
    strcpy(task->working_dir, parenttask->working_dir); // inherit working dir
 
@@ -359,10 +374,10 @@ void api_launch_task(registers_t *regs) {
    if(argc > 0 && args != NULL) {
       for(int i = 0; i < argc; i++) {
          // map args to task
-         map(task->page_dir, (uint32_t)args[i], (uint32_t)args[i], 1, 1);
+         map(task->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
       }
    }
-   map(task->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+   map(task->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
 }
 
 void api_fat_write_file(registers_t *regs) {
@@ -432,15 +447,17 @@ void api_display_popup(registers_t *regs) {
    window_popup_dialog(getWindow(popup), parent, message, output, return_func);
    strcpy(getWindow(popup)->title, title);
    window_draw_outline(getWindow(popup), false);
+   toolbar_draw();
 }
 
 void api_display_colourpicker(registers_t *regs) {
-   // IN: ebx = callback function (argument is uint16_t colour)
+   // IN: ebx = colour
+   // IN: ecx = callback function (argument is uint16_t colour)
 
    gui_window_t *parent = getWindow(get_current_task_window());
    int popup = windowmgr_add();
    debug_printf("Displaying colourpicker\n");
-   window_popup_colourpicker(getWindow(popup), parent, (void*)regs->ebx);
+   window_popup_colourpicker(getWindow(popup), parent, (void*)regs->ecx, (uint16_t)regs->ebx);
    window_draw_outline(getWindow(popup), false);
 }
 

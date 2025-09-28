@@ -44,11 +44,15 @@ typedef struct {
 uint16_t *framebuffer;
 uint8_t *bmp;
 bmp_info_t *info;
+int bufferwidth = 0;
 int width = 0;
 int height = 0;
 char path[256];
 
+windowobj_t *wo_menu;
+
 windowobj_t *clearbtn_wo;
+windowobj_t *colour_wo;
 windowobj_t *colourbtn_wo;
 windowobj_t *zoominbtn_wo;
 windowobj_t *zoomtext_wo;
@@ -61,25 +65,20 @@ windowobj_t *toolplusbtn_wo;
 int size = 1; 
 int scale = 1;
 int colour = 0;
+int offsetX = 0;
+int offsetY = 0;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
 
    width = w;
    height = h;
-   int y = height - 15;
-   clearbtn_wo->y = y;
-   colourbtn_wo->y = y;
-   toolplusbtn_wo->y = y;
-   toolsizetext_wo->y = y;
-   toolminusbtn_wo->y = y;
-   zoomoutbtn_wo->y = y;
-   zoomtext_wo->y = y;
-   zoominbtn_wo->y = y;
-   openbtn_wo->y = y;
-   writebtn_wo->y = y;
+   bufferwidth = get_surface().width;
+   wo_menu->y = height - 17;
+   wo_menu->width = w;
+   colour_wo->y = height - 16;
    clear();
-   bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
    redraw();
    end_subroutine();
 }
@@ -88,20 +87,20 @@ static inline int min(int a, int b) { return (a < b) ? a : b; }
 static inline int max(int a, int b) { return (a > b) ? a : b; }
 
 void set(int x, int y) {
-   if (x < 0 || x >= width || y < 0 || y >= height) return;
+   if (x < 0 || x >= bufferwidth || y < 0 || y >= height) return;
    
    int brush_size = size * scale;
    
    // Calculate safe drawing bounds
    int start_x = max(0, x);
-   int end_x = min(width, x + brush_size);
+   int end_x = min(bufferwidth, x + brush_size);
    int start_y = max(0, y);
    int end_y = min(height, y + brush_size);
    
    // Draw without bounds checking in inner loop
    for(int py = start_y; py < end_y; py++) {
       for(int px = start_x; px < end_x; px++) {
-         framebuffer[px + py * width] = colour;
+         framebuffer[px + py * bufferwidth] = colour;
       }
    }
    
@@ -232,13 +231,15 @@ void zoomin_click(void *wo, void *regs) {
 
 void colour_callback(uint16_t c) {
    colour = c;
+   colour_wo->colour_bg = c;
+   colour_wo->colour_bg_hover = c;
    end_subroutine();
 }
 
 void colour_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   display_colourpicker(&colour_callback);
+   display_colourpicker(colour, &colour_callback);
    end_subroutine();
 }
 
@@ -321,7 +322,7 @@ void write_click(void *wo, void *regs) {
          // Bounds check for framebuffer
          uint16_t colour = 0; // default black
          if(fx >= 0 && fx < width && fy >= 0 && fy < height) {
-               colour = framebuffer[fy * width + fx];
+               colour = framebuffer[fy * bufferwidth + fx];
          }
          
          // Write to bitmap
@@ -335,6 +336,12 @@ void write_click(void *wo, void *regs) {
 
    height += 15; // restore
 
+   end_subroutine();
+}
+
+void scroll(int deltaY, int offY) {
+   offsetY = offY;
+   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
    end_subroutine();
 }
 
@@ -378,63 +385,75 @@ void _start(int argc, char **args) {
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
 
    framebuffer = (uint16_t*)(get_surface().buffer);
+   bufferwidth = get_surface().width;
    width = get_width();
    height = get_height();
 
+   // menu
+   wo_menu = register_windowobj(WO_CANVAS, 0, height - 17, width, 20);
+   wo_menu->bordered = false;
    // window objects
    int margin = 5;
    int x = margin;
-   int y = height - 15;
-   clearbtn_wo = create_button(NULL, x, y, "Clear");
+   int y = 2;
+   clearbtn_wo = create_button(wo_menu, x, y, "Clear");
    clearbtn_wo->click_func = &clear_click;
    x += clearbtn_wo->width + margin;
 
-   toolminusbtn_wo = create_button(NULL, x, y, "-");
+   toolminusbtn_wo = create_button(wo_menu, x, y, "-");
    toolminusbtn_wo->width = 20;
    toolminusbtn_wo->click_func = &toolminus_click;
    x += toolminusbtn_wo->width;
 
-   toolsizetext_wo = create_text(NULL, x, y, "1");
+   toolsizetext_wo = create_text(wo_menu, x, y, "1");
    toolsizetext_wo->width = 20;
    toolsizetext_wo->texthalign = true;
    toolsizetext_wo->textvalign = true;
    toolsizetext_wo->textpadding = 0;
    x += toolsizetext_wo->width;
 
-   toolplusbtn_wo = create_button(NULL, x, y, "+");
+   toolplusbtn_wo = create_button(wo_menu, x, y, "+");
    toolplusbtn_wo->width = 20;
    toolplusbtn_wo->click_func = &tool_click;
    x += toolplusbtn_wo->width + margin;
 
-   colourbtn_wo = create_button(NULL, x, y, "Colour");
+   colour_wo = register_windowobj(WO_CANVAS, x + 1, height - 15, 17, 14);
+   colour_wo->colour_bg = 0;
+   colour_wo->colour_bg_hover = 0;
+   colour_wo->click_func = &colour_click;
+   x += colour_wo->width + margin;
+
+   colourbtn_wo = create_button(wo_menu, x, y, "Colour");
    colourbtn_wo->click_func = &colour_click;
    x += colourbtn_wo->width + margin;
 
-   zoomoutbtn_wo = create_button(NULL, x, y,  "-");
+   zoomoutbtn_wo = create_button(wo_menu, x, y,  "-");
    zoomoutbtn_wo->width = 20;
    zoomoutbtn_wo->click_func = &zoomout_click;
    x += zoomoutbtn_wo->width;
 
-   zoomtext_wo = create_text(NULL, x, y, "100%");
+   zoomtext_wo = create_text(wo_menu, x, y, "100%");
    zoomtext_wo->width = 40;
    zoomtext_wo->texthalign = true;
    zoomtext_wo->textvalign = true;
    x += zoomtext_wo->width;
 
-   zoominbtn_wo = create_button(NULL, x, y, "+");
+   zoominbtn_wo = create_button(wo_menu, x, y, "+");
    zoominbtn_wo->width = 20;
    zoominbtn_wo->click_func = &zoomin_click;
    x += zoominbtn_wo->width + margin;
 
-   openbtn_wo = create_button(NULL, x, y, "Open");
+   openbtn_wo = create_button(wo_menu, x, y, "Open");
    openbtn_wo->click_func = &open_click;
    x += openbtn_wo->width + margin;
 
-   writebtn_wo = create_button(NULL, x, y, "Write");
+   writebtn_wo = create_button(wo_menu, x, y, "Write");
    writebtn_wo->click_func = &write_click;
 
-
    redraw();
+
+   create_scrollbar(&scroll);
+   set_content_height(info->height + 20);
 
    while(1==1) {
       //asm volatile("pause");
