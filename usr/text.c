@@ -21,18 +21,21 @@ typedef struct {
    uint32_t fileSize; // bytes
 } __attribute__((packed)) fat_dir_t;
 
-volatile windowobj_t *wo_path_o;
-volatile windowobj_t *wo_text_o;
-volatile windowobj_t *wo_status_o;
-volatile windowobj_t *wo_save_o;
-volatile windowobj_t *wo_open_o;
+windowobj_t *wo_menu_o;
+windowobj_t *wo_path_o;
+windowobj_t *wo_text_o;
+windowobj_t *wo_status_o;
+windowobj_t *wo_save_o;
+windowobj_t *wo_open_o;
 
-volatile int content_height = 0;
+int content_height = 0;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)fb;
+   (void)h;
    clear();
 
+   wo_menu_o->width = w;
    wo_text_o->width = w - 10;
    int padding = 2;
    int x = wo_open_o->x + wo_open_o->width + padding;
@@ -62,7 +65,9 @@ void return_fn(void *wo) {
 void load_file(char *filepath) {
    fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath, true);
    if(entry == NULL) {
-      display_popup("Error", "File not found", false, NULL);
+      char buffer[250];
+      sprintf(buffer, "File '%s' not found", filepath);
+      display_popup("Error", buffer, false, NULL);
       wo_text_o->textpos = 0;
       wo_text_o->text[wo_text_o->textpos] = '\0';
       return;
@@ -137,36 +142,39 @@ void _start(int argc, char **args) {
 
    create_scrollbar(NULL);
 
-   int width = get_width();
    int height = get_height();
    content_height = height;
    set_content_height(content_height);
+   int width = get_width();
 
    int x = 5;
    int padding = 2;
 
-   wo_save_o = create_button(NULL, x, 2, "Save");
+   wo_menu_o = register_windowobj(WO_CANVAS, 0, 0, width, 20);
+   wo_menu_o->bordered = false;
+
+   wo_save_o = create_button(wo_menu_o, x, 2, "Save");
    wo_save_o->click_func = &save_func;
    x += wo_save_o->width + padding;
 
-   wo_open_o = create_button(NULL, x, 2, "Browse");
+   wo_open_o = create_button(wo_menu_o, x, 2, "Browse");
    wo_open_o->click_func = &open_func;
    x += wo_open_o->width + padding;
 
-   wo_path_o = create_text(NULL, x, 2, "<path>");
+   wo_path_o = create_text(wo_menu_o, x, 2, "<path>");
    wo_path_o->width = (((width - 10) - x) * 2) / 3;
    wo_path_o->return_func = &path_return;
    wo_path_o->textvalign = true;
    wo_path_o->oneline = true;
    x += wo_path_o->width + padding;
 
-   wo_status_o = create_text(NULL, x, 2, "New");
+   wo_status_o = create_text(wo_menu_o, x, 2, "New");
    wo_status_o->disabled = true;
    wo_status_o->width = wo_path_o->width/2;
    wo_status_o->textvalign = true;
    wo_status_o->texthalign = true;
 
-   wo_text_o = create_text(NULL, 5, 17, "");
+   wo_text_o = create_text(NULL, 5, 22, "");
    //resize() // resize text buffer
    wo_text_o->width = width - 10;
    wo_text_o->height = height - 20;

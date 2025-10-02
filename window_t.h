@@ -5,7 +5,7 @@
 #include "surface_t.h"
 #include "windowobj.h"
 
-#define TEXT_BUFFER_LENGTH 40
+#define TEXT_BUFFER_LENGTH 64
 #define CMD_HISTORY_LENGTH 10
 
 typedef struct gui_window_t {

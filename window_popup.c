@@ -5,6 +5,7 @@
 #include "windowobj.h"
 #include "lib/string.h"
 #include "memory.h"
+#include "interrupts.h"
 
 // window popup - subwindows
 
@@ -18,7 +19,6 @@ void window_popup_init(gui_window_t *window, gui_window_t *parent) {
 // define default popups - common mini-progs
 
 void window_popup_dialog_close(void *windowobj, void *regs) {
-   (void)regs;
    gui_window_t *window = getSelectedWindow();
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    int index = get_window_index_from_pointer(window);
@@ -68,6 +68,20 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    }
 }
 
+void window_popup_return(void *vwo) {
+   windowobj_t *wo = (windowobj_t*)vwo;
+   char *output = malloc(strlen(wo->text));
+   strcpy(output, wo->text);
+   debug_printf("Return string %s\n", output);
+
+   // simulate ok click
+   gui_window_t *window = getSelectedWindow();
+   window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
+   // get regs
+   void *regs = (void*)get_regs();
+   window_popup_dialog_close((void*)dialog->wo_okbtn, regs);
+}
+
 // void return_func(char *output)
 void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text, bool output, void *return_func) {
    if(parent != NULL)
@@ -110,6 +124,9 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
       y += 30;
       dialog->wo_output = window_create_text(window, 60, y, "");
       dialog->wo_output->width = 140;
+      dialog->wo_output->return_func = &window_popup_return;
+      dialog->wo_output->oneline = true;
+      dialog->wo_output->clicked = true; // selected by default
    }
 
    // ok button
@@ -118,11 +135,13 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
    if(output) {
       x = 75;
    }
-   windowobj_t *wo_okbtn = window_create_button(window, x, y, "Ok", &window_popup_dialog_close);
+   dialog->wo_okbtn = window_create_button(window, x, y, "Ok", &window_popup_dialog_close);
 
    if(output) {
-      windowobj_t *wo_cancelbtn = window_create_button(window, x + wo_okbtn->width + 10, y, "Cancel", &window_popup_dialog_close);
+      window_create_button(window, x + dialog->wo_okbtn->width + 10, y, "Cancel", &window_popup_dialog_close);
    }
+
+   window_clearbuffer(window, window->bgcolour);
 
 }
 

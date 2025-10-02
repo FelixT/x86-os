@@ -7,6 +7,7 @@
 typedef struct window_popup_dialog_t {
    gui_window_t *parent;
    windowobj_t *wo_output;
+   windowobj_t *wo_okbtn;
    void (*callback_func)(char *output);
 } window_popup_dialog_t;
 

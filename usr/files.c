@@ -164,6 +164,40 @@ void downarrow() {
 
 }
 
+void path_callback() {
+   if(wo_path->text == NULL) {
+      debug_write_str("Text is null\n");
+      end_subroutine();
+      return;
+   }
+
+   char path[500];
+   strcpy(path, wo_path->text);
+   int len = strlen(path);
+   if(len > 0 && path[len-1] != '/') {
+      strcat(path, "/");
+   }
+   fat_dir_t *dir = (fat_dir_t*)fat_parse_path(path, false);
+
+   if(!dir) {
+      if(strcmp(path, "/")) {
+         read_root();
+         display_items();
+      } else {
+         char buffer[500];
+         sprintf(buffer, "Location '%s' not found", path);
+         display_popup("Error", buffer, false, NULL);
+      }
+   } else {
+      strcpy(cur_path, wo_path->text);
+      no_items = fat_get_dir_size(dir->firstClusterNo);
+      cur_items = (fat_dir_t*)fat_read_dir(dir->firstClusterNo);
+      display_items();
+   }
+
+   end_subroutine();
+}
+
 void click(int x, int y) {
 
    (void)(x);
@@ -174,7 +208,7 @@ void click(int x, int y) {
    }
 
    // clicked menu
-   if(y > height - 20) {
+   if(y > (int)height - 20) {
       end_subroutine();
       return;
    }
@@ -199,6 +233,7 @@ void click(int x, int y) {
       offset = 0;
       if(cur_items[index].firstClusterNo == 0) {
          read_root();
+         scroll_to(0);
       } else {
          // update path
          if(cur_items[index].filename[0] == '.') {
@@ -226,6 +261,8 @@ void click(int x, int y) {
          // read dir
          no_items = fat_get_dir_size(cur_items[index].firstClusterNo);
          cur_items = (fat_dir_t*)fat_read_dir(cur_items[index].firstClusterNo);
+
+         scroll_to(0);
       }
 
       // cur_items[index].firstClusterNo;
@@ -334,6 +371,7 @@ void add_file_callback(char *filename) {
 
 void add_file(void *wo, void *regs) {
    (void)wo;
+   (void)regs;
    display_popup("Name", "Enter filename", true, &add_file_callback);
    end_subroutine();
 }
@@ -355,6 +393,7 @@ void add_folder_callback(char *name) {
 
 void add_folder(void *wo, void *regs) {
    (void)wo;
+   (void)regs;
    display_popup("Name", "Enter folder name", true, &add_folder_callback);
    end_subroutine();
 }
@@ -398,6 +437,8 @@ void _start(int argc, char **args) {
    wo_menu->bordered = false;
    wo_path = create_text(wo_menu, 4, 3, "/");
    wo_path->width = displayedwidth - 120;
+   wo_path->return_func = &path_callback;
+   wo_path->oneline = true;
    wo_newfile = create_button(wo_menu, displayedwidth - 114, 3, "+ File");
    wo_newfile->width = 50;
    wo_newfile->click_func = &add_file;

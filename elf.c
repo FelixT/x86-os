@@ -10,6 +10,12 @@
 
 void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args) {
 
+   int task_index = get_free_task_index();
+   if(task_index == -1) {
+      debug_printf("No free tasks\n");
+      return;
+   }
+
    elf_header_t *elf_header = (elf_header_t*)prog;
    elf_prog_header_t *prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
    // fail if
@@ -109,8 +115,6 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
       
       prog_header++;
    }
-
-   int task_index = get_free_task_index();
 
    create_task_entry(task_index, elf_header->entry, (vmem_end - vmem_start), false);
    task_state_t *task = &gettasks()[task_index];

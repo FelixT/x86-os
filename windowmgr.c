@@ -652,9 +652,44 @@ void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
    
 }
 
+void windowmgr_swap_window() {
+   if(selectedWindow != NULL) {
+      // find next in render order
+      bool foundsel = false;
+      bool found = false;
+      int first = -1;
+      for(int i = 0; i < windowCount; i++) {
+         if(render_order[i] != NULL && first == -1)
+            first = i;
+         if(render_order[i] == selectedWindow) {
+            foundsel = true;
+         } else if(foundsel && render_order[i] != NULL) {
+            setSelectedWindowIndex(get_window_index_from_pointer(render_order[i]));
+            found = true;
+            break;
+         }
+      }
+      if(!found && first != -1)
+         setSelectedWindowIndex(get_window_index_from_pointer(render_order[first]));
+   } else {
+      for(int i = 0; i < windowCount; i++) {
+         if(render_order[i] != NULL) {
+            setSelectedWindowIndex(get_window_index_from_pointer(render_order[i]));
+            break;
+         }
+      }
+   }
+
+   if(selectedWindow)
+      selectedWindow->minimised = false;
+}
+
+
 bool keyboard_shift = false;
 bool keyboard_caps = false;
 bool keyboard_alt = false;
+bool keyboard_control = false;
+
 void windowmgr_keypress(void *regs, int scan_code) {
    // check desktop window objects
    if(default_menu.visible) {
@@ -669,38 +704,14 @@ void windowmgr_keypress(void *regs, int scan_code) {
    if(scan_code == 0x38) {
       // alt
       keyboard_alt = !released;
+   } else if(scan_code == 0x38) {
+      // control
+      keyboard_control = !released;
    } else if(scan_code == 0x0F) {
+      // tab
       if(keyboard_alt) {
          // alt+tab
-         if(selectedWindow != NULL) {
-            // find next in render order
-            bool foundsel = false;
-            bool found = false;
-            int first = -1;
-            for(int i = 0; i < windowCount; i++) {
-               if(render_order[i] != NULL && first == -1)
-                  first = i;
-               if(render_order[i] == selectedWindow) {
-                  foundsel = true;
-               } else if(foundsel && render_order[i] != NULL) {
-                  setSelectedWindowIndex(get_window_index_from_pointer(render_order[i]));
-                  found = true;
-                  break;
-               }
-            }
-            if(!found && first != -1)
-               setSelectedWindowIndex(get_window_index_from_pointer(render_order[first]));
-         } else {
-            for(int i = 0; i < windowCount; i++) {
-               if(render_order[i] != NULL) {
-                  setSelectedWindowIndex(get_window_index_from_pointer(render_order[i]));
-                  break;
-               }
-            }
-         }
-
-         if(selectedWindow)
-            selectedWindow->minimised = false;
+         windowmgr_swap_window();
       }
    }
 
@@ -825,6 +836,10 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
          if(i == clicked_index) continue;
          windowobj_t *wo = selectedWindow->window_objects[i];
          wo->clicked = false;
+         for(int x = 0; x < wo->child_count; x++) {
+            windowobj_t *child = wo->children[x];
+            child->clicked = false;
+         }
       }
 
       return true;
@@ -1206,8 +1221,13 @@ int get_window_index_from_pointer(gui_window_t *window) {
    return -1;
 }
 
+static inline int min(int a, int b) { return (a < b) ? a : b; }
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height) {
-   free((uint32_t)window->framebuffer, window->framebuffer_size);
+   uint16_t *old_framebuffer = window->framebuffer;
+   uint32_t old_framebuffer_size = window->framebuffer_size;
+   int old_width = window->surface.width;
+   int old_height = window->surface.height;
+
    window->framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
    window->framebuffer = malloc(window->framebuffer_size);
    window->width = width;
@@ -1215,6 +1235,17 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    window->surface.buffer = (uint32_t)window->framebuffer;
    window->surface.width = width;
    window->surface.height = height - TITLEBAR_HEIGHT;
+
+   int min_width = min(window->width, old_width);
+   int min_height = min(window->height, old_height);
+   window_clearbuffer(window, window->bgcolour);
+   for(int x = 0; x < min_width; x++) {
+      for(int y = 0; y < min_height; y++) {
+         window->framebuffer[x + window->surface.width*y] = old_framebuffer[x + old_width*y];
+      }
+   }
+
+   free((uint32_t)old_framebuffer, old_framebuffer_size);
 
    if(window->scrollbar != NULL) {
       // resize scrollbar
@@ -1244,7 +1275,6 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    // call resize func if exists
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
-   window_clearbuffer(window, window->bgcolour);
    if(regs && task > -1 && window->resize_func) {
       switch_to_task(task, regs);
       uint32_t *args = malloc(sizeof(uint32_t) * 3);

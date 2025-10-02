@@ -261,7 +261,7 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
    windowobj_t *wo = (windowobj_t*)windowobj;
    if(!wo->visible || (wo->parent != NULL && !((windowobj_t*)wo->parent)->visible)) return false;
 
-   if(wo->type != WO_TEXT) {
+   if(wo->type != WO_TEXT && wo->type != WO_CANVAS) {
       wo->clicked = false;
       windowobj_draw(wo);
       window_draw_content_region(getSelectedWindow(), wo->x, wo->y, wo->width, wo->height + getFont()->height);
@@ -313,14 +313,22 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
    }
 
    // check if we clicked on a child
+   int clicked_child = -1;
    for(int i = 0; i < wo->child_count; i++) {
       windowobj_t *child = (windowobj_t*)wo->children[i];
       if(relX >= child->x && relX < child->x + child->width
       && relY >= child->y && relY < child->y + child->height
       && child->visible) {
          windowobj_click(regs, (void*)child, relX - child->x, relY - child->y);
-         return; // stop at first child clicked
+         clicked_child = i;
+         break; // stop at first child clicked
       }
+   }
+   // set all others to unclicked
+   for(int i = 0; i < wo->child_count; i++) {
+      if(i == clicked_child) continue;
+      windowobj_t *child = (windowobj_t*)wo->children[i];
+      child->clicked = false;
    }
 
    if(wo->click_func != NULL) {
@@ -434,6 +442,15 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
 
    if(wo->disabled) return;
 
+   // call keydown on all clicked children
+   for(int i = 0; i < wo->child_count; i++) {
+      windowobj_t *child = wo->children[i];
+      if(!child->clicked) continue;
+
+      windowobj_keydown(regs, child, scan_code);
+   }
+
+
    if(wo->type == WO_MENU) {
       // handle uparrow/downarrow
       if(scan_code == 72) {
@@ -514,15 +531,18 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    wo->textpos++;
    wo->text[wo->textpos] = '\0';
 
+   int offsetX = (wo->parent != NULL ? ((windowobj_t*)wo->parent)->x : 0);
+   int offsetY = (wo->parent != NULL ? ((windowobj_t*)wo->parent)->y : 0);
+
    if(c == '\n') {
       // cover current cursor
-      draw_rect(wo->window_surface, 0xFFFF, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
+      draw_rect(wo->window_surface, 0xFFFF, wo->x + wo->cursorx + offsetX, wo->y + wo->cursory + offsetY, getFont()->width, 2);
       wo->cursory += getFont()->height + wo->textpadding;
       wo->cursorx = wo->textpadding + 1;
       wo->cursor_textpos++;
    } else {
-      draw_rect(wo->window_surface, rgb16(255, 255, 255), wo->x + wo->cursorx, wo->y + wo->cursory - getFont()->height + 2, getFont()->width, getFont()->height);
-      draw_char(wo->window_surface, c, 0, wo->x + wo->cursorx, wo->y + wo->cursory - getFont()->height + 2);
+      draw_rect(wo->window_surface, rgb16(255, 255, 255), wo->x + wo->cursorx + offsetX, wo->y + wo->cursory - getFont()->height + 2 + offsetY, getFont()->width, getFont()->height);
+      draw_char(wo->window_surface, c, 0, wo->x + wo->cursorx + offsetX, wo->y + wo->cursory - getFont()->height + 2 + offsetY);
       wo->cursorx += getFont()->width + wo->textpadding;
       wo->cursor_textpos++;
       if(wo->cursorx + getFont()->width + wo->textpadding > wo->width) {
@@ -532,7 +552,7 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    }
 
    // draw cursor
-   draw_rect(wo->window_surface, 0, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
+   draw_rect(wo->window_surface, 0, wo->x + wo->cursorx + offsetX, wo->y + wo->cursory + offsetY, getFont()->width, 2);
 }
 
 void windowobj_dragged(void *windowobj, int x, int y, int relX, int relY) {

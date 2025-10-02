@@ -150,6 +150,11 @@ void tasks_alloc() {
 }
 
 void tasks_launch_binary(registers_t *regs, char *path) {
+   int index = get_free_task_index();
+   if(index == -1) {
+      debug_printf("No free tasks\n");
+      return;
+   }
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Program not found\n", 0);
@@ -157,7 +162,6 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t progAddr = (uint32_t)prog;
-   int index = get_free_task_index();
    create_task_entry(index, progAddr, entry->fileSize, false);
    launch_task(index, regs, false);
    gui_redrawall();

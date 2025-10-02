@@ -30,6 +30,8 @@ static idtr_t idtr;
 
 void (*irqs[32])(registers_t *regs);
 
+registers_t *cur_regs = NULL;
+
 void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
    idt_entry_t* descriptor = &idt[vector];
  
@@ -466,6 +468,8 @@ void show_endtask_dialog(int int_no, registers_t *regs) {
 
 void exception_handler(int int_no, registers_t *regs) {
 
+   cur_regs = regs;
+
    if(int_no < 32) {
 
       uint32_t cpl = regs->cs & 0x3;
@@ -656,4 +660,8 @@ void err_exception_handler(int int_no, registers_t *regs) {
 
    switching_paused = false;
 
+}
+
+registers_t *get_regs() {
+   return cur_regs;
 }

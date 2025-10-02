@@ -340,6 +340,7 @@ void write_click(void *wo, void *regs) {
 }
 
 void scroll(int deltaY, int offY) {
+   (void)deltaY;
    offsetY = offY;
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
    end_subroutine();

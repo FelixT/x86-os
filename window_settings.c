@@ -500,7 +500,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       y += 25;
       uinttohexstr(selected->txtcolour, text);
       settings->w_txtcolour_wo = window_create_text(window, x, y, text);
-      settings->w_txtcolourpick_wo->oneline = true;
+      settings->w_txtcolour_wo->oneline = true;
       settings->w_txtcolour_wo->return_func = &window_settings_set_window_txtcolour;
       window_create_button(window, x2, y, "Pick", &window_settings_picktxtcolour);
 

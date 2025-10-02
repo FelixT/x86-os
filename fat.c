@@ -176,6 +176,12 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
    uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
 
+   if(filename[0] == '.' && filename[1] == '.') {
+      fat_dir_t *result = malloc(sizeof(fat_dir_t));
+      *result = *(fat_dir_t*)(dirBuf + sizeof(fat_dir_t)); // entry 1
+      free((uint32_t)dirBuf, dirSize);
+      return result;
+   }
    int entries = dirSize / sizeof(fat_dir_t);
    for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
@@ -793,7 +799,12 @@ fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
 
    char name[9];
    char ext[4];
-   if(!strsplit(name, ext, pathElement, '.')) {
+   if(strcmp(pathElement, "..")) {
+      strcpy(name, pathElement);
+      ext[0] = '\0';
+   } else if(strcmp(pathElement, ".")) {
+      return dir;
+   } else if(!strsplit(name, ext, pathElement, '.')) {
       strcpy(name, pathElement);
       ext[0] = '\0';
    }

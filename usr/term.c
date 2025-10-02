@@ -403,7 +403,7 @@ void term_cmd_mkdir(char *arg) {
 void checkcmd(char *buffer) {
 
    char command[10];
-   char arg[30];
+   char arg[50];
    strsplit((char*)command, (char*)arg, buffer, ' '); // super unsafe
    strtoupper(command, command);
 
