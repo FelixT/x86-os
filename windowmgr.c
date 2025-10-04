@@ -704,14 +704,17 @@ void windowmgr_keypress(void *regs, int scan_code) {
    if(scan_code == 0x38) {
       // alt
       keyboard_alt = !released;
-   } else if(scan_code == 0x38) {
-      // control
-      keyboard_control = !released;
    } else if(scan_code == 0x0F) {
       // tab
       if(keyboard_alt) {
          // alt+tab
          windowmgr_swap_window();
+      }
+   } else if(keyboard_alt) {
+      // alt+w
+      if(scan_to_char(scan_code, false, false) == 'w') {
+         window_close(regs, gui_selected_window);
+         windowmgr_redrawall();
       }
    }
 

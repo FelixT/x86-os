@@ -129,11 +129,11 @@ void terminal_keypress(char key) {
 }
 
 void terminal_checkcmd(char* command) {
-   if(strcmp(command, "WICKED")) {
+   if(strequ(command, "WICKED")) {
       terminal_write("\nyep, wicked\n");
    }
 
-   if(strcmp(command, "CLEAR")) {
+   if(strequ(command, "CLEAR")) {
       terminal_clear();
    }
 }

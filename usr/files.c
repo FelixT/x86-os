@@ -36,7 +36,7 @@ void get_abs_path(char *out, char *inpath) {
    } else {
       // relative path
       strcpy(out, cur_path);
-      if(!strcmp(out, "/"))
+      if(!strequ(out, "/"))
          strcat(out, "/");
       strcat(out, inpath);
    }
@@ -180,7 +180,7 @@ void path_callback() {
    fat_dir_t *dir = (fat_dir_t*)fat_parse_path(path, false);
 
    if(!dir) {
-      if(strcmp(path, "/")) {
+      if(strequ(path, "/")) {
          read_root();
          display_items();
       } else {
@@ -290,7 +290,7 @@ void click(int x, int y) {
 
       // handle supported extensions
       // bmp, elf, txt
-      if(strcmp(extension, "BMP")) {
+      if(strequ(extension, "BMP")) {
          
          char **args = (char**)malloc(1);
          args[0] = fullpath;
@@ -299,12 +299,12 @@ void click(int x, int y) {
          launch_task("/sys/bmpview.elf", 1, args);
       }
 
-      if(strcmp(extension, "ELF")) {
+      if(strequ(extension, "ELF")) {
          // note: this also ends the subroutine
          launch_task(fullpath, 0, NULL);
       }
 
-      if(strcmp(extension, "TXT")) {
+      if(strequ(extension, "TXT")) {
          
          char **args = (char**)malloc(1);
          args[0] = fullpath;
@@ -313,7 +313,7 @@ void click(int x, int y) {
          launch_task("/sys/text.elf", 1, args);
       }
 
-      if(strcmp(extension, "FON")) {
+      if(strequ(extension, "FON")) {
          set_sys_font(fullpath);
       }
 
@@ -355,12 +355,19 @@ void scroll(int deltaY, int offsetY) {
 }
 
 void add_file_callback(char *filename) {
-   if(filename && !strcmp(filename, "")) {
+   if(filename && !strequ(filename, "")) {
       debug_write_str(filename);
       char path[512];
       get_abs_path(path, filename);
       debug_write_str(path);
-      fat_new_file(path);
+      int fd = new_file(path);
+      if(fd < 0) {
+         char buffer[250];
+         sprintf(buffer, "Failed to create file '%s'", path);
+         display_popup("Error", buffer, false, NULL);
+      } else {
+         close(fd);
+      }
       // refresh
       no_items = fat_get_dir_size(cur_items[0].firstClusterNo);
       cur_items = (fat_dir_t*)fat_read_dir(cur_items[0].firstClusterNo);
@@ -377,12 +384,17 @@ void add_file(void *wo, void *regs) {
 }
 
 void add_folder_callback(char *name) {
-   if(name && !strcmp(name, "")) {
+   if(name && !strequ(name, "")) {
       debug_write_str(name);
       char path[512];
       get_abs_path(path, name);
       debug_write_str(path);
-      fat_new_dir(path);
+      // actually add the dir
+      if(!mkdir(path)) {
+         char buffer[250];
+         sprintf(buffer, "Failed to create folder '%s'", path);
+         display_popup("Error", buffer, false, NULL);
+      }
       // refresh
       no_items = fat_get_dir_size(cur_items[0].firstClusterNo);
       cur_items = (fat_dir_t*)fat_read_dir(cur_items[0].firstClusterNo);

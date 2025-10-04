@@ -358,7 +358,7 @@ void _start(int argc, char **args) {
       if(args[0][0] != '/') {
          // relative path
          getwd(path);
-         if(!strcmp(path, "/"))
+         if(!strequ(path, "/"))
             strcat(path, "/");
          strcat(path, args[0]);
       } else {

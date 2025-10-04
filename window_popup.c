@@ -25,7 +25,7 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    int parent_index = get_window_index_from_pointer(dialog->parent);
    // store output if exists
    windowobj_t *wo = (windowobj_t*)windowobj;
-   bool ok_clicked = strcmp(wo->text, "Ok");
+   bool ok_clicked = strequ(wo->text, "Ok");
    char *output = NULL;
    if(ok_clicked && dialog->callback_func) {
       if(dialog->wo_output) {
@@ -151,13 +151,13 @@ void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int re
    (void)relY;
    windowobj_t *wo = (windowobj_t*)windowobj;
    window_popup_filepicker_t *fp = (window_popup_filepicker_t*)getSelectedWindow()->state;
-   if(strcmp(wo->text, ".")) {
+   if(strequ(wo->text, ".")) {
       // do nothing
-   } else if(strcmp(wo->text, "..")) {
+   } else if(strequ(wo->text, "..")) {
       strsplit_last(fp->wo_path->text, NULL, fp->wo_path->text, '/');
       strsplit_last(fp->wo_path->text, NULL, fp->wo_path->text, '/');
       strcat(fp->wo_path->text, "/");
-      if(strcmp(fp->wo_path->text, "/")) {
+      if(strequ(fp->wo_path->text, "/")) {
          fp->currentdir = NULL;
       } else {
          fat_dir_t *items = malloc(sizeof(fat_dir_t)*fat_get_dir_size(fp->currentdir->firstClusterNo));

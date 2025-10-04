@@ -394,44 +394,44 @@ void window_term_checkcmd(void *regs, void *window) {
    selected->text_buffer[selected->text_index] = '\0';
 
    char command[10];
-   char arg[30];
+   char arg[40];
    strsplit((char*)command, (char*)arg, selected->text_buffer, ' '); // super unsafe
 
    strtoupper(command, command);
 
-   if(strcmp(command, "HELP"))
+   if(strequ(command, "HELP"))
       term_cmd_help();
-   else if(strcmp(command, "CLEAR"))
+   else if(strequ(command, "CLEAR"))
       term_cmd_clear(selected);
-   else if(strcmp(command, "MOUSE"))
+   else if(strequ(command, "MOUSE"))
       term_cmd_mouse();
-   else if(strcmp(command, "TASKS"))
+   else if(strequ(command, "TASKS"))
       term_cmd_tasks();
-   else if(strcmp(command, "PROG1"))
+   else if(strequ(command, "PROG1"))
       term_cmd_prog1(regs);
-   else if(strcmp(command, "PROG2"))
+   else if(strequ(command, "PROG2"))
       term_cmd_prog2(regs);
-   else if(strcmp(command, "TEST"))
+   else if(strequ(command, "TEST"))
       term_cmd_test();
-   else if(strcmp(command, "DESKTOP"))
+   else if(strequ(command, "DESKTOP"))
       term_cmd_desktop();
-   else if(strcmp(command, "REDRAWALL"))
+   else if(strequ(command, "REDRAWALL"))
       term_cmd_redrawall();
-   else if(strcmp(command, "PADDING"))
+   else if(strequ(command, "PADDING"))
       term_cmd_padding((char*)arg);
-   else if(strcmp(command, "LAUNCH"))
+   else if(strequ(command, "LAUNCH"))
       term_cmd_launch(regs, (char*)arg);
-   else if(strcmp(command, "RESIZE"))
+   else if(strequ(command, "RESIZE"))
       term_cmd_resize(regs, selected, (char*)arg);
-   else if(strcmp(command, "BGIMG"))
+   else if(strequ(command, "BGIMG"))
       term_cmd_bgimg((char*)arg);
-   else if(strcmp(command, "BG"))
+   else if(strequ(command, "BG"))
       term_cmd_bg((char*)arg);
-   else if(strcmp(command, "MEM"))
+   else if(strequ(command, "MEM"))
       term_cmd_mem((char*)arg);
-   else if(strcmp(command, "DMPMEM"))
+   else if(strequ(command, "DMPMEM"))
       term_cmd_dmpmem((char*)arg);
-   else if(strcmp(command, "SETTINGS"))
+   else if(strequ(command, "SETTINGS"))
       term_cmd_settings();
    else
       term_cmd_default((char*)command);

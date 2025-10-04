@@ -184,7 +184,7 @@ void _start(int argc, char **args) {
          // relative path
          char path[256];
          getwd(path);
-         if(!strcmp(path, "/"))
+         if(!strequ(path, "/"))
             strcat(path, "/");
          strcat(path, args[0]);
          load_file(path);

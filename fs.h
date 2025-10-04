@@ -8,19 +8,29 @@
 #define FS_MAX_FILENAME 256
 
 typedef struct {
+    uint32_t file_size;
+    uint32_t first_cluster;
+} fs_file_data_t;
+
+typedef struct {
     bool active;
     char filename[FS_MAX_FILENAME];
-    uint32_t file_size; // rw position
-    uint32_t current_pos;
     int flags;
-    bool is_dir;
-    uint32_t first_cluster;
-    bool is_term;
-    int window_index;
+    uint8_t type; // 0 = file, 1 = dir, 2 = term
+    int window_index; // terminal window for terms
+    uint32_t current_pos;
+    fs_file_data_t *data;
 } fs_file_t;
 
+#define FS_TYPE_FILE 0
+#define FS_TYPE_DIR 1
+#define FS_TYPE_TERM 2
+
 fs_file_t *fs_open(char *path);
-void fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size);
+bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size);
 bool fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task);
+bool fs_mkdir(char *path);
+fs_file_t *fs_new(char *path);
+bool fs_rename(char *oldpath, char *newname);
 
 #endif

@@ -276,7 +276,7 @@ void software_handler(registers_t *regs) {
          api_free(regs);
          break;
       case 41:
-         api_fat_new_file(regs);
+         api_new_file(regs);
          break;
       case 42:
          api_set_window_title(regs);
@@ -303,7 +303,7 @@ void software_handler(registers_t *regs) {
          api_debug_write_str(regs);
          break;
       case 50:
-         api_fat_new_dir(regs);
+         api_mkdir(regs);
          break;
       case 51:
          api_sbrk(regs);
@@ -325,6 +325,9 @@ void software_handler(registers_t *regs) {
          break;
       case 57:
          api_windowobj_add_child(regs);
+         break;
+      case 58:
+         api_rename(regs);
          break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);

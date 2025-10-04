@@ -34,7 +34,6 @@ void api_fat_get_bpb(registers_t *regs);
 void api_fat_parse_path(registers_t *regs);
 void api_fat_read_file(registers_t *regs);
 void api_fat_write_file(registers_t *regs);
-void api_fat_new_file(registers_t *regs);
 void api_get_get_dir_size(registers_t *regs);
 void api_read_dir(registers_t *regs);
 void api_draw_bmp(registers_t *regs);
@@ -52,12 +51,14 @@ void api_display_colourpicker(registers_t *regs);
 void api_display_filepicker(registers_t *regs);
 void api_read(registers_t *regs);
 void api_debug_write_str(registers_t *regs);
-void api_fat_new_dir(registers_t *regs);
 void api_sbrk(registers_t *regs);
 void api_open(registers_t *regs);
 void api_write(registers_t *regs);
 void api_create_scrollbar(registers_t *regs);
 void api_set_scrollable_height(registers_t *regs);
 void api_scroll_to(registers_t *regs);
+void api_new_file(registers_t *regs);
+void api_mkdir(registers_t *regs);
+void api_rename(registers_t *regs);
 
 #endif

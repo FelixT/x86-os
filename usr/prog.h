@@ -222,20 +222,15 @@ static inline int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    return err;
 }
 
-static inline void fat_new_file(char *path) {
+static inline bool mkdir(char *path) {
+   int success;
    asm volatile (
-      "int $0x30;"
-      :: "a" (41),
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (success)
+      : "a" (50),
       "b" ((uint32_t)path)
    );
-}
-
-static inline void fat_new_dir(char *path) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (50),
-      "b" ((uint32_t)path)
-   );
+   return (bool)success;
 }
 
 static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is_transparent) {
@@ -456,6 +451,34 @@ static inline int write(int fd, char *buf, size_t count) {
       "d" ((uint32_t)count)
    );
    return c;
+}
+
+static inline int new_file(char *path) {
+   int fd;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (fd)
+      : "a" (41),
+      "b" ((uint32_t)path)
+   );
+   return fd;
+}
+
+static inline void close(int fd) {
+   (void)fd;
+   // do nothing yet
+}
+
+static inline bool rename(char *path, char *newname) {
+   int success;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (success)
+      : "a" (58),
+      "b" ((uint32_t)path),
+      "c" ((uint32_t)newname)
+   );
+   return (bool)success;
 }
 
 static inline uint32_t *sbrk(uint32_t increment) {

@@ -389,11 +389,6 @@ void api_fat_write_file(registers_t *regs) {
    regs->ebx = fat_write_file((char*)regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
 }
 
-void api_fat_new_file(registers_t *regs) {
-   // IN: ebx = path
-   fat_new_file((char*)regs->ebx, NULL, 0);
-}
-
 void api_set_sys_font(registers_t *regs) {
    // IN: ebx = path
 
@@ -474,11 +469,6 @@ void api_debug_write_str(registers_t *regs) {
    debug_printf("t%iw%i: ", get_current_task(), get_current_task_window(), getSelectedWindowIndex());
    debug_printf((char*)regs->ebx);
    debug_printf("\n");
-}
-
-void api_fat_new_dir(registers_t *regs) {
-   // IN: ebx - dir path
-   fat_new_dir((char*)regs->ebx);
 }
 
 void api_sbrk(registers_t *regs) {
@@ -645,8 +635,36 @@ void api_fsize(registers_t *regs) {
    if(fd < 0 || fd > task->fd_count) {
       regs->ebx = -1;
    } else {
-      regs->ebx = task->file_descriptors[fd]->file_size;
+      regs->ebx = task->file_descriptors[fd]->data->file_size;
    }
+}
+
+void api_mkdir(registers_t *regs) {
+   // IN: ebx - dir path
+   // OUT: ebx - bool success
+   regs->ebx = fs_mkdir((char*)regs->ebx);
+}
+
+void api_rename(registers_t *regs) {
+   // IN: ebx - old path
+   // IN: ecx - new name
+   // OUT: ebx - bool success
+   regs->ebx = fs_rename((char*)regs->ebx, (char*)regs->ecx);
+}
+
+void api_new_file(registers_t *regs) {
+   // IN: ebx - file path
+   // OUT: ebx - int fd / -1 on error
+   fs_file_t *file = fs_new((char*)regs->ebx);
+   if(!file) {
+      regs->ebx = -1;
+      debug_printf("api_new_file: error\n");
+      return;
+   }
+   task_state_t *task = get_current_task_state();
+   int fd = task->fd_count;
+   task->file_descriptors[task->fd_count++] = file;
+   regs->ebx = fd;
 }
 
 void api_create_scrollbar(registers_t *regs) {

@@ -77,8 +77,8 @@ bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension)
    strtoupper((char*)entryName, (char*)entryName); // fat ignores file case
    strtoupper((char*)entryExtension, (char*)entryExtension);
 
-   if(!strcmp(entryName, name)) return false;
-   if(!strcmp(entryExtension, extension)) return false;
+   if(!strequ(entryName, name)) return false;
+   if(!strequ(entryExtension, extension)) return false;
    
    return true;
 }
@@ -309,10 +309,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    return allocated;
 }
 
-void fat_new_file(char *path, uint8_t *buffer, uint32_t size) {
-   (void)buffer;
-   (void)size;
-
+void fat_new_file(char *path) {
    // get directory cluster
    fat_dir_t *dir = fat_parse_path(path, false);
    if(dir == NULL) {
@@ -329,10 +326,8 @@ void fat_new_file(char *path, uint8_t *buffer, uint32_t size) {
    char filename[9];
    char extension[4];
    // split at last /
-   while(path[0] != '\0') {
-      strsplit(tmp, path, path, '/');
-      strcpy_fixed(filenamefull, tmp, 12);
-   }
+   strsplit_last(NULL, tmp, path, '/');
+   strcpy_fixed(filenamefull, tmp, 12);
    strsplit(filename, extension, filenamefull, '.'); // split at first dot
    strtoupper(filename, filename);
    strtoupper(extension, extension);
@@ -340,6 +335,7 @@ void fat_new_file(char *path, uint8_t *buffer, uint32_t size) {
    strcpy_fixed((char*)filedir->filename, filename, strlen(filename));
    filedir->filename[strlen(filename)] = ' ';
    strcpy_fixed((char*)filedir->filename+8, extension, strlen(extension));
+   filedir->filename[8+strlen(extension)] = ' ';
    filedir->attributes = 0x20; // file
    filedir->firstClusterNo = 0; // to be set later
    filedir->fileSize = 0;
@@ -389,7 +385,6 @@ void fat_new_file(char *path, uint8_t *buffer, uint32_t size) {
    debug_writestr("Updating FAT table\n");
    ata_write_exact(true, true, fatTableAddr, fatTable, 2 * noClusters);
    free((uint32_t)fatTable, 2 * noClusters);
-
 
    return;
 }
@@ -488,7 +483,7 @@ bool fat_new_dir(char *path) {
    char dirname[256];
    char parentpath[256];
    strsplit_last(parentpath, dirname, path, '/');
-   if(strcmp(parentpath, ""))
+   if(strequ(parentpath, ""))
       strcpy(parentpath, "/");
    if(strlen(dirname) > 8) {
       debug_printf("Dir name too long\n");
@@ -507,7 +502,7 @@ bool fat_new_dir(char *path) {
 
    memset(dir->filename, ' ', 11);
    strcpy_fixed((char*)dir->filename, dirname, 8);
-   dir->filename[strlen(dirname)] = ' ';
+   dir->filename[8] = ' ';
    dir->attributes = 0x10; // directory
    dir->firstClusterNo = 0; // to be set later
    dir->fileSize = 0;
@@ -549,7 +544,7 @@ bool fat_new_dir(char *path) {
    dotdot_entry.filename[0] = '.';
    dotdot_entry.filename[1] = '.';
    dotdot_entry.attributes = 0x12;  // hidden directory attribute
-   dotdot_entry.firstClusterNo = strcmp(parentpath, "/") ? 0 : parent->firstClusterNo;
+   dotdot_entry.firstClusterNo = strequ(parentpath, "/") ? 0 : parent->firstClusterNo;
    dotdot_entry.fileSize = 0;
 
     // zero new cluster
@@ -790,6 +785,65 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
 }
 
+bool fat_rename(char *path, char *filename) {
+   // get parent
+   char parentpath[512];
+   char oldname[16];
+   char name[9];
+   char extension[4];
+
+   strsplit_last(parentpath, oldname, path, '/');
+   strsplit(name, extension, oldname, '.');
+
+   if(parentpath[strlen(parentpath)-1] != '/') {
+      // dir, append /
+      strcat(parentpath, "/");
+   }
+
+   fat_dir_t *dir = fat_parse_path(parentpath, false);
+   if(!dir) {
+      debug_printf("File '%s' not found\n", parentpath);
+      return false;
+   }
+
+   uint32_t clusterNo = dir->firstClusterNo;
+   uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+
+   uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
+
+   // read a whole cluster (directory) at once
+   uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+   uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
+
+   int entries = dirSize / sizeof(fat_dir_t);
+   bool match = false;
+   for(int i = 0; i < entries; i++) {
+      fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
+      if(fat_entry_matches_filename(fat_dir, name, extension)) {
+         match = true;
+         char newfilename[12];
+         newfilename[11] = '\0';
+         memset(newfilename, ' ', 11);
+         char newfile[9];
+         char newext[4];
+         strsplit(newfile, newext, filename, '.');
+         strncpy(newfilename, newfile, strlen(newfile));
+         newfilename[strlen(newfile)] = ' ';
+         strncpy(newfilename+8, newext, strlen(newext));
+         newfilename[8+strlen(newext)] = ' ';
+         strncpy((char*)fat_dir->filename, newfilename, 11);
+         debug_printf("Found match, renaming to '%s'\n", newfilename);
+      }
+   }
+   if(match) {
+      ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
+      return true;
+   } else {
+      debug_printf("File not found");
+      return false;
+   }
+}
+
 fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
    if(strlen(pathElement) == 0)
       return dir;
@@ -799,10 +853,10 @@ fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
 
    char name[9];
    char ext[4];
-   if(strcmp(pathElement, "..")) {
+   if(strequ(pathElement, "..")) {
       strcpy(name, pathElement);
       ext[0] = '\0';
-   } else if(strcmp(pathElement, ".")) {
+   } else if(strequ(pathElement, ".")) {
       return dir;
    } else if(!strsplit(name, ext, pathElement, '.')) {
       strcpy(name, pathElement);

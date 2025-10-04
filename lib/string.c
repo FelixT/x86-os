@@ -133,7 +133,7 @@ int strlen(char* str) {
    return len;
 }
 
-bool strcmp(char* str1, char* str2) {
+bool strequ(char* str1, char* str2) {
    int len = strlen(str1);
    if(len != strlen(str2))
       return false;

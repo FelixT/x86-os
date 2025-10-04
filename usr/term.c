@@ -23,7 +23,7 @@ void get_abs_path(char *out, char *inpath) {
    } else {
       // relative path
       getwd(out);
-      if(!strcmp(out, "/"))
+      if(!strequ(out, "/"))
          strcat(out, "/");
       strcat(out, inpath);
    }
@@ -36,17 +36,18 @@ void term_cmd_default(char *command) {
 void term_cmd_help() {
    // todo: mouse, tasks, prog1, prog2, files, viewbmp, test, desktop, mem, bg, bgimg, padding, redrawall, windowbg, windowtxt
    write_str("\n");
-   printf("CLEAR\n");
-   printf("LAUNCH path\n");
-   printf("FILES, TEXT <path>\n");
-   printf("FAT <path>, FATNEW path\n");
-   printf("FAPPEND <path> <buffer>\n");
-   printf("FWRITE <path> <buffer>\n");
-   printf("FATDIR cluster, FREAD path\n");
-   printf("LS, CD path, PWD\n");
-   printf("CAT path, TOUCH path, MKDIR path\n");
-   printf("DMPMEM x <y>\n");
-   printf("FONT path, RGBHEX r g b\n");
+   printf(" CLEAR\n");
+   printf(" LAUNCH path\n");
+   printf(" FILES, TEXT <path>\n");
+   printf(" FAT <path>,\n");
+   printf(" FAPPEND <path> <buffer>\n");
+   printf(" FWRITE <path> <buffer>\n");
+   printf(" FREAD path\n");
+   printf(" LS, CD path, PWD\n");
+   printf(" CAT path, TOUCH path\n");
+   printf(" MKDIR path, RENAME path newname\n");
+   printf(" DMPMEM x <y>\n");
+   printf(" FONT path, RGBHEX r g b\n\n");
 }
 
 void term_cmd_clear() {
@@ -87,7 +88,7 @@ void argtofullpath(char *buf, char *arg) {
    } else {
       buf[0] = '\0';
       strcat(buf, path);
-      if(!strcmp(buf, "/"))
+      if(!strequ(buf, "/"))
          strcat(buf, "/");
       strcat(buf, arg);
    }
@@ -140,7 +141,7 @@ void printdir(fat_dir_t *items, int size) {
 void term_cmd_fat(char *arg) {
    fat_dir_t *items = NULL;
    int size = 0;
-   if(strcmp(arg, "/") || strcmp(arg, "")) {
+   if(strequ(arg, "/") || strequ(arg, "")) {
       // root
       printf("Root directory\n");
       items = (fat_dir_t*)fat_read_root();
@@ -235,10 +236,6 @@ void term_cmd_dmpmem(char *arg) {
    free((uint32_t)buf, rowlen);
 }
 
-void term_cmd_fatnew(char *arg) {
-   fat_new_file(arg);
-}
-
 void term_cmd_launch(char *arg) {
    char fullpath[256];
    argtofullpath(fullpath, arg);
@@ -266,12 +263,12 @@ void term_cmd_rgbhex(char *arg) {
 
 void term_cmd_ls(char *arg) {
    char *p = arg;
-   if(strcmp(p, ""))
+   if(strequ(p, ""))
       p = path;
 
    fat_dir_t *items = NULL;
    int size = 0;
-   if(strcmp(p, "/") || strcmp(p, "")) {
+   if(strequ(p, "/") || strequ(p, "")) {
       // root
       items = (fat_dir_t*)fat_read_root();
       fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
@@ -298,7 +295,7 @@ void term_cmd_ls(char *arg) {
 }
 
 void term_cmd_cd(char *arg) {
-   if(strcmp(arg, "..") || strcmp(arg, "../")) {
+   if(strequ(arg, "..") || strequ(arg, "../")) {
       // go up one directory
       int len = strlen(path);
       for(int i = len-1; i >= 0; i--) {
@@ -307,17 +304,17 @@ void term_cmd_cd(char *arg) {
             break;
          }
       }
-   } else if(strcmp(arg, ".") || arg[0] == '\0' || strcmp(arg, "./")) {
+   } else if(strequ(arg, ".") || arg[0] == '\0' || strequ(arg, "./")) {
       // do nothing
    } else if(arg[0] == '/') {
       // absolute path
       strcpy(path, arg);
    } else{
-      if(!strcmp(path, "/"))
+      if(!strequ(path, "/"))
          strcat(path, "/");
       strcat(path, arg);
    }
-   if(strcmp(path, "")) {
+   if(strequ(path, "")) {
       strcat(path, "/");
    }
    chdir(path);
@@ -329,7 +326,12 @@ void term_cmd_touch(char *arg) {
 
    get_abs_path(path, arg);
 
-   fat_new_file(path);
+   int fd = new_file(path);
+   if(fd < 0) {
+      printf("Failed to create file '%s'\n", path);
+   } else {
+      close(fd);
+   }
 }
 
 void term_cmd_pwd() {
@@ -397,7 +399,26 @@ void term_cmd_mkdir(char *arg) {
    char path[256];
    get_abs_path(path, arg);
 
-   fat_new_dir(path);
+   if(!mkdir(path)) {
+      printf("Failed to create directory '%s'\n", path);
+   }
+}
+
+void term_cmd_rename(char *arg) {
+   char path[256];
+   char newname[40];
+
+   if(!strsplit(path, newname, arg, ' ')) {
+      printf("Usage: RENAME path newname\n");
+      return;
+   }
+
+   char fullpath[256];
+   get_abs_path(fullpath, path);
+
+   if(!rename(fullpath, newname)) {
+      printf("Renaming '%s' to '%s' failed\n", fullpath, newname);
+   }
 }
 
 void checkcmd(char *buffer) {
@@ -407,52 +428,50 @@ void checkcmd(char *buffer) {
    strsplit((char*)command, (char*)arg, buffer, ' '); // super unsafe
    strtoupper(command, command);
 
-   if(strcmp(command, "HELP"))
+   if(strequ(command, "HELP"))
       term_cmd_help();
-   else if(strcmp(command, "CLEAR"))
+   else if(strequ(command, "CLEAR"))
       term_cmd_clear();
-   else if(strcmp(command, "FAT"))
+   else if(strequ(command, "FAT"))
       term_cmd_fat(arg);
-   else if(strcmp(command, "FATDIR"))
-      term_cmd_fatdir(arg);
-   else if(strcmp(command, "FREAD"))
+   else if(strequ(command, "FREAD"))
       term_cmd_fread(arg);
-   else if(strcmp(command, "FATNEW"))
-      term_cmd_fatnew(arg);
-   else if(strcmp(command, "FILES"))
+   else if(strequ(command, "FILES"))
       term_cmd_files();
-   else if(strcmp(command, "FONT"))
+   else if(strequ(command, "FONT"))
       term_cmd_font(arg);
-   else if(strcmp(command, "VIEWBMP"))
+   else if(strequ(command, "VIEWBMP"))
       term_cmd_viewbmp(arg);
-   else if(strcmp(command, "DMPMEM"))
+   else if(strequ(command, "DMPMEM"))
       term_cmd_dmpmem(arg);
-      else if(strcmp(command, "LAUNCH"))
+      else if(strequ(command, "LAUNCH"))
       term_cmd_launch(arg);
-   else if(strcmp(command, "LAUNCH"))
+   else if(strequ(command, "LAUNCH"))
       term_cmd_launch(arg);
-      else if(strcmp(command, "LAUNCH"))
+      else if(strequ(command, "LAUNCH"))
       term_cmd_launch(arg);
-   else if(strcmp(command, "TEXT"))
+   else if(strequ(command, "TEXT"))
       term_cmd_text(arg);
-   else if(strcmp(command, "RGBHEX"))
+   else if(strequ(command, "RGBHEX"))
       term_cmd_rgbhex(arg);
-   else if(strcmp(command, "LS"))
+   else if(strequ(command, "LS"))
       term_cmd_ls(arg);
-   else if(strcmp(command, "CD"))
+   else if(strequ(command, "CD"))
       term_cmd_cd(arg);
-   else if(strcmp(command, "TOUCH"))
+   else if(strequ(command, "TOUCH"))
       term_cmd_touch(arg);
-   else if(strcmp(command, "PWD"))
+   else if(strequ(command, "PWD"))
       term_cmd_pwd();
-   else if(strcmp(command, "CAT"))
+   else if(strequ(command, "CAT"))
       term_cmd_cat(arg);
-   else if(strcmp(command, "FAPPEND"))
+   else if(strequ(command, "FAPPEND"))
       term_cmd_fappend(arg);
-   else if(strcmp(command, "FWRITE"))
+   else if(strequ(command, "FWRITE"))
       term_cmd_fwrite(arg);
-   else if(strcmp(command, "MKDIR"))
+   else if(strequ(command, "MKDIR"))
       term_cmd_mkdir(arg);
+   else if(strequ(command, "RENAME"))
+      term_cmd_rename(arg);
    else
       term_cmd_default(command);
 
