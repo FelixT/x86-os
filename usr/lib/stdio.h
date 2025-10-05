@@ -17,10 +17,13 @@ typedef struct {
 
 #define MAX_FILES 16
 
+void memcpy(void *dest, const void *src, int bytes);
 FILE* fopen(const char* filename, const char* mode);
 size_t fwrite(const void* ptr, size_t size, size_t count, FILE* stream);
 size_t fread(void* ptr, size_t size, size_t count, FILE* stream);
 int fclose(FILE* stream);
 int fflush(FILE* stream);
+void debug_printf(const char *format, ...);
+void printf(const char *format, ...);
 
 #endif

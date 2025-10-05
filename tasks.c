@@ -40,6 +40,8 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
 }
 
 void launch_task(int index, registers_t *regs, bool focus) {
+   int old_task = current_task;
+
    current_task = index;
 
    task_state_t *task = &tasks[current_task];
@@ -68,6 +70,11 @@ void launch_task(int index, registers_t *regs, bool focus) {
    task->fd_count = 3;
    
    debug_printf("Launching task %u\n", index);
+
+   // save regs
+   if(old_task >= 0) {
+      tasks[old_task].registers = *regs;
+   }
 
    tasks[current_task].enabled = true;
 
@@ -231,9 +238,7 @@ bool switch_to_task(int index, registers_t *regs) {
    //debug_printf("Switching from task %i to %i\n", current_task, index);
 
    if(!tasks[index].enabled) {
-      window_writestr("Task switch failed: task ", 0, 0);
-      window_writenum(index, 0, 0);
-      window_writestr(" is unavaliable\n", 0, 0);
+      debug_printf("Task switch failed: task %i is unavailable\n", index);
       return false;
    }
 
@@ -328,7 +333,6 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
       event->argc = argc;
       event->task = current_task;
       events_add(10, &task_execute_queued_subroutine, (void*)event, -1);
-      //   return;
       return;
    } else if(!tasks[current_task].enabled) {
       debug_printf("Task %i is ended, exiting subroutine");
@@ -366,6 +370,8 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
 void task_subroutine_end(registers_t *regs) {
    // restore registers
    //debug_writestr("Ending subrouting\n");
+   if(!tasks[current_task].in_routine)
+      return;
 
    *regs = tasks[current_task].routine_return_regs;
 

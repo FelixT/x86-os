@@ -113,24 +113,26 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
    window->resizable = false;
 
    // dialog message
-   int y = 15;
+   int y = 5;
    windowobj_t *wo_msg = window_create_text(window, 15, y, text);
    wo_msg->width = 220;
-   wo_msg->height = 20;
+   wo_msg->height = 30;
    wo_msg->disabled = true;
    wo_msg->bordered = false;
+   wo_msg->textvalign = true;
+   wo_msg->texthalign = true;
+   y += 40;
 
    if(output) {
-      y += 30;
       dialog->wo_output = window_create_text(window, 60, y, "");
       dialog->wo_output->width = 140;
       dialog->wo_output->return_func = &window_popup_return;
       dialog->wo_output->oneline = true;
       dialog->wo_output->clicked = true; // selected by default
+      y += 30;
    }
 
    // ok button
-   y += 30;
    int x = 15;
    if(output) {
       x = 75;

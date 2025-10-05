@@ -707,7 +707,8 @@ void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t size, v
    events_add(1, &fat_read_file_callback, (void*)state, -1);
 }
 
-
+// this is broken, but is still used for simple cases
+// see chunked version above
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    bool readEntireFile = (size == 0); // read entry entry as stored on disk or the size supplied
@@ -784,7 +785,6 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    return fileContents;
 
 }
-
 bool fat_rename(char *path, char *filename) {
    // get parent
    char parentpath[512];
@@ -839,7 +839,7 @@ bool fat_rename(char *path, char *filename) {
       ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
       return true;
    } else {
-      debug_printf("File not found");
+      debug_printf("File not found\n");
       return false;
    }
 }

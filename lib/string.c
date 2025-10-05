@@ -350,7 +350,7 @@ uint32_t hextouint(char *str) {
    return u;
 }
 
-void memset(void *dest, uint8_t ch, int count) {
+void *memset(void *dest, uint8_t ch, int count) {
    // faster memset using fancy assembly
    // Use stosb for small blocks (under 16 bytes)
    if(count < 16) {
@@ -360,7 +360,7 @@ void memset(void *dest, uint8_t ch, int count) {
          : "D" (dest), "a" (ch), "c" (count)
          : "memory", "cc"
       );
-      return;
+      return dest;
    }
     
    // For larger blocks, use stosd (4 bytes at a time)
@@ -404,4 +404,13 @@ void memset(void *dest, uint8_t ch, int count) {
       );
    }
 
+   return dest;
+
+}
+
+void tolower(char *c) {
+   for(int i = 0; i < strlen(c); i++) {
+      if(c[i] >= 'A' && c[i] <= 'Z')
+         c[i] += ('a'-'A');
+   }
 }

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../lib/string.h"
+#include "lib/stdio.h"
 #include "lib/wo_api.h"
 
 #include "prog.h"
@@ -12,10 +13,9 @@ volatile uint32_t width;
 volatile uint32_t height;
 volatile uint8_t *file_icon;
 volatile uint8_t *folder_icon;
-volatile fat_bpb_t *bpb;
-volatile fat_dir_t *cur_items;
-volatile int no_items;
 volatile int offset;
+fs_dir_content_t *dir_content;
+int shown_items;
 
 char cur_path[512];
 windowobj_t *wo_menu;
@@ -23,7 +23,7 @@ windowobj_t *wo_path;
 windowobj_t *wo_newfile;
 windowobj_t *wo_newfolder;
 
-char tolower(char c) {
+char tolower_c(char c) {
    if(c >= 'A' && c <= 'Z')
       c += ('a'-'A');
    return c;
@@ -50,55 +50,32 @@ void display_items() {
    
    int offsetLeft = offset;
    int position = 0;
+   shown_items = 0;
 
-   for(int i = 0; i < no_items; i++) {
-      if(cur_items[i].filename[0] == 0) break;
+   for(int i = 0; i < dir_content->size; i++) {
+      fs_dir_entry_t *entry = &dir_content->entries[i];
+      bool dotentry = entry->filename[0] == '.';
 
-      bool hidden = (cur_items[i].attributes & 0x02) == 0x02;
-      bool dotentry = cur_items[i].filename[0] == 0x2E;
-
-      if(hidden & !dotentry) {
-         cur_items[i].zero = -1;
+      if(entry->hidden && !dotentry) {
          continue; // ignore
       }
       
+      shown_items++;
       offsetLeft--;
       if(offsetLeft >= 0) {
-         cur_items[i].zero = -1;
          continue;
       }
 
-      cur_items[i].zero = position;
-
-      char fileName[9];
-      char extension[4];
-      char fullName[13];
-
-      for(int j = 0; j < 8; j++)
-         fileName[j] = tolower(cur_items[i].filename[j]);
-      fileName[8] = '\0';
-
-      for(int j = 0; j < 3; j++)
-         extension[j] = tolower(cur_items[i].filename[j+8]);
-      extension[3] = '\0';
-
-      strsplit(fullName, NULL, fileName, ' ');
-      if(extension[0] != ' ') {
-         strcat(fullName, ".");
-         strcat(fullName, extension);
-      }
 
       // draw
-      if((cur_items[i].attributes & 0x10) == 0x10) {
-         // directory
+      if(entry->type == FS_TYPE_DIR) {
          bmp_draw((uint8_t*)folder_icon, x, y, 1, true);
-         write_strat(fileName, x + 27, y + 7);
+         write_strat(entry->filename, x + 27, y + 7);
       } else {
-         // file
          bmp_draw((uint8_t*)file_icon, x, y, 1, true);
-         write_strat(fullName, x + 27, y + 7);
+         write_strat(entry->filename, x + 27, y + 7);
 
-         uint32_t size = cur_items[i].fileSize;
+         uint32_t size = entry->file_size;
          char type[4];
          strcpy(type, "b");
          if(size > 1000) {
@@ -114,7 +91,6 @@ void display_items() {
          write_strat(sizeStr, x + 150, y + 7);
       }
 
-
       y += 25;
       position++;
    }
@@ -125,19 +101,9 @@ void display_items() {
 }
 
 void read_root() {
-   cur_path[0] = '/';
-   cur_path[1] = '\0';
+   strcpy(cur_path, "/");
    // read root
-   bpb = (fat_bpb_t*) fat_get_bpb();
-   cur_items = (fat_dir_t*)fat_read_root();
-   no_items = bpb->noRootEntries;
-   // get real root size
-   for(int i = 0; i < bpb->noRootEntries; i++) {
-      if(cur_items[i].filename[0] == 0) {
-         no_items = i;
-         break;
-      }
-   }
+   dir_content = read_dir(cur_path);
 }
 
 void uparrow() {
@@ -155,7 +121,7 @@ void uparrow() {
 void downarrow() {
 
    offset++;
-   if(offset >= no_items) offset = no_items - 1;
+   if(offset >= shown_items) offset = shown_items - 1;
 
    display_items();
    redraw();
@@ -190,8 +156,8 @@ void path_callback() {
       }
    } else {
       strcpy(cur_path, wo_path->text);
-      no_items = fat_get_dir_size(dir->firstClusterNo);
-      cur_items = (fat_dir_t*)fat_read_dir(dir->firstClusterNo);
+      dir_content = read_dir(cur_path);
+      offset = 0;
       display_items();
    }
 
@@ -216,113 +182,111 @@ void click(int x, int y) {
    // see where we clicked
    int position = (y-5)/25;
 
-   if(cur_items == NULL) end_subroutine();
+   if(dir_content == NULL) end_subroutine();
 
    int index = -1;
-   // find where .zero (position) == position
-   for(int i = 0; i < no_items; i++) {
-      if(cur_items[i].zero == position)
+   int i_pos = 0;
+   for(int i = 0; i < dir_content->size; i++) {
+      fs_dir_entry_t *entry = &dir_content->entries[i];
+      bool dotentry = entry->filename[0] == '.';
+      if(entry->hidden && !dotentry)
+         continue;
+      if(i_pos == position)
          index = i;
+      i_pos++;
    }
 
-   if(index < 0) end_subroutine();
+   if(index < 0)
+      end_subroutine();
 
-   if((cur_items[index].attributes & 0x10) == 0x10) {
-      // directory
-      // free((uint32_t)cur_items, no_items*32);
+   fs_dir_entry_t *clicked_entry = &dir_content->entries[index];
+
+   if(clicked_entry->type == FS_TYPE_DIR) {
       offset = 0;
-      if(cur_items[index].firstClusterNo == 0) {
-         read_root();
-         scroll_to(0);
-      } else {
-         // update path
-         if(cur_items[index].filename[0] == '.') {
-            if(cur_items[index].filename[1] == '.') {
-               int lastslashpos = -1;
-               for(int i = 0; i < strlen(cur_path); i++) {
-                  if(cur_path[i] == '/')
-                     lastslashpos = i;
-               }
-               if(lastslashpos)
-                  cur_path[lastslashpos] = '\0';
-            } else {
-               // do nothing
+      scroll_to(0);
+
+      // update path
+      if(clicked_entry->filename[0] == '.') {
+         if(clicked_entry->filename[1] == '.') {
+            int lastslashpos = -1;
+            for(int i = 0; cur_path[i] != '\0'; i++) {
+               if(cur_path[i] == '/')
+                  lastslashpos = i;
+            }
+
+            if(lastslashpos > 0) {
+               cur_path[lastslashpos] = '\0';
+            } else if(lastslashpos == 0) {
+               cur_path[1] = '\0';
             }
          } else {
-            int pi = strlen(cur_path);
-            if(pi == 1) pi = 0;
-            cur_path[pi] = '/';
-            int x;
-            for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
-               cur_path[pi+x+1] = tolower(cur_items[index].filename[x]);
-            cur_path[pi+x+1] = '\0';
+            // do nothing
          }
-
-         // read dir
-         no_items = fat_get_dir_size(cur_items[index].firstClusterNo);
-         cur_items = (fat_dir_t*)fat_read_dir(cur_items[index].firstClusterNo);
-
-         scroll_to(0);
+      } else {
+         int pi = strlen(cur_path);
+         if(pi == 1) pi = 0;
+         cur_path[pi] = '/';
+         cur_path[pi+1] = '\0';
+         strcat(cur_path, clicked_entry->filename);
       }
 
-      // cur_items[index].firstClusterNo;
+      // read dir
+      dir_content = read_dir(cur_path);
+      display_items();
+      redraw();
+
    } else {
       // file
-
-      int x;
-
       char extension[4];
-      for(x = 0; x < 3; x++)
-         extension[x] = cur_items[index].filename[x+8];
-      extension[3] = '\0';
+      strsplit(NULL, extension, clicked_entry->filename, '.');
 
-      char fullpath[200];
+      char fullpath[255];
       int pi = strlen(cur_path);
-      for(x = 0; x < pi; x++)
+      for(int x = 0; x < pi; x++)
          fullpath[x] = cur_path[x];
       fullpath[pi] = '/';
-      for(x = 0; x < 8 && cur_items[index].filename[x] != ' '; x++)
-         fullpath[pi+x+1] = cur_items[index].filename[x];
-      pi+=x+1;
-      fullpath[pi] = '.';
-      for(x = 0; x < 4; x++)
-         fullpath[pi+x+1] = extension[x];
+      fullpath[pi+1] = '\0';
+      strcat(fullpath, clicked_entry->filename);
 
+      bool launched = false;
       // handle supported extensions
       // bmp, elf, txt
-      if(strequ(extension, "BMP")) {
-         
-         char **args = (char**)malloc(1);
-         args[0] = fullpath;
+      if(strequ(extension, "bmp")) {
+         char **args = (char**)malloc(1*sizeof(char*));
+         args[0] = malloc(strlen(fullpath)+1);
+         strcpy(args[0], fullpath);
 
          // note: this also ends the subroutine
+         launched = true;
          launch_task("/sys/bmpview.elf", 1, args);
       }
 
-      if(strequ(extension, "ELF")) {
+      if(strequ(extension, "elf")) {
          // note: this also ends the subroutine
+         launched = true;
          launch_task(fullpath, 0, NULL);
       }
 
-      if(strequ(extension, "TXT")) {
-         
-         char **args = (char**)malloc(1);
-         args[0] = fullpath;
+      if(strequ(extension, "txt")) {
+         char **args = (char**)malloc(1*sizeof(char*));
+         args[0] = malloc(strlen(fullpath)+1);
+         strcpy(args[0], fullpath);
 
          // note: this also ends the subroutine
+         launched = true;
          launch_task("/sys/text.elf", 1, args);
       }
 
-      if(strequ(extension, "FON")) {
+      if(strequ(extension, "fon")) {
          set_sys_font(fullpath);
       }
 
+      if(launched) {
+         debug_printf("This should never happen!"); // launching task should end the subroutine
+         while(true) {}
+      }
 
-      // cur_items[index].firstClusterNo;
    }
-
-   display_items();
-   redraw();
 
    end_subroutine();
 
@@ -348,7 +312,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 void scroll(int deltaY, int offsetY) {
    (void)deltaY;
    offset = (offsetY + 24) / 25;
-   if(offset >= no_items) offset = no_items - 1;
+   if(offset >= shown_items) offset = shown_items - 1;
    display_items();
    redraw();
    end_subroutine();
@@ -369,9 +333,9 @@ void add_file_callback(char *filename) {
          close(fd);
       }
       // refresh
-      no_items = fat_get_dir_size(cur_items[0].firstClusterNo);
-      cur_items = (fat_dir_t*)fat_read_dir(cur_items[0].firstClusterNo);
+      dir_content = read_dir(cur_path);
       display_items();
+      redraw();
    }
    end_subroutine();
 }
@@ -396,9 +360,9 @@ void add_folder_callback(char *name) {
          display_popup("Error", buffer, false, NULL);
       }
       // refresh
-      no_items = fat_get_dir_size(cur_items[0].firstClusterNo);
-      cur_items = (fat_dir_t*)fat_read_dir(cur_items[0].firstClusterNo);
+      dir_content = read_dir(cur_path);
       display_items();
+      redraw();
    }
    end_subroutine();
 }
@@ -417,8 +381,7 @@ void _start(int argc, char **args) {
    // init
    set_window_title("File Manager");
 
-   cur_items = NULL;
-   no_items = 0;
+   dir_content = read_dir("/");
    offset = 0;
    file_icon = (uint8_t*)fat_read_file("/bmp/file20.bmp");
    if(file_icon == NULL) {
@@ -459,7 +422,6 @@ void _start(int argc, char **args) {
    wo_newfolder->width = 62;
    wo_newfolder->click_func = &add_folder;
 
-   read_root();
    display_items();
    redraw();
 

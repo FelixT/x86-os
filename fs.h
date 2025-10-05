@@ -22,6 +22,19 @@ typedef struct {
     fs_file_data_t *data;
 } fs_file_t;
 
+typedef struct {
+    char filename[FS_MAX_FILENAME];
+    int type;
+    uint32_t file_size;
+    bool hidden;
+} fs_dir_entry_t; // simplified struct for listing directory contents
+
+typedef struct {
+    fs_dir_entry_t *entries;
+    int size;
+} fs_dir_content_t;
+
+
 #define FS_TYPE_FILE 0
 #define FS_TYPE_DIR 1
 #define FS_TYPE_TERM 2
@@ -32,5 +45,7 @@ bool fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int tas
 bool fs_mkdir(char *path);
 fs_file_t *fs_new(char *path);
 bool fs_rename(char *oldpath, char *newname);
+fs_dir_content_t *fs_read_dir(char *path);
+void fs_dir_content_free(fs_dir_content_t *content);
 
 #endif

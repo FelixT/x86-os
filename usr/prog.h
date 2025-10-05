@@ -134,7 +134,7 @@ static inline int get_height() {
    return output;
 }
 
-static inline uint32_t *malloc(uint32_t size) {
+static inline void *malloc(uint32_t size) {
    uint32_t addr;
 
    asm volatile (
@@ -144,7 +144,7 @@ static inline uint32_t *malloc(uint32_t size) {
       "b" (size)
    );
 
-   return (uint32_t*)addr;
+   return (void*)addr;
 }
 
 static inline void free(uint32_t addr, uint32_t size) {
@@ -163,18 +163,6 @@ static inline uint32_t *fat_get_bpb() {
       "int $0x30;movl %%ebx, %0;"
       : "=r" (addr)
       : "a" (17)
-   );
-
-   return (uint32_t*)addr;
-}
-
-static inline uint32_t *fat_read_root() {
-   uint32_t addr;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
-      : "a" (18)
    );
 
    return (uint32_t*)addr;
@@ -274,17 +262,36 @@ static inline int fat_get_dir_size(int firstClusterNo) {
    return output;
 }
 
-static inline uint32_t *fat_read_dir(int firstClusterNo) {
+// from fs.h
+#define FS_MAX_FILENAME 255
+
+#define FS_TYPE_FILE 0
+#define FS_TYPE_DIR 1
+#define FS_TYPE_TERM 2
+
+typedef struct {
+    char filename[FS_MAX_FILENAME];
+    int type;
+    uint32_t file_size;
+    bool hidden;
+} fs_dir_entry_t;
+
+typedef struct {
+    fs_dir_entry_t *entries;
+    int size;
+} fs_dir_content_t;
+
+static inline fs_dir_content_t *read_dir(char *path) {
    uint32_t addr;
 
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (addr)
       : "a" (25),
-      "b" ((uint32_t)firstClusterNo)
+      "b" ((uint32_t)path)
    );
 
-   return (uint32_t*)addr;
+   return (fs_dir_content_t*)addr;
 }
 
 static inline void debug_write_str(char *str) {
@@ -464,9 +471,10 @@ static inline int new_file(char *path) {
    return fd;
 }
 
-static inline void close(int fd) {
+static inline int close(int fd) {
    (void)fd;
    // do nothing yet
+   return 0;
 }
 
 static inline bool rename(char *path, char *newname) {

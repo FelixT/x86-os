@@ -268,15 +268,6 @@ void api_get_get_dir_size(registers_t *regs) {
    regs->ebx = (uint32_t)fat_get_dir_size(regs->ebx);
 }
 
-void api_read_dir(registers_t *regs) {
-   // IN: ebx = directory firstClusterNo
-   // OUT: ebx
-   fat_dir_t *items = malloc(32 * fat_get_dir_size(regs->ebx));
-   fat_read_dir((uint16_t)regs->ebx, items);
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)items, (uint32_t)items, 1, 1);
-   regs->ebx = (uint32_t)items;
-}
-
 void api_draw_bmp(registers_t *regs) {
    // IN: ebx = bmp address
    // IN: ecx = x
@@ -363,7 +354,6 @@ void api_launch_task(registers_t *regs) {
 
    task_state_t *parenttask = &gettasks()[get_current_task()];
 
-   debug_printf("In subroutine %s\n", parenttask->routine_name);
    task_subroutine_end(regs);
 
    tasks_launch_elf(regs, path, argc, copied_args);
@@ -610,6 +600,21 @@ void api_read(registers_t *regs) {
       task->paused = true;
    }
 
+}
+
+void api_read_dir(registers_t *regs) {
+   // IN: ebx - char *path
+   // OUT: ebx - fs_dir_content_t *
+   fs_dir_content_t *content = fs_read_dir((char*)regs->ebx);
+   if(!content) {
+      regs->ebx = 0;
+      return;
+   }
+   page_dir_entry_t *page_dir = gettasks()[get_current_task()].page_dir;
+   map_size(page_dir, (uint32_t)content, (uint32_t)content, sizeof(fs_dir_content_t), 1, 1);
+   uint32_t entries_size = sizeof(fs_dir_entry_t)*content->size;
+   map_size(page_dir, (uint32_t)content->entries, (uint32_t)content->entries, entries_size, 1, 1);
+   regs->ebx = (uint32_t)content;
 }
 
 void api_write(registers_t *regs) {

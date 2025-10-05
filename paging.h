@@ -40,6 +40,7 @@ typedef struct page_table_entry_t {
 
 void unmap(page_dir_entry_t *dir, uint32_t addr);
 void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw);
+void map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw);
 void page_init();
 uint32_t page_getphysical(page_dir_entry_t *dir, uint32_t vaddr);
 page_dir_entry_t *page_get_kernel_pagedir();
@@ -47,12 +48,15 @@ void swap_pagedir(page_dir_entry_t *dir);
 page_dir_entry_t *new_page();
 page_dir_entry_t *page_get_current();
 
+#define PAGE_SIZE 0x1000
+#define PAGE_MASK (PAGE_SIZE - 1)
+
 static inline uint32_t page_align_up(uint32_t addr) {
-   return (addr + 0xFFF) & ~0xFFF;
+   return (addr + PAGE_MASK) & ~PAGE_MASK;
 }
 
 static inline uint32_t page_align_down(uint32_t addr) {
-   return addr & ~(0x1000 - 1);
+   return addr & ~PAGE_MASK;
 }
 
 #endif

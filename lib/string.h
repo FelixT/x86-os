@@ -26,6 +26,7 @@ char *strchr(const char *str, int c);
 char *strcat(char *dest, const char *src);
 uint32_t hextouint(char *str);
 int strtoint(char *str);
-void memset(void *dest, uint8_t ch, int count);
+void *memset(void *dest, uint8_t ch, int count);
+void tolower(char *c);
 
 #endif

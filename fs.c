@@ -43,6 +43,89 @@ fs_file_t *fs_open(char *path) {
    return file;
 }
 
+fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
+   fs_dir_entry_t entry;
+   char fileName[9];
+   char extension[4];
+   strcpy_fixed((char*)fileName, (char*)item->filename, 8);
+   strcpy_fixed((char*)extension, (char*)item->filename+8, 3);
+   strsplit((char*)fileName, NULL, (char*)fileName, ' '); // null terminate at first space
+   strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
+   tolower((char*)fileName);
+   tolower((char*)extension);
+   if(extension[0] != '\0') {
+      sprintf(entry.filename, "%s.%s", fileName, extension);
+   } else {
+      sprintf(entry.filename, "%s", fileName);
+   }
+   entry.type = (item->attributes & 0x10) ? FS_TYPE_DIR : FS_TYPE_FILE;
+   entry.file_size = item->fileSize;
+   entry.hidden = (item->attributes & 0x02) != 0;
+
+   return entry;
+}
+
+fs_dir_content_t *fs_read_dir(char *path) {
+   fs_dir_content_t *content = (fs_dir_content_t*)malloc(sizeof(fs_dir_content_t));
+   content->entries = NULL;
+   content->size = 0;
+
+   if(strequ(path, "/") || strequ(path, "")) {
+      // root
+      fat_dir_t *items = fat_read_root();
+      fat_bpb_t fat_bpb = fat_get_bpb();
+      content->size = fat_bpb.noRootEntries;
+      for(int i = 0; i < fat_bpb.noRootEntries; i++) {
+         if(items[i].filename[0] == 0) {
+            content->size = i;
+            break;
+         }
+      }
+      content->entries = (fs_dir_entry_t*)malloc(sizeof(fs_dir_entry_t) * content->size);
+      for(int i = 0; i < content->size; i++) {
+         fs_dir_entry_t *entry = &content->entries[i];
+         *entry = fs_get_dir_entry(&items[i]);
+      }
+      free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb.noRootEntries);
+      return content;
+   } else {
+      fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
+      if(entry == NULL)
+         return content;
+      if(entry->attributes & 0x10) {
+         int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
+         fat_dir_t *items = malloc(size*sizeof(fat_dir_t));
+         fat_read_dir(entry->firstClusterNo, items);
+         content->size = size;
+         for(int i = 0; i < size; i++) {
+            if(items[i].filename[0] == 0) {
+               content->size = i;
+               break;
+            }
+         }
+         content->entries = (fs_dir_entry_t*)malloc(sizeof(fs_dir_entry_t) * content->size);
+         for(int i = 0; i < content->size; i++)
+         {
+            fs_dir_entry_t *entry = &content->entries[i];
+            *entry = fs_get_dir_entry(&items[i]);
+         }
+         free((uint32_t)items, size*sizeof(fat_dir_t));
+      } else {
+         return content;
+      }
+      free((uint32_t)entry, sizeof(fat_dir_t));
+      return content;
+   }
+}
+
+void fs_dir_content_free(fs_dir_content_t *content) {
+   if(content) {
+      if(content->entries)
+         free((uint32_t)content->entries, sizeof(fs_dir_entry_t) * content->size);
+      free((uint32_t)content, sizeof(fs_dir_content_t));
+   }
+}
+
 bool fs_mkdir(char *path) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
       debug_printf("FS: invalid dir path\n");

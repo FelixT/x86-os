@@ -207,7 +207,7 @@ void software_handler(registers_t *regs) {
          api_fat_get_bpb(regs);
          break;
       case 18:
-         api_fat_read_root(regs);
+         //api_fat_read_root(regs);
          break;
       case 19:
          api_fat_parse_path(regs);

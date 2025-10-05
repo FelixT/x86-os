@@ -6,16 +6,6 @@
 
 char path[256] = "/";
 
-void printf(char *format, ...) {
-   char *buffer = (char*)malloc(512);
-   va_list args;
-   va_start(args, format);
-   vsnprintf(buffer, 512, format, args);
-   va_end(args);
-   write_str(buffer);
-   free((uint32_t)buffer, 512);
-}
-
 void get_abs_path(char *out, char *inpath) {
    if(inpath[0] == '/') {
       // absolute path
@@ -94,86 +84,6 @@ void argtofullpath(char *buf, char *arg) {
    }
 }
 
-void tolower(char *c) {
-   for(int i = 0; i < strlen(c); i++) {
-      if(c[i] >= 'A' && c[i] <= 'Z')
-         c[i] += ('a'-'A');
-   }
-}
-
-void printdir(fat_dir_t *items, int size) {
-   for(int i = 0; i < size; i++) {
-      // print dir entry
-      if(items[i].filename[0] == 0) continue;
-      if(items[i].firstClusterNo < 2) continue;
-      if((items[i].attributes & 0x02) == 0x02) continue; // hidden
-
-      char fileName[9];
-      char extension[4];
-      strcpy_fixed((char*)fileName, (char*)items[i].filename, 8);
-      strcpy_fixed((char*)extension, (char*)items[i].filename+8, 3);
-      tolower((char*)fileName);
-      tolower((char*)extension);
-      strsplit((char*)fileName, NULL, (char*)fileName, ' '); // null terminate at first space
-      strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
-      printf(" %s%s%s ", fileName, (extension[0] != '\0') ? "." : "", extension);
-      if((items[i].attributes & 0x10) == 0x10) // directory
-         printf("DIR\n");
-      else {
-         // file
-         uint32_t size = items[i].fileSize;
-         char type[4];
-         strcpy(type, "b");
-         if(size > 1000) {
-            strcpy(type, "kb");
-            size /= 1000;
-            if(size > 1000) {
-               strcpy(type, "mb");
-               size /= 1000;
-            }
-         }
-         printf("<%u %s>\n", size, type);
-         
-      }
-   }
-}
-
-void term_cmd_fat(char *arg) {
-   fat_dir_t *items = NULL;
-   int size = 0;
-   if(strequ(arg, "/") || strequ(arg, "")) {
-      // root
-      printf("Root directory\n");
-      items = (fat_dir_t*)fat_read_root();
-      fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
-      size = fat_bpb->noRootEntries;
-      free((uint32_t)fat_bpb, sizeof(fat_bpb_t));
-      printdir(items, size);
-      free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
-   } else {
-
-      fat_dir_t *entry = (fat_dir_t*)fat_parse_path(arg, true);
-      if(entry == NULL) {
-         printf("Path not found\n", 0);
-         free((uint32_t)entry, sizeof(fat_dir_t));
-         return;
-      }
-      if(entry->attributes & 0x10) {
-         printf("Directory %s found in cluster %u\n", arg, entry->firstClusterNo);
-         int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
-         fat_dir_t *items = (fat_dir_t*)fat_read_dir(entry->firstClusterNo);
-         printdir(items, size);
-         fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
-         free((uint32_t)items, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-         free((uint32_t)fat_bpb, sizeof(fat_bpb_t));
-      } else {
-         printf("File %s found in cluster %u\n", arg, entry->firstClusterNo);
-      }
-      free((uint32_t)entry, sizeof(fat_dir_t));
-
-   }
-}
-
 void term_cmd_font(char *arg) {
    set_sys_font(arg);
 }
@@ -189,16 +99,6 @@ void term_cmd_fread(char *arg) {
    get_abs_path(path, arg);
    uint8_t *file = (uint8_t*)fat_read_file(path);
    printf("File loaded into 0x%h\n", (uint32_t)file);
-}
-
-void term_cmd_fatdir(char *arg) {
-   int cluster = stoi(arg);
-   int size = fat_get_dir_size((uint16_t) cluster);
-
-   fat_dir_t *items = (fat_dir_t*)fat_read_dir((uint16_t)cluster);
-   printdir(items, size);
-
-   //free((uint32_t)items, 32 * size);
 }
 
 void term_cmd_dmpmem(char *arg) {
@@ -237,9 +137,41 @@ void term_cmd_dmpmem(char *arg) {
 }
 
 void term_cmd_launch(char *arg) {
+   char patharg[256];
    char fullpath[256];
-   argtofullpath(fullpath, arg);
-   launch_task(fullpath, 0, NULL);
+   char args[256];
+      printf("Launching called with arg %s\n", arg);
+   if(strsplit(patharg, args, arg, ' ')) {
+      printf("Launching %s with args %s\n", patharg, args);
+      // has args
+      char **arglist = (char**)malloc(sizeof(char*) * 10);
+      int argc = 0;
+      char *p = args;
+      char temp[256];
+      // set path as first arg
+      argtofullpath(fullpath, patharg);
+      arglist[argc] = (char*)malloc(strlen(fullpath) + 1);
+      strcpy(arglist[argc], fullpath);
+      argc++;
+      // set other args
+      if(strchr(p, ' ')) {
+         while(strsplit(temp, p, p, ' ')) {
+            arglist[argc] = (char*)malloc(strlen(temp) + 1);
+            strcpy(arglist[argc], temp);
+            argc++;
+            if(argc >= 10) break;
+         }
+      } else {
+         arglist[argc] = (char*)malloc(strlen(p) + 1);
+         strcpy(arglist[argc], p);
+         argc++;
+      }
+      printf("Argc %i\n", argc);
+      launch_task(fullpath, argc, arglist);
+   } else {
+      argtofullpath(fullpath, arg);
+      launch_task(fullpath, 0, NULL);
+   }
 }
 
 void term_cmd_text(char *arg) {
@@ -266,32 +198,36 @@ void term_cmd_ls(char *arg) {
    if(strequ(p, ""))
       p = path;
 
-   fat_dir_t *items = NULL;
-   int size = 0;
-   if(strequ(p, "/") || strequ(p, "")) {
-      // root
-      items = (fat_dir_t*)fat_read_root();
-      fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
-      size = fat_bpb->noRootEntries;
-      free((uint32_t)fat_bpb, sizeof(fat_bpb_t));
-      printdir(items, size);
-      free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
-   } else {
-
-      fat_dir_t *entry = (fat_dir_t*)fat_parse_path(p, true);
-      if(entry == NULL)
-         return;
-      if(entry->attributes & 0x10) {
-         int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
-         fat_dir_t *items = (fat_dir_t*)fat_read_dir(entry->firstClusterNo);
-         printdir(items, size);
-         fat_bpb_t *fat_bpb = (fat_bpb_t*)fat_get_bpb();
-         free((uint32_t)items, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-         free((uint32_t)fat_bpb, sizeof(fat_bpb_t));
+   fs_dir_content_t *content = read_dir(p);
+   
+   for(int i = 0; i < content->size; i++) {
+      fs_dir_entry_t *entry = &content->entries[i];
+      if(entry->hidden)
+         continue;
+      char filename_padded[16];
+      memset(filename_padded, ' ', 15);
+      memcpy(filename_padded, entry->filename, strlen(entry->filename));
+      filename_padded[15] = '\0';
+      printf(" %s", filename_padded);
+      if(entry->type == FS_TYPE_DIR) {
+         printf(" DIR");
+      } else {
+         uint32_t size = entry->file_size;
+         char type[4];
+         strcpy(type, "b");
+         if(size > 1000) {
+            strcpy(type, "kb");
+            size /= 1000;
+            if(size > 1000) {
+               strcpy(type, "mb");
+               size /= 1000;
+            }
+         }
+         printf(" %i %s", size, type);
       }
-      free((uint32_t)entry, sizeof(fat_dir_t));
-
+      printf("\n");
    }
+
 }
 
 void term_cmd_cd(char *arg) {
@@ -432,8 +368,6 @@ void checkcmd(char *buffer) {
       term_cmd_help();
    else if(strequ(command, "CLEAR"))
       term_cmd_clear();
-   else if(strequ(command, "FAT"))
-      term_cmd_fat(arg);
    else if(strequ(command, "FREAD"))
       term_cmd_fread(arg);
    else if(strequ(command, "FILES"))
@@ -444,11 +378,7 @@ void checkcmd(char *buffer) {
       term_cmd_viewbmp(arg);
    else if(strequ(command, "DMPMEM"))
       term_cmd_dmpmem(arg);
-      else if(strequ(command, "LAUNCH"))
-      term_cmd_launch(arg);
    else if(strequ(command, "LAUNCH"))
-      term_cmd_launch(arg);
-      else if(strequ(command, "LAUNCH"))
       term_cmd_launch(arg);
    else if(strequ(command, "TEXT"))
       term_cmd_text(arg);
@@ -481,18 +411,18 @@ void checkcmd(char *buffer) {
 }
 
 void _start() {
-      set_window_title("User Terminal");
+   set_window_title("User Terminal");
 
-      char *wd = (char*)malloc(256);
-      getwd(wd);
-      strcpy(path, wd);
-      free((uint32_t)wd, 256);
+   char *wd = (char*)malloc(256);
+   getwd(wd);
+   strcpy(path, wd);
+   free((uint32_t)wd, 256);
 
-      printf("User Terminal at %s\n", path);
+   printf("User Terminal at %s\n", path);
 
-      override_term_checkcmd((uint32_t)(&checkcmd));
+   override_term_checkcmd((uint32_t)(&checkcmd));
 
-      while(true) {
-         yield();
-      }
+   while(true) {
+      yield();
+   }
 }
