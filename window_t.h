@@ -56,6 +56,7 @@ typedef struct gui_window_t {
    void (*mouserelease_func)();
    void (*checkcmd_func)(void *regs, void *window); // override terminal behaviour
    void (*read_func)(void *regs, char *buffer); // kernel override terminal behaviour
+   int read_task; // task to switch on read
    char *read_buffer; // buffer for read_func, used by terminal
 
    void *state;

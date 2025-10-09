@@ -144,7 +144,6 @@ void _start(int argc, char **args) {
 
    int height = get_height();
    content_height = height;
-   set_content_height(content_height);
    int width = get_width();
 
    int x = 5;

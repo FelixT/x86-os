@@ -296,6 +296,12 @@ void vsnprintf(char *buffer, size_t size, char *format, va_list args) {
                x[0] = (char)va_arg(args, int);
                strcat(buffer, x);
                break;
+            case 'p':
+               uint32_t p = va_arg(args, uint32_t);
+               strcat(buffer, "0x");
+               uinttohexstr(p, hstr);
+               strcat(buffer, hstr);
+               break;
             default:
                x[0] = '%';
                strcat(buffer, x);

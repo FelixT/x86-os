@@ -88,13 +88,23 @@ void window_term_return(void *regs, void *window) {
    window_newline(selected);
 
    if(selected->read_func != NULL) {
-      gui_interrupt_switchtask(regs);
-      char *buffer = (char*)malloc(selected->text_index+1);
-      strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
-      buffer[selected->text_index] = '\0';
-      selected->read_func(regs, buffer);
-   }
-   if(selected->checkcmd_func != &window_term_checkcmd) {
+      // read callback i.e. reading from stdin
+      if(selected->read_task > 0) {
+         task_state_t *readtask = &gettasks()[selected->read_task];
+         readtask->paused = false; // force switch
+         if(!switch_to_task(selected->read_task, regs)) {
+            debug_printf("read: couldn't switch to task %i\n", selected->read_task);
+         } else {
+            char *buffer = (char*)malloc(selected->text_index+1);
+            strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
+            buffer[selected->text_index] = '\0';
+            selected->read_func(regs, buffer);
+         }
+      } else {
+         debug_printf("read: No read task\n");
+      }
+   } else if(selected->checkcmd_func != &window_term_checkcmd) {
+      // "checkcmd" override
       if(selected->checkcmd_func != NULL) {
          gui_interrupt_switchtask(regs);
          char *buffer = (char*)malloc(selected->text_index+1);

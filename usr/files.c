@@ -180,7 +180,7 @@ void click(int x, int y) {
    }
 
    // see where we clicked
-   int position = (y-5)/25;
+   int position = (y-5)/25 + offset;
 
    if(dir_content == NULL) end_subroutine();
 
@@ -258,13 +258,13 @@ void click(int x, int y) {
 
          // note: this also ends the subroutine
          launched = true;
-         launch_task("/sys/bmpview.elf", 1, args);
+         launch_task("/sys/bmpview.elf", 1, args, false);
       }
 
       if(strequ(extension, "elf")) {
          // note: this also ends the subroutine
          launched = true;
-         launch_task(fullpath, 0, NULL);
+         launch_task(fullpath, 0, NULL, false);
       }
 
       if(strequ(extension, "txt") || strequ(extension, "c")) {
@@ -274,7 +274,7 @@ void click(int x, int y) {
 
          // note: this also ends the subroutine
          launched = true;
-         launch_task("/sys/text.elf", 1, args);
+         launch_task("/sys/text.elf", 1, args, false);
       }
 
       if(strequ(extension, "fon")) {

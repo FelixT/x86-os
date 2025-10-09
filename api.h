@@ -4,11 +4,11 @@
 #include "registers_t.h"
 
 void api_write_string(registers_t *regs);
-void api_write_number(registers_t *regs);
-void api_write_uint(registers_t *regs);
-void api_write_newline();
+void api_write_number(registers_t *regs); // deprecated
+void api_write_uint(registers_t *regs); // deprecated
+void api_write_newline(); // deprecated
 void api_write_string_at(registers_t *regs);
-void api_write_number_at(registers_t *regs);
+void api_write_number_at(registers_t *regs); // deprecated
 void api_yield(registers_t *regs);
 void api_print_program_stack(registers_t *regs);
 void api_print_stack();
@@ -29,12 +29,12 @@ void api_override_checkcmd(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_free(registers_t *regs);
-void api_fat_read_root(registers_t *regs);
-void api_fat_get_bpb(registers_t *regs);
-void api_fat_parse_path(registers_t *regs);
-void api_fat_read_file(registers_t *regs);
-void api_fat_write_file(registers_t *regs);
-void api_get_get_dir_size(registers_t *regs);
+void api_fat_read_root(registers_t *regs); // deprecated
+void api_fat_get_bpb(registers_t *regs); // deprecated
+void api_fat_parse_path(registers_t *regs); // deprecated
+void api_fat_read_file(registers_t *regs); // deprecated
+void api_fat_write_file(registers_t *regs); // deprecated
+void api_get_get_dir_size(registers_t *regs); // deprecated
 void api_read_dir(registers_t *regs);
 void api_draw_bmp(registers_t *regs);
 void api_clear_window(registers_t *regs);

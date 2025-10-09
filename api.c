@@ -12,39 +12,59 @@
 #include "window_popup.h"
 #include "fs.h"
 
-gui_window_t *api_get_window() {
+inline gui_window_t *api_get_window() {
    return &gui_get_windows()[get_current_task_window()];
 }
 
+inline void api_write_to_task(char *out) {
+   task_write_to_window(get_current_task(), out);
+}
+
+void api_printf(char *format, ...) {
+   char *buffer = (char*)malloc(512);
+   va_list args;
+   va_start(args, format);
+   vsnprintf(buffer, 512, format, args);
+   va_end(args);
+   api_write_to_task(buffer);
+   free((uint32_t)buffer, 512);
+}
+
+// api funcs
+
 void api_write_string(registers_t *regs) {
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   gui_window_t *window = api_get_window();
+   task_state_t *task = get_current_task_state();
    // write ebx
-   if(gettasks()[get_current_task()].vmem_start == 0) // not elf
-      window_writestr((char*)(gettasks()[get_current_task()].prog_entry+regs->ebx), window->txtcolour, get_current_task_window());
+   char *out;
+   if(task->vmem_start == 0) // not elf
+      out = (char*)(task->prog_entry + regs->ebx);
    else // elf
-      window_writestr((char*)regs->ebx, window->txtcolour, get_current_task_window());
+      out = (char*)regs->ebx;
+
+   api_write_to_task(out);
 }
 
 void api_write_number(registers_t *regs) {
    // write ebx
-   window_writenum(regs->ebx, 0, get_current_task_window());
+   api_printf("%i", regs->ebx);
 }
 
 void api_write_uint(registers_t *regs) {
    // write ebx
-   window_writeuint(regs->ebx, 0, get_current_task_window());
+   api_printf("%u", regs->ebx);
 }
 
 void api_write_newline() {
-   window_drawchar('\n', 0, get_current_task_window());
+   api_printf("\n");
 }
 
 void api_write_string_at(registers_t *regs) {
-      // IN: ebx = string address
-      // IN: ecx = x
-      // IN: edx = y
-      gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-      window_writestrat((char*)regs->ebx, window->txtcolour, regs->ecx, regs->edx, get_current_task_window());
+   // IN: ebx = string address
+   // IN: ecx = x
+   // IN: edx = y
+   gui_window_t *window = api_get_window();
+   window_writestrat((char*)regs->ebx, window->txtcolour, regs->ecx, regs->edx, get_current_task_window());
 }
 
 void api_write_number_at(registers_t *regs) {
@@ -59,11 +79,10 @@ void api_yield(registers_t *regs) {
    //debug_printf("Switched to task %u\n", get_current_task());
 }
 
+// potentially broken
 void api_print_program_stack(registers_t *regs) {
-   for(int i = 0; i < 64; i++) {
-      gui_writenum(((int*)regs->esp)[i], get_current_task_window());
-      gui_writestr(" ", 0);
-   }
+   for(int i = 0; i < 64; i++)
+      api_printf("%i ", ((int*)regs->esp)[i]);
 }
 
 void api_print_stack() {
@@ -71,19 +90,17 @@ void api_print_stack() {
    int esp;
    asm("movl %%esp, %0" : "=r"(esp));
 
-   for(int i = 0; i < 64; i++) {
-      gui_writenum(((int*)esp)[i], 0);
-      gui_writestr(" ", 0);
-   }
+   for(int i = 0; i < 64; i++)
+      api_printf("%i ", ((int*)esp)[i]);
 }
 
 void api_return_framebuffer(registers_t *regs) {
    // get framebuffer in ebx, width in ecx, height in edx
    uint32_t framebuffer = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
-   uint32_t size = gui_get_windows()[get_current_task_window()].framebuffer_size;
+   uint32_t size = api_get_window()->framebuffer_size;
    // map to task
    for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size+0xFFF)/0x1000; i++) {
-      map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
+      map(get_current_task_state()->page_dir, i*0x1000, i*0x1000, 1, 1);
    }
    regs->ebx = framebuffer;
    regs->ecx = api_get_window()->surface.width;
@@ -98,12 +115,12 @@ void api_return_window_width(registers_t *regs) {
 
 void api_return_window_height(registers_t *regs) {
    // get window framebuffer height in ebx
-   regs->ebx = gui_get_windows()[get_current_task_window()].height - TITLEBAR_HEIGHT;
+   regs->ebx = api_get_window()->height - TITLEBAR_HEIGHT;
 }
 
 void api_redraw_window() {
    // draw
-   gui_get_windows()[get_current_task_window()].needs_redraw = true;
+   api_get_window()->needs_redraw = true;
    gui_draw_window(get_current_task_window());
 }
 
@@ -112,14 +129,12 @@ void api_redraw_pixel(registers_t *regs) {
    // IN: ecx = y
 
    // x, y
-   window_draw_content_region(&(gui_get_windows()[get_current_task_window()]), regs->ebx, regs->ecx, 1, 1);
+   window_draw_content_region(api_get_window(), regs->ebx, regs->ecx, 1, 1);
 }
 
 void api_end_task(registers_t *regs) {
    // return with status ebx
-   window_writestr("Task ended with status ", 0, get_current_task_window());
-   window_writenum(regs->ebx, 0, get_current_task_window());
-   window_drawchar('\n', 0, get_current_task_window());
+   api_printf("Ending with status %i\n", regs->ebx);
 
    end_task(get_current_task(), regs);
 }
@@ -127,57 +142,50 @@ void api_end_task(registers_t *regs) {
 void api_override_uparrow(registers_t *regs) {
    // override uparrow window function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].uparrow_func = (void *)(addr);
+   api_get_window()->uparrow_func = (void *)(addr);
 }
 
 void api_override_checkcmd(registers_t *regs) {
    // override terminal checkcmd function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].checkcmd_func = (void *)(addr);
+  api_get_window()->checkcmd_func = (void *)(addr);
 }
 
 void api_override_downarrow(registers_t *regs) {
    // override downarrow window function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].downarrow_func = (void *)(addr);
+   api_get_window()->downarrow_func = (void *)(addr);
 }
 
 void api_override_mouseclick(registers_t *regs) {
    // override mouse left click function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].click_func = (void *)(addr);
+   api_get_window()->click_func = (void *)(addr);
 }
 
 void api_override_draw(registers_t *regs) {
    // override draw function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].draw_func = (void *)(addr);
+   api_get_window()->draw_func = (void *)(addr);
 }
 
 void api_override_resize(registers_t *regs) {
    // override resize function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].resize_func = (void *)(addr);
+   api_get_window()->resize_func = (void *)(addr);
 }
 
 void api_override_drag(registers_t *regs) {
    // override drag function with ebx
    uint32_t addr = regs->ebx;
-
-   gui_get_windows()[get_current_task_window()].drag_func = (void *)(addr);
+   api_get_window()->drag_func = (void *)(addr);
 }
 
 void api_override_mouserelease(registers_t *regs) {
    // override mouserelease function with ebx
    uint32_t addr = regs->ebx;
 
-   gui_get_windows()[get_current_task_window()].mouserelease_func = (void *)(addr);
+   api_get_window()->mouserelease_func = (void *)(addr);
 }
 
 void api_end_subroutine(registers_t *regs) {
@@ -189,7 +197,7 @@ void api_malloc(registers_t *regs) {
    // OUT: ebx = addr
    uint32_t *mem = malloc(regs->ebx);
 
-   task_state_t *task = &gettasks()[get_current_task()];
+   task_state_t *task = get_current_task_state();
    //task->allocated_pages[task->no_allocated] = mem;
    //task->no_allocated++;*/
 
@@ -332,10 +340,12 @@ void api_launch_task(registers_t *regs) {
    // IN: ebx = path
    // IN: ecx = argc
    // IN: edx = args
+   // IN: esi = copy environment of current task (use same wd & file descriptors)
 
    char *path = (char*)regs->ebx;
    int argc = (int)regs->ecx;
-   char **args = (char**)regs->edx;  
+   char **args = (char**)regs->edx;
+   bool copy = (bool)regs->esi;  
    
    // copy args
    char **copied_args = NULL;
@@ -356,9 +366,22 @@ void api_launch_task(registers_t *regs) {
 
    task_subroutine_end(regs);
 
+   int oldwindow = getSelectedWindowIndex();
+
    tasks_launch_elf(regs, path, argc, copied_args);
    task_state_t *task = &gettasks()[get_current_task()];
-   strcpy(task->working_dir, parenttask->working_dir); // inherit working dir
+
+   if(copy) {
+      // copy file descriptors and working dir from parent
+      for(int i = 0; i < parenttask->fd_count; i++) {
+         task->file_descriptors[i] = parenttask->file_descriptors[i];
+      }
+      task->fd_count = parenttask->fd_count;
+      strcpy(task->working_dir, parenttask->working_dir); // inherit working dir
+      window_close(NULL, getSelectedWindowIndex()); // may get issues from having task without window
+      setSelectedWindowIndex(oldwindow);
+      gui_redrawall();
+   }
 
    // map args to new task
    if(argc > 0 && args != NULL) {
@@ -547,12 +570,19 @@ void api_open(registers_t *regs) {
 }
 
 void api_read_stdin_callback(void *regs, char *buffer) {
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-
-   window->read_func = NULL;
-   strcpy(window->read_buffer, buffer);
-   gettasks()[get_current_task()].paused = false;
-   ((registers_t*)regs)->ebx = strlen(window->read_buffer)+1; // return length
+   task_state_t *task = get_current_task_state();
+   int w = task->file_descriptors[0]->window_index;
+   registers_t *r = (registers_t*)regs;
+   if(w > 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed) {
+      gui_window_t *window = getWindow(w);
+      gui_window_t *current = api_get_window();
+      strcpy(window->read_buffer, buffer);
+      task->paused = false;
+      r->ebx = strlen(buffer+1);
+   } else {
+      debug_printf("Couldn't find window\n");
+      r->ebx = -1;
+   }
 }
 
 void api_read_fd_callback(registers_t *regs, int task) {
@@ -586,10 +616,12 @@ void api_read(registers_t *regs) {
 
    if(fd == 0) {
       // read from stdin
-      gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+      // note: only one task can read from a windows stdin at a time as these get overwritten
+      gui_window_t *window = getWindow(task->file_descriptors[0]->window_index);
       window->read_func = &api_read_stdin_callback;
       window->read_buffer = buf;
-      gettasks()[get_current_task()].paused = true;
+      window->read_task = get_current_task();
+      task->paused = true;
       switch_task(regs); // yield
    } else if(fd > 0 && fd < 3) {
       // stdout/stderr - can only write to these

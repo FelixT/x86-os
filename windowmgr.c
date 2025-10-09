@@ -274,6 +274,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->drag_func = NULL;
    window->resize_func = NULL;
    window->mouserelease_func = NULL;
+   window->read_func = NULL;
 }
 
 int windowmgr_add() {

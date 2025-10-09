@@ -125,7 +125,7 @@ void end_task(int index, registers_t *regs) {
       debug_printf("Task was in syscall %i\n", tasks[index].syscall_no);
 
    if(tasks[index].window >= 0)
-      window_writestr("Task ended\n", 0, tasks[index].window);
+      task_write_to_window(index, "<Task ended>\n");
 
    // todo: kill associated events
 
@@ -137,6 +137,7 @@ void end_task(int index, registers_t *regs) {
       free(tasks[index].prog_start, tasks[index].prog_size);
    // TODO: free args
    // TODO: free page dir at some point
+   // TODO: free fds
 
    if(tasks[index].vmem_start != 0) {
       debug_printf("Unmapping 0x%h - 0x%h\n", tasks[index].vmem_start, tasks[index].vmem_end);
@@ -388,6 +389,18 @@ void task_subroutine_end(registers_t *regs) {
 
    if(tasks[current_task].paused) {
       switch_task(regs); // yield
+   }
+}
+
+void task_write_to_window(int task, char *out) {
+   task_state_t *t = &gettasks()[task];
+   // write to stdio
+   int w = t->file_descriptors[1]->window_index;
+   int curw = get_current_task_window();
+   if(w == curw || (w >= 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed)) {
+      window_writestr(out, getWindow(w)->txtcolour, w);
+   } else {
+      debug_printf("Tried to write '%s' to task %i window %i\n", out, task, w);
    }
 }
 

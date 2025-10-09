@@ -46,7 +46,7 @@ void term_cmd_clear() {
 }
 
 void term_cmd_files() {
-   launch_task("/sys/files.elf", 0, NULL);
+   launch_task("/sys/files.elf", 0, NULL, false);
 }
 
 uint32_t argtouint(char *str) {
@@ -91,7 +91,7 @@ void term_cmd_font(char *arg) {
 void term_cmd_viewbmp(char *arg) {
    char **args = (char**)malloc(sizeof(char*) * 1);
    args[0] = arg;
-   launch_task("/sys/bmpview.elf", 1, args);
+   launch_task("/sys/bmpview.elf", 1, args, false);
 }
 
 void term_cmd_fread(char *arg) {
@@ -140,11 +140,10 @@ void term_cmd_launch(char *arg) {
    char patharg[256];
    char fullpath[256];
    char args[256];
-      printf("Launching called with arg %s\n", arg);
    if(strsplit(patharg, args, arg, ' ')) {
       printf("Launching %s with args %s\n", patharg, args);
       // has args
-      char **arglist = (char**)malloc(sizeof(char*) * 10);
+      char **arglist = (char**)malloc(sizeof(char*) * 12);
       int argc = 0;
       char *p = args;
       char temp[256];
@@ -161,23 +160,28 @@ void term_cmd_launch(char *arg) {
             argc++;
             if(argc >= 10) break;
          }
+         if(p[0] == '\0' && temp[0] != '\0' && argc < 10) {
+            arglist[argc] = (char*)malloc(strlen(temp) + 1);
+            strcpy(arglist[argc], temp);
+            argc++;
+         }
       } else {
          arglist[argc] = (char*)malloc(strlen(p) + 1);
          strcpy(arglist[argc], p);
          argc++;
       }
-      printf("Argc %i\n", argc);
-      launch_task(fullpath, argc, arglist);
+      arglist[argc] = NULL;
+      launch_task(fullpath, argc, arglist, true);
    } else {
       argtofullpath(fullpath, arg);
-      launch_task(fullpath, 0, NULL);
+      launch_task(fullpath, 0, NULL, true);
    }
 }
 
 void term_cmd_text(char *arg) {
    char **args = (char**)malloc(sizeof(char*) * 1);
    args[0] = arg;
-   launch_task("/sys/text.elf", 1, args);
+   launch_task("/sys/text.elf", 1, args, false);
 }
 
 void term_cmd_rgbhex(char *arg) {
@@ -283,7 +287,7 @@ void term_cmd_cat(char *arg) {
    get_abs_path(path, arg);
    FILE *f = fopen(path, "r");
    if(!f) {
-      printf("File %s not found\n");
+      printf("File %s not found\n", path);
       return;
    }
    printf("Opened file '%s' with size %u\n", path, f->size);

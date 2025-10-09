@@ -353,13 +353,14 @@ static inline void queue_event(uint32_t callback, int delta) {
    );
 }
 
-static inline void launch_task(char *path, int argc, char **args) {
+static inline void launch_task(char *path, int argc, char **args, bool copy) {
    asm volatile (
       "int $0x30;"
       :: "a" (32),
       "b" ((uint32_t)path),
       "c" ((uint32_t)argc),
-      "d" ((uint32_t)args)
+      "d" ((uint32_t)args),
+      "S" ((uint32_t)copy) // inherit fds and wd from current task
    );
 }
 
