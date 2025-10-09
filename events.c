@@ -60,6 +60,11 @@ void event_fire(registers_t *regs, event_t *event) {
     args[1] = (uint32_t)event->msg;
 
     if(event->task >= 0) {
+        if(gettasks()[event->task].paused) {
+            debug_printf("Task %i is paused, skipping event\n", event->task);
+            free((uint32_t)args, sizeof(uint32_t) * 1);
+            return;
+        }
         if(switch_to_task(event->task, regs)) {
             task_call_subroutine(regs, "event", (uint32_t)(event->callback), args, 1);
         }

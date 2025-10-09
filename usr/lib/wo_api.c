@@ -3,13 +3,23 @@
 #include "../prog_wo.h"
 #include "../../lib/string.h"
 
-windowobj_t *create_button(windowobj_t *parent, int x, int y, char *text) {
+windowobj_t *create_wo(windowobj_t *parent, int type, int x, int y, int width, int height) {
    windowobj_t *wo;
    if(parent == NULL) {
-      wo = register_windowobj(WO_BUTTON, x, y, 50, 14);
+      wo = register_windowobj(type, x, y, width, height);
    } else {
-      wo = windowobj_add_child(parent, WO_BUTTON, x, y, 50, 14);
+      wo = windowobj_add_child(parent, type, x, y, width, height);
    }
+   return wo;
+}
+
+windowobj_t *create_canvas(windowobj_t *parent, int x, int y, int width, int height) {
+   windowobj_t *wo = create_wo(parent, WO_CANVAS, x, y, width, height);
+   return wo;
+}
+
+windowobj_t *create_button(windowobj_t *parent, int x, int y, char *text) {
+   windowobj_t *wo = create_wo(parent, WO_BUTTON, x, y, 50, 14);
    char *newtext = (char*)malloc(256);
    strcpy(newtext, text);
    wo->text = newtext;
@@ -17,12 +27,7 @@ windowobj_t *create_button(windowobj_t *parent, int x, int y, char *text) {
 }
 
 windowobj_t *create_text(windowobj_t *parent, int x, int y, char *text) {
-   windowobj_t *wo;
-   if(parent == NULL) {
-      wo = register_windowobj(WO_TEXT, x, y, 100, 14);
-   } else {
-      wo = windowobj_add_child(parent, WO_TEXT, x, y, 100, 14);
-   }
+   windowobj_t *wo = create_wo(parent, WO_TEXT, x, y, 100, 14);
    char *newtext = (char*)malloc(256);
    strcpy(newtext, text);
    wo->text = newtext;

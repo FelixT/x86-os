@@ -3,7 +3,7 @@ global font7
 font7:
 
 ; size
-db 85
+db 91
 ; width
 db 5
 ; height
@@ -30,6 +30,12 @@ db '>'
 db '<'
 db '('
 db ')'
+db '['
+db ']'
+db '{'
+db '}'
+db '#'
+db '"'
 db '_'
 db ','
 db '%'
@@ -238,6 +244,60 @@ font_lessthan:
    db 00100b
    db 11000b
 
+;[
+   db 11111b
+   db 10000b
+   db 10000b
+   db 10000b
+   db 10000b
+   db 10000b
+   db 11111b
+
+;]
+   db 11111b
+   db 00001b
+   db 00001b
+   db 00001b
+   db 00001b
+   db 00001b
+   db 11111b
+
+;{
+   db 00011b
+   db 00100b
+   db 00100b
+   db 11000b
+   db 00100b
+   db 00100b
+   db 00011b
+
+;}
+   db 11000b
+   db 00100b
+   db 00100b
+   db 00011b
+   db 00100b
+   db 00100b
+   db 11000b
+
+;#
+   db 01010b
+   db 11111b
+   db 01010b
+   db 01010b
+   db 11111b
+   db 01010b
+   db 00000b
+
+;"
+   db 01010b
+   db 01010b
+   db 00000b
+   db 00000b
+   db 00000b
+   db 00000b
+   db 00000b
+   
 global font_underscore
 font_underscore:
    db 00000b

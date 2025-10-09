@@ -288,6 +288,16 @@ void window_scroll_callback(void *wo, void *regs, int x, int y) {
    window_scroll_do_callback(regs, scrollbar->return_func, scrollPixels, scrolledY);
 }
 
+// periodically called while scrolling
+void window_scroll_event(void *regs, void *msg) {
+   if(getSelectedWindowIndex() != (int)msg) return;
+   if(!getSelectedWindow() || !getSelectedWindow()->scrollbar) return;
+   windowobj_t *scroller = getSelectedWindow()->scrollbar->children[0];
+   if(!scroller->clicked) return; // not being dragged
+   window_scroll_callback(scroller, regs, 0, 0);
+   events_add(20, &window_scroll_event, msg, -1);
+}
+
 void window_scroll_up_callback(void *wo, void *regs) {
    (void)regs;
    // scroll up by 10 pixels
@@ -374,6 +384,12 @@ void window_scroll_to(int y) {
    window_scroll_do_callback(NULL, window->scrollbar->return_func, deltaY, window->scrolledY);
 }
 
+void window_scroll_start(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
+   events_add(20, &window_scroll_event, (void*)getSelectedWindowIndex(), -1);
+}
+
 windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int deltaY, int offsetY)) {
    // create scrollbar on right side of window
    int x = window->width - 14;
@@ -445,6 +461,7 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    scroller->text = text;
    scroller->parent = scrollbar;
    scroller->release_func = &window_scroll_callback;
+   scroller->click_func = &window_scroll_start;
 
    scrollbar->children[0] = scroller;
    scrollbar->children[1] = upbtn;
@@ -497,7 +514,7 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
          int index = get_window_index_from_pointer(window);
          int task = get_task_from_window(index);
          if(regs && task > -1 && window->resize_func) {
-            switch_to_task(task, regs);
+            if(!switch_to_task(task, regs)) return;
             uint32_t *args = malloc(sizeof(uint32_t) * 3);
             args[2] = (uint32_t)window->framebuffer;
             args[1] = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);

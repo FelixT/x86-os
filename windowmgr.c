@@ -1226,6 +1226,13 @@ int get_window_index_from_pointer(gui_window_t *window) {
 
 static inline int min(int a, int b) { return (a < b) ? a : b; }
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height) {
+   int maxheight = surface.height - TOOLBAR_HEIGHT - 5;
+   if(height > maxheight) height = maxheight;
+   int y_overflow = window->y + height - maxheight;
+   if(y_overflow > 0) {
+      window->y -= y_overflow;
+   }
+
    uint16_t *old_framebuffer = window->framebuffer;
    uint32_t old_framebuffer_size = window->framebuffer_size;
    int old_width = window->surface.width;
@@ -1279,7 +1286,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
    if(regs && task > -1 && window->resize_func) {
-      switch_to_task(task, regs);
+      if(!switch_to_task(task, regs)) return;
       uint32_t *args = malloc(sizeof(uint32_t) * 3);
       args[2] = (uint32_t)window->framebuffer;
       args[1] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
@@ -1296,8 +1303,8 @@ void window_mouserelease(registers_t *regs, gui_window_t *window) {
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
    if(task > -1 && window->mouserelease_func) {
-      switch_to_task(task, regs);
-      task_call_subroutine(regs, "mouserelease", (uint32_t)(window->mouserelease_func), NULL, 0);
+      if(switch_to_task(task, regs))
+         task_call_subroutine(regs, "mouserelease", (uint32_t)(window->mouserelease_func), NULL, 0);
    }
 
    // check windowobjs

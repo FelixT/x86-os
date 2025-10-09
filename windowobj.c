@@ -76,6 +76,20 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
       if(c == '\n') {
          y += wo->textpadding + getFont()->height;
          x = wo->textpadding + 1;
+      } else if(c == '\t') {
+         // draw 4 spaces
+         for(int s = 0; s < 4; s++) {
+            if(wo->y + y + getFont()->height >= 0 && wo->y + y <= wo->window_surface->height) {
+               draw_char(wo->window_surface, ' ', colour, wo->x + x, wo->y + y);
+            }
+            x += wo->textpadding + getFont()->width;
+
+            // wrapping
+            if(x + wo->textpadding + getFont()->width > wo->width) {
+               y += wo->textpadding + getFont()->height;
+               x = wo->textpadding + 1;
+            }
+         }
       } else {
          if(wo->y + y + getFont()->height >= 0 && wo->y + y <= wo->window_surface->height) {
             draw_char(wo->window_surface, c, colour, wo->x + x, wo->y + y);

@@ -267,7 +267,7 @@ void click(int x, int y) {
          launch_task(fullpath, 0, NULL);
       }
 
-      if(strequ(extension, "txt")) {
+      if(strequ(extension, "txt") || strequ(extension, "c")) {
          char **args = (char**)malloc(1*sizeof(char*));
          args[0] = malloc(strlen(fullpath)+1);
          strcpy(args[0], fullpath);

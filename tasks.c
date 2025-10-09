@@ -241,6 +241,10 @@ bool switch_to_task(int index, registers_t *regs) {
       debug_printf("Task switch failed: task %i is unavailable\n", index);
       return false;
    }
+   if(tasks[index].paused) {
+      debug_printf("Task switch failed: task %i is paused\n", index);
+      return false;
+   }
 
    // save registers
    tasks[current_task].registers = *regs;
@@ -298,7 +302,7 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
    task_event_t *event = (task_event_t*)msg;
    if(tasks[current_task].in_routine) {
       // queue back up again
-      events_add(30, &task_execute_queued_subroutine, (void*)event, -1);
+      events_add(15, &task_execute_queued_subroutine, (void*)event, -1);
    } else {
 
       if(!switch_to_task(event->task, regs)) return;
@@ -306,12 +310,12 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
       task_call_subroutine(regs, event->name, event->addr, event->args, event->argc);
       tasks[event->task].routine_return_window = getSelectedWindowIndex();
 
-      debug_printf("Launching queued routine %s for task %i window %i\n", event->name, get_current_task(), get_current_task_window());
+      /*debug_printf("Launching queued routine %s for task %i window %i\n", event->name, get_current_task(), get_current_task_window());
       debug_printf("Arguments are ");
       for(int i = 0; i < event->argc; i++) {
          debug_printf("%i <0x%h> ", i, event->args[i]);
       }
-      debug_printf("\n");
+      debug_printf("\n");*/
 
       if(get_current_task_window() != getSelectedWindowIndex()) {
          setSelectedWindowIndex(get_current_task_window());

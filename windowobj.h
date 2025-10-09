@@ -20,6 +20,8 @@ typedef struct windowobj_menu_t {
    bool disabled;
 } windowobj_menu_t;
 
+#define MAX_CHILDREN 32
+
 typedef struct windowobj_t {
    enum windowobj_type type;
 
@@ -58,7 +60,7 @@ typedef struct windowobj_t {
    uint16_t colour_border_hover;
    uint16_t colour_bg_hover;
 
-   void *children[10];
+   void *children[MAX_CHILDREN];
    int child_count;
    void *parent; // parent windowobj, NULL if this is a top-level object
 } windowobj_t;

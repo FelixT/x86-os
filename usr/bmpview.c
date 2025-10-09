@@ -74,9 +74,8 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    width = w;
    height = h;
    bufferwidth = get_surface().width;
-   wo_menu->y = height - 17;
+   wo_menu->y = height - wo_menu->height;
    wo_menu->width = w;
-   colour_wo->y = height - 16;
    clear();
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
    redraw();
@@ -216,6 +215,7 @@ void zoomout_click(void *wo, void *regs) {
    sprintf(zoomtext_wo->text, "%i00%", scale);
    clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   set_content_height(info->height*scale + 20);
    end_subroutine();
 }
 
@@ -226,6 +226,7 @@ void zoomin_click(void *wo, void *regs) {
    sprintf(zoomtext_wo->text, "%i00%", scale);
    clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   set_content_height(info->height*scale + 20);
    end_subroutine();
 }
 
@@ -278,6 +279,7 @@ void open_file(char *p) {
    if(bmp_check())
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
 
+   set_content_height(info->height*scale + 20);
    end_subroutine();
 }
 
@@ -299,7 +301,7 @@ void write_click(void *wo, void *regs) {
 
    bmp_header_t *header = (bmp_header_t*)bmp;
    
-   height -= 15; // remove bottom bar
+   height -= wo_menu->height; // remove menu bar
 
    int maxX = info->width; // bitmap width (not scaled)
    if(width/scale < maxX)
@@ -334,7 +336,7 @@ void write_click(void *wo, void *regs) {
    uint32_t size = header->dataOffset + rowSize * info->height;
    fat_write_file(path, bmp, size);
 
-   height += 15; // restore
+   height += wo_menu->height; // restore
 
    end_subroutine();
 }
@@ -391,10 +393,10 @@ void _start(int argc, char **args) {
    height = get_height();
 
    // menu
-   wo_menu = register_windowobj(WO_CANVAS, 0, height - 17, width, 20);
+   wo_menu = register_windowobj(WO_CANVAS, 0, height - 18, width, 18);
    wo_menu->bordered = false;
    // window objects
-   int margin = 5;
+   int margin = 3;
    int x = margin;
    int y = 2;
    clearbtn_wo = create_button(wo_menu, x, y, "Clear");
@@ -418,7 +420,7 @@ void _start(int argc, char **args) {
    toolplusbtn_wo->click_func = &tool_click;
    x += toolplusbtn_wo->width + margin;
 
-   colour_wo = register_windowobj(WO_CANVAS, x + 1, height - 15, 17, 14);
+   colour_wo = create_canvas(wo_menu, x, y, 14, 14);
    colour_wo->colour_bg = 0;
    colour_wo->colour_bg_hover = 0;
    colour_wo->click_func = &colour_click;
@@ -454,7 +456,7 @@ void _start(int argc, char **args) {
    redraw();
 
    create_scrollbar(&scroll);
-   set_content_height(info->height + 20);
+   set_content_height(info->height*scale + 20);
 
    while(1==1) {
       //asm volatile("pause");

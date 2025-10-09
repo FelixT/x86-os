@@ -153,7 +153,7 @@ fs_file_t *fs_new(char *path) {
 
 bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size) {
    if(file->type == FS_TYPE_TERM) {
-      debug_printf("Write %u to window %i\n", size, file->window_index);
+      //debug_printf("Write %u to window %i\n", size, file->window_index);
       window_writestrn((char*)buffer, size, 0, file->window_index);
    } else if(file->type == FS_TYPE_FILE) {
       // write to file
@@ -169,18 +169,18 @@ bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size) {
    return true;
 }
 
-bool fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task) {
+int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task) {
    if((int)size < 0)
       size = file->data->file_size;
    if(file->current_pos + size > file->data->file_size)
       size = file->data->file_size - file->current_pos;
-   if(size == 0) return false;
+   if(size == 0) return 0;
 
    debug_printf("Reading %u bytes to buffer at 0x%h\n", size, buffer);
 
    fat_read_file_chunked(file->data->first_cluster, buffer, size, callback, task);
    file->current_pos += size;
-   return true;
+   return size;
 }
 
 bool fs_rename(char *oldpath, char *newname) {

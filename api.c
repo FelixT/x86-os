@@ -526,12 +526,19 @@ void api_sbrk(registers_t *regs) {
 
 void api_open(registers_t *regs) {
    // IN: ebx - char* path
+   // IN: ecx - flag (0 read, 1 write)
    // OUT: ebx - int fd
    fs_file_t *file = fs_open((char*)regs->ebx);
    if(!file) {
-      regs->ebx = -1;
-      debug_printf("api_open: file not found\n");
-      return;
+      if(regs->ecx == 1) { // write
+         debug_printf("api_open: creating new file %s\n", (char*)regs->ebx);
+         file = fs_new((char*)regs->ebx);
+      }
+      if(!file) {
+         debug_printf("api_open: could not create new file\n");
+         regs->ebx = -1;
+         return;
+      }
    }
    task_state_t *task = get_current_task_state();
    int fd = task->fd_count;
@@ -549,7 +556,7 @@ void api_read_stdin_callback(void *regs, char *buffer) {
 }
 
 void api_read_fd_callback(registers_t *regs, int task) {
-   debug_printf("Read callback\n");
+   debug_printf("Read callback task %i\n", task);
    gettasks()[task].paused = false;
    switch_to_task(task, regs); // wake
 }
@@ -564,6 +571,8 @@ void api_read(registers_t *regs) {
    char *buf = (char*)regs->ecx;
    size_t count = regs->edx;
 
+   debug_printf("api_read: fd %i, buf 0x%h, count %u\n", fd, buf, count);
+   
    if(fd < 0 || fd >= task->fd_count) {
       debug_printf("read: fd not found\n");
       regs->ebx = -1;
@@ -591,13 +600,10 @@ void api_read(registers_t *regs) {
          regs->ebx = -1;
          return;
       }
-      if(!fs_read(task->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task())) {
-         regs->ebx = 0;
-         return;
-      } else {
-         regs->ebx = count;
-      }
-      task->paused = true;
+      regs->ebx = fs_read(task->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task());
+      if(regs->ebx > 0)
+         task->paused = true;
+      switch_task(regs); // yield
    }
 
 }
@@ -626,9 +632,11 @@ void api_write(registers_t *regs) {
    uint8_t *buffer = (uint8_t*)regs->ecx;
    size_t size = (size_t)regs->edx;
    if(fd < 0 || fd > task->fd_count) {
+      debug_printf("api_write: fd not found\n");
       regs->ebx = -1;
    } else {
       fs_write(task->file_descriptors[fd], buffer, size);
+      regs->ebx = size;
    }
 }
 

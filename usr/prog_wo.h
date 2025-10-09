@@ -8,6 +8,9 @@ static inline windowobj_t *register_windowobj(int type, int x, int y, int width,
       : "a" (31)
    );
    windowobj_t *wo = (windowobj_t*)addr;
+   if(!wo) {
+      return NULL;
+   }
    wo->type = type;
    wo->x = x;
    wo->y = y;
@@ -29,6 +32,9 @@ static inline windowobj_t *windowobj_add_child(windowobj_t *parent, int type, in
       "b" ((uint32_t)parent)
    );
    windowobj_t *child = (windowobj_t*)addr;
+   if(!child) {
+      return NULL;
+   }
    child->type = type;
    child->x = x;
    child->y = y;
