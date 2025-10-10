@@ -4,21 +4,7 @@
 #include "prog_wo.h"
 #include "../lib/string.h"
 #include "lib/wo_api.h"
-
-typedef struct {
-   uint8_t filename[11];
-   uint8_t attributes;
-   uint8_t reserved;
-   uint8_t creationTimeFine; // in 10ths of a second
-   uint16_t creationTime;
-   uint16_t creationDate;
-   uint16_t lastAccessDate;
-   uint16_t zero; // high 16 bits of entry's first cluster no in other fat vers. we can use this for position
-   uint16_t lastModifyTime;
-   uint16_t lastModifyDate;
-   uint16_t firstClusterNo;
-   uint32_t fileSize; // bytes
-} __attribute__((packed)) fat_dir_t;
+#include "lib/stdio.h"
 
 typedef struct {
    uint32_t headerSize; // size of this header
@@ -58,7 +44,7 @@ windowobj_t *zoominbtn_wo;
 windowobj_t *zoomtext_wo;
 windowobj_t *zoomoutbtn_wo;
 windowobj_t *openbtn_wo;
-windowobj_t *writebtn_wo;
+windowobj_t *savebtn_wo;
 windowobj_t *toolminusbtn_wo;
 windowobj_t *toolsizetext_wo;
 windowobj_t *toolplusbtn_wo;
@@ -67,6 +53,7 @@ int scale = 1;
 int colour = 0;
 int offsetX = 0;
 int offsetY = 0;
+FILE *current_file = NULL;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
@@ -265,21 +252,40 @@ bool bmp_check() {
    return true;
 }
 
-// filepicker callback
-void open_file(char *p) {
-   clear();
-   strcpy(path, p);
-   bmp = (uint8_t*)fat_read_file(path);
-   if(bmp == NULL) {
+void load_img() {
+   // close existing
+   if(current_file)
+      fclose(current_file);
+
+   FILE *f = fopen(path, "r+");
+   if(!f) {
       display_popup("Error", "File not found\n", false, NULL);
       exit(0);
    }
+   int size = fsize(fileno(f));
+   char *buf = (char*)malloc(size);
+   if(!fread(buf, size, 1, f)) {
+      display_popup("Error", "Couldn't read file\n", false, NULL);
+      exit(0);
+   }
+   current_file = f;
+
+   bmp = (uint8_t*)buf;
 
    info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    if(bmp_check())
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+}
+
+// filepicker callback
+void open_file(char *p) {
+   clear();
+   strcpy(path, p);
+
+   load_img();
 
    set_content_height(info->height*scale + 20);
+   
    end_subroutine();
 }
 
@@ -290,7 +296,7 @@ void open_click(void *wo, void *regs) {
    end_subroutine();
 }
 
-void write_click(void *wo, void *regs) {
+void save_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
    if(info->bpp != 16) {
@@ -334,7 +340,9 @@ void write_click(void *wo, void *regs) {
    }
 
    uint32_t size = header->dataOffset + rowSize * info->height;
-   fat_write_file(path, bmp, size);
+   fseek(current_file, 0, SEEK_SET);
+   fwrite(bmp, size, 1, current_file);
+   fflush(current_file);
 
    height += wo_menu->height; // restore
 
@@ -369,12 +377,6 @@ void _start(int argc, char **args) {
       }
    }
 
-   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
-   if(entry == NULL) {
-      display_popup("Error", "File not found\n", false, NULL);
-      exit(0);
-   }
-
    override_click((uint32_t)&click);
    override_drag((uint32_t)&click);
    override_mouserelease((uint32_t)&release);
@@ -382,10 +384,7 @@ void _start(int argc, char **args) {
    override_resize((uint32_t)&resize);
    clear();
    
-   bmp = (uint8_t*)fat_read_file(path);
-   info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
-   if(bmp_check())
-      bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   load_img();
 
    framebuffer = (uint16_t*)(get_surface().buffer);
    bufferwidth = get_surface().width;
@@ -450,8 +449,8 @@ void _start(int argc, char **args) {
    openbtn_wo->click_func = &open_click;
    x += openbtn_wo->width + margin;
 
-   writebtn_wo = create_button(wo_menu, x, y, "Write");
-   writebtn_wo->click_func = &write_click;
+   savebtn_wo = create_button(wo_menu, x, y, "Save");
+   savebtn_wo->click_func = &save_click;
 
    redraw();
 

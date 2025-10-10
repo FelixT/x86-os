@@ -1,7 +1,6 @@
 #include "prog.h"
 #include <stdarg.h>
 #include "../lib/string.h"
-#include "prog_fat.h"
 #include "lib/stdio.h"
 
 char path[256] = "/";
@@ -97,8 +96,18 @@ void term_cmd_viewbmp(char *arg) {
 void term_cmd_fread(char *arg) {
    char path[256];
    get_abs_path(path, arg);
-   uint8_t *file = (uint8_t*)fat_read_file(path);
-   printf("File loaded into 0x%h\n", (uint32_t)file);
+   FILE *f = fopen(path, 0);
+   if(!f) {
+      printf("File not found\n");
+      return;
+   }
+   int size = fsize(fileno(f));
+   char *buffer = malloc(size);
+   int read = fread(buffer, size, 1, f);
+   if(read)
+      printf("File size %i loaded into 0x%h\n", size, (uint32_t)buffer);
+   else
+      printf("Couldn't read file\n");
 }
 
 void term_cmd_dmpmem(char *arg) {
@@ -133,7 +142,7 @@ void term_cmd_dmpmem(char *arg) {
          printf("\n");
       }
    }
-   free((uint32_t)buf, rowlen);
+   free(buf, rowlen);
 }
 
 void term_cmd_launch(char *arg) {
@@ -278,7 +287,7 @@ void term_cmd_pwd() {
    char *wd = (char*)malloc(256);
    getwd(wd);
    printf("%s\n", wd);
-   free((uint32_t)wd, 256);
+   free(wd, 256);
    return;
 }
 
@@ -290,17 +299,18 @@ void term_cmd_cat(char *arg) {
       printf("File %s not found\n", path);
       return;
    }
-   printf("Opened file '%s' with size %u\n", path, f->size);
-   char *buf = (char*)malloc(f->size+1);
-   if(!fread(buf, f->size, 1, f)) {
+   int size = fsize(fileno(f));
+   printf("Opened file '%s' with size %u\n", path, size);
+   char *buf = (char*)malloc(size+1);
+   if(!fread(buf, size, 1, f)) {
       printf("Couldn't read file\n");
       return;
    }
    buf[f->content_size] = '\0';
    printf("%s\n", buf);
-   free((uint32_t)buf, f->size);
+   free(buf, size);
    fclose(f);
-   free((uint32_t)f, sizeof(FILE));
+   free(f, sizeof(FILE));
    printf("Closed file\n");
 }
 
@@ -312,10 +322,11 @@ void term_cmd_fappend(char *arg) {
    get_abs_path(path, patharg);
    
    FILE *f = fopen(path, "a");
-   printf("Opened file '%s' with size %u\n", path, f->size);
+   int size = fsize(fileno(f));
+   printf("Opened file '%s' with size %u\n", path, size);
    fwrite(buffer, strlen(buffer), 1, f);
    fclose(f);
-   free((uint32_t)f, sizeof(FILE));
+   free(f, sizeof(FILE));
    printf("Closed file\n");
 }
 
@@ -327,11 +338,12 @@ void term_cmd_fwrite(char *arg) {
    get_abs_path(path, patharg);
    
    FILE *f = fopen(path, "w");
-   printf("Opened file '%s' with size %u\n", path, f->size);
-   fwrite(buffer, strlen(buffer), 1, f);
-   printf("Wrote %u bytes\n", f->content_size);
+   int size = fsize(fileno(f));
+   printf("Opened file '%s' with size %u\n", path, size);
+   int c = fwrite(buffer, strlen(buffer), 1, f);
+   printf("Wrote %u bytes\n", c);
    fclose(f);
-   free((uint32_t)f, sizeof(FILE));
+   free(f, sizeof(FILE));
    printf("Closed file\n");
 }
 
@@ -409,7 +421,7 @@ void checkcmd(char *buffer) {
    else
       term_cmd_default(command);
 
-   free((uint32_t)buffer, 1); // should be programs responsibility to free
+   free(buffer, 1); // should be programs responsibility to free
 
    end_subroutine();
 }
@@ -420,7 +432,7 @@ void _start() {
    char *wd = (char*)malloc(256);
    getwd(wd);
    strcpy(path, wd);
-   free((uint32_t)wd, 256);
+   free(wd, 256);
 
    printf("User Terminal at %s\n", path);
 

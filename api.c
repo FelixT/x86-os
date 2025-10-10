@@ -33,7 +33,6 @@ void api_printf(char *format, ...) {
 // api funcs
 
 void api_write_string(registers_t *regs) {
-   gui_window_t *window = api_get_window();
    task_state_t *task = get_current_task_state();
    // write ebx
    char *out;
@@ -218,64 +217,6 @@ void api_free(registers_t *regs) {
    free(regs->ebx, regs->ecx);
 }
 
-void api_fat_get_bpb(registers_t *regs) {
-   // out: ebx
-   fat_bpb_t *bpb = malloc(sizeof(fat_bpb_t));
-   *bpb = fat_get_bpb(); // refresh fat tables
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)bpb, (uint32_t)bpb, 1, 1);
-
-   regs->ebx = (uint32_t)bpb;
-}
-
-void api_fat_read_root(registers_t *regs) {
-   // out: ebx
-   fat_dir_t *items = fat_read_root();
-   for(uint32_t i = (uint32_t)items/0x1000; i < ((uint32_t)items+sizeof(fat_dir_t)*fat_get_bpb().noRootEntries+0xFFF)/0x1000; i++) {
-      map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
-   }
-
-   regs->ebx = (uint32_t)items;
-}
-
-void api_fat_parse_path(registers_t *regs) {
-   // IN: ebx = addr of char* path
-   // IN: ebx = isfile
-   // OUT: ebx = addr of fat_dir_t entry for path or 0 if doesn't exist
-
-   fat_dir_t *entry = fat_parse_path((char*)regs->ebx, (bool)regs->ecx);
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)entry, (uint32_t)entry, 1, 1);
-   regs->ebx = (uint32_t)entry;
-}
-
-void api_fat_read_file_callback(void *regs, int task) {
-   gettasks()[task].paused = false;
-   switch_to_task(task, regs);
-}
-
-void api_fat_read_file(registers_t *regs) {
-   // IN: ebx = path
-   // OUT: ebx = addr of file content buffer, null on fail
-   fat_dir_t *entry = fat_parse_path((char*)regs->ebx, true);
-   if(!entry) {
-      regs->ebx = 0;
-   } else {
-      uint8_t *buffer = (uint8_t*)malloc(entry->fileSize+1);
-      for(uint32_t i = (uint32_t)buffer/0x1000; i < ((uint32_t)buffer+entry->fileSize+1+0xFFF)/0x1000; i++) {
-         map(get_current_task_state()->page_dir, i*0x1000, i*0x1000, 1, 1);
-      }
-      fat_read_file_chunked(entry->firstClusterNo, buffer, entry->fileSize, &api_fat_read_file_callback, get_current_task());
-      regs->ebx = (uint32_t)buffer;
-      gettasks()[get_current_task()].paused = true;
-      switch_task(regs); // yield
-   }
-}
-
-void api_get_get_dir_size(registers_t *regs) {
-   // IN: ebx = directory firstClusterNo
-   // OUT: ebx = directory size
-   regs->ebx = (uint32_t)fat_get_dir_size(regs->ebx);
-}
-
 void api_draw_bmp(registers_t *regs) {
    // IN: ebx = bmp address
    // IN: ecx = x
@@ -391,15 +332,6 @@ void api_launch_task(registers_t *regs) {
       }
    }
    map(task->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
-}
-
-void api_fat_write_file(registers_t *regs) {
-   // IN: ebx = path
-   // IN: ecx = buffer
-   // IN: edx = size
-   // OUT ebx = 0 on success, < 0 error code on failure
-
-   regs->ebx = fat_write_file((char*)regs->ebx, (uint8_t*)regs->ecx, (uint32_t)regs->edx);
 }
 
 void api_set_sys_font(registers_t *regs) {
@@ -575,7 +507,6 @@ void api_read_stdin_callback(void *regs, char *buffer) {
    registers_t *r = (registers_t*)regs;
    if(w > 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed) {
       gui_window_t *window = getWindow(w);
-      gui_window_t *current = api_get_window();
       strcpy(window->read_buffer, buffer);
       task->paused = false;
       r->ebx = strlen(buffer+1);
@@ -680,7 +611,7 @@ void api_fsize(registers_t *regs) {
    if(fd < 0 || fd > task->fd_count) {
       regs->ebx = -1;
    } else {
-      regs->ebx = task->file_descriptors[fd]->data->file_size;
+      regs->ebx = fs_filesize(task->file_descriptors[fd]);
    }
 }
 

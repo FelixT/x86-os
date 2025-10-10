@@ -74,4 +74,6 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
 void task_subroutine_end(registers_t *regs);
 void tss_init();
 
+void task_write_to_window(int task, char *out);
+
 #endif

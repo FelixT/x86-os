@@ -9,7 +9,7 @@ void printf(char *format, ...) {
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    write(0, buffer, 512);
-   free((uint32_t)buffer, 512);
+   free(buffer, 512);
 }
 
 void _start() {
@@ -20,12 +20,6 @@ void _start() {
    //sbrk(-0x3000);
    uint32_t size = (uint32_t)sbrk(0) - start;
    printf("Size 0x%h\n", size);
-   
-   // test opening files
-   /*int fd = open("/bmp/file20.bmp");
-   printf("Got fd %i\n", fd);
-   read(fd, buf, size);
-   bmp_draw((uint8_t*)buf, 0, 0, 1, false);*/
 
    while(true) {
       read(0, buf, size);

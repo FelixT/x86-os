@@ -13,17 +13,24 @@ typedef struct {
    char mode[4];
    int is_open;
    int dirty; // Track if buffer has been modified
+   int fd;
 } FILE;
 
 #define MAX_FILES 16
 
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
 void memcpy(void *dest, const void *src, int bytes);
-FILE* fopen(const char* filename, const char* mode);
-size_t fwrite(const void* ptr, size_t size, size_t count, FILE* stream);
-size_t fread(void* ptr, size_t size, size_t count, FILE* stream);
-int fclose(FILE* stream);
-int fflush(FILE* stream);
+FILE* fopen(const char *filename, const char *mode);
+size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream);
+size_t fread(void *ptr, size_t size, size_t count, FILE *stream);
+int fclose(FILE *stream);
+int fflush(FILE *stream);
 void debug_printf(const char *format, ...);
 void printf(const char *format, ...);
+int fileno(FILE *stream);
+void fseek(FILE *stream, int pos, int type);
 
 #endif

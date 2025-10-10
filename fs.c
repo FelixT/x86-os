@@ -193,4 +193,8 @@ bool fs_rename(char *oldpath, char *newname) {
       return false;
    }
    return fat_rename(oldpath, newname);
-} 
+}
+
+int fs_filesize(fs_file_t *file) {
+   return file->data->file_size;
+}

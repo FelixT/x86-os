@@ -203,18 +203,18 @@ void software_handler(registers_t *regs) {
       case 16:
          api_malloc(regs);
          break;
-      case 17:
-         api_fat_get_bpb(regs);
-         break;
-      case 18:
-         //api_fat_read_root(regs);
-         break;
-      case 19:
-         api_fat_parse_path(regs);
-         break;
-      case 20:
-         api_fat_read_file(regs);
-         break;
+      //case 17:
+      //   api_fat_get_bpb(regs);
+      //   break;
+      //case 18:
+      //   api_fat_read_root(regs);
+      //   break;
+      //case 19:
+      //   api_fat_parse_path(regs);
+      //   break;
+      //case 20:
+      //   api_fat_read_file(regs);
+      //   break;
       case 21:
          api_draw_bmp(regs);
          break;
@@ -224,15 +224,15 @@ void software_handler(registers_t *regs) {
       case 23:
          api_clear_window(regs);
          break;
-      case 24:
-         api_get_get_dir_size(regs);
-         break;
+      //case 24:
+      //   api_get_get_dir_size(regs);
+      //   break;
       case 25:
          api_read_dir(regs);
          break;
-      case 26:
-         api_get_get_dir_size(regs);
-         break;
+      //case 26:
+      //   api_get_get_dir_size(regs);
+      //   break;
       case 27: 
          api_override_downarrow(regs);
          break;
@@ -251,9 +251,9 @@ void software_handler(registers_t *regs) {
       case 32:
          api_launch_task(regs);
          break;
-      case 33:
-         api_fat_write_file(regs);
-         break;
+      //case 33:
+      //   api_fat_write_file(regs);
+      //   break;
       case 34:
          api_override_resize(regs);
          break;
@@ -328,6 +328,9 @@ void software_handler(registers_t *regs) {
          break;
       case 58:
          api_rename(regs);
+         break;
+      case 59:
+         api_fsize(regs);
          break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);

@@ -5,14 +5,13 @@
 #include "lib/wo_api.h"
 
 #include "prog.h"
-#include "prog_fat.h"
 #include "prog_wo.h"
 
 volatile uint16_t *framebuffer;
 volatile uint32_t width;
 volatile uint32_t height;
-volatile uint8_t *file_icon;
-volatile uint8_t *folder_icon;
+uint8_t *file_icon;
+uint8_t *folder_icon;
 volatile int offset;
 fs_dir_content_t *dir_content;
 int shown_items;
@@ -100,12 +99,6 @@ void display_items() {
    set_text(wo_path, cur_path);
 }
 
-void read_root() {
-   strcpy(cur_path, "/");
-   // read root
-   dir_content = read_dir(cur_path);
-}
-
 void uparrow() {
 
    offset--;
@@ -143,17 +136,12 @@ void path_callback() {
    if(len > 0 && path[len-1] != '/') {
       strcat(path, "/");
    }
-   fat_dir_t *dir = (fat_dir_t*)fat_parse_path(path, false);
 
-   if(!dir) {
-      if(strequ(path, "/")) {
-         read_root();
-         display_items();
-      } else {
-         char buffer[500];
-         sprintf(buffer, "Location '%s' not found", path);
-         display_popup("Error", buffer, false, NULL);
-      }
+   fs_dir_content_t *content = read_dir(path);
+   if(!content) {
+      char buffer[500];
+      sprintf(buffer, "Location '%s' not found", path);
+      display_popup("Error", buffer, false, NULL);
    } else {
       strcpy(cur_path, wo_path->text);
       dir_content = read_dir(cur_path);
@@ -383,17 +371,26 @@ void _start(int argc, char **args) {
 
    dir_content = read_dir("/");
    offset = 0;
-   file_icon = (uint8_t*)fat_read_file("/bmp/file20.bmp");
-   if(file_icon == NULL) {
+   
+   FILE *f = fopen("/bmp/file20.bmp", "r");
+   if(!f) {
       write_str("File icon not found\n");
       exit(0);
    }
+   int size = fsize(fileno(f));
+   file_icon = malloc(size);
+   fread(file_icon, size, 1, f);
+   fclose(f);
 
-   folder_icon = (uint8_t*)fat_read_file("/bmp/folder20.bmp");
-   if(folder_icon == NULL) {
+   f = fopen("/bmp/folder20.bmp", "r");
+   if(!f) {
       write_str("Folder icon not found\n");
       exit(0);
    }
+   size = fsize(fileno(f));
+   folder_icon = malloc(size);
+   fread(folder_icon, size, 1, f);
+   fclose(f);
 
    framebuffer = (uint16_t*)(get_surface().buffer);
 

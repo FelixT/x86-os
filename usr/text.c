@@ -5,21 +5,7 @@
 #include "prog_wo.h"
 #include "../lib/string.h"
 #include "lib/wo_api.h"
-
-typedef struct {
-   uint8_t filename[11];
-   uint8_t attributes;
-   uint8_t reserved;
-   uint8_t creationTimeFine; // in 10ths of a second
-   uint16_t creationTime;
-   uint16_t creationDate;
-   uint16_t lastAccessDate;
-   uint16_t zero; // high 16 bits of entry's first cluster no in other fat vers. we can use this for position
-   uint16_t lastModifyTime;
-   uint16_t lastModifyDate;
-   uint16_t firstClusterNo;
-   uint32_t fileSize; // bytes
-} __attribute__((packed)) fat_dir_t;
+#include "lib/stdio.h"
 
 windowobj_t *wo_menu_o;
 windowobj_t *wo_path_o;
@@ -29,6 +15,8 @@ windowobj_t *wo_save_o;
 windowobj_t *wo_open_o;
 
 int content_height = 0;
+
+FILE *current_file = NULL;
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)fb;
@@ -63,8 +51,8 @@ void return_fn(void *wo) {
 }
 
 void load_file(char *filepath) {
-   fat_dir_t *entry = (fat_dir_t*)fat_parse_path(filepath, true);
-   if(entry == NULL) {
+   FILE *f = fopen(filepath, "r");
+   if(!f) {
       char buffer[250];
       sprintf(buffer, "File '%s' not found", filepath);
       display_popup("Error", buffer, false, NULL);
@@ -72,17 +60,23 @@ void load_file(char *filepath) {
       wo_text_o->text[wo_text_o->textpos] = '\0';
       return;
    }
+
+   int size = fsize(fileno(f));
+   current_file = f;
+
    set_text((windowobj_t*)wo_path_o, filepath);
-   uinttostr(entry->fileSize, wo_status_o->text);
+   uinttostr(size, wo_status_o->text);
    wo_status_o->textpos = strlen(wo_status_o->text);
    wo_status_o->cursor_textpos = wo_status_o->textpos;
 
+   char *txtbuffer = (char*)malloc(size+1);
+   fread(txtbuffer, size, 1, f);
 
-   wo_text_o->text = (char*)fat_read_file(filepath);
-   wo_text_o->textpos = entry->fileSize;
-   wo_text_o->cursor_textpos = entry->fileSize;
+   wo_text_o->text = txtbuffer;
+   wo_text_o->textpos = size;
+   wo_text_o->cursor_textpos = size;
    wo_text_o->text[wo_text_o->textpos] = '\0';
-   wo_text_o->return_func = return_fn; // see what happens
+   wo_text_o->return_func = return_fn;
    
    redraw();
    wo_text_o->height = wo_text_o->cursory + 10;
@@ -102,19 +96,13 @@ void save_func(void *wo, void *regs) {
    (void)regs;
    set_text((windowobj_t*)wo_status_o, "Saving...");
 
-   int err = fat_write_file(wo_path_o->text, (uint8_t*)wo_text_o->text, strlen(wo_text_o->text));
-   if(err < 0) {
-      if(err == -1) {
-         display_popup("Error", "File not found", false, NULL);
-      } else if(err == -2) {
-         display_popup("Error", "No free clusters", false, NULL);
-      } else if(err == -3) {
-         display_popup("Error", "Error updating directory entry", false, NULL);
-      } else {
-         display_popup("Error", "Unknown error", false, NULL);
-      }
+   int w = fwrite(wo_path_o->text, strlen(wo_text_o->text), 1, current_file);
+   debug_printf("Wrote %i bytes\n", w);
+   if(w <= 0 && strlen(wo_text_o->text) > 0) {
+      display_popup("Error", "Write failed", false, NULL);
       set_text((windowobj_t*)wo_status_o, "Error");
    } else {
+      fflush(current_file);
       set_text((windowobj_t*)wo_status_o, "Saved");
    }
 

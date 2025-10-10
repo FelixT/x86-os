@@ -29,12 +29,6 @@ void api_override_checkcmd(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_free(registers_t *regs);
-void api_fat_read_root(registers_t *regs); // deprecated
-void api_fat_get_bpb(registers_t *regs); // deprecated
-void api_fat_parse_path(registers_t *regs); // deprecated
-void api_fat_read_file(registers_t *regs); // deprecated
-void api_fat_write_file(registers_t *regs); // deprecated
-void api_get_get_dir_size(registers_t *regs); // deprecated
 void api_read_dir(registers_t *regs);
 void api_draw_bmp(registers_t *regs);
 void api_clear_window(registers_t *regs);
@@ -54,6 +48,7 @@ void api_debug_write_str(registers_t *regs);
 void api_sbrk(registers_t *regs);
 void api_open(registers_t *regs);
 void api_write(registers_t *regs);
+void api_fsize(registers_t *regs);
 void api_create_scrollbar(registers_t *regs);
 void api_set_scrollable_height(registers_t *regs);
 void api_scroll_to(registers_t *regs);

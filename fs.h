@@ -47,5 +47,6 @@ fs_file_t *fs_new(char *path);
 bool fs_rename(char *oldpath, char *newname);
 fs_dir_content_t *fs_read_dir(char *path);
 void fs_dir_content_free(fs_dir_content_t *content);
+int fs_filesize(fs_file_t *file);
 
 #endif

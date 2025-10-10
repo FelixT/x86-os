@@ -147,67 +147,13 @@ static inline void *malloc(uint32_t size) {
    return (void*)addr;
 }
 
-static inline void free(uint32_t addr, uint32_t size) {
+static inline void free(void *addr, uint32_t size) {
    asm volatile (
       "int $0x30;"
       :: "a" (40),
-      "b" (addr),
+      "b" ((uint32_t*)addr),
       "c" (size)
    );
-}
-
-static inline uint32_t *fat_get_bpb() {
-   uint32_t addr;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
-      : "a" (17)
-   );
-
-   return (uint32_t*)addr;
-}
-
-static inline uint32_t *fat_parse_path(char *path, bool isfile) {
-   uint32_t addr;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
-      : "a" (19),
-      "b" ((uint32_t)path),
-      "c" ((uint32_t)isfile)
-   );
-
-   return (uint32_t*)addr;
-}
-
-static inline uint32_t *fat_read_file(char *path) {
-   uint32_t addr;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
-      : "a" (20),
-      "b" ((uint32_t)path)
-   );
-
-   return (uint32_t*)addr;
-}
-
-static inline int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
-   int err;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (err)
-      : "a" (33),
-      "b" ((uint32_t)path),
-      "c" ((uint32_t)buffer),
-      "d" ((uint32_t)size)
-   );
-
-   return err;
 }
 
 static inline bool mkdir(char *path) {
@@ -247,19 +193,6 @@ static inline void clear() {
    asm volatile(
       "int $0x30"
       :: "a" (23));
-}
-
-static inline int fat_get_dir_size(int firstClusterNo) {
-   uint32_t output;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (output)
-      : "a" (24),
-      "b" ((uint32_t)firstClusterNo)
-   );
-
-   return output;
 }
 
 // from fs.h
@@ -424,15 +357,27 @@ static inline void display_filepicker(void *callback) {
    );
 }
 
-static inline int open(char *path) {
+static inline int open(char *path, int flag) {
    int fd;
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (fd)
       : "a" (52),
-      "b" ((uint32_t)path)
+      "b" ((uint32_t)path),
+      "c" (flag)
    );
    return fd;
+}
+
+static inline int fsize(int fd) {
+   int size;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (size)
+      : "a" (59),
+      "b" ((uint32_t)fd)
+   );
+   return size;
 }
 
 static inline int read(int fd, char *buf, size_t count) {

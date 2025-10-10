@@ -4,8 +4,10 @@
 #include "prog.h"
 #include "prog_bmp.h"
 #include "prog_wo.h"
+#include "lib/stdio.h"
+#include "../lib/string.h"
 
-volatile uint8_t *image;
+uint8_t *image;
 
 int x = 0;
 int y = 0;
@@ -29,23 +31,25 @@ void click_callback() {
     timer_callback();
 }
 
-void strcpy(char* dest, char* src) {
-   int i = 0;
-
-   while(src[i] != '\0') {
-      dest[i] = src[i];
-      i++;
-   }
-   dest[i] = '\0';
-}
-
 void _start() {
     set_window_title("Prog4");
     override_draw((uint32_t)NULL);
 
-    image = (uint8_t*)fat_read_file("/bmp/file20.bmp");
-    if(image == NULL) {
+    FILE *f = fopen("/bmp/file20.bmp", "r");
+    if(!f) {
         write_str("File icon not found\n");
+        exit(0);
+    }
+
+    int size = fsize(fileno(f));
+    if(size <= 0) {
+        write_str("Invalid file\n");
+    }
+    image = malloc(size);
+    int read = fread(image, size, 1, f);
+
+    if(read <= 0) {
+        write_str("Couldn't read file\n");
         exit(0);
     }
 
