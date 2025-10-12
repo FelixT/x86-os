@@ -51,7 +51,7 @@ FILE *fopen(const char *filename, const char *mode) {
 
     file->fd = open(file->path, flag);
     if(file->fd == -1) {
-        debug_printf("fopen failed\n");
+        debug_println("fopen failed");
         fclose(file);
         return NULL;
     }
@@ -96,18 +96,19 @@ FILE *fopen(const char *filename, const char *mode) {
 }
 
 size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
-    if (!stream || !stream->is_open) return 0;
+    if(!stream || !stream->is_open) return 0;
     
     size_t total_bytes = size * count;
     
-    debug_printf("Position %i bytes %i size %i\n", stream->position, total_bytes, stream->size);
+    debug_println("Position %i bytes %i size %i", stream->position, total_bytes, stream->size);
 
     // expand buffer if needed
     if(stream->position + total_bytes > stream->size) {
         uint32_t new_size = stream->position + total_bytes + 0x1000;
         uint8_t *new_buffer = malloc(new_size);
         if(!new_buffer) return 0; // resize failed
-        memcpy(new_buffer, stream->buffer, stream->size);
+        memset(new_buffer, 0, new_size);
+        memcpy(new_buffer, stream->buffer, stream->content_size);
         free(stream->buffer, stream->size);
         stream->buffer = new_buffer;
         stream->size = new_size;
@@ -144,7 +145,7 @@ int fclose(FILE *stream) {
     
     // if file was modified, write it back
     if(stream->dirty && (strchr(stream->mode, 'w') || strchr(stream->mode, 'a') || strchr(stream->mode, '+'))) {
-        debug_printf("Writing %u bytes\n", stream->content_size);
+        debug_println("Writing %u bytes", stream->content_size);
         write(stream->fd, (char*)stream->buffer, stream->content_size);
     }
     
@@ -187,7 +188,7 @@ void fseek(FILE *stream, int pos, int type) {
         stream->position = stream->content_size;
 }
 
-void debug_printf(const char *format, ...) {
+void debug_println(const char *format, ...) {
    char buffer[1024];
    va_list args;
    va_start(args, format);

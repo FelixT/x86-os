@@ -54,9 +54,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
    int tmpwindow = getSelectedWindowIndex();
    tasks[current_task].window = windowmgr_add();
-   if(!focus) { 
-      setSelectedWindowIndex(tmpwindow);
-   } else {
+   if(focus) { 
       window_draw_outline(getSelectedWindow(), false);
    }
 
@@ -68,6 +66,10 @@ void launch_task(int index, registers_t *regs, bool focus) {
    task->file_descriptors[1] = stdout;
    task->file_descriptors[2] = stderr;
    task->fd_count = 3;
+
+   if(!focus) { 
+      setSelectedWindowIndex(tmpwindow);
+   }
    
    debug_printf("Launching task %u\n", index);
 

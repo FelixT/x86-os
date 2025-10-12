@@ -126,6 +126,16 @@ bool strstartswith(char* src, char* startswith) {
    return true;
 }
 
+bool strendswith(char* src, char* endswith) {
+   int src_len = strlen(src);
+   int end_len = strlen(endswith);
+    
+    if(end_len > src_len)
+        return false;
+    
+   return strequ(src + src_len - end_len, endswith);
+}
+
 int strlen(char* str) {
    int len = 0;
    while(str[len] != '\0')

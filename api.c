@@ -194,16 +194,14 @@ void api_end_subroutine(registers_t *regs) {
 void api_malloc(registers_t *regs) {
    // IN: ebx = size
    // OUT: ebx = addr
-   uint32_t *mem = malloc(regs->ebx);
+   int size = regs->ebx;
+   uint32_t *mem = malloc(size);
 
    task_state_t *task = get_current_task_state();
    //task->allocated_pages[task->no_allocated] = mem;
-   //task->no_allocated++;*/
 
    // identity map
-   for(uint32_t i = (uint32_t)mem/0x1000; i < ((uint32_t)mem+regs->ebx+0xFFF)/0x1000; i++) {
-      map(task->page_dir, i*0x1000, i*0x1000, 1, 1);
-   }
+   task->no_allocated += map_size(task->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1);
 
    regs->ebx = (uint32_t)mem;
 
@@ -215,6 +213,12 @@ void api_free(registers_t *regs) {
    // IN: ebx = addr
    // IN: ecx = size
    free(regs->ebx, regs->ecx);
+
+   uint32_t mem = regs->ebx;
+   task_state_t *task = get_current_task_state();
+
+   // unmap from user
+   task->no_allocated -= map_size(task->page_dir, mem, mem, regs->ecx, 1, 0);
 }
 
 void api_draw_bmp(registers_t *regs) {
@@ -411,9 +415,7 @@ void api_display_filepicker(registers_t *regs) {
 }
 
 void api_debug_write_str(registers_t *regs) {
-   debug_printf("t%iw%i: ", get_current_task(), get_current_task_window(), getSelectedWindowIndex());
-   debug_printf((char*)regs->ebx);
-   debug_printf("\n");
+   debug_printf("t%iw%i: %s\n", get_current_task(), get_current_task_window(), regs->ebx);
 }
 
 void api_sbrk(registers_t *regs) {
@@ -660,4 +662,28 @@ void api_scroll_to(registers_t *regs) {
    // IN: ebx - y
    setSelectedWindowIndex(get_current_task_window());
    window_scroll_to(regs->ebx);
+}
+
+void api_set_window_size(registers_t *regs) {
+   // IN: ebx width
+   // IN: ecx height
+   // doesn't call resize function
+   int width = regs->ebx;
+   int height = regs->ecx;
+
+   if(width < 20 || height < 20) return;
+
+   gui_window_t *window = api_get_window();
+   int maxwidth = gui_get_surface()->width - 20;
+   int maxheight = gui_get_surface()->height - 50;
+   if(width > maxwidth)
+      width = maxwidth;
+   if(height > maxheight)
+      height = maxheight;
+   if(window->x + width > maxwidth)
+      window->x = 0;
+   if(window->y + height > maxheight)
+      window->y = 0;
+   window_resize(NULL, window, width, height);
+   gui_redrawall();
 }

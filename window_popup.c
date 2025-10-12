@@ -115,7 +115,7 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
    // dialog message
    int y = 5;
    windowobj_t *wo_msg = window_create_text(window, 15, y, text);
-   wo_msg->width = 220;
+   wo_msg->width = 230;
    wo_msg->height = 30;
    wo_msg->disabled = true;
    wo_msg->bordered = false;
@@ -133,7 +133,7 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
    }
 
    // ok button
-   int x = 15;
+   int x = 105;
    if(output) {
       x = 75;
    }

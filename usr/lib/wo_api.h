@@ -9,6 +9,7 @@ windowobj_t *create_wo(windowobj_t *parent, int type, int x, int y, int width, i
 windowobj_t *create_canvas(windowobj_t *parent, int x, int y, int width, int height);
 windowobj_t *create_button(windowobj_t *parent, int x, int y, char *text);
 windowobj_t *create_text(windowobj_t *parent, int x, int y, char *text);
+windowobj_t *create_text_static(windowobj_t *parent, int x, int y, char *text);
 void set_text(windowobj_t *wo, char *text);
 
 #endif

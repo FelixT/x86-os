@@ -135,7 +135,7 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
    gui_writestr("\nSet up timer\n", COLOUR_ORANGE);
-   timer_set_hz(400);
+   timer_set_hz(600);
 
    // reload font, it gets cut off(??)
    fat_dir_t *entry = fat_parse_path("/font/7.fon", true);
@@ -148,6 +148,9 @@ void gui_init_meat(registers_t *regs, void *msg) {
    getSelectedWindow()->active = false;
    setSelectedWindowIndex(-1);
    gui_redrawall();
+
+   gui_writestr("\nEnabling mouse\n", COLOUR_ORANGE);
+   mouse_enable();
 }
 
 void gui_init(void) {
@@ -169,7 +172,6 @@ void gui_init(void) {
    //gui_clear(gui_bg);
    font_init();
    windowmgr_init();
-   mouse_enable();
 
    events_add(1, &gui_init_meat, NULL, -1);
 }

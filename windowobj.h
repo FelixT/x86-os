@@ -59,6 +59,7 @@ typedef struct windowobj_t {
    uint16_t colour_bg;
    uint16_t colour_border_hover;
    uint16_t colour_bg_hover;
+   uint16_t colour_text;
 
    void *children[MAX_CHILDREN];
    int child_count;

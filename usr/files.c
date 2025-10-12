@@ -87,7 +87,7 @@ void display_items() {
          }
          char sizeStr[20];
          sprintf(sizeStr, "<%u %s>", size, type);
-         write_strat(sizeStr, x + 150, y + 7);
+         write_strat(sizeStr, width - 80, y + 7);
       }
 
       y += 25;
@@ -148,6 +148,7 @@ void path_callback() {
       offset = 0;
       display_items();
    }
+   free(content, sizeof(fs_dir_content_t) * content->size);
 
    end_subroutine();
 }
@@ -270,7 +271,7 @@ void click(int x, int y) {
       }
 
       if(launched) {
-         debug_printf("This should never happen!"); // launching task should end the subroutine
+         debug_println("This should never happen!"); // launching task should end the subroutine
          while(true) {}
       }
 
@@ -367,6 +368,7 @@ void _start(int argc, char **args) {
    (void)args;
 
    // init
+   set_window_size(320, 260);
    set_window_title("File Manager");
 
    dir_content = read_dir("/");

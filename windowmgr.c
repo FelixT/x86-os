@@ -36,7 +36,8 @@ uint8_t *gui_bgimage = NULL;
 uint8_t *icon_files = NULL;
 
 extern bool mouse_heldright;
-windowobj_t default_menu; // right click menu
+windowobj_t *default_menu; // right click menu
+windowobj_t *app_button; // toolbar app button
 
 // would be much better as a linked link
 gui_window_t *render_order[100];
@@ -205,11 +206,11 @@ void window_close(void *regs, int windowIndex) {
 }
 
 bool window_init(gui_window_t *window) {
-   strcpy(window->title, "Terminal");
+   strcpy(window->title, "KTerminal");
    window->x = 20;
    window->y = 20;
-   window->width = 440;
-   window->height = 300;
+   window->width = 400;
+   window->height = 280;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = getFont()->padding;
@@ -447,8 +448,9 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
       }
    }
 
-   // redraw cursor if it disappeared
-   if(width > getFont()->width && height > getFont()->height
+   extern uint16_t *draw_buffer;
+   // redraw cursor if it disappeared - unless redrawing all
+   if(surface.buffer != (uint32_t)draw_buffer && width > getFont()->width && height > getFont()->height
    && gui_mouse_x >= window->x + offsetX && gui_mouse_x <= window->x + offsetX + width && gui_mouse_x + getFont()->width <= window->width
    && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY && gui_mouse_y <= window->y + TITLEBAR_HEIGHT + offsetY + height && gui_mouse_y + getFont()->height <= window->height) {
       gui_cursor_shown = false;
@@ -497,8 +499,8 @@ void window_draw(gui_window_t *window) {
 }
 
 void windowmgr_getproperties() {
-   default_menu.menuselected = -1;
-   default_menu.menuhovered = -1;
+   default_menu->menuselected = -1;
+   default_menu->menuhovered = -1;
 
    // show selected window settings 
    gui_window_t *selected = getSelectedWindow();
@@ -516,8 +518,8 @@ void windowmgr_closeselected_callback(registers_t *regs, void *msg) {
 }
 
 void windowmgr_closeselected() {
-   default_menu.menuselected = -1;
-   default_menu.menuhovered = -1;
+   default_menu->menuselected = -1;
+   default_menu->menuhovered = -1;
 
    // close selected window
    int index = getSelectedWindowIndex();
@@ -550,21 +552,31 @@ void windowmgr_init() {
    window_draw(&gui_windows[0]);
 
    // set up default menu
-   windowobj_init(&default_menu, &surface);
-   default_menu.type = WO_MENU;
-   default_menu.visible = false;
-   default_menu.width = 80;
-   default_menu.height = 40;
-   default_menu.menuitems = malloc(sizeof(windowobj_menu_t) * 10);
-   strcpy(default_menu.menuitems[0].text, "Settings");
-   default_menu.menuitems[0].func = &windowmgr_getproperties;
-   default_menu.menuitems[0].disabled = false;
-   strcpy(default_menu.menuitems[1].text, "Close");
-   default_menu.menuitems[1].func = &windowmgr_closeselected;
-   default_menu.menuitems[1].disabled = false;
-   //strcpy(default_menu.menuitems[1].text, "Test2");
-   //default_menu.menuitems[1].func = NULL;
-   default_menu.menuitem_count = 2;
+   default_menu = (windowobj_t*)malloc(sizeof(windowobj_t));
+   windowobj_init(default_menu, &surface);
+   default_menu->type = WO_MENU;
+   default_menu->visible = false;
+   default_menu->width = 80;
+   default_menu->height = 40;
+   default_menu->menuitems = malloc(sizeof(windowobj_menu_t) * 10);
+
+   strcpy(default_menu->menuitems[0].text, "Settings");
+   default_menu->menuitems[0].func = &windowmgr_getproperties;
+   default_menu->menuitems[0].disabled = false;
+
+   strcpy(default_menu->menuitems[1].text, "Close");
+   default_menu->menuitems[1].func = &windowmgr_closeselected;
+   default_menu->menuitems[1].disabled = false;
+
+   default_menu->menuitem_count = 2;
+
+   // set up app button
+   app_button = (windowobj_t*)malloc(sizeof(windowobj_t));
+   windowobj_init(app_button, &surface);
+   app_button->type = WO_BUTTON;
+   app_button->x = surface.width - 55;
+   app_button->y = surface.height - 17;
+   app_button->text = "Apps";
 }
 
 void toolbar_draw() {
@@ -693,7 +705,7 @@ bool keyboard_control = false;
 
 void windowmgr_keypress(void *regs, int scan_code) {
    // check desktop window objects
-   if(default_menu.visible) {
+   if(default_menu->visible) {
       windowobj_keydown(regs, &default_menu, scan_code);
       return;
    }
@@ -715,7 +727,6 @@ void windowmgr_keypress(void *regs, int scan_code) {
       // alt+w
       if(scan_to_char(scan_code, false, false) == 'w') {
          window_close(regs, gui_selected_window);
-         windowmgr_redrawall();
       }
    }
 
@@ -803,22 +814,25 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
          window->minimised = true;
          setSelectedWindowIndex(-1);
          gui_redrawall();
-         return false;
+         return true;
       }
 
       // close
       if(relY < TITLEBAR_HEIGHT && relX > window->width - (getFont()->width+3)) {
          window_close(regs, index);
-         return false;
+         return true;
       }
 
       window->needs_redraw = true;
+      bool alreadyselected = window == selectedWindow;
       setSelectedWindowIndex(index);
 
       if(relY < TITLEBAR_HEIGHT) {
          window->dragged = true;
          return true;
       }
+
+      if(!alreadyselected) return true;
 
       // check if we clicked on window object
       relY -= TITLEBAR_HEIGHT;
@@ -942,19 +956,37 @@ bool windowmgr_click(void *regs, int x, int y) {
       return false;
    }
 
-   if(default_menu.visible) {
+   if(default_menu->visible) {
       // clicked on menu
-      if(x >= default_menu.x && x <= default_menu.x + default_menu.width
-      && y >= default_menu.y && y <= default_menu.y + default_menu.height) {
-         windowobj_click(regs, (void*)&default_menu, 0, 0); // unused x, y
-         default_menu.visible = false;
+      if(x >= default_menu->x && x <= default_menu->x + default_menu->width
+      && y >= default_menu->y && y <= default_menu->y + default_menu->height) {
+         windowobj_click(regs, default_menu, 0, 0); // unused x, y
+         default_menu->visible = false;
          gui_redrawall();
          return true;
       } else {
-         default_menu.visible = false;
+         default_menu->visible = false;
          gui_redrawall();
          return false;
       }
+   }
+
+   // clicked app btn
+   if(x >= app_button->x && x <= app_button->x + app_button->width
+      && y >= app_button->y && y <= app_button->y + app_button->height) {
+      for(int i = 0; i < windowCount; i++) {
+         if(gui_windows[i].closed) continue;
+         if(strequ(gui_windows[i].title, "Apps")) {
+            setSelectedWindowIndex(i);
+            return true;
+         }
+      }
+      tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL);
+      selectedWindow->width = 120;
+      selectedWindow->height = 280;
+      selectedWindow->x = surface.width - selectedWindow->width - 20;
+      selectedWindow->y = surface.height - selectedWindow->height - 50;
+      return true;
    }
 
    if(!clicked_on_window(regs, getSelectedWindowIndex(), x, y)) {
@@ -1014,12 +1046,13 @@ void windowmgr_rightclick(void *regs, int x, int y) {
       gui_redrawall();
    }
    // draw menu
-   default_menu.visible = true;
-   default_menu.x = x;
-   default_menu.y = y;
-   if(default_menu.y > surface.height - default_menu.height - TOOLBAR_HEIGHT) {
+   default_menu->visible = true;
+   app_button->visible = true;
+   default_menu->x = x;
+   default_menu->y = y;
+   if(default_menu->y > surface.height - default_menu->height - TOOLBAR_HEIGHT) {
       // menu would be off screen, move up
-      default_menu.y = surface.height - default_menu.height - TOOLBAR_HEIGHT;
+      default_menu->y = surface.height - default_menu->height - TOOLBAR_HEIGHT;
    }
 }
 
@@ -1029,7 +1062,8 @@ void windowmgr_draw() {
       window_draw(render_order[i]);
    }
 
-   windowobj_draw(&default_menu);
+   windowobj_draw(default_menu);
+   windowobj_draw(app_button);
 }
 
 void windowmgr_redrawall() {
@@ -1134,20 +1168,20 @@ void desktop_click(registers_t *regs, int x, int y) {
 
 void windowmgr_mousemove(int x, int y) {
    // check desktop windowobjects
-   if(default_menu.visible) {
+   if(default_menu->visible) {
       // check if within menu
-      int relX_wo = x - default_menu.x;
-      int relY_wo = y - default_menu.y;
-      if(relX_wo > 0 && relX_wo < default_menu.width
-      && relY_wo > 0 && relY_wo < default_menu.height) {
-         if(default_menu.hover_func)
-            default_menu.hover_func((void*)&default_menu, relX_wo, relY_wo);
+      int relX_wo = x - default_menu->x;
+      int relY_wo = y - default_menu->y;
+      if(relX_wo > 0 && relX_wo < default_menu->width
+      && relY_wo > 0 && relY_wo < default_menu->height) {
+         if(default_menu->hover_func)
+            default_menu->hover_func(default_menu, relX_wo, relY_wo);
          return;
       } else {
-         if(default_menu.menuhovered != -1 || default_menu.hovering) {
-            default_menu.menuhovered = -1;
-            default_menu.hovering = false;
-            windowobj_draw(&default_menu);
+         if(default_menu->menuhovered != -1 || default_menu->hovering) {
+            default_menu->menuhovered = -1;
+            default_menu->hovering = false;
+            windowobj_draw(default_menu);
          }
       }
    }

@@ -34,6 +34,15 @@ windowobj_t *create_text(windowobj_t *parent, int x, int y, char *text) {
    return wo;
 }
 
+windowobj_t *create_text_static(windowobj_t *parent, int x, int y, char *text) {
+   windowobj_t *wo = create_wo(parent, WO_TEXT, x, y, 100, 14);
+   char *newtext = (char*)malloc(256);
+   strcpy(newtext, text);
+   wo->text = newtext;
+   wo->bordered = false;
+   return wo;
+}
+
 void set_text(windowobj_t *wo, char *text) {
    strcpy(wo->text, text);
    wo->textpos = strlen(text);

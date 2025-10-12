@@ -13,6 +13,7 @@ windowobj_t *wo_text_o;
 windowobj_t *wo_status_o;
 windowobj_t *wo_save_o;
 windowobj_t *wo_open_o;
+windowobj_t *wo_new_o;
 
 int content_height = 0;
 
@@ -39,8 +40,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 
 void return_fn(void *wo) {
    (void)wo;
+   redraw();
+   wo_text_o->height = wo_text_o->cursory + 10;
    if(wo_text_o->cursory > wo_text_o->height - 2) {
-      wo_text_o->height = wo_text_o->cursory + 12;
       content_height = wo_text_o->height + 25;
       set_content_height(content_height);
       scroll_to(wo_text_o->cursory);
@@ -51,7 +53,7 @@ void return_fn(void *wo) {
 }
 
 void load_file(char *filepath) {
-   FILE *f = fopen(filepath, "r");
+   FILE *f = fopen(filepath, "r+");
    if(!f) {
       char buffer[250];
       sprintf(buffer, "File '%s' not found", filepath);
@@ -76,7 +78,6 @@ void load_file(char *filepath) {
    wo_text_o->textpos = size;
    wo_text_o->cursor_textpos = size;
    wo_text_o->text[wo_text_o->textpos] = '\0';
-   wo_text_o->return_func = return_fn;
    
    redraw();
    wo_text_o->height = wo_text_o->cursory + 10;
@@ -91,19 +92,36 @@ void path_return() {
    end_subroutine();
 }
 
+void error(char *msg) {
+   display_popup("Error", msg, false, NULL);
+   set_text(wo_status_o, "Error");
+}
+
 void save_func(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   set_text((windowobj_t*)wo_status_o, "Saving...");
+   set_text(wo_status_o, "Saving...");
+   if(current_file == NULL) {
+      // new file
+      if(wo_path_o->text[0] == '/') {
+         FILE *f = fopen(wo_path_o->text, "w");
+         if(!f) {
+            error("Couldn't create file");
+         }
+         current_file = f;
+      } else {
+         error("Invalid path");
+      }
+   }
 
-   int w = fwrite(wo_path_o->text, strlen(wo_text_o->text), 1, current_file);
-   debug_printf("Wrote %i bytes\n", w);
+   fseek(current_file, 0, SEEK_SET);
+   int w = fwrite(wo_text_o->text, strlen(wo_text_o->text), 1, current_file);
+   debug_println("Wrote %i bytes", w);
    if(w <= 0 && strlen(wo_text_o->text) > 0) {
-      display_popup("Error", "Write failed", false, NULL);
-      set_text((windowobj_t*)wo_status_o, "Error");
+      error("Write failed");
    } else {
       fflush(current_file);
-      set_text((windowobj_t*)wo_status_o, "Saved");
+      set_text(wo_status_o, "Saved");
    }
 
    end_subroutine();
@@ -118,6 +136,13 @@ void open_func(void *wo, void *regs) {
    (void)wo;
    (void)regs;
    display_filepicker(&filepicker_return);
+   end_subroutine();
+}
+
+void new_func(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
+   launch_task("/sys/text.elf", 0, NULL, false);
    end_subroutine();
 }
 
@@ -141,12 +166,19 @@ void _start(int argc, char **args) {
    wo_menu_o->bordered = false;
 
    wo_save_o = create_button(wo_menu_o, x, 2, "Save");
+   wo_save_o->width = 35;
    wo_save_o->click_func = &save_func;
    x += wo_save_o->width + padding;
 
-   wo_open_o = create_button(wo_menu_o, x, 2, "Browse");
+   wo_open_o = create_button(wo_menu_o, x, 2, "Open");
+   wo_open_o->width = 35;
    wo_open_o->click_func = &open_func;
    x += wo_open_o->width + padding;
+
+   wo_new_o = create_button(wo_menu_o, x, 2, "New");
+   wo_new_o->width = 35;
+   wo_new_o->click_func = &new_func;
+   x += wo_new_o->width + padding;
 
    wo_path_o = create_text(wo_menu_o, x, 2, "<path>");
    wo_path_o->width = (((width - 10) - x) * 2) / 3;
@@ -164,7 +196,7 @@ void _start(int argc, char **args) {
    wo_text_o = create_text(NULL, 5, 22, "");
    //resize() // resize text buffer
    wo_text_o->width = width - 10;
-   wo_text_o->height = height - 20;
+   wo_text_o->return_func = return_fn;
 
    if(argc == 1 && *args[0] != '\0') {
       if(args[0][0] != '/') {

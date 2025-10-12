@@ -154,7 +154,12 @@ fs_file_t *fs_new(char *path) {
 bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size) {
    if(file->type == FS_TYPE_TERM) {
       //debug_printf("Write %u to window %i\n", size, file->window_index);
-      window_writestrn((char*)buffer, size, 0, file->window_index);
+      int w = file->window_index;
+      if(w > 0 && w < getWindowCount() && !getWindow(w)->closed) {
+         window_writestrn((char*)buffer, size, 0, file->window_index);
+      } else {
+         debug_printf("FS: error writing to window %s\n", file->window_index);
+      }
    } else if(file->type == FS_TYPE_FILE) {
       // write to file
       if(fat_write_file(file->filename, buffer, size) < 0) {

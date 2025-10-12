@@ -7,6 +7,11 @@
 
 #include "../surface_t.h"
 
+static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
+   // 5r 6g 5b
+   return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+}
+
 static inline void write_str(char *str) {
    asm volatile(
       "int $0x30"
@@ -203,15 +208,15 @@ static inline void clear() {
 #define FS_TYPE_TERM 2
 
 typedef struct {
-    char filename[FS_MAX_FILENAME];
-    int type;
-    uint32_t file_size;
-    bool hidden;
+   char filename[FS_MAX_FILENAME];
+   int type;
+   uint32_t file_size;
+   bool hidden;
 } fs_dir_entry_t;
 
 typedef struct {
-    fs_dir_entry_t *entries;
-    int size;
+   fs_dir_entry_t *entries;
+   int size;
 } fs_dir_content_t;
 
 static inline fs_dir_content_t *read_dir(char *path) {
@@ -473,6 +478,15 @@ static inline void scroll_to(uint32_t y) {
       "int $0x30"
       :: "a" (56),
       "b" (y)
+   );
+}
+
+static inline void set_window_size(int width, int height) {
+      asm volatile (
+      "int $0x30"
+      :: "a" (60),
+      "b" (width),
+      "c" (height)
    );
 }
 

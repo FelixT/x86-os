@@ -68,15 +68,19 @@ void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw)
 
 }
 
-void map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw) {
+int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw) {
    uint32_t phys_start = page_align_down(phys_addr);
    uint32_t virt_start = page_align_down(virt_addr);
-    
+
    uint32_t phys_end = page_align_up(phys_addr + size);
-    
+
+   int mapped = 0;
    for(uint32_t paddr = phys_start, vaddr = virt_start; paddr < phys_end; paddr += PAGE_SIZE, vaddr += PAGE_SIZE) {
       map(dir, paddr, vaddr, user, rw);
+      mapped++;
    }
+
+   return mapped;
 }
 
 extern uint32_t kernel_end;

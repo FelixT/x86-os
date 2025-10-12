@@ -35,7 +35,7 @@ typedef struct task_state_t {
    char routine_name[32];
    page_dir_entry_t *page_dir;
    uint32_t *allocated_pages[128]; // pointers as returned by malloc
-   uint16_t no_allocated;
+   int no_allocated;
    bool in_syscall;
    uint16_t syscall_no;
    char working_dir[256]; // current working directory

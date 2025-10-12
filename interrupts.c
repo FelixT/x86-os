@@ -332,6 +332,9 @@ void software_handler(registers_t *regs) {
       case 59:
          api_fsize(regs);
          break;
+      case 60:
+         api_set_window_size(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -361,37 +364,43 @@ void keyboard_handler(registers_t *regs) {
 int mouse_cycle = 0;
 uint8_t mouse_data[3];
 
+extern bool mouse_enabled;
 void mouse_handler(registers_t *regs) {
-   // mouse!
-   mouse_data[mouse_cycle] = inb(0x60);
-   
+   if(!mouse_enabled) return;
+
+   uint8_t status = inb(0x64);
+   if(!(status & 0x01) || !(status & 0x20)) return;
+
+   uint8_t data = inb(0x60);
+
+   if(mouse_cycle == 0 && !(data & 0x08))
+      return; // wait for sync
+
+   mouse_data[mouse_cycle] = data;
    mouse_cycle++;
 
    if(mouse_cycle == 3) {
-      int8_t xm = mouse_data[0];
-      int8_t ym = mouse_data[1];
+      int relX = mouse_data[1];
+      int relY = mouse_data[2];
 
       // handle case of negative relative values
-      //int relX = xm - ((mouse_data[1] << 4) & 0x100);
-      //int relY = ym - ((mouse_data[1] << 3) & 0x100);
+      if(mouse_data[0] & 0x10) relX -= 256;
+      if(mouse_data[0] & 0x20) relY -= 256;
 
-      extern bool mouse_enabled;
-      if(mouse_enabled) {
-         mouse_update(xm, ym);
+      mouse_update(relX, relY);
 
-         if(regs) {
-            if(mouse_data[2] & 0x2)
-               mouse_rightclick(regs);
-            else if(mouse_data[2] & 0x1)
-               mouse_leftclick(regs, xm, ym);
-            else
-               mouse_release(regs);
-         }
-         if(xm != 0 || ym != 0) {
-            gui_cursor_save_bg(); // save pixels at new cursor location
-            gui_cursor_draw();
-         }
+      if(regs) {
+         if(mouse_data[0] & 0x2)
+            mouse_rightclick(regs);
+         else if(mouse_data[0] & 0x1)
+            mouse_leftclick(regs, relX, relY);
+         else
+            mouse_release(regs);
+      }
       
+      if(relX != 0 || relY != 0) {
+         gui_cursor_save_bg();
+         gui_cursor_draw();
       }
 
       mouse_cycle = 0;

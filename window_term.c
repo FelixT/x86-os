@@ -209,7 +209,7 @@ void term_cmd_help() {
    window_term_printf("TEST, DESKTOP\n");
    window_term_printf("MEM <x>, DMPMEM x <y>\n");
    window_term_printf("BG colour, BGIMG path\n");
-   window_term_printf("PADDING size, REDRAWALL, RESIZE x y\n");
+   window_term_printf("PADDING size, REDRAWALL\n");
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -236,14 +236,14 @@ void term_cmd_tasks() {
    for(int i = 0; i < TOTAL_TASKS; i++) {
       window_term_printf("\n%i: ", i);
       if(tasks[i].enabled) {
-         window_term_printf("Enabled <w%i %s>", tasks[i].window, gui_get_windows()[tasks[i].window].title);
+         window_term_printf("<w%i %s>", tasks[i].window, gui_get_windows()[tasks[i].window].title);
          if(tasks[i].in_routine)
             window_term_printf(" <routine %s>", tasks[i].routine_name);
          if(tasks[i].privileged)
             window_term_printf(" privileged");
          if(tasks[i].paused)
             window_term_printf(" paused");
-         window_term_printf(" eip 0x%h", tasks[i].registers.eip);
+         window_term_printf(" eip 0x%h, allocated %i / %i kb, heap size %i", tasks[i].registers.eip, tasks[i].no_allocated, tasks[i].no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].heap_end - tasks[i].heap_start);
       } else {
          window_term_printf("Disabled");
       }
@@ -281,14 +281,6 @@ void term_cmd_desktop() {
 
 void term_cmd_launch(registers_t *regs, char *arg) {
    tasks_launch_elf(regs, arg, 0, NULL);
-}
-
-void term_cmd_resize(registers_t *regs, gui_window_t *window, char *arg) {
-   char arg2[10];
-   if(!strsplit(arg, arg2, arg, ' ')) return;
-   int width = stoi(arg);
-   int height = stoi(arg2);
-   window_resize(regs, window, width, height);
 }
 
 void term_cmd_bg(char *arg) {
@@ -330,7 +322,7 @@ void term_cmd_mem(char *arg) {
       for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
          if(status[i].allocated) used++;
       }
-      window_term_printf("%i/%i allocated\n", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE);
+      window_term_printf("%i/%i (%i kb / %i kb) allocated\n", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, used*MEM_BLOCK_SIZE/1000, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE*MEM_BLOCK_SIZE/1000);
    }
 }
 
@@ -431,8 +423,6 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_padding((char*)arg);
    else if(strequ(command, "LAUNCH"))
       term_cmd_launch(regs, (char*)arg);
-   else if(strequ(command, "RESIZE"))
-      term_cmd_resize(regs, selected, (char*)arg);
    else if(strequ(command, "BGIMG"))
       term_cmd_bgimg((char*)arg);
    else if(strequ(command, "BG"))

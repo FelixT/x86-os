@@ -186,7 +186,6 @@ windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text
       strcpy(newtext, text);
       button->text = newtext;
    }
-   button->text = text;
    button->click_func = func;
    window->window_objects[window->window_object_count++] = button;
    windowobj_draw(button);

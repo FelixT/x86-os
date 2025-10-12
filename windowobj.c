@@ -39,6 +39,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->oneline = false;
    windowobj->bordered = true;
    windowobj->colour_bg = COLOUR_WHITE;
+   windowobj->colour_text = COLOUR_BLACK;
    windowobj->colour_border = rgb16(120, 120, 120);
    windowobj->colour_bg_hover = rgb16(240, 240, 240);
    windowobj->colour_border_hover = rgb16(40, 40, 40);
@@ -58,6 +59,7 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
    int x = wo->textpadding + 1;
    int y = wo->textpadding + 1;
+   
    if(wo->textvalign)
       y = (wo->height - (getFont()->height + wo->textpadding))/2+1;
    if(wo->texthalign) {
@@ -130,7 +132,7 @@ void windowobj_draw(void *windowobj) {
    
    uint16_t bg = wo->colour_bg;
    uint16_t border = wo->colour_border;
-   uint16_t text = 0;
+   uint16_t text = wo->colour_text;
    uint16_t light = rgb16(235, 235, 235);
    uint16_t dark = rgb16(145, 145, 145);
 
@@ -303,7 +305,10 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
       } else {
          // task
          gui_interrupt_switchtask(regs);
-         task_call_subroutine(regs, "worelease", (uint32_t)(wo->release_func), NULL, 0);
+         char **args = malloc(sizeof(char*));
+         args[0] = (char*)wo;
+         map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+         task_call_subroutine(regs, "worelease", (uint32_t)(wo->release_func), (uint32_t*)args, 1);
       }
    }
    return true;
@@ -353,7 +358,10 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
          ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
       } else {
          gui_interrupt_switchtask(regs);
-         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), NULL, 0);
+         char **args = malloc(sizeof(char*));
+         args[0] = (char*)wo;
+         map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), (uint32_t*)args, 1);
       }
    }
 }
