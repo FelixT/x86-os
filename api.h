@@ -56,5 +56,6 @@ void api_new_file(registers_t *regs);
 void api_mkdir(registers_t *regs);
 void api_rename(registers_t *regs);
 void api_set_window_size(registers_t *regs);
+void api_get_font_info(registers_t *regs);
 
 #endif

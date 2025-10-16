@@ -490,6 +490,21 @@ static inline void set_window_size(int width, int height) {
    );
 }
 
+typedef struct font_info_t {
+   int width;
+   int height;
+} font_info_t;
+
+static inline font_info_t get_font_info() {
+   font_info_t info;
+      asm volatile (
+      "int $0x30"
+      : "=b" (info.width), "=c" (info.height)
+      : "a" (61)
+   );
+   return info;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(uint32_t addr) {

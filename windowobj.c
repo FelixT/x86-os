@@ -23,6 +23,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->hovering = false;
    windowobj->clicked = false;
    windowobj->disabled = false;
+   windowobj->isstatic = false;
    windowobj->textpos = 0;
    windowobj->textvalign = true;
    windowobj->texthalign = true;
@@ -59,7 +60,7 @@ void windowobj_drawstr(windowobj_t *wo, uint16_t colour) {
 
    int x = wo->textpadding + 1;
    int y = wo->textpadding + 1;
-   
+
    if(wo->textvalign)
       y = (wo->height - (getFont()->height + wo->textpadding))/2+1;
    if(wo->texthalign) {
@@ -140,7 +141,7 @@ void windowobj_draw(void *windowobj) {
       bg = rgb16(200, 200, 200);
 
       wo->clicked = wo->clicked && mouse_held;
-      if(wo->clicked) {
+      if(wo->clicked && !wo->isstatic) {
          bg = rgb16(185, 185, 185);
          text = rgb16(40, 40, 40);
       } else {
@@ -167,7 +168,6 @@ void windowobj_draw(void *windowobj) {
       draw_line(wo->window_surface, dark,  wo->x, wo->y, false, wo->width);
       draw_line(wo->window_surface, light, wo->x, wo->y + wo->height - 1, false, wo->width);
       draw_line(wo->window_surface, light, wo->x + wo->width - 1, wo->y, true,  wo->height);
-
 
    } else if(wo->type == WO_TEXT) {
 
@@ -243,7 +243,7 @@ void windowobj_draw(void *windowobj) {
    }
    windowobj_drawstr(wo, text);
 
-   if(wo->type == WO_TEXT && wo->clicked) {
+   if(wo->type == WO_TEXT && wo->clicked && !wo->isstatic) {
       // draw cursor
       draw_rect(wo->window_surface, text, wo->x + wo->cursorx, wo->y + wo->cursory, getFont()->width, 2);
    }
@@ -314,6 +314,7 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
    return true;
 }
 
+extern windowobj_t *default_menu;
 void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
@@ -323,11 +324,25 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
    wo->clicked = true;
 
    if(wo->type == WO_MENU) {
+      wo->menuselected = wo->menuhovered;
       if(wo->menuhovered >= 0) {
          windowobj_menu_t *item = &wo->menuitems[wo->menuhovered];
-         if(item->func != NULL)
-            item->func();
-         wo->menuselected = wo->menuhovered;
+         if(item->func != NULL) {
+            // task
+            if(wo == default_menu || get_task_from_window(getSelectedWindowIndex()) == -1) {
+               // kernel
+               item->func();
+            } else {
+               // task
+               if(!gui_interrupt_switchtask(regs)) return;
+
+               windowobj_t **args = malloc(sizeof(windowobj_t*) * 1);
+               args[0] = wo;
+            
+               task_call_subroutine(regs, "menuselect", (uint32_t)item->func, (uint32_t*)args, 1);
+               return;
+            }
+         }
       }
    }
 
@@ -462,7 +477,7 @@ void windowobj_move_cursor_vertical(windowobj_t *wo, int direction) {
 void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
-   if(wo->disabled) return;
+   if(wo->disabled || wo->isstatic) return;
 
    // call keydown on all clicked children
    for(int i = 0; i < wo->child_count; i++) {

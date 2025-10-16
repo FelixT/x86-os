@@ -147,7 +147,8 @@ fs_file_t *fs_new(char *path) {
       debug_printf("FS: file %s already exists\n", path);
       return NULL;
    }
-   fat_new_file(path);
+   if(!fat_new_file(path))
+      return NULL;
    return fs_open(path);
 }
 

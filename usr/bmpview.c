@@ -29,6 +29,8 @@ typedef struct {
 
 uint16_t *framebuffer;
 uint8_t *bmp;
+uint16_t *bmpbuffer;
+uint32_t rowSize;
 bmp_info_t *info;
 int bufferwidth = 0;
 int width = 0;
@@ -36,10 +38,9 @@ int height = 0;
 char path[256];
 
 windowobj_t *wo_menu;
+windowobj_t *options = NULL;
 
-windowobj_t *clearbtn_wo;
 windowobj_t *colour_wo;
-windowobj_t *colourbtn_wo;
 windowobj_t *zoominbtn_wo;
 windowobj_t *zoomtext_wo;
 windowobj_t *zoomoutbtn_wo;
@@ -48,7 +49,7 @@ windowobj_t *savebtn_wo;
 windowobj_t *toolminusbtn_wo;
 windowobj_t *toolsizetext_wo;
 windowobj_t *toolplusbtn_wo;
-int size = 1; 
+int size = 2;
 int scale = 1;
 int colour = 0;
 int offsetX = 0;
@@ -72,25 +73,102 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 static inline int min(int a, int b) { return (a < b) ? a : b; }
 static inline int max(int a, int b) { return (a > b) ? a : b; }
 
+int brush_type = 0;
+
+static const uint8_t brush_patterns[][8] = {
+   { // default
+      0b01111110,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b01111110,
+   },
+   { // circle
+      0b00011000,
+      0b01111110,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b01111110,
+      0b00011000,
+   },
+   { // square
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+   }, // cross
+   {
+      0b00011000,
+      0b00011000,
+      0b00011000,
+      0b11111111,
+      0b11111111,
+      0b00011000,
+      0b00011000,
+      0b00011000,
+   }, // spray
+   {
+      0b01000010,
+      0b00100100,
+      0b10010001,
+      0b01001010,
+      0b00100100,
+      0b10010001,
+      0b01000010,
+      0b00100100,
+   }, // custom (todo)
+   {
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+      0b11111111,
+   },
+};
+
 void set(int x, int y) {
-   if (x < 0 || x >= bufferwidth || y < 0 || y >= height) return;
-   
    int brush_size = size * scale;
    
-   // Calculate safe drawing bounds
+   if(x < 0 || x >= info->width || x >= bufferwidth || y < 0 || y >= height || y >= info->width) return;
+
    int start_x = max(0, x);
    int end_x = min(bufferwidth, x + brush_size);
    int start_y = max(0, y);
    int end_y = min(height, y + brush_size);
    
-   // Draw without bounds checking in inner loop
    for(int py = start_y; py < end_y; py++) {
       for(int px = start_x; px < end_x; px++) {
+         int pattern_y = ((py-y) * 8) / brush_size;
+         int pattern_x = ((px-x) * 8) / brush_size;
+         
+         // check pattern
+         if(size > 1 && !(brush_patterns[brush_type][pattern_y] & (1 << (7 - pattern_x)))) 
+            continue;
+
          framebuffer[px + py * bufferwidth] = colour;
+
+         // set bmp
+         if(info->bpp != 16) return;
+         int rowOffset = (info->height - ((py + offsetY)/scale + 1)) * rowSize;
+         int index = rowOffset / 2 + px/scale;
+         if(index >= (int)info->dataSize) return;
+         bmpbuffer[index] = colour;
       }
    }
    
-   redraw_pixel(x, y);
+   //redraw_pixel(x, y);
 }
 
 int abs(int i) {
@@ -139,6 +217,12 @@ int prevY = -1;
 
 void click(int x, int y) {
 
+   if(x > width) // clicked scrollarea
+      end_subroutine();
+
+   if(options && options->visible)
+      end_subroutine();
+
    set(x, y);
    if(prevX == -1) prevX = x;
    if(prevY == -1) prevY = y;
@@ -161,17 +245,6 @@ void release() {
    prevY = -1;
 
    end_subroutine();
-}
-
-void clear_click(void *wo, void *regs) {
-   (void)wo;
-   (void)regs;
-   clear();
-
-   bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
-
-   end_subroutine();
-
 }
 
 void tool_click(void *wo, void *regs) {
@@ -275,6 +348,10 @@ void load_img() {
    info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    if(bmp_check())
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+
+   bmp_header_t *header = (bmp_header_t*)bmp;
+   bmpbuffer = (uint16_t*)(&bmp[0] + header->dataOffset);
+   rowSize = ((info->width * 2 + 3) / 4) * 4;
 }
 
 // filepicker callback
@@ -316,28 +393,7 @@ void save_click(void *wo, void *regs) {
    if(height/scale < maxY)
       maxY = height/scale;
 
-   uint16_t *pixels16bit = (uint16_t*)(&bmp[0] + header->dataOffset);
    uint32_t rowSize = ((info->width * 2 + 3) / 4) * 4;
-
-   for(int yi = 0; yi < maxY; yi++) {
-      int rowOffset = (info->height - (yi + 1)) * rowSize; // BMP is bottom-up
-      
-      for(int xi = 0; xi < maxX; xi++) {
-         // Calculate framebuffer position (scaled)
-         int fx = xi * scale; // source x coordinate in framebuffer
-         int fy = yi * scale; // source y coordinate in framebuffer
-         
-         // Bounds check for framebuffer
-         uint16_t colour = 0; // default black
-         if(fx >= 0 && fx < width && fy >= 0 && fy < height) {
-               colour = framebuffer[fy * bufferwidth + fx];
-         }
-         
-         // Write to bitmap
-         int index16 = rowOffset / 2 + xi;
-         pixels16bit[index16] = colour;
-      }
-   }
 
    uint32_t size = header->dataOffset + rowSize * info->height;
    fseek(current_file, 0, SEEK_SET);
@@ -353,6 +409,58 @@ void scroll(int deltaY, int offY) {
    (void)deltaY;
    offsetY = offY;
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
+   end_subroutine();
+}
+
+void brush_callback(windowobj_t *wo) {
+   brush_type = wo->menuselected;
+
+   end_subroutine();
+}
+
+void brush_close() {
+   options->visible = false;
+   clear();
+   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
+
+   end_subroutine();
+}
+
+void brush_click(void *wo) {
+   (void)wo;
+
+   if(options != NULL) {
+      options->visible = true;
+      end_subroutine();
+   }
+
+   // create canvas
+   options = create_canvas(NULL, 20, 20, 100, 120);
+   create_text_static(options, 5, 8, "Brush type:");
+   windowobj_t *menu = create_wo(options, WO_MENU, 5, 20, 90, 75);
+   windowobj_t *close = create_button(options, 5, 100, "Close");
+   close->release_func = &brush_close;
+   menu->menuitems = (windowobj_menu_t*)malloc(sizeof(windowobj_menu_t) * 2);
+   windowobj_menu_t generic;
+   generic.disabled = false;
+   generic.func = &brush_callback;
+
+   menu->menuitem_count = 5;
+   for(int i = 0; i < menu->menuitem_count; i++)
+      menu->menuitems[i] = generic;
+   strcpy(menu->menuitems[0].text, "Default");
+   strcpy(menu->menuitems[1].text, "Circle");
+   strcpy(menu->menuitems[2].text, "Square");
+   strcpy(menu->menuitems[3].text, "Cross");
+   strcpy(menu->menuitems[4].text, "Spray");
+   end_subroutine();
+}
+
+// discard changes
+void clear_click(void *wo, void *regs) {
+   (void)wo;
+   (void)regs;
+   load_img(path);
    end_subroutine();
 }
 
@@ -376,6 +484,8 @@ void _start(int argc, char **args) {
          strcpy(path, args[0]);
       }
    }
+   
+   load_img();
 
    override_click((uint32_t)&click);
    override_drag((uint32_t)&click);
@@ -383,8 +493,6 @@ void _start(int argc, char **args) {
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
    clear();
-   
-   load_img();
 
    framebuffer = (uint16_t*)(get_surface().buffer);
    bufferwidth = get_surface().width;
@@ -398,39 +506,9 @@ void _start(int argc, char **args) {
    int margin = 3;
    int x = margin;
    int y = 2;
-   clearbtn_wo = create_button(wo_menu, x, y, "Clear");
-   clearbtn_wo->click_func = &clear_click;
-   x += clearbtn_wo->width + margin;
-
-   toolminusbtn_wo = create_button(wo_menu, x, y, "-");
-   toolminusbtn_wo->width = 20;
-   toolminusbtn_wo->click_func = &toolminus_click;
-   x += toolminusbtn_wo->width;
-
-   toolsizetext_wo = create_text(wo_menu, x, y, "1");
-   toolsizetext_wo->width = 20;
-   toolsizetext_wo->texthalign = true;
-   toolsizetext_wo->textvalign = true;
-   toolsizetext_wo->textpadding = 0;
-   x += toolsizetext_wo->width;
-
-   toolplusbtn_wo = create_button(wo_menu, x, y, "+");
-   toolplusbtn_wo->width = 20;
-   toolplusbtn_wo->click_func = &tool_click;
-   x += toolplusbtn_wo->width + margin;
-
-   colour_wo = create_canvas(wo_menu, x, y, 14, 14);
-   colour_wo->colour_bg = 0;
-   colour_wo->colour_bg_hover = 0;
-   colour_wo->click_func = &colour_click;
-   x += colour_wo->width + margin;
-
-   colourbtn_wo = create_button(wo_menu, x, y, "Colour");
-   colourbtn_wo->click_func = &colour_click;
-   x += colourbtn_wo->width + margin;
 
    zoomoutbtn_wo = create_button(wo_menu, x, y,  "-");
-   zoomoutbtn_wo->width = 20;
+   zoomoutbtn_wo->width = 15;
    zoomoutbtn_wo->click_func = &zoomout_click;
    x += zoomoutbtn_wo->width;
 
@@ -441,16 +519,53 @@ void _start(int argc, char **args) {
    x += zoomtext_wo->width;
 
    zoominbtn_wo = create_button(wo_menu, x, y, "+");
-   zoominbtn_wo->width = 20;
+   zoominbtn_wo->width = 15;
    zoominbtn_wo->click_func = &zoomin_click;
    x += zoominbtn_wo->width + margin;
 
    openbtn_wo = create_button(wo_menu, x, y, "Open");
+   openbtn_wo->width = 40;
    openbtn_wo->click_func = &open_click;
    x += openbtn_wo->width + margin;
 
    savebtn_wo = create_button(wo_menu, x, y, "Save");
+   savebtn_wo->width = 40;
    savebtn_wo->click_func = &save_click;
+   x += savebtn_wo->width + margin;
+
+   windowobj_t *clearbtn_wo = create_button(wo_menu, x, y, "Reset");
+   clearbtn_wo->width = 40;
+   clearbtn_wo->click_func = &clear_click;
+   x += clearbtn_wo->width + margin;
+   
+   windowobj_t *brushtxt_wo = create_text_static(wo_menu, x, y, "Brush: ");
+   brushtxt_wo->width = 40;
+   brushtxt_wo->textvalign = true;
+   brushtxt_wo->click_func = (void*)&brush_click;
+   x += brushtxt_wo->width;
+
+   colour_wo = create_canvas(wo_menu, x, y, 14, 14);
+   colour_wo->colour_bg = 0;
+   colour_wo->colour_bg_hover = 0;
+   colour_wo->click_func = &colour_click;
+   x += colour_wo->width + margin;
+
+   toolminusbtn_wo = create_button(wo_menu, x, y, "-");
+   toolminusbtn_wo->width = 15;
+   toolminusbtn_wo->click_func = &toolminus_click;
+   x += toolminusbtn_wo->width;
+
+   toolsizetext_wo = create_text(wo_menu, x, y, "2");
+   toolsizetext_wo->width = 20;
+   toolsizetext_wo->texthalign = true;
+   toolsizetext_wo->textvalign = true;
+   toolsizetext_wo->textpadding = 0;
+   x += toolsizetext_wo->width;
+
+   toolplusbtn_wo = create_button(wo_menu, x, y, "+");
+   toolplusbtn_wo->width = 15;
+   toolplusbtn_wo->click_func = &tool_click;
+   x += toolplusbtn_wo->width + margin;
 
    redraw();
 

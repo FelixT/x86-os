@@ -687,3 +687,10 @@ void api_set_window_size(registers_t *regs) {
    window_resize(NULL, window, width, height);
    gui_redrawall();
 }
+
+void api_get_font_info(registers_t *regs) {
+   // OUT: ebx: system font width
+   // OUT: ecx: system font height
+   regs->ebx = getFont()->width;
+   regs->ecx = getFont()->height;
+} 

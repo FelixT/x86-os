@@ -229,6 +229,7 @@ bool window_init(gui_window_t *window) {
    window->disabled = false;
    window->toolbar_pos = -1;
    window->scrolledY = 0;
+   window->scrollable_content_height = 0;
    window->scrollbar = NULL;
 
    window_resetfuncs(window);
@@ -1281,9 +1282,12 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    window->surface.width = width;
    window->surface.height = height - TITLEBAR_HEIGHT;
 
-   int min_width = min(window->width, old_width);
+   int scrollbarwidth = (window->scrollbar && window->scrollbar->visible) ? window->scrollbar->width : 0;
+
+   int min_width = min(window->width, old_width-scrollbarwidth);
    int min_height = min(window->height, old_height);
    window_clearbuffer(window, window->bgcolour);
+   // copy window
    for(int x = 0; x < min_width; x++) {
       for(int y = 0; y < min_height; y++) {
          window->framebuffer[x + window->surface.width*y] = old_framebuffer[x + old_width*y];

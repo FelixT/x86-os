@@ -51,6 +51,8 @@ $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra us
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/calc.c -o o/calc.elf o/lib/string.o
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/apps.c -o o/apps.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -63,6 +65,8 @@ cp o/bmpview.elf fs_root/sys/bmpview.elf
 cp o/text.elf fs_root/sys/text.elf
 cp o/term.elf fs_root/sys/term.elf
 cp o/calc.elf fs_root/sys/calc.elf
+cp o/apps.elf fs_root/sys/apps.elf
+cp o/interp.elf fs_root/sys/interp.elf
 #cp o/progidle.elf fs_root/sys/progidle.elf
 
 # fonts

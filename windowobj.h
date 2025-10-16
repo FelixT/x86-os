@@ -46,6 +46,7 @@ typedef struct windowobj_t {
    bool visible;
    bool disabled;
    bool oneline; // no return behaviour unless overriden
+   bool isstatic; // not editable
    int textpos; // text length
    int cursor_textpos; // position in text cursor is at
    int cursorx;

@@ -368,7 +368,7 @@ void _start(int argc, char **args) {
    (void)args;
 
    // init
-   set_window_size(320, 260);
+   set_window_size(320, 265);
    set_window_title("File Manager");
 
    dir_content = read_dir("/");
@@ -409,10 +409,13 @@ void _start(int argc, char **args) {
 
    wo_menu = register_windowobj(WO_CANVAS, 0, height - 20, displayedwidth, 20);
    wo_menu->bordered = false;
-   wo_path = create_text(wo_menu, 4, 3, "/");
+
+   strcpy(cur_path, "/");
+   wo_path = create_text(wo_menu, 4, 3, cur_path);
    wo_path->width = displayedwidth - 120;
    wo_path->return_func = &path_callback;
    wo_path->oneline = true;
+
    wo_newfile = create_button(wo_menu, displayedwidth - 114, 3, "+ File");
    wo_newfile->width = 50;
    wo_newfile->click_func = &add_file;

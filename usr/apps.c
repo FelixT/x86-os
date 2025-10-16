@@ -8,12 +8,8 @@
 #include "../lib/string.h"
 #include "lib/wo_api.h"
 
-void app_click(void *wo, void *regs) {
-   windowobj_t *w = (windowobj_t*)wo;
-   end_subroutine();
-}
-
 void app_launch(void *wo, void *regs) {
+   (void)regs;
    windowobj_t *w = (windowobj_t*)wo;
    w->clicked = false;
    w->hovering = false;
@@ -43,9 +39,8 @@ void _start() {
          char name[10];
          strsplit(name, NULL, entry->filename, '.');
          windowobj_t *wo = create_text_static(NULL, 20, y, name);
-         wo->colour_text = rgb16(30, 40, 180);
+         wo->colour_text = rgb16(10, 30, 100);
          wo->release_func = (void*)&app_launch;
-         wo->click_func = (void*)&app_click;
          wo->cursor_textpos = strlen(name);
          wo->width = 75;
 
@@ -59,6 +54,9 @@ void _start() {
    }
 
    free(content, sizeof(fs_dir_content_t) * content->size);
+
+   create_scrollbar(NULL);
+   set_content_height(y);
 
    redraw();
    

@@ -218,14 +218,25 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
 }
 
 bool fat_update_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_dir_t *dir) {
-   uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+   bool inroot = clusterNo == 0;
 
-   uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
+   int entries;
+   uint8_t *dirBuf;
+   uint32_t bufSize;
+   uint32_t dirAddr;
 
-   // read a whole cluster (directory) at once
-   uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
-   uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
-   int entries = dirSize / sizeof(fat_dir_t);
+   if(inroot) {
+      entries = fat_bpb->noRootEntries;
+      bufSize = sizeof(fat_dir_t) * fat_bpb->noRootEntries;
+      dirAddr = rootSector * fat_bpb->bytesPerSector + baseAddr;
+      dirBuf = ata_read_exact(true, true, dirAddr, bufSize);
+   } else {
+      bufSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+      uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+      dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
+      dirBuf = ata_read_exact(true, true, dirAddr, bufSize);
+      entries = bufSize / sizeof(fat_dir_t);
+   }
 
    for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
@@ -234,14 +245,14 @@ bool fat_update_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
          memcpy_fast(dirBuf + i * sizeof(fat_dir_t), dir, sizeof(fat_dir_t)); // update the entry
-         ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
-         free((uint32_t)dirBuf, dirSize);
+         ata_write_exact(true, true, dirAddr, dirBuf, bufSize);
+         free((uint32_t)dirBuf, bufSize);
          return true;
       }
    }
 
    debug_printf("Error: file not found for path '%s'\n", filename);
-   free((uint32_t)dirBuf, dirSize);
+   free((uint32_t)dirBuf, bufSize);
    return false;
 }
 
@@ -315,25 +326,32 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    return allocated;
 }
 
-void fat_new_file(char *path) {
+bool fat_new_file(char *path) {
    // get directory cluster
-   fat_dir_t *dir = fat_parse_path(path, false);
-   if(dir == NULL) {
-      debug_printf("Error: directory not found for path '%s'\n", path);
-      return;
+   char filenamefull[256];
+   char parentpath[256];
+   strsplit_last(parentpath, filenamefull, path, '/');
+   if(strequ(parentpath, ""))
+      strcpy(parentpath, "/");
+   if(strlen(filenamefull) > 11) {
+      debug_printf("Filename '%s' too long\n", filenamefull);
+      return false;
+   }
+   strtoupper(filenamefull, filenamefull);
+
+   fat_dir_t *parent = fat_parse_path(parentpath, true);
+   bool inroot = strequ(parentpath, "/");
+   if(!inroot && parent == NULL) {
+      debug_printf("Error: parent directory '%s' not found\n", parentpath);
+      return false;
    }
 
    fat_dir_t *filedir = malloc(sizeof(fat_dir_t));
    memset(filedir, 0, sizeof(fat_dir_t));
 
    // extract filename from path
-   char filenamefull[12];
-   char tmp[12];
    char filename[9];
    char extension[4];
-   // split at last /
-   strsplit_last(NULL, tmp, path, '/');
-   strcpy_fixed(filenamefull, tmp, 12);
    strsplit(filename, extension, filenamefull, '.'); // split at first dot
    strtoupper(filename, filename);
    strtoupper(extension, extension);
@@ -352,42 +370,61 @@ void fat_new_file(char *path) {
       freeCluster++;
    if(freeCluster >= noClusters) {
       debug_printf("Error: no free clusters\n");
-      return;
+      return false;
    }
    ((uint16_t*)fat_table)[freeCluster] = 0xFFFF; // mark as end of chain
-   ((uint16_t*)fat_table)[dir->firstClusterNo] = freeCluster; // link to directory
    filedir->firstClusterNo = freeCluster;
    debug_printf("Found free cluster %u\n", freeCluster);
 
    // find free entry in directory
-   uint32_t dirFirstSector = ((dir->firstClusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
-   uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
-   uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
-   uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
-   int entries = dirSize / sizeof(fat_dir_t);
 
+   int entries;
+   uint8_t *dirBuf;
+   uint32_t bufSize;
+   uint32_t dirAddr;
+
+   if(inroot) {
+      entries = fat_bpb->noRootEntries;
+      bufSize = sizeof(fat_dir_t) * fat_bpb->noRootEntries;
+      dirAddr = rootSector * fat_bpb->bytesPerSector + baseAddr;
+      dirBuf = ata_read_exact(true, true, dirAddr, bufSize);
+    } else {
+      bufSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+      uint32_t dirFirstSector = ((parent->firstClusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+      dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
+      dirBuf = ata_read_exact(true, true, dirAddr, bufSize);
+      entries = bufSize / sizeof(fat_dir_t);
+   }
+
+   bool found = false;
    for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(memcmp((char*)fat_dir->filename, (char*)filedir->filename, 11) == 0) {
          debug_printf("Error: file already exists\n");
-         free((uint32_t)dirBuf, dirSize);
+         free((uint32_t)dirBuf, bufSize);
          free((uint32_t)filedir, sizeof(fat_dir_t));
-         return;
+         return false;
       }
       if(fat_dir->filename[0] == '\0') {
          // found a free entry
          debug_printf("Found free entry %u\n", i);
          memcpy_fast(dirBuf + i * sizeof(fat_dir_t), filedir, sizeof(fat_dir_t)); // copy the new entry
+         found = true;
          break;
       }
    }
-   debug_writestr("Updating directory\n");
-   ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
 
-   debug_writestr("Updating FAT table\n");
-   fat_table_write();
+   if(found) {
+      debug_writestr("Updating directory\n");
+      ata_write_exact(true, true, dirAddr, dirBuf, bufSize);
 
-   return;
+      debug_writestr("Updating FAT table\n");
+      fat_table_write();
+   } else {
+      debug_printf("Error: No free entries found in directory '%'\n", parentpath);
+   }
+
+   return true;
 }
 
 int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
@@ -396,6 +433,11 @@ int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
       debug_printf("Error: file not found for path '%s'\n", path);
       return -1;
    }
+
+   char filenamefull[256];
+   char parentpath[256];
+   strsplit_last(parentpath, filenamefull, path, '/');
+   bool inroot = strequ(parentpath, "/") || strequ(parentpath, "");
 
    uint32_t clusterNo = dir->firstClusterNo;
    uint32_t oldsize = dir->fileSize;
@@ -452,7 +494,7 @@ int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
       curCluster = next;
    }
 
-   // Update the file size in the directory entry
+   // update the file size in the directory entry
    dir->fileSize = size;
    char name[9];
    char extension[4];
@@ -461,11 +503,20 @@ int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {
    strsplit((char*)name, NULL, (char*)name, ' '); // null terminate at first space
    strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
    fat_dir_t *parentDir = fat_parse_path(path, false);
-   debug_printf("Updating file '%s' in directory %u\n", path, parentDir->firstClusterNo);
-   if(!fat_update_in_dir(parentDir->firstClusterNo, name, extension, dir)) {
+   int firstCluster = 0;
+   if(!inroot && !parentDir) {
+      debug_printf("Parent dir '%s' not found\n", parentpath);
+      return -3;
+   }
+   if(!inroot)
+      firstCluster = parentDir->firstClusterNo;
+
+   debug_printf("Updating file '%s' in directory %u\n", path, firstCluster);
+   if(!fat_update_in_dir(firstCluster, name, extension, dir)) {
       debug_printf("Error updating directory entry\n");
       free((uint32_t)dir, sizeof(fat_dir_t));
-      free((uint32_t)parentDir, sizeof(fat_dir_t));
+      if(!inroot)
+         free((uint32_t)parentDir, sizeof(fat_dir_t));
       return -3;
    }
 
@@ -486,11 +537,16 @@ bool fat_new_dir(char *path) {
    }
    strtoupper(dirname, dirname);
    debug_printf("Creating dir %s in parent %s\n", dirname, parentpath);
-   fat_dir_t *parent = fat_parse_path(parentpath, true);
-   if(parent == NULL) {
-      debug_printf("Parent not found\n", path);
-      return false;
+   bool inroot = strequ(parentpath, "/");
+   fat_dir_t *parent = NULL;
+   if(!inroot) {
+      parent = fat_parse_path(parentpath, true);
+      if(parent == NULL) {
+         debug_printf("Parent not found\n", path);
+         return false;
+      }
    }
+
    // create dir
    fat_dir_t *dir = malloc(sizeof(fat_dir_t));
    memset(dir, 0, sizeof(fat_dir_t));
@@ -520,7 +576,7 @@ bool fat_new_dir(char *path) {
    uint32_t newDirAddr = baseAddr + newDirSector * fat_bpb->bytesPerSector;
    uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
     
-    // .
+   // .
    fat_dir_t dot_entry;
    memset(&dot_entry, 0, sizeof(fat_dir_t));
    memset(dot_entry.filename, ' ', 11);
@@ -536,7 +592,7 @@ bool fat_new_dir(char *path) {
    dotdot_entry.filename[0] = '.';
    dotdot_entry.filename[1] = '.';
    dotdot_entry.attributes = 0x12;  // hidden directory attribute
-   dotdot_entry.firstClusterNo = strequ(parentpath, "/") ? 0 : parent->firstClusterNo;
+   dotdot_entry.firstClusterNo = inroot ? 0 : parent->firstClusterNo;
    dotdot_entry.fileSize = 0;
 
     // zero new cluster
@@ -549,35 +605,57 @@ bool fat_new_dir(char *path) {
    ata_write_exact(true, true, newDirAddr, clusterBuf, clusterSize);
    free((uint32_t)clusterBuf, clusterSize);
 
-   // find free entry in parent directory
-   uint32_t dirFirstSector = ((parent->firstClusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
-   uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
-   uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
-   uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
-   int entries = dirSize / sizeof(fat_dir_t);
+   int entries;
+   uint8_t *dirBuf;
+   uint32_t bufSize;
+   uint32_t dirAddr;
 
+   if(inroot) {
+      entries = fat_bpb->noRootEntries;
+      bufSize = sizeof(fat_dir_t) * fat_bpb->noRootEntries;
+      dirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
+      dirBuf = ata_read_exact(true, true, dirAddr, bufSize);
+   } else {
+      bufSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+      uint32_t dirFirstSector = ((parent->firstClusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+      dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
+      dirBuf = ata_read_exact(true, true, dirAddr, bufSize);
+      entries = bufSize / sizeof(fat_dir_t);
+   }
+
+   // look for free entry in dir
+   bool found = false;
    for(int i = 0; i < entries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(memcmp((char*)fat_dir->filename, (char*)dir->filename, 11) == 0) {
          debug_printf("Error: dir already exists\n");
-         free((uint32_t)dirBuf, dirSize);
+         free((uint32_t)dirBuf, bufSize);
          free((uint32_t)dir, sizeof(fat_dir_t));
          return false;
       }
+
       if(fat_dir->filename[0] == '\0') {
          // found a free entry
          debug_printf("Found free entry %u\n", i);
-         memcpy_fast(dirBuf + i * sizeof(fat_dir_t), dir, sizeof(fat_dir_t)); // copy the new entry
+         // set it
+         memcpy_fast(dirBuf + i * sizeof(fat_dir_t), dir, sizeof(fat_dir_t));
+         found = true;
          break;
       }
    }
-   debug_writestr("Updating directory\n");
-   ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
 
-   debug_writestr("Updating FAT table\n");
-   fat_table_write();
+   if(found) {
+      debug_writestr("Updating directory\n");
+      ata_write_exact(true, true, dirAddr, dirBuf, bufSize);
 
-   return true;
+      debug_writestr("Updating FAT table\n");
+      fat_table_write();
+
+      return true;
+   } else {
+      debug_printf("No free entry found in '%'\n", parentpath);
+      return false;
+   }
 
 }
 
@@ -686,17 +764,11 @@ void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t size, v
 
    debug_printf("Buffer size %u task %u\n", state->size, state->task);
 
-   // map to task
-   /*if(task > -1) {
-      for(uint32_t i = (uint32_t)state->buffer/0x1000; i < ((uint32_t)state->buffer+state->size+0xFFF)/0x1000; i++)
-         map(gettasks()[task].page_dir, i*0x1000, i*0x1000, 1, 1);
-   }*/
-
    // kick off read event chain
    events_add(1, &fat_read_file_callback, (void*)state, -1);
 }
 
-// this is broken, but is still used for simple cases
+// this is potentially broken, but is still used in kernel in some places
 // see chunked version above
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 

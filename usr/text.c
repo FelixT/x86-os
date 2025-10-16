@@ -41,8 +41,8 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 void return_fn(void *wo) {
    (void)wo;
    redraw();
-   wo_text_o->height = wo_text_o->cursory + 10;
    if(wo_text_o->cursory > wo_text_o->height - 2) {
+      wo_text_o->height = wo_text_o->cursory + 12;
       content_height = wo_text_o->height + 25;
       set_content_height(content_height);
       scroll_to(wo_text_o->cursory);

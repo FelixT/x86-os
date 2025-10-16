@@ -3,6 +3,11 @@
 #include "../prog_wo.h"
 #include "../../lib/string.h"
 
+int text_width(windowobj_t *wo) {
+   if(!wo || !wo->text) return 0;
+   return strlen(wo->text)*(get_font_info().width+wo->textpadding);
+}
+
 windowobj_t *create_wo(windowobj_t *parent, int type, int x, int y, int width, int height) {
    windowobj_t *wo;
    if(parent == NULL) {
@@ -23,6 +28,7 @@ windowobj_t *create_button(windowobj_t *parent, int x, int y, char *text) {
    char *newtext = (char*)malloc(256);
    strcpy(newtext, text);
    wo->text = newtext;
+   wo->width = text_width(wo) + 16;
    return wo;
 }
 
@@ -40,6 +46,8 @@ windowobj_t *create_text_static(windowobj_t *parent, int x, int y, char *text) {
    strcpy(newtext, text);
    wo->text = newtext;
    wo->bordered = false;
+   wo->width = text_width(wo) + 10;
+   wo->isstatic = true;
    return wo;
 }
 

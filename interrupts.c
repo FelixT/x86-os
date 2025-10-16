@@ -335,6 +335,9 @@ void software_handler(registers_t *regs) {
       case 60:
          api_set_window_size(regs);
          break;
+      case 61:
+         api_get_font_info(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -435,7 +438,7 @@ void timer_handler(registers_t *regs) {
       //if(timer_i%1000)
       //   gui_showtimer(timer_i%10);
 
-      if(timer_i%15 == 0) {
+      if(timer_i%5 == 0) {
          gui_draw();
       }
 

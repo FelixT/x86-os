@@ -26,7 +26,7 @@ void term_cmd_help() {
    // todo: mouse, tasks, prog1, prog2, files, viewbmp, test, desktop, mem, bg, bgimg, padding, redrawall, windowbg, windowtxt
    write_str("\n");
    printf(" CLEAR\n");
-   printf(" LAUNCH path\n");
+   printf(" LAUNCH<w> path\n");
    printf(" FILES, TEXT <path>\n");
    printf(" FAT <path>,\n");
    printf(" FAPPEND <path> <buffer>\n");
@@ -145,7 +145,7 @@ void term_cmd_dmpmem(char *arg) {
    free(buf, rowlen);
 }
 
-void term_cmd_launch(char *arg) {
+void term_cmd_launch(char *arg, bool copy) {
    char patharg[256];
    char fullpath[256];
    char args[256];
@@ -180,10 +180,10 @@ void term_cmd_launch(char *arg) {
          argc++;
       }
       arglist[argc] = NULL;
-      launch_task(fullpath, argc, arglist, true);
+      launch_task(fullpath, argc, arglist, copy);
    } else {
       argtofullpath(fullpath, arg);
-      launch_task(fullpath, 0, NULL, true);
+      launch_task(fullpath, 0, NULL, copy);
    }
 }
 
@@ -395,7 +395,9 @@ void checkcmd(char *buffer) {
    else if(strequ(command, "DMPMEM"))
       term_cmd_dmpmem(arg);
    else if(strequ(command, "LAUNCH"))
-      term_cmd_launch(arg);
+      term_cmd_launch(arg, true);
+   else if(strequ(command, "LAUNCHW"))
+      term_cmd_launch(arg, false);
    else if(strequ(command, "TEXT"))
       term_cmd_text(arg);
    else if(strequ(command, "RGBHEX"))
