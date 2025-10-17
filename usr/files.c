@@ -147,8 +147,8 @@ void path_callback() {
       dir_content = read_dir(cur_path);
       offset = 0;
       display_items();
+      free(content, sizeof(fs_dir_content_t) * content->size);
    }
-   free(content, sizeof(fs_dir_content_t) * content->size);
 
    end_subroutine();
 }
@@ -290,8 +290,10 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_menu->width = w;
    wo_menu->y = height - 20;
    wo_path->width = w - 120;
-   wo_newfile->x = w - 115;
-   wo_newfolder->x = w - 63;
+   int x = wo_path->width + wo_path->x + 2;
+   wo_newfile->x = x;
+   x += wo_newfile->width + 2;
+   wo_newfolder->x = x;
 
    display_items();
    redraw();
@@ -411,17 +413,21 @@ void _start(int argc, char **args) {
    wo_menu->bordered = false;
 
    strcpy(cur_path, "/");
-   wo_path = create_text(wo_menu, 4, 3, cur_path);
+   int x = 4;
+   int y = 3;
+   wo_path = create_text(wo_menu, x, 3, cur_path);
    wo_path->width = displayedwidth - 120;
    wo_path->return_func = &path_callback;
    wo_path->oneline = true;
+   x += wo_path->width + 2;
 
-   wo_newfile = create_button(wo_menu, displayedwidth - 114, 3, "+ File");
-   wo_newfile->width = 50;
+   wo_newfile = create_button(wo_menu, x, y, "+ File");
    wo_newfile->click_func = &add_file;
+   wo_newfile->width = 55;
+   x += wo_newfile->width + 2;
 
-   wo_newfolder = create_button(wo_menu, displayedwidth - 63, 3, "+ Folder");
-   wo_newfolder->width = 62;
+   wo_newfolder = create_button(wo_menu, x, y, "+ Folder");
+   wo_newfolder->width = 55;
    wo_newfolder->click_func = &add_folder;
 
    display_items();

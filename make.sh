@@ -41,9 +41,12 @@ nasm usr/progidle.asm -f bin -o o/progidle.bin
 #nasm progidle.asm -f elf32 -o o/progidle.o
 #$LD o/progidle.o -o o/progidle.elf
 
+# c libs
 $GCC -c usr/lib/wo_api.c -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra -o o/lib/wo_api.o
 $GCC -c usr/lib/stdio.c -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra -o o/lib/stdio.o
+$GCC -c usr/lib/map.c -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra -o o/lib/map.o
 
+# c progs
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/prog3.c -o o/prog3.elf 
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/prog4.c -o o/prog4.elf o/lib/string.o o/lib/stdio.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/files.c -o o/files.elf o/lib/string.o o/lib/wo_api.o  o/lib/stdio.o
@@ -52,7 +55,7 @@ $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra us
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/calc.c -o o/calc.elf o/lib/string.o
 $GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/apps.c -o o/apps.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o
-$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o
+$GCC -ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/map.o
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin

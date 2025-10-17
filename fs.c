@@ -90,8 +90,11 @@ fs_dir_content_t *fs_read_dir(char *path) {
       return content;
    } else {
       fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
-      if(entry == NULL)
-         return content;
+      if(entry == NULL) {
+         // not found
+         free((uint32_t)content, sizeof(fat_dir_t));
+         return NULL;
+      }
       if(entry->attributes & 0x10) {
          int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
          fat_dir_t *items = malloc(size*sizeof(fat_dir_t));

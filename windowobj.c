@@ -138,7 +138,8 @@ void windowobj_draw(void *windowobj) {
    uint16_t dark = rgb16(145, 145, 145);
 
    if(wo->type == WO_BUTTON || wo->type == WO_SCROLLER) {
-      bg = rgb16(200, 200, 200);
+      windowmgr_settings_t *wm_settings = windowmgr_get_settings();
+      bg = wm_settings->titlebar_colour;
 
       wo->clicked = wo->clicked && mouse_held;
       if(wo->clicked && !wo->isstatic) {
@@ -146,14 +147,13 @@ void windowobj_draw(void *windowobj) {
          text = rgb16(40, 40, 40);
       } else {
          if(wo->hovering)
-            bg = rgb16(220, 220, 220);
+            bg = rgb16(224, 224, 224);
 
          uint16_t tmp = light;
          light = dark;
          dark = tmp;
       }
 
-      windowmgr_settings_t *wm_settings = windowmgr_get_settings();
       if(wm_settings->theme == 1) {
          // gradient button
          if(wo->hovering)
@@ -304,7 +304,10 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
          wo->release_func(windowobj, regs, relX, relY);
       } else {
          // task
-         gui_interrupt_switchtask(regs);
+         if(!gui_interrupt_switchtask(regs)) {
+            debug_printf("Couldn't switch to task\n");
+            return true;
+         }
          char **args = malloc(sizeof(char*));
          args[0] = (char*)wo;
          map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
@@ -372,7 +375,10 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
          // supply with regs so we can switch task
          ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
       } else {
-         gui_interrupt_switchtask(regs);
+         if(!gui_interrupt_switchtask(regs)) {
+            debug_printf("Couldn't switch to task\n");
+            return;
+         }
          char **args = malloc(sizeof(char*));
          args[0] = (char*)wo;
          map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
@@ -506,11 +512,12 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    switch(scan_code) {
       case 28: // return
          if(wo->return_func != NULL) {
-            gui_interrupt_switchtask(regs);
             if(get_task_from_window(getSelectedWindowIndex()) == -1) // kernel
                wo->return_func(wo);
-            else // usr
+            else { // usr
+               if(!gui_interrupt_switchtask(regs)) return;
                task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), NULL, 0);
+            }
 
             if(!wo->oneline) // still do default behaviour
                c = '\n';
