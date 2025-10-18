@@ -52,6 +52,7 @@ void window_close(void *regs, int windowIndex);
 void window_mouserelease(registers_t *regs, gui_window_t *window);
 int get_window_index_from_pointer(gui_window_t *window);
 void window_resetfuncs(gui_window_t *window);
+void window_removefuncs(gui_window_t *window);
 void window_disable(gui_window_t *window);
 void window_draw_outline(gui_window_t *window, bool occlude);
 windowmgr_settings_t *windowmgr_get_settings();

@@ -468,7 +468,7 @@ void _start(int argc, char **args) {
    set_window_title("BMP Viewer");
 
    if(argc != 1) {
-      write_str("Wrong number of arguments provided");
+      printf("Wrong number of arguments provided\n");
       exit(0);
    }
 
@@ -500,7 +500,7 @@ void _start(int argc, char **args) {
    height = get_height();
 
    // menu
-   wo_menu = register_windowobj(WO_CANVAS, 0, height - 18, width, 18);
+   wo_menu = create_canvas(NULL, 0, height - 18, width, 18);
    wo_menu->bordered = false;
    // window objects
    int margin = 3;

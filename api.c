@@ -250,8 +250,24 @@ void api_queue_event(registers_t *regs) {
 }
 
 void api_register_windowobj(registers_t *regs) {
+   // IN: ebx = index of child window or -1 for task's main window
    // OUT: ebx = windowobj
+   int index = regs->ebx;
+
    gui_window_t *window = api_get_window();
+   if(index >= 0) {
+      if(index < window->child_count) {
+         window = window->children[index];
+      } else {
+         regs->ebx = 0;
+         return;
+      }
+   }
+
+   if(!window || window->closed) {
+      regs->ebx = 0;
+      return;
+   }
 
    windowobj_t *wo = malloc(sizeof(windowobj_t));
    windowobj_init(wo, &window->surface);
@@ -262,6 +278,8 @@ void api_register_windowobj(registers_t *regs) {
 }
 
 void api_windowobj_add_child(registers_t *regs) {
+   // only works on task's main window
+
    // IN: ebx = parent windowobj
    // OUT: ebx = child windowobj
    gui_window_t *window = api_get_window();
@@ -693,4 +711,32 @@ void api_get_font_info(registers_t *regs) {
    // OUT: ecx: system font height
    regs->ebx = getFont()->width;
    regs->ecx = getFont()->height;
-} 
+}
+
+void api_create_window(registers_t *regs) {
+   // IN ebx: width
+   // IN ecx: height
+   // OUT ebx: child index
+   int width = regs->ebx;
+   int height = regs->ecx;
+   if(width < 50) width = 50;
+   if(height < 50) height = 50;
+
+   gui_window_t *parent = api_get_window();
+   if(parent->child_count == 10) {
+      regs->ebx = -1;
+      return;
+   }
+   int i = windowmgr_add();
+   if(i <= 0) {
+      regs->ebx = -1;
+      return;
+   }
+   gui_window_t *newwindow = getWindow(i);
+   window_removefuncs(newwindow);
+   int c = parent->child_count;
+   parent->children[c] = newwindow;
+   parent->child_count++;
+   window_resize(regs, newwindow, width, height);
+   regs->ebx = c;
+}

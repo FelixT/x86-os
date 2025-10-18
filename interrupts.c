@@ -338,6 +338,9 @@ void software_handler(registers_t *regs) {
       case 61:
          api_get_font_info(regs);
          break;
+      case 62:
+         api_create_window(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

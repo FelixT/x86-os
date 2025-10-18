@@ -24,7 +24,7 @@ typedef struct task_state_t {
    uint32_t prog_size;
    registers_t registers;
    bool privileged; // 0 = user, 1 = kernel
-   int window;
+   int window; // the task's main window. additional windows are children of this
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;
    registers_t routine_return_regs;

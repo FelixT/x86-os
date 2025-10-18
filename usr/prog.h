@@ -505,6 +505,18 @@ static inline font_info_t get_font_info() {
    return info;
 }
 
+static inline int create_window(int width, int height) {
+   int index;
+      asm volatile (
+      "int $0x30"
+      : "=b" (index)
+      : "a" (62),
+      "b" (width),
+      "c" (height)
+   );
+   return index;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(uint32_t addr) {

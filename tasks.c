@@ -214,8 +214,8 @@ void tasks_init(registers_t *regs) {
 void switch_task(registers_t *regs) {
    if(!switching)
       return;
-      // save registers
-   tasks[current_task].registers = *regs;
+
+   int old_task = current_task;
 
    if(task_exists()) {
       // find next enabled task (round robin)
@@ -223,16 +223,20 @@ void switch_task(registers_t *regs) {
          current_task++;
          current_task%=TOTAL_TASKS;
       } while(!tasks[current_task].enabled || tasks[current_task].paused);
+         
+      if(tasks[current_task].page_dir != page_get_current())
+         swap_pagedir(tasks[current_task].page_dir);
 
-      if(!tasks[current_task].enabled)
-         debug_writestr("Task isn't enabled!\n");
+      if(old_task != current_task) {
+         // save registers
+         tasks[old_task].registers = *regs;
 
-      // swap page
-      swap_pagedir(tasks[current_task].page_dir);
-
-      // restore registers
-      *regs = tasks[current_task].registers;
+         // restore registers
+         *regs = tasks[current_task].registers;
+      }
    } else {
+      // save registers
+      tasks[old_task].registers = *regs;
       tasks_init(regs);
    }
 }
@@ -249,8 +253,7 @@ bool switch_to_task(int index, registers_t *regs) {
       return false;
    }
 
-   // save registers
-   tasks[current_task].registers = *regs;
+   int old_task = current_task;
 
    current_task = index;
 
@@ -258,8 +261,13 @@ bool switch_to_task(int index, registers_t *regs) {
    if(page_get_current() != tasks[current_task].page_dir)
       swap_pagedir(tasks[current_task].page_dir);
 
-   // restore registers
-   *regs = tasks[current_task].registers;
+   if(current_task != old_task) {
+      // save registers
+      tasks[old_task].registers = *regs;
+
+      // restore registers
+      *regs = tasks[current_task].registers;
+   }
 
    return true;
 }
@@ -286,8 +294,20 @@ task_state_t *get_current_task_state() {
 
 int get_task_from_window(int windowIndex) {
    for(int i = 0; i < TOTAL_TASKS; i++) {
-      if(tasks[i].window == windowIndex && tasks[i].enabled)
+      if(!tasks[i].enabled) continue;
+      if(tasks[i].window == windowIndex) {
          return i;
+      } else {
+         gui_window_t *searchWindow = getWindow(windowIndex);
+         gui_window_t *mainWindow = getWindow(tasks[i].window);
+         if(!mainWindow || mainWindow->closed) continue;
+         // check children of window
+         for(int x = 0; x < mainWindow->child_count; x++) {
+            gui_window_t *child = mainWindow->children[x];
+            if(child == searchWindow)
+               return i;
+         }
+      }
    }
    return -1;
 }
@@ -395,7 +415,7 @@ void task_subroutine_end(registers_t *regs) {
 }
 
 void task_write_to_window(int task, char *out) {
-   task_state_t *t = &gettasks()[task];
+   task_state_t *t = &tasks[task];
    // write to stdio
    int w = t->file_descriptors[1]->window_index;
    int curw = get_current_task_window();

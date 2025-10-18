@@ -162,7 +162,7 @@ void _start(int argc, char **args) {
    int x = 5;
    int padding = 2;
 
-   wo_menu_o = register_windowobj(WO_CANVAS, 0, 0, width, 20);
+   wo_menu_o = create_canvas(NULL, 0, 0, width, 20);
    wo_menu_o->bordered = false;
 
    wo_save_o = create_button(wo_menu_o, x, 2, "Save");

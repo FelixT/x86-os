@@ -409,7 +409,7 @@ void _start(int argc, char **args) {
 
    int displayedwidth = get_width();
 
-   wo_menu = register_windowobj(WO_CANVAS, 0, height - 20, displayedwidth, 20);
+   wo_menu = create_canvas(NULL, 0, height - 20, displayedwidth, 20);
    wo_menu->bordered = false;
 
    strcpy(cur_path, "/");

@@ -25,10 +25,10 @@ windowmgr_settings_t wm_settings = {
    .default_window_bgcolour = 0xFFFF,
    .default_window_txtcolour = 0x0000,
    .desktop_enabled = false,
-   .titlebar_colour = 0xDF1B,
-   .titlebar_colour2 = 0xB5B6,
+   .titlebar_colour = COLOUR_TITLEBAR_CLASSIC,
+   .titlebar_colour2 = COLOUR_TITLEBAR_COLOUR2,
    .titlebar_gradientstyle = 1, // vertical
-   .theme = 1
+   .theme = 0
 };
 
 uint8_t *icon_window = NULL;
@@ -209,7 +209,7 @@ bool window_init(gui_window_t *window) {
    strcpy(window->title, "KTerminal");
    window->x = 20;
    window->y = 20;
-   window->width = 400;
+   window->width = 360;
    window->height = 280;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
@@ -270,6 +270,24 @@ void window_resetfuncs(gui_window_t *window) {
    window->downarrow_func = &window_term_downarrow;
    window->draw_func = &window_term_draw;
    window->checkcmd_func = &window_term_checkcmd;
+
+   // other functions without default behaviour
+   window->click_func = NULL;
+   window->drag_func = NULL;
+   window->resize_func = NULL;
+   window->mouserelease_func = NULL;
+   window->read_func = NULL;
+}
+
+void window_removefuncs(gui_window_t *window) {
+   // reset all functions
+   window->return_func = NULL;
+   window->keypress_func = NULL;
+   window->backspace_func = NULL;
+   window->uparrow_func = NULL;
+   window->downarrow_func = NULL;
+   window->draw_func = NULL;
+   window->checkcmd_func = NULL;
 
    // other functions without default behaviour
    window->click_func = NULL;
