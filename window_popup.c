@@ -25,71 +25,30 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    int parent_index = get_window_index_from_pointer(dialog->parent);
    // store output if exists
    windowobj_t *wo = (windowobj_t*)windowobj;
-   bool ok_clicked = strequ(wo->text, "Ok");
-   char *output = NULL;
-   if(ok_clicked && dialog->callback_func) {
-      if(dialog->wo_output) {
-         output = malloc(strlen(dialog->wo_output->text));
-         strcpy(output, dialog->wo_output->text);
-         debug_printf("Return string %s\n", output);
-      }
-      
-   }
-   // self destruct
-   window_close(NULL, index);
-   setSelectedWindowIndex(parent_index);
 
    // launch callback if exists
-   if(dialog->callback_func == NULL || !ok_clicked)
+   if(dialog->callback_func == NULL)
       return;
 
    if(get_task_from_window(getSelectedWindowIndex()) == -1) {
       // call as kernel
-      dialog->callback_func(output);
-      free((uint32_t)output, strlen(output));
-      getSelectedWindow()->needs_redraw = true;
-      window_draw(getSelectedWindow());
-   } else {
-      if(!gui_interrupt_switchtask(regs))
-         return;
-      // calling function as task
-      uint32_t *args = malloc(sizeof(uint32_t) * 1);
-      args[0] = (uint32_t)output;
-      uint32_t start_page = (uint32_t)output / 0x1000;
-      uint32_t end_page = ((uint32_t)output + strlen(output) + 0xFFF) / 0x1000;
-      for(uint32_t i = start_page; i < end_page; i++)
-         map(page_get_current(), i*0x1000, i*0x1000, 1, 1);
-      map(page_get_current(), (uint32_t)args, (uint32_t)args, 1, 1);
-   
-      task_call_subroutine(regs, "popupreturn", (uint32_t)dialog->callback_func, args, 1);
-   
-      getSelectedWindow()->needs_redraw = true;
-      window_draw(getSelectedWindow());
+      dialog->callback_func(regs);
+      if(getSelectedWindow()) {
+         getSelectedWindow()->needs_redraw = true;
+         window_draw(getSelectedWindow());
+      }
    }
+
+   // self destruct
+   debug_printf("Closing window %i\n", index);
+   window_close(NULL, index);
 }
 
-void window_popup_return(void *vwo) {
-   windowobj_t *wo = (windowobj_t*)vwo;
-   char *output = malloc(strlen(wo->text));
-   strcpy(output, wo->text);
-   debug_printf("Return string %s\n", output);
-
-   // simulate ok click
-   gui_window_t *window = getSelectedWindow();
-   window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
-   // get regs
-   void *regs = (void*)get_regs();
-   window_popup_dialog_close((void*)dialog->wo_okbtn, regs);
-}
-
-// void return_func(char *output)
-void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text, bool output, void *return_func) {
+window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text) {
    if(parent != NULL)
       parent->children[parent->child_count++] = window;
    
    int height = 95;
-   if(output)
-      height += 30;
    
    window_resize(NULL, window, 260, height);
 
@@ -106,8 +65,6 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
 
    window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
-   dialog->wo_output = NULL;
-   dialog->callback_func = return_func;
    window->state = (void*)dialog;
    window->state_size = sizeof(window_popup_dialog_t);
    window->resizable = false;
@@ -123,28 +80,13 @@ void window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text,
    wo_msg->texthalign = true;
    y += 40;
 
-   if(output) {
-      dialog->wo_output = window_create_text(window, 60, y, "");
-      dialog->wo_output->width = 140;
-      dialog->wo_output->return_func = &window_popup_return;
-      dialog->wo_output->oneline = true;
-      dialog->wo_output->clicked = true; // selected by default
-      y += 30;
-   }
-
    // ok button
    int x = 105;
-   if(output) {
-      x = 75;
-   }
    dialog->wo_okbtn = window_create_button(window, x, y, "Ok", &window_popup_dialog_close);
-
-   if(output) {
-      window_create_button(window, x + dialog->wo_okbtn->width + 10, y, "Cancel", &window_popup_dialog_close);
-   }
 
    window_clearbuffer(window, window->bgcolour);
 
+   return dialog;
 }
 
 void window_popup_filepicker_click(void *windowobj, void *regs, int relX, int relY) {

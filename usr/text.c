@@ -6,6 +6,7 @@
 #include "../lib/string.h"
 #include "lib/wo_api.h"
 #include "lib/stdio.h"
+#include "lib/dialogs.h"
 
 windowobj_t *wo_menu_o;
 windowobj_t *wo_path_o;
@@ -57,7 +58,7 @@ void load_file(char *filepath) {
    if(!f) {
       char buffer[250];
       sprintf(buffer, "File '%s' not found", filepath);
-      display_popup("Error", buffer, false, NULL);
+      dialog_msg("Error", buffer);
       wo_text_o->textpos = 0;
       wo_text_o->text[wo_text_o->textpos] = '\0';
       return;
@@ -93,7 +94,7 @@ void path_return() {
 }
 
 void error(char *msg) {
-   display_popup("Error", msg, false, NULL);
+   dialog_msg("Error", msg);
    set_text(wo_status_o, "Error");
 }
 

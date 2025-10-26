@@ -60,7 +60,7 @@ fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
    }
    entry.type = (item->attributes & 0x10) ? FS_TYPE_DIR : FS_TYPE_FILE;
    entry.file_size = item->fileSize;
-   entry.hidden = (item->attributes & 0x02) != 0;
+   entry.hidden = (item->attributes & 0x02) || (item->attributes & 0x08); // 'hidden' and 'volume' entries
 
    return entry;
 }
@@ -72,6 +72,7 @@ fs_dir_content_t *fs_read_dir(char *path) {
 
    if(strequ(path, "/") || strequ(path, "")) {
       // root
+
       fat_dir_t *items = fat_read_root();
       fat_bpb_t fat_bpb = fat_get_bpb();
       content->size = fat_bpb.noRootEntries;
@@ -89,12 +90,15 @@ fs_dir_content_t *fs_read_dir(char *path) {
       free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb.noRootEntries);
       return content;
    } else {
+      // not root
+
       fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
       if(entry == NULL) {
          // not found
          free((uint32_t)content, sizeof(fat_dir_t));
          return NULL;
       }
+
       if(entry->attributes & 0x10) {
          int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
          fat_dir_t *items = malloc(size*sizeof(fat_dir_t));
@@ -107,13 +111,14 @@ fs_dir_content_t *fs_read_dir(char *path) {
             }
          }
          content->entries = (fs_dir_entry_t*)malloc(sizeof(fs_dir_entry_t) * content->size);
-         for(int i = 0; i < content->size; i++)
-         {
+         for(int i = 0; i < content->size; i++) {
             fs_dir_entry_t *entry = &content->entries[i];
             *entry = fs_get_dir_entry(&items[i]);
          }
          free((uint32_t)items, size*sizeof(fat_dir_t));
       } else {
+         // not a dir
+         free((uint32_t)entry, sizeof(fat_dir_t));
          return content;
       }
       free((uint32_t)entry, sizeof(fat_dir_t));

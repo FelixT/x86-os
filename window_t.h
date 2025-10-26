@@ -8,6 +8,8 @@
 #define TEXT_BUFFER_LENGTH 64
 #define CMD_HISTORY_LENGTH 10
 
+#define W_CHILDCOUNT 10
+
 typedef struct gui_window_t {
    char title[20];
    int x;
@@ -63,7 +65,7 @@ typedef struct gui_window_t {
    int state_size;
    void (*state_free)(void *window);
 
-   void *children[10]; // child windows, used for popup windows
+   void *children[W_CHILDCOUNT]; // child windows
    int child_count;
 } gui_window_t;
 

@@ -373,12 +373,29 @@ void api_set_sys_font(registers_t *regs) {
 
 void api_set_window_title(registers_t *regs) {
    // IN: ebx = title
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-   strcpy(window->title, (char*)regs->ebx);
+   // IN: ecx = window child index
+   int cindex = regs->ecx;
+   char *title = (char*)regs->ebx;
+   if(strlen(title) > 19) return;
 
-   // redraw window
-   gui_draw_window(get_current_task_window());
-   toolbar_draw();
+   gui_window_t *mainwindow = &gui_get_windows()[get_current_task_window()];
+   if(cindex == -1) {
+      strcpy(mainwindow->title, title);
+      window_draw_outline(mainwindow, true);
+      toolbar_draw();
+
+      return;
+   }
+   if(cindex >= 0 && cindex < mainwindow->child_count) {
+      gui_window_t *window = mainwindow->children[cindex];
+      int windex = get_window_index_from_pointer(window);
+      if(windex) {
+         strcpy(window->title, title);
+         window_draw_outline(window, true);
+         toolbar_draw();
+      }
+      return;
+   }
 }
 
 void api_set_working_dir(registers_t *regs) {
@@ -390,26 +407,6 @@ void api_set_working_dir(registers_t *regs) {
 void api_get_working_dir(registers_t *regs) {
    // IN: ebx = size 256 buf for working dif
    strcpy((char*)regs->ebx, gettasks()[get_current_task()].working_dir);
-}
-
-void api_display_popup(registers_t *regs) {
-   // IN: ebx = title
-   // IN: ecx = message
-   // IN: edx = output
-   // IN: esi = return_func(char *output)
-
-   // program loses control of dialog after its created
-
-   char *title = (char*)regs->ebx;
-   char *message = (char*)regs->ecx;
-   bool output = (bool)regs->edx;
-   void *return_func = (void*)regs->esi;
-   gui_window_t *parent = getWindow(get_current_task_window());
-   int popup = windowmgr_add();
-   window_popup_dialog(getWindow(popup), parent, message, output, return_func);
-   strcpy(getWindow(popup)->title, title);
-   window_draw_outline(getWindow(popup), false);
-   toolbar_draw();
 }
 
 void api_display_colourpicker(registers_t *regs) {
@@ -692,8 +689,8 @@ void api_set_window_size(registers_t *regs) {
    if(width < 20 || height < 20) return;
 
    gui_window_t *window = api_get_window();
-   int maxwidth = gui_get_surface()->width - 20;
-   int maxheight = gui_get_surface()->height - 50;
+   int maxwidth = gui_get_surface()->width - 5;
+   int maxheight = gui_get_surface()->height - TOOLBAR_HEIGHT;
    if(width > maxwidth)
       width = maxwidth;
    if(height > maxheight)
@@ -723,7 +720,7 @@ void api_create_window(registers_t *regs) {
    if(height < 50) height = 50;
 
    gui_window_t *parent = api_get_window();
-   if(parent->child_count == 10) {
+   if(parent->child_count == W_CHILDCOUNT) {
       regs->ebx = -1;
       return;
    }
@@ -739,4 +736,29 @@ void api_create_window(registers_t *regs) {
    parent->child_count++;
    window_resize(regs, newwindow, width, height);
    regs->ebx = c;
+}
+
+void api_close_window(registers_t *regs) {
+   // IN: ebx: child index
+   // OUT ebx: bool success
+   int cindex = regs->ebx;
+   gui_window_t *mainwindow = api_get_window();
+   if(!mainwindow) return;
+   if(cindex == -1) {
+      // close main window and all children without killing task
+      window_close(regs, get_current_task_state()->window);
+      regs->ebx = 0;
+      return;
+   }
+   // close child window
+   if(cindex < 0 || cindex > mainwindow->child_count) {
+      regs->ebx = 0;
+      return;
+   }
+   gui_window_t *window = mainwindow->children[cindex];
+   int index = get_window_index_from_pointer(window);
+   debug_printf("Closing window %i\n", index);
+   window_close(NULL, index);
+   mainwindow->children[cindex] = NULL;
+   setSelectedWindowIndex(get_current_task_state()->window);
 }

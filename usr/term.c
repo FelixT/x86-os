@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "../lib/string.h"
 #include "lib/stdio.h"
+#include "lib/sort.h"
 
 char path[256] = "/";
 
@@ -206,12 +207,21 @@ void term_cmd_rgbhex(char *arg) {
    printf("0x%h\n", n);
 }
 
+int sort_dir(const void *v1, const void *v2) {
+   const fs_dir_entry_t *d1 = (const fs_dir_entry_t*)v1;
+   const fs_dir_entry_t *d2 = (const fs_dir_entry_t*)v2;
+
+   return strcmp(d1->filename, d2->filename);
+}
+
 void term_cmd_ls(char *arg) {
    char *p = arg;
    if(strequ(p, ""))
       p = path;
 
    fs_dir_content_t *content = read_dir(p);
+   if(content->entries)
+      sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_dir);
    
    for(int i = 0; i < content->size; i++) {
       fs_dir_entry_t *entry = &content->entries[i];

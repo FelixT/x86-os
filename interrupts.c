@@ -288,7 +288,7 @@ void software_handler(registers_t *regs) {
          api_get_working_dir(regs);
          break;
       case 45:
-         api_display_popup(regs);
+         //api_display_popup(regs);
          break;
       case 46:
          api_display_colourpicker(regs);
@@ -340,6 +340,9 @@ void software_handler(registers_t *regs) {
          break;
       case 62:
          api_create_window(regs);
+         break;
+      case 63:
+         api_close_window(regs);
          break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
@@ -465,9 +468,8 @@ void closewindow_event(registers_t *regs, void *msg) {
    window_close(regs, (int)msg);
 }
 
-void endtask_callback(void *wo, void *regs) {
+void endtask_callback(void *regs) {
    // callback for close window dialog
-   (void)wo;
    int task = strtoint(getSelectedWindow()->window_objects[0]->text+strlen("Task "));
    events_add(35, &closewindow_event, (void*)get_task_window(task), -1);
    end_task(task, regs);
@@ -477,11 +479,11 @@ void show_endtask_dialog(int int_no, registers_t *regs) {
    int popup = windowmgr_add();
    char buffer[50];
    sprintf(buffer, "Task %i paused due to exception %i", get_current_task(), int_no);
-   window_popup_dialog(getWindow(popup), getWindow(get_current_task_window()), buffer, false, NULL);
+   window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
+   dialog->callback_func = &endtask_callback;
    window_disable(getWindow(get_current_task_window()));
-   getWindow(popup)->window_objects[1]->click_func = &endtask_callback;
    strcpy(getWindow(popup)->title, "Error");
-   strcpy(getWindow(popup)->window_objects[1]->text, "Exit");
+   strcpy(dialog->wo_okbtn->text, "Exit");
    pause_task(get_current_task(), regs);
    toolbar_draw();
    window_draw_outline(getWindow(popup), false);

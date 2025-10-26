@@ -3,6 +3,8 @@
 #include "../lib/string.h"
 #include "lib/stdio.h"
 #include "lib/wo_api.h"
+#include "lib/sort.h"
+#include "lib/dialogs.h"
 
 #include "prog.h"
 #include "prog_wo.h"
@@ -26,6 +28,18 @@ char tolower_c(char c) {
    if(c >= 'A' && c <= 'Z')
       c += ('a'-'A');
    return c;
+}
+
+int sort_func(const void *v1, const void *v2) {
+   const fs_dir_entry_t *d1 = (const fs_dir_entry_t*)v1;
+   const fs_dir_entry_t *d2 = (const fs_dir_entry_t*)v2;
+
+   return strcmp(d1->filename, d2->filename);
+}
+
+void sort_dir() {
+   if(!dir_content) return;
+   sort(dir_content->entries, dir_content->size, sizeof(fs_dir_entry_t), sort_func);
 }
 
 void get_abs_path(char *out, char *inpath) {
@@ -141,10 +155,11 @@ void path_callback() {
    if(!content) {
       char buffer[500];
       sprintf(buffer, "Location '%s' not found", path);
-      display_popup("Error", buffer, false, NULL);
+      dialog_msg("Error", buffer);
    } else {
       strcpy(cur_path, wo_path->text);
       dir_content = read_dir(cur_path);
+      sort_dir();
       offset = 0;
       display_items();
       free(content, sizeof(fs_dir_content_t) * content->size);
@@ -221,6 +236,7 @@ void click(int x, int y) {
 
       // read dir
       dir_content = read_dir(cur_path);
+      sort_dir();
       display_items();
       redraw();
 
@@ -311,57 +327,55 @@ void scroll(int deltaY, int offsetY) {
 
 void add_file_callback(char *filename) {
    if(filename && !strequ(filename, "")) {
-      debug_write_str(filename);
       char path[512];
       get_abs_path(path, filename);
-      debug_write_str(path);
+      debug_println("Creating file %s", path);
       int fd = new_file(path);
       if(fd < 0) {
          char buffer[250];
          sprintf(buffer, "Failed to create file '%s'", path);
-         display_popup("Error", buffer, false, NULL);
+         dialog_msg("Error", buffer);
       } else {
          close(fd);
       }
       // refresh
       dir_content = read_dir(cur_path);
+      sort_dir();
       display_items();
       redraw();
    }
-   end_subroutine();
 }
 
 void add_file(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   display_popup("Name", "Enter filename", true, &add_file_callback);
+   dialog_input("Enter filename", (void*)&add_file_callback);
    end_subroutine();
 }
 
 void add_folder_callback(char *name) {
    if(name && !strequ(name, "")) {
-      debug_write_str(name);
       char path[512];
       get_abs_path(path, name);
-      debug_write_str(path);
+      debug_println("Creating folder %s", path);
       // actually add the dir
       if(!mkdir(path)) {
          char buffer[250];
          sprintf(buffer, "Failed to create folder '%s'", path);
-         display_popup("Error", buffer, false, NULL);
+         dialog_msg("Error", buffer);
       }
       // refresh
       dir_content = read_dir(cur_path);
+      sort_dir();
       display_items();
       redraw();
    }
-   end_subroutine();
 }
 
 void add_folder(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   display_popup("Name", "Enter folder name", true, &add_folder_callback);
+   dialog_input("Enter folder name", &add_folder_callback);
    end_subroutine();
 }
 
@@ -374,6 +388,7 @@ void _start(int argc, char **args) {
    set_window_title("File Manager");
 
    dir_content = read_dir("/");
+   sort_dir();
    offset = 0;
    
    FILE *f = fopen("/bmp/file20.bmp", "r");

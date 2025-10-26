@@ -32,22 +32,31 @@ void window_settings_draw(void *w) {
       y += 18;
       window_writestrat("Desktop Background Colour", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Desktop Background Image", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Window Background Colour", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Window Text Colour", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Text Padding", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Theme", window->txtcolour, 10, y, index);
       y += 35;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Gradient Type", window->txtcolour, 10, y, index);
       y += 35;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Theme Colour", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Theme Colour 2", window->txtcolour, 10, y, index);
       y += 25;
+      draw_line(&window->surface, rgb16(230, 230, 230), 10, y-10, false, x-20);
       window_writestrat("Font", window->txtcolour, 10, y, index);
 
       // update positions

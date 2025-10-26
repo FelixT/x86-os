@@ -5,6 +5,7 @@
 #include "../lib/string.h"
 #include "lib/wo_api.h"
 #include "lib/stdio.h"
+#include "lib/dialogs.h"
 
 typedef struct {
    uint32_t headerSize; // size of this header
@@ -307,19 +308,19 @@ void colour_click(void *wo, void *regs) {
 bool bmp_check() {
    // check if supported
    if(bmp[0] != 'B' || bmp[1] != 'M') {
-      display_popup("Error", "File isn't a BMP\n", false, NULL);
+      dialog_msg("Error", "File isn't a BMP\n");
       return false;
    }
    if(info->bpp != 8 && info->bpp != 16) {
-      display_popup("Error", "BPP not 8bit or 16bit\n", false, NULL);
+      dialog_msg("Error", "BPP not 8bit or 16bit\n");
       return false;
    }
    if(info->bpp == 8 && info->compressionMethod != 0) {
-      display_popup("Error", "Compression method not BI_RGB for 8bit bmp\n", false, NULL);
+      dialog_msg("Error", "Compression method not BI_RGB for 8bit bmp\n");
       return false;
    }
    if(info->bpp == 16 && info->compressionMethod != 3) {
-      display_popup("Error", "Compression method not BI_BITFIELDS for 16bit bmp\n", false, NULL);
+      dialog_msg("Error", "Compression method not BI_BITFIELDS for 16bit bmp\n");
       return false;
    }
    return true;
@@ -332,13 +333,13 @@ void load_img() {
 
    FILE *f = fopen(path, "r+");
    if(!f) {
-      display_popup("Error", "File not found\n", false, NULL);
+      dialog_msg("Error", "File not found\n");
       exit(0);
    }
    int size = fsize(fileno(f));
    char *buf = (char*)malloc(size);
    if(!fread(buf, size, 1, f)) {
-      display_popup("Error", "Couldn't read file\n", false, NULL);
+      dialog_msg("Error", "Couldn't read file\n");
       exit(0);
    }
    current_file = f;
@@ -377,7 +378,7 @@ void save_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
    if(info->bpp != 16) {
-      display_popup("Error", "Can only save 16bit bitmaps\n", false, NULL);
+      dialog_msg("Error", "Can only save 16bit bitmaps\n");
       end_subroutine();
       return;
    }

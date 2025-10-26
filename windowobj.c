@@ -272,6 +272,29 @@ extern int gui_mouse_x;
 extern int gui_mouse_y;
 extern bool gui_cursor_shown;
 
+// task's main window = -1, children of main window are 0,1,etc, not found = -2
+int task_get_window_index(int task) {
+   if(!getSelectedWindow())
+      return -2;
+
+   int task_main_window_i = gettasks()[task].window;
+   gui_window_t *task_main_window = &gui_get_windows()[task_main_window_i];
+   if(getSelectedWindowIndex() == task_main_window_i) {
+      // main window
+      return -1;
+   } else {
+      // check children
+
+      for(int i = 0; i < task_main_window->child_count; i++) {
+         if(task_main_window->children[i] == getSelectedWindow())
+            return i;
+      }
+
+      // not found
+      return -2;
+   }
+}
+
 bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
    // unclick
    windowobj_t *wo = (windowobj_t*)windowobj;
@@ -298,8 +321,8 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
 
    if(wo->release_func != NULL) {
       // well user progs defo shouldn't be able to create scrollers
-      if(get_task_from_window(getSelectedWindowIndex()) == -1
-      || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
+      int task = get_task_from_window(getSelectedWindowIndex());
+      if(task == -1 || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
          // kernel
          wo->release_func(windowobj, regs, relX, relY);
       } else {
@@ -308,10 +331,11 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
             debug_printf("Couldn't switch to task\n");
             return true;
          }
-         char **args = malloc(sizeof(char*));
-         args[0] = (char*)wo;
+         void **args = malloc(sizeof(void*)*2);
+         args[1] = (void*)wo;
+         args[0] = (void*)task_get_window_index(task);
          map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-         task_call_subroutine(regs, "worelease", (uint32_t)(wo->release_func), (uint32_t*)args, 1);
+         task_call_subroutine(regs, "worelease", (uint32_t)(wo->release_func), (uint32_t*)args, 2);
       }
    }
    return true;
@@ -332,17 +356,20 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
          windowobj_menu_t *item = &wo->menuitems[wo->menuhovered];
          if(item->func != NULL) {
             // task
-            if(wo == default_menu || get_task_from_window(getSelectedWindowIndex()) == -1) {
+            int task = get_task_from_window(getSelectedWindowIndex());
+
+            if(wo == default_menu || task == -1) {
                // kernel
                item->func();
             } else {
                // task
                if(!gui_interrupt_switchtask(regs)) return;
 
-               windowobj_t **args = malloc(sizeof(windowobj_t*) * 1);
-               args[0] = wo;
+               void **args = malloc(sizeof(void*) * 2);
+               args[1] = (void*)wo;
+               args[0] = (void*)task_get_window_index(task);
             
-               task_call_subroutine(regs, "menuselect", (uint32_t)item->func, (uint32_t*)args, 1);
+               task_call_subroutine(regs, "menuselect", (uint32_t)item->func, (uint32_t*)args, 2);
                return;
             }
          }
@@ -369,8 +396,8 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
    }
 
    if(wo->click_func != NULL) {
-      if(get_task_from_window(getSelectedWindowIndex()) == -1
-      || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
+      int task = get_task_from_window(getSelectedWindowIndex());
+      if(task == -1 || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
          // kernel
          // supply with regs so we can switch task
          ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
@@ -379,10 +406,11 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
             debug_printf("Couldn't switch to task\n");
             return;
          }
-         char **args = malloc(sizeof(char*));
-         args[0] = (char*)wo;
+         void **args = malloc(sizeof(void*) * 2);
+         args[1] = (void*)wo;
+         args[0] = (void*)task_get_window_index(task);
          map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), (uint32_t*)args, 1);
+         task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), (uint32_t*)args, 2);
       }
    }
 }
@@ -493,7 +521,6 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
       windowobj_keydown(regs, child, scan_code);
    }
 
-
    if(wo->type == WO_MENU) {
       // handle uparrow/downarrow
       if(scan_code == 72) {
@@ -512,11 +539,16 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
    switch(scan_code) {
       case 28: // return
          if(wo->return_func != NULL) {
-            if(get_task_from_window(getSelectedWindowIndex()) == -1) // kernel
+            int task = get_task_from_window(getSelectedWindowIndex());
+            if(task == -1) { // kernel
                wo->return_func(wo);
-            else { // usr
+            } else { // usr
                if(!gui_interrupt_switchtask(regs)) return;
-               task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), NULL, 0);
+               void **args = malloc(sizeof(void*)*2);
+               args[1] = (void*)wo;
+               args[0] = (void*)task_get_window_index(task);
+               map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+               task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), (uint32_t*)args, 2);
             }
 
             if(!wo->oneline) // still do default behaviour

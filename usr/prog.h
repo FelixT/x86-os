@@ -314,7 +314,17 @@ static inline void set_window_title(char *title) {
    asm volatile (
       "int $0x30;"
       :: "a" (42),
-      "b" ((uint32_t)title)
+      "b" ((uint32_t)title),
+      "c" ((uint32_t)-1)
+   );
+}
+
+static inline void set_window_title_w(int window, char *title) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (42),
+      "b" ((uint32_t)title),
+      "c" ((uint32_t)window)
    );
 }
 
@@ -331,17 +341,6 @@ static inline void getwd(char *buf) {
       "int $0x30;"
       :: "a" (44),
       "b" ((uint32_t)buf)
-   );
-}
-
-static inline void display_popup(char *title, char *message, bool output, void* callback) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (45),
-      "b" ((uint32_t)title),
-      "c" ((uint32_t)message),
-      "d" ((uint32_t)output),
-      "S" ((uint32_t)callback)
    );
 }
 
@@ -515,6 +514,17 @@ static inline int create_window(int width, int height) {
       "c" (height)
    );
    return index;
+}
+
+static inline bool close_window(int index) {
+   int success;
+   asm volatile (
+      "int $0x30"
+      : "=b" (success)
+      : "a" (63),
+      "b" (index)
+   );
+   return (bool)success;
 }
 
 // terminal override

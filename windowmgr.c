@@ -143,7 +143,7 @@ void window_close(void *regs, int windowIndex) {
    if(windowIndex == 0) {
       // debug window
       int popup = windowmgr_add();
-      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window", false, NULL);
+      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window");
       window_draw_outline(getSelectedWindow(), false);
       getWindow(windowIndex)->minimised = true;
       getWindow(windowIndex)->active = false;
@@ -154,11 +154,14 @@ void window_close(void *regs, int windowIndex) {
    if(windowIndex == getSelectedWindowIndex())
       setSelectedWindowIndex(-1);
 
-   if(regs != NULL)
-      end_task(get_task_from_window(windowIndex), regs);
-
-   // re-establish pointer as gui_windows may have been resized in end_task
-   window = getWindow(windowIndex);
+   if(regs) {
+      int task = get_task_from_window(windowIndex);
+      if(gettasks()[task].window == windowIndex) {
+         end_task(task, regs); // don't kill task if closing child window
+         // re-establish pointer as gui_windows may have been resized in end_task
+         window = getWindow(windowIndex);
+      }
+   }
    window->closed = true;
 
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
@@ -764,11 +767,6 @@ void windowmgr_keypress(void *regs, int scan_code) {
       windowobj_t *wo = selectedWindow->window_objects[i];
       if(!wo->clicked) continue;
 
-      gui_interrupt_switchtask(regs);
-      if(get_current_task_window() != getSelectedWindowIndex()) {
-         int tasks = get_task_from_window(getSelectedWindowIndex());
-         if(tasks != -1) return; // no task
-      }
       windowobj_keydown(regs, (void*)wo, scan_code);
       windowobj_redraw((void*)selectedWindow, (void*)wo);
       return;
@@ -1003,8 +1001,8 @@ bool windowmgr_click(void *regs, int x, int y) {
       tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL);
       selectedWindow->width = 120;
       selectedWindow->height = 280;
-      selectedWindow->x = surface.width - selectedWindow->width - 20;
-      selectedWindow->y = surface.height - selectedWindow->height - 50;
+      selectedWindow->x = surface.width - selectedWindow->width - 5;
+      selectedWindow->y = surface.height - selectedWindow->height - TOOLBAR_HEIGHT;
       return true;
    }
 

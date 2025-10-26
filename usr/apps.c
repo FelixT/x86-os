@@ -7,6 +7,7 @@
 #include "lib/stdio.h"
 #include "../lib/string.h"
 #include "lib/wo_api.h"
+#include "lib/sort.h"
 
 void app_launch(void *wo, void *regs) {
    (void)regs;
@@ -24,12 +25,21 @@ void app_launch(void *wo, void *regs) {
    end_subroutine();
 }
 
+int sort_filename(const void *v1, const void *v2) {
+   const fs_dir_entry_t *d1 = (const fs_dir_entry_t*)v1;
+   const fs_dir_entry_t *d2 = (const fs_dir_entry_t*)v2;
+
+   return strcmp(d1->filename, d2->filename);
+}
+
 void _start() {
    
    set_window_size(120, 280);
    set_window_title("Apps");
 
    fs_dir_content_t *content = read_dir("/sys");
+   if(content->entries)
+      sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_filename);
    override_draw(0);
 
    int y = 5;
