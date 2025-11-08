@@ -15,6 +15,8 @@ void callback(char *str) {
 void _start() {
    int w = dialog_input("Test123", (void*)&callback);
    printf("created window %i\n", w);
+   windowobj_t *btn = create_button_w(w, NULL, 10, 10, "Click Me");
+   btn->release_func = &click;
 
    while(true) {
       yield();

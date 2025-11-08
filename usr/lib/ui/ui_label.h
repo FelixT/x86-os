@@ -1,0 +1,20 @@
+#ifndef UI_LABEL_H
+#define UI_LABEL_H
+
+#include <stdint.h>
+#include "wo.h"
+
+typedef struct label_t {
+   char label[128];
+   uint16_t colour_txt;
+   uint16_t colour_txt_hover;
+   uint16_t colour_txt_clicked;
+   uint16_t colour_border_light;
+   uint16_t colour_border_dark;
+   bool bordered;
+   void (*release_func)(wo_t *wo);
+} label_t;
+
+wo_t *create_label(int x, int y, int width, int height, char *text);
+
+#endif

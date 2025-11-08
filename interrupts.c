@@ -267,7 +267,7 @@ void software_handler(registers_t *regs) {
          api_redraw_pixel(regs);
          break;
       case 38:
-         api_override_mouserelease(regs);
+         api_override_release(regs);
          break;
       case 39:
          api_override_checkcmd(regs);

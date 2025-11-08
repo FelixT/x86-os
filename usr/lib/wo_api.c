@@ -36,7 +36,7 @@ windowobj_t *create_button_w(int window, windowobj_t *parent, int x, int y, char
    char *newtext = (char*)malloc(256);
    strcpy(newtext, text);
    wo->text = newtext;
-   wo->width = text_width(wo) + 14;
+   wo->width = text_width(wo) + 10;
    return wo;
 }
 

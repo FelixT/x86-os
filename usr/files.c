@@ -83,10 +83,10 @@ void display_items() {
       // draw
       if(entry->type == FS_TYPE_DIR) {
          bmp_draw((uint8_t*)folder_icon, x, y, 1, true);
-         write_strat(entry->filename, x + 27, y + 7);
+         write_strat(entry->filename, x + 27, y + 7, -1);
       } else {
          bmp_draw((uint8_t*)file_icon, x, y, 1, true);
-         write_strat(entry->filename, x + 27, y + 7);
+         write_strat(entry->filename, x + 27, y + 7, -1);
 
          uint32_t size = entry->file_size;
          char type[4];
@@ -101,7 +101,7 @@ void display_items() {
          }
          char sizeStr[20];
          sprintf(sizeStr, "<%u %s>", size, type);
-         write_strat(sizeStr, width - 80, y + 7);
+         write_strat(sizeStr, width - 80, y + 7, -1);
       }
 
       y += 25;
@@ -117,6 +117,7 @@ void uparrow() {
 
    offset--;
    if(offset < 0) offset = 0;
+   scroll_to(offset * 25);
 
    display_items();
    redraw();
@@ -129,6 +130,7 @@ void downarrow() {
 
    offset++;
    if(offset >= shown_items) offset = shown_items - 1;
+   scroll_to(offset * 25);
 
    display_items();
    redraw();
@@ -305,11 +307,8 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 
    wo_menu->width = w;
    wo_menu->y = height - 20;
-   wo_path->width = w - 120;
-   int x = wo_path->width + wo_path->x + 2;
-   wo_newfile->x = x;
-   x += wo_newfile->width + 2;
-   wo_newfolder->x = x;
+   int btn_width = wo_newfile->width + 2 + wo_newfolder->width + 2 + 5;
+   wo_path->width = w - btn_width;
 
    display_items();
    redraw();
@@ -430,20 +429,18 @@ void _start(int argc, char **args) {
    strcpy(cur_path, "/");
    int x = 4;
    int y = 3;
+   wo_newfile = create_button(wo_menu, x, y, "+ File");
+   wo_newfile->click_func = &add_file;
+   x += wo_newfile->width + 2;
+   wo_newfolder = create_button(wo_menu, x, y, "+ Folder");
+   wo_newfolder->click_func = &add_folder;
+   x += wo_newfolder->width + 2;
+   
    wo_path = create_text(wo_menu, x, 3, cur_path);
-   wo_path->width = displayedwidth - 120;
+   wo_path->width = displayedwidth - x - 5;
    wo_path->return_func = &path_callback;
    wo_path->oneline = true;
    x += wo_path->width + 2;
-
-   wo_newfile = create_button(wo_menu, x, y, "+ File");
-   wo_newfile->click_func = &add_file;
-   wo_newfile->width = 55;
-   x += wo_newfile->width + 2;
-
-   wo_newfolder = create_button(wo_menu, x, y, "+ Folder");
-   wo_newfolder->width = 55;
-   wo_newfolder->click_func = &add_folder;
 
    display_items();
    redraw();

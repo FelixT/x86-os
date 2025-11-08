@@ -278,7 +278,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->click_func = NULL;
    window->drag_func = NULL;
    window->resize_func = NULL;
-   window->mouserelease_func = NULL;
+   window->release_func = NULL;
    window->read_func = NULL;
 }
 
@@ -296,7 +296,7 @@ void window_removefuncs(gui_window_t *window) {
    window->click_func = NULL;
    window->drag_func = NULL;
    window->resize_func = NULL;
-   window->mouserelease_func = NULL;
+   window->release_func = NULL;
    window->read_func = NULL;
 }
 
@@ -750,6 +750,11 @@ void windowmgr_keypress(void *regs, int scan_code) {
       if(scan_to_char(scan_code, false, false) == 'w') {
          window_close(regs, gui_selected_window);
       }
+      // alt+space
+      if(scan_to_char(scan_code, false, false) == ' ') {
+         windowmgr_launch_apps((registers_t*)regs);
+         return;
+      }
    }
 
    if(selectedWindow == NULL) return;
@@ -961,6 +966,21 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    //gui_cursor_draw();
 }
 
+void windowmgr_launch_apps(registers_t *regs) {
+   for(int i = 0; i < windowCount; i++) {
+      if(gui_windows[i].closed) continue;
+      if(strequ(gui_windows[i].title, "Apps")) {
+         setSelectedWindowIndex(i);
+         return;
+      }
+   }
+   tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL);
+   selectedWindow->width = 120;
+   selectedWindow->height = 280;
+   selectedWindow->x = surface.width - selectedWindow->width - 5;
+   selectedWindow->y = surface.height - selectedWindow->height - TOOLBAR_HEIGHT;
+}
+
 extern bool cursor_resize;
 bool windowmgr_click(void *regs, int x, int y) {
    clicked_x = x;
@@ -991,18 +1011,7 @@ bool windowmgr_click(void *regs, int x, int y) {
    // clicked app btn
    if(x >= app_button->x && x <= app_button->x + app_button->width
       && y >= app_button->y && y <= app_button->y + app_button->height) {
-      for(int i = 0; i < windowCount; i++) {
-         if(gui_windows[i].closed) continue;
-         if(strequ(gui_windows[i].title, "Apps")) {
-            setSelectedWindowIndex(i);
-            return true;
-         }
-      }
-      tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL);
-      selectedWindow->width = 120;
-      selectedWindow->height = 280;
-      selectedWindow->x = surface.width - selectedWindow->width - 5;
-      selectedWindow->y = surface.height - selectedWindow->height - TOOLBAR_HEIGHT;
+      windowmgr_launch_apps(regs);
       return true;
    }
 
@@ -1040,12 +1049,13 @@ bool windowmgr_click(void *regs, int x, int y) {
    } else {
       // calling as task
       uint32_t *args = malloc(sizeof(uint32_t) * 2);
-      args[1] = x - selectedWindow->x;
-      args[0] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
+      args[2] = x - selectedWindow->x;
+      args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
+      args[0] = get_cindex();
       map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
 
       if((y - (selectedWindow->y + TITLEBAR_HEIGHT)) >= 0) {
-         task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 2);
+         task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 3);
       } else {
          // clicked titlebar, don't call routine
          free((uint32_t)args, sizeof(uint32_t) * 2);
@@ -1353,13 +1363,19 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    
 }
 
-void window_mouserelease(registers_t *regs, gui_window_t *window) {
-   // call mouserelease func if exists
+void window_release(registers_t *regs, gui_window_t *window) {
+   // call mouse release func if exists
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
-   if(task > -1 && window->mouserelease_func) {
-      if(switch_to_task(task, regs))
-         task_call_subroutine(regs, "mouserelease", (uint32_t)(window->mouserelease_func), NULL, 0);
+   if(task > -1 && window->release_func) {
+      if(switch_to_task(task, regs)) {
+         uint32_t *args = malloc(sizeof(uint32_t) * 3);
+         args[2] = gui_mouse_x - window->x; // x relative to window content
+         args[1] = gui_mouse_y - window->y - TITLEBAR_HEIGHT; // y relative to window content
+         args[0] = get_cindex();
+
+         task_call_subroutine(regs, "release", (uint32_t)(window->release_func), args, 3);
+      }
    }
 
    // check windowobjs
@@ -1375,4 +1391,24 @@ void window_mouserelease(registers_t *regs, gui_window_t *window) {
 
 windowmgr_settings_t *windowmgr_get_settings() {
    return &wm_settings;
+}
+
+// get 'cindex' of currently selected window
+// main task window has index 0, children 1+
+int get_cindex() {
+   int w = get_task_window(get_current_task()); // main window of current task
+   if(w < 0)
+      return -1;
+
+   gui_window_t *window = getWindow(w);
+   if(window == NULL || !window->active)
+      return -1;
+   if(window == selectedWindow)
+      return 0;
+   for(int i = 0; i < window->child_count; i++) {
+      gui_window_t *child = window->children[i];
+      if(child->active && child == selectedWindow)
+         return i;
+   }
+   return -1;
 }

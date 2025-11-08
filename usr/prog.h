@@ -44,13 +44,13 @@ static inline void write_uint(uint32_t num) {
 }
 
 static inline surface_t get_surface(void) {
-    surface_t surface;
-    asm volatile (
-        "int $0x30"
-        : "=b" (surface.buffer), "=c" (surface.width), "=d" (surface.height)
-        : "a" (7)
-    );
-    return surface;
+   surface_t surface;
+   asm volatile (
+      "int $0x30"
+      : "=b" (surface.buffer), "=c" (surface.width), "=d" (surface.height)
+      : "a" (7)
+   );
+   return surface;
 }
 
 static inline void write_newline() {
@@ -184,13 +184,15 @@ static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is
    );
 }
 
-static inline void write_strat(char *str, int x, int y) {
+static inline void write_strat(char *str, int x, int y, int colour) {
+   // colour=-1 for window text colour
    asm volatile(
       "int $0x30"
       :: "a" (22),
       "b" ((uint32_t)str),
       "c" ((uint32_t)x),
-      "d" ((uint32_t)y)
+      "d" ((uint32_t)y),
+      "S" ((uint32_t)colour)
    );
 }
 
@@ -264,7 +266,7 @@ static inline void override_drag(uint32_t addr) {
    );
 }
 
-static inline void override_mouserelease(uint32_t addr) {
+static inline void override_release(uint32_t addr) {
    asm volatile(
       "int $0x30"
       :: "a" (38),
@@ -492,13 +494,14 @@ static inline void set_window_size(int width, int height) {
 typedef struct font_info_t {
    int width;
    int height;
+   int padding;
 } font_info_t;
 
 static inline font_info_t get_font_info() {
    font_info_t info;
       asm volatile (
       "int $0x30"
-      : "=b" (info.width), "=c" (info.height)
+      : "=b" (info.width), "=c" (info.height), "=d" (info.padding)
       : "a" (61)
    );
    return info;

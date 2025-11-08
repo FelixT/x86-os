@@ -340,7 +340,7 @@ void mouse_release(registers_t *regs) {
             window_resize(regs, window, window->width, window->height);
             window->resized = false;
          } else {
-            window_mouserelease(regs, window);
+            window_release(regs, window);
          }
       }
    }

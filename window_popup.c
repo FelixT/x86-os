@@ -19,12 +19,12 @@ void window_popup_init(gui_window_t *window, gui_window_t *parent) {
 // define default popups - common mini-progs
 
 void window_popup_dialog_close(void *windowobj, void *regs) {
+   (void)windowobj;
    gui_window_t *window = getSelectedWindow();
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    int index = get_window_index_from_pointer(window);
    int parent_index = get_window_index_from_pointer(dialog->parent);
-   // store output if exists
-   windowobj_t *wo = (windowobj_t*)windowobj;
+   setSelectedWindowIndex(parent_index);
 
    // launch callback if exists
    if(dialog->callback_func == NULL)

@@ -272,6 +272,7 @@ void toolminus_click(void *wo, void *regs) {
 void zoomout_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
+   scroll_to(0);
    if(scale > 1) scale--;
    sprintf(zoomtext_wo->text, "%i00%", scale);
    clear();
@@ -283,6 +284,7 @@ void zoomout_click(void *wo, void *regs) {
 void zoomin_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
+   scroll_to(0);
    scale++;
    sprintf(zoomtext_wo->text, "%i00%", scale);
    clear();
@@ -327,6 +329,7 @@ bool bmp_check() {
 }
 
 void load_img() {
+   scroll_to(0);
    // close existing
    if(current_file)
       fclose(current_file);
@@ -490,10 +493,9 @@ void _start(int argc, char **args) {
 
    override_click((uint32_t)&click);
    override_drag((uint32_t)&click);
-   override_mouserelease((uint32_t)&release);
+   override_release((uint32_t)&release);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
-   clear();
 
    framebuffer = (uint16_t*)(get_surface().buffer);
    bufferwidth = get_surface().width;

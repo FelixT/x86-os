@@ -62,8 +62,12 @@ void api_write_string_at(registers_t *regs) {
    // IN: ebx = string address
    // IN: ecx = x
    // IN: edx = y
+   // IN: esi = colour (-1 for window colour)
    gui_window_t *window = api_get_window();
-   window_writestrat((char*)regs->ebx, window->txtcolour, regs->ecx, regs->edx, get_current_task_window());
+   int colour = regs->esi;
+   if(colour == -1)
+      colour = window->txtcolour;
+   window_writestrat((char*)regs->ebx, colour, regs->ecx, regs->edx, get_current_task_window());
 }
 
 void api_write_number_at(registers_t *regs) {
@@ -180,11 +184,11 @@ void api_override_drag(registers_t *regs) {
    api_get_window()->drag_func = (void *)(addr);
 }
 
-void api_override_mouserelease(registers_t *regs) {
-   // override mouserelease function with ebx
+void api_override_release(registers_t *regs) {
+   // override mouse release function with ebx
    uint32_t addr = regs->ebx;
 
-   api_get_window()->mouserelease_func = (void *)(addr);
+   api_get_window()->release_func = (void *)(addr);
 }
 
 void api_end_subroutine(registers_t *regs) {
@@ -706,8 +710,10 @@ void api_set_window_size(registers_t *regs) {
 void api_get_font_info(registers_t *regs) {
    // OUT: ebx: system font width
    // OUT: ecx: system font height
+   // OUT: edx: system font padding
    regs->ebx = getFont()->width;
    regs->ecx = getFont()->height;
+   regs->edx = getFont()->padding;
 }
 
 void api_create_window(registers_t *regs) {
