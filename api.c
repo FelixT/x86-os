@@ -142,22 +142,10 @@ void api_end_task(registers_t *regs) {
    end_task(get_current_task(), regs);
 }
 
-void api_override_uparrow(registers_t *regs) {
-   // override uparrow window function with ebx
-   uint32_t addr = regs->ebx;
-   api_get_window()->uparrow_func = (void *)(addr);
-}
-
 void api_override_checkcmd(registers_t *regs) {
    // override terminal checkcmd function with ebx
    uint32_t addr = regs->ebx;
   api_get_window()->checkcmd_func = (void *)(addr);
-}
-
-void api_override_downarrow(registers_t *regs) {
-   // override downarrow window function with ebx
-   uint32_t addr = regs->ebx;
-   api_get_window()->downarrow_func = (void *)(addr);
 }
 
 void api_override_mouseclick(registers_t *regs) {
@@ -190,6 +178,14 @@ void api_override_release(registers_t *regs) {
 
    api_get_window()->release_func = (void *)(addr);
 }
+
+void api_override_keypress(registers_t *regs) {
+   // override (main) window keypress function with ebx
+   uint32_t addr = regs->ebx;
+
+   api_get_window()->keypress_func = (void *)(addr);
+}
+
 
 void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;

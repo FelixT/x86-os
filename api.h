@@ -18,8 +18,6 @@ void api_return_window_height(registers_t *regs);
 void api_redraw_window();
 void api_redraw_pixel(registers_t *regs);
 void api_end_task(registers_t *regs);
-void api_override_uparrow(registers_t *regs);
-void api_override_downarrow(registers_t *regs);
 void api_override_mouseclick(registers_t *regs);
 void api_override_draw(registers_t *regs);
 void api_override_resize(registers_t *regs);
@@ -59,5 +57,6 @@ void api_set_window_size(registers_t *regs);
 void api_get_font_info(registers_t *regs);
 void api_create_window(registers_t *regs);
 void api_close_window(registers_t *regs);
+void api_override_keypress(registers_t *regs);
 
 #endif

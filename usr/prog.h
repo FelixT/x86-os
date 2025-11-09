@@ -84,14 +84,6 @@ static inline void exit(int status) {
    );
 }
 
-static inline void override_uparrow(uint32_t addr) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (11),
-      "b" (addr)
-   );
-}
-
 static inline void end_subroutine() {
    asm volatile(
       "int $0x30"
@@ -242,14 +234,6 @@ static inline void debug_write_str(char *str) {
    );
 }
 
-static inline void override_downarrow(uint32_t addr) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (27),
-      "b" (addr)
-   );
-}
-
 static inline void override_resize(uint32_t addr) {
    asm volatile(
       "int $0x30"
@@ -270,6 +254,14 @@ static inline void override_release(uint32_t addr) {
    asm volatile(
       "int $0x30"
       :: "a" (38),
+      "b" (addr)
+   );
+}
+
+static inline void override_keypress(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (64),
       "b" (addr)
    );
 }

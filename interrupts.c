@@ -185,9 +185,9 @@ void software_handler(registers_t *regs) {
       case 10:
          api_end_task(regs);
          break;
-      case 11:
-         api_override_uparrow(regs);
-         break;
+      //case 11:
+      //   api_override_uparrow(regs);
+      //   break;
       case 12:
          api_end_subroutine(regs);
          break;
@@ -233,9 +233,9 @@ void software_handler(registers_t *regs) {
       //case 26:
       //   api_get_get_dir_size(regs);
       //   break;
-      case 27: 
-         api_override_downarrow(regs);
-         break;
+      //case 27: 
+      //   api_override_downarrow(regs);
+      //   break;
       case 28:
          api_write_number_at(regs);
          break;
@@ -343,6 +343,9 @@ void software_handler(registers_t *regs) {
          break;
       case 63:
          api_close_window(regs);
+         break;
+      case 64:
+         api_override_keypress(regs);
          break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);

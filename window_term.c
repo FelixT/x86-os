@@ -48,7 +48,21 @@ uint32_t window_term_argtouint(char *str) {
    return num;
 }
 
-void window_term_keypress(char key, void *window) {
+void window_term_keypress(uint16_t key, void *window) {
+   if(key == 8) {
+      window_term_backspace(window);
+      return;
+   } else if(key == 0x0D) {
+      window_term_return(get_regs(), window);
+      return;
+   } else if(key == 0x100) {
+      window_term_uparrow(window);
+      return;
+   } else if(key == 0x101) {
+      window_term_downarrow(window);
+      return;
+   }
+
    if((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')
     || key == ' ' || key == '/' || key == '.' || key == '-' || key == '(' || key == ')' || key == '<' || key == '>'
     || key == '=' || key == '+') {

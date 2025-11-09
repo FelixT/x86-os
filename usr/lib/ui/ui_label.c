@@ -3,8 +3,34 @@
 #include "../../../lib/string.h"
 #include "../draw.h"
 
-static inline int string_width(char *txt) {
-   return strlen(txt)*(get_font_info().width+get_font_info().padding);
+int ui_string_width(char *txt) {
+   int width = 0;
+
+   for(int i = 0; i < strlen(txt); i++) {
+      if(txt[i] == '\n') {
+         break; // only return width of first line
+      }
+      width += get_font_info().width + get_font_info().padding;
+   }
+
+   return width;
+}
+
+int ui_string_height(char *txt, int width) {
+   int x = 0;
+   int height = get_font_info().height;
+   for(int i = 0; i < strlen(txt); i++) {
+      if(txt[i] == '\n') {
+         height += get_font_info().height + get_font_info().padding;
+         x = 0;
+      } else {
+         x += get_font_info().width + get_font_info().padding;
+         if(x + get_font_info().width + get_font_info().padding > width) {
+            height += get_font_info().height + get_font_info().padding;
+            x = 0;
+         }
+      }
+   }
 }
 
 void draw_label(wo_t *label, surface_t *surface) {
@@ -34,7 +60,8 @@ void draw_label(wo_t *label, surface_t *surface) {
    }
 
    // text 
-   int text_width = string_width(label_data->label);
+   int text_width = ui_string_width(label_data->label);
+   int text_height = ui_string_height(label_data->label, width);
    char display_label[sizeof(label_data->label)];
 
    if(text_width > width) {
@@ -50,7 +77,7 @@ void draw_label(wo_t *label, surface_t *surface) {
       display_label[max_chars - 3] = '\0';
       strcat(display_label, "...");
       
-      text_width = string_width(display_label);
+      text_width = ui_string_width(display_label);
    } else {
       // full string
       strncpy(display_label, label_data->label, sizeof(display_label) - 1);
@@ -58,9 +85,25 @@ void draw_label(wo_t *label, surface_t *surface) {
    }
 
    // center text
-   int text_x = x + (width - text_width) / 2;
-   int text_y = y + (height - get_font_info().height) / 2;
-   write_strat(display_label, text_x, text_y, txt);
+   int text_x = x + (label_data->halign ? (width - text_width) / 2 : 0);
+   int text_y = y + (label_data->valign ? (height - text_height) / 2 : 0);
+
+   for(int i = 0; i < strlen(display_label); i++) {
+      if(display_label[i] == '\n') {
+         text_y += get_font_info().height + get_font_info().padding;
+         text_width = ui_string_width(display_label+i+1);
+         text_x = x + (label_data->halign ? (width - text_width) / 2 : 0);
+      } else {
+         // somewhat inefficient
+         char buf[2] = {display_label[i], '\0'};
+         write_strat(buf, text_x, text_y, txt);
+         text_x += get_font_info().width + get_font_info().padding;
+         if(text_x + get_font_info().width + get_font_info().padding > x + width) {
+            text_y += get_font_info().height + get_font_info().padding;
+            text_x = x;
+         }
+      }
+   }
 }
 
 void release_label(wo_t *label, surface_t *surface, int x, int y) {
@@ -71,8 +114,6 @@ void release_label(wo_t *label, surface_t *surface, int x, int y) {
    label_t *label_data = (label_t *)label->data;
    if(label_data->release_func)
       label_data->release_func(label);
-
-   debug_write_str("Released\n");
 }
 
 wo_t *create_label(int x, int y, int width, int height, char *text) {
@@ -86,6 +127,8 @@ wo_t *create_label(int x, int y, int width, int height, char *text) {
    label_data->colour_border_light = rgb16(235, 235, 235);
    label_data->colour_border_dark = rgb16(145, 145, 145);
    label_data->bordered = true;
+   label_data->valign = true;
+   label_data->halign = true;
 
    label->data = label_data;
    label->draw_func = &draw_label;

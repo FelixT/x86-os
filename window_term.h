@@ -7,7 +7,7 @@
 
 // default, terminal style window behaviour
 void window_term_return(void *regs, void *window);
-void window_term_keypress(char key, void *window);
+void window_term_keypress(uint16_t key, void *window);
 void window_term_backspace(void *window);
 void window_term_uparrow(void *window);
 void window_term_downarrow(void *window);

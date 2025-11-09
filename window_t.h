@@ -45,11 +45,7 @@ typedef struct gui_window_t {
    int window_object_count;
 
 	// function pointers, window is type *gui_window_t
-	void (*return_func)(void *regs, void *window);
-	void (*keypress_func)(char key, void *window);
-   void (*backspace_func)(void *window);
-   void (*uparrow_func)(void *window);
-   void (*downarrow_func)(void *window);
+	void (*keypress_func)(uint16_t key, void *window);
    void (*click_func)(int x, int y);
    void (*drag_func)(int x, int y);
    void (*draw_func)(void *window);

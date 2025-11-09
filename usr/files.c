@@ -113,32 +113,6 @@ void display_items() {
    set_text(wo_path, cur_path);
 }
 
-void uparrow() {
-
-   offset--;
-   if(offset < 0) offset = 0;
-   scroll_to(offset * 25);
-
-   display_items();
-   redraw();
-
-   end_subroutine();
-
-}
-
-void downarrow() {
-
-   offset++;
-   if(offset >= shown_items) offset = shown_items - 1;
-   scroll_to(offset * 25);
-
-   display_items();
-   redraw();
-
-   end_subroutine();
-
-}
-
 void path_callback() {
    if(wo_path->text == NULL) {
       debug_write_str("Text is null\n");
@@ -378,6 +352,31 @@ void add_folder(void *wo, void *regs) {
    end_subroutine();
 }
 
+void keypress(uint16_t c, int window) {
+   (void)window;
+
+   bool uparrow = c == 0x100;
+   bool downarrow = c == 0x101;
+
+   if(uparrow || downarrow) {
+      if(uparrow)
+         offset--;
+      else
+         offset++;
+      
+      if(offset < 0) offset = 0;
+      if(offset >= shown_items) offset = shown_items - 1;
+
+      scroll_to(offset * 25);
+      display_items();
+
+      redraw();
+   }
+
+   end_subroutine();
+
+}
+
 void _start(int argc, char **args) {
    (void)argc;
    (void)args;
@@ -413,8 +412,7 @@ void _start(int argc, char **args) {
    framebuffer = (uint16_t*)(get_surface().buffer);
 
    create_scrollbar(&scroll);
-   override_uparrow((uint32_t)&uparrow);
-   override_downarrow((uint32_t)&downarrow);
+   override_keypress((uint32_t)&keypress);
    override_click((uint32_t)&click);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);

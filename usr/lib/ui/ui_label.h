@@ -12,6 +12,8 @@ typedef struct label_t {
    uint16_t colour_border_light;
    uint16_t colour_border_dark;
    bool bordered;
+   bool valign;
+   bool halign;
    void (*release_func)(wo_t *wo);
 } label_t;
 

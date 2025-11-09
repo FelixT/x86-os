@@ -266,11 +266,7 @@ bool window_init(gui_window_t *window) {
 
 void window_resetfuncs(gui_window_t *window) {
    // reset all functions
-   window->return_func = &window_term_return;
    window->keypress_func = &window_term_keypress;
-   window->backspace_func = &window_term_backspace;
-   window->uparrow_func = &window_term_uparrow;
-   window->downarrow_func = &window_term_downarrow;
    window->draw_func = &window_term_draw;
    window->checkcmd_func = &window_term_checkcmd;
 
@@ -284,11 +280,7 @@ void window_resetfuncs(gui_window_t *window) {
 
 void window_removefuncs(gui_window_t *window) {
    // reset all functions
-   window->return_func = NULL;
    window->keypress_func = NULL;
-   window->backspace_func = NULL;
-   window->uparrow_func = NULL;
-   window->downarrow_func = NULL;
    window->draw_func = NULL;
    window->checkcmd_func = NULL;
 
@@ -649,44 +641,6 @@ void toolbar_draw() {
 
 extern char scan_to_char(int scan_code, bool shift, bool caps);
 
-void windowmgr_uparrow(registers_t *regs, gui_window_t *window) {
-
-   if(window->uparrow_func == NULL) return;
-
-   gui_interrupt_switchtask(regs);
-   int taskIndex = get_current_task();
-   task_state_t *task = &gettasks()[taskIndex];
-
-   if(taskIndex == -1 || !task->enabled
-   || window->uparrow_func == (void *)window_term_uparrow) {
-      // launch into function directly as kernel
-      (*(window->uparrow_func))(window);
-   } else {
-      // run as task
-      task_call_subroutine(regs, "uparrow", (uint32_t)(window->uparrow_func), NULL, 0);
-   }
-   
-}
-
-void windowmgr_downarrow(registers_t *regs, gui_window_t *window) {
-
-   if(window->downarrow_func == NULL) return;
-
-   gui_interrupt_switchtask(regs);
-   int taskIndex = get_current_task();
-   task_state_t *task = &gettasks()[taskIndex];
-
-   if(taskIndex == -1 || !task->enabled
-   || selectedWindow->downarrow_func == (void *)window_term_downarrow) {
-      // launch into function directly as kernel
-      (*(window->downarrow_func))(window);
-   } else {
-      // run as task
-      task_call_subroutine(regs, "downarrow", (uint32_t)(window->downarrow_func), NULL, 0);
-   }
-   
-}
-
 void windowmgr_swap_window() {
    if(selectedWindow != NULL) {
       // find next in render order
@@ -779,27 +733,46 @@ void windowmgr_keypress(void *regs, int scan_code) {
 
    // otherwise, default behaviour
    switch(scan_code) {
-      case 28: // return
-         if(selectedWindow->return_func != NULL)
-            (*(selectedWindow->return_func))(regs, selectedWindow);
-         break;
-      case 14: // backspace
-         if(selectedWindow->backspace_func != NULL)
-            (*(selectedWindow->backspace_func))(selectedWindow);
-         break;
-      case 72: // up arrow
-         windowmgr_uparrow(regs, selectedWindow);
-         break;
-      case 80: // down arrow
-         windowmgr_downarrow(regs, selectedWindow);
-         break;
-      case 0x3A:
+      case 0x3A: // caps
          keyboard_caps = !keyboard_caps;
          break;
       default:
-         char c = scan_to_char(scan_code, keyboard_shift, keyboard_caps);
-         if(selectedWindow->keypress_func != NULL)
+         // call window keypress func with char
+         uint16_t c = (uint16_t)scan_to_char(scan_code, keyboard_shift, keyboard_caps);
+         if(c == 0) { // special chars
+            if(scan_code == 14) // backspace
+               c = 0x08;
+            if(scan_code == 1) // escape
+               c = 0x1B;
+            if(scan_code == 28) // return
+               c = 0x0D;
+            if(scan_code == 72) // uparrow
+               c = 0x100;
+            if(scan_code == 80) // downarrow
+               c = 0x101;
+            if(scan_code == 75) // leftarrow
+               c = 0x102;
+            if(scan_code == 77) // rightarrow
+               c = 0x103;
+         }
+         // keypress func
+         if(!selectedWindow->keypress_func) break;
+
+         gui_interrupt_switchtask(regs);
+         int taskIndex = get_current_task();
+
+         if(taskIndex == -1 || selectedWindow->keypress_func == &window_term_keypress) {
+            // launch into function directly as kernel
             (*(selectedWindow->keypress_func))(c, selectedWindow);
+         } else {
+            // run as task
+            uint32_t *args = malloc(sizeof(uint32_t) * 2);
+            args[1] = c;
+            args[0] = get_cindex();
+
+            task_call_subroutine(regs, "keypress", (uint32_t)(selectedWindow->keypress_func), args, 2);
+         }
+
          break;
    }
 }
