@@ -8,7 +8,7 @@
 
 typedef enum {
    WO_DISABLED,
-   WO_TEXTINPUT,
+   WO_INPUT,
    WO_LABEL,
    WO_BUTTON,
    WO_CANVAS,
@@ -26,6 +26,7 @@ typedef struct wo_t {
 
    bool hovering;
    bool clicked;
+   bool selected; // focused
    bool needs_redraw;
    void *data; // actual object e.g. button_t, label_t, etc.
    
@@ -34,6 +35,7 @@ typedef struct wo_t {
    void (*release_func)(struct wo_t *wo, surface_t *surface, int x, int y);
    void (*hover_func)(struct wo_t *wo, int x, int y);
    void (*drag_func)(struct wo_t *wo, int x, int y);
+   void (*keypress_func)(struct wo_t *wo, uint16_t c);
 } wo_t;
 
 wo_t *create_wo(int x, int y, int width, int height);

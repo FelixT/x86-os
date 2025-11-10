@@ -11,6 +11,7 @@ wo_t *create_wo(int x, int y, int width, int height) {
    obj->enabled = true;
    obj->hovering = false;
    obj->clicked = false;
+   obj->selected = false;
    obj->needs_redraw = false;
    obj->data = NULL;
    obj->draw_func = NULL;
