@@ -6,11 +6,11 @@
 
 // 'one-line' text input
 
-inline int ui_string_width(char *txt) {
+static inline int ui_string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
 }
 
-void draw_input(wo_t *input, surface_t *surface) {
+void draw_input(wo_t *input, surface_t *surface, int window) {
    if(input == NULL || input->data == NULL) return;
    input_t *input_data = (input_t *)input->data;
 
@@ -85,7 +85,7 @@ void draw_input(wo_t *input, surface_t *surface) {
    int text_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+1);
    int text_y = y + (input_data->valign ? (height - text_height) / 2 : get_font_info().padding+1);
 
-   write_strat(display_text, text_x, text_y, txt);
+   write_strat_w(display_text, text_x, text_y, txt, window);
 
    // draw cursor
    int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width) + 1;
@@ -121,7 +121,7 @@ void keypress_input(wo_t *input, uint16_t c) {
          input_data->cursor_pos = len;
    } else if(c > 0) {
       // add char at cursor position
-      if(len < sizeof(input_data->text) - 1) {
+      if((unsigned)len < sizeof(input_data->text) - 1) {
          for(int i = len; i >= input_data->cursor_pos; i--) {
             input_data->text[i + 1] = input_data->text[i];
          }
@@ -129,8 +129,6 @@ void keypress_input(wo_t *input, uint16_t c) {
          input_data->cursor_pos++;
       }
    }
-
-   debug_println("Input string: %s", input_data->text);
 
 }
 
@@ -157,4 +155,5 @@ wo_t *create_input(int x, int y, int width, int height) {
    input->data = input_data;
    input->draw_func = &draw_input;
    input->keypress_func = &keypress_input;
+   return input;
 }

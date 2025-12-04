@@ -18,6 +18,7 @@ $GCC -c usr/lib/stdio.c $FLAGS -o o/lib/stdio.o
 $GCC -c usr/lib/map.c $FLAGS -o o/lib/map.o
 $GCC -c usr/lib/sort.c $FLAGS -o o/lib/sort.o
 $GCC -c usr/lib/dialogs.c $FLAGS -o o/lib/dialogs.o
+$GCC -c usr/lib/dialogs2.c $FLAGS -o o/lib/dialogs2.o
 $GCC -c usr/lib/draw.c $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
@@ -25,13 +26,13 @@ bash usr/lib/ui/make.sh
 # c progs
 $GCC $FLAGS usr/prog3.c -o o/prog3.elf 
 $GCC $FLAGS usr/prog4.c -o o/prog4.elf o/lib/string.o o/lib/stdio.o
-$GCC $FLAGS usr/files.c -o o/files.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/sort.o o/lib/dialogs.o
-$GCC $FLAGS usr/bmpview.c -o o/bmpview.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/dialogs.o
-$GCC $FLAGS usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/dialogs.o
+$GCC $FLAGS usr/files.c -o o/files.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/sort.o o/lib/dialogs2.o
+$GCC $FLAGS usr/bmpview.c -o o/bmpview.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/dialogs2.o
+$GCC $FLAGS usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/dialogs2.o
 $GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o
 $GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o
 $GCC $FLAGS usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/map.o
-$GCC $FLAGS usr/prog5.c -o o/prog5.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/map.o o/lib/dialogs.o
+$GCC $FLAGS usr/prog5.c -o o/prog5.elf o/lib/string.o o/lib/stdio.o o/lib/dialogs.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/drawusr.o o/lib/wo.o
 
 $GCC $FLAGS usr/apps.c -o o/apps.elf \
     o/lib/string.o \

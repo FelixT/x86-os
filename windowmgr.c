@@ -1016,6 +1016,11 @@ bool windowmgr_click(void *regs, int x, int y) {
    
    if(selectedWindow->click_func == NULL) return true;
 
+   if(y < selectedWindow->y + TITLEBAR_HEIGHT) {
+      // clicked titlebar, don't call routine
+      return true;
+   }
+
    // switch to task
    gui_interrupt_switchtask(regs);
    if(get_task_from_window(getSelectedWindowIndex()) == -1) {
@@ -1023,18 +1028,13 @@ bool windowmgr_click(void *regs, int x, int y) {
       getSelectedWindow()->click_func(x - selectedWindow->x, y - (selectedWindow->y + TITLEBAR_HEIGHT));
    } else {
       // calling as task
-      uint32_t *args = malloc(sizeof(uint32_t) * 2);
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
       args[2] = x - selectedWindow->x;
       args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
       args[0] = get_cindex();
       map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
 
-      if((y - (selectedWindow->y + TITLEBAR_HEIGHT)) >= 0) {
-         task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 3);
-      } else {
-         // clicked titlebar, don't call routine
-         free((uint32_t)args, sizeof(uint32_t) * 2);
-      }
+      task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 3);
    }
 
    return true;
@@ -1233,9 +1233,10 @@ void windowmgr_mousemove(int x, int y) {
             if(task < 0) return;
             if(!switch_to_task(task, regs)) return;
             uint32_t *args = malloc(sizeof(uint32_t) * 2);
-            args[1] = relX;
-            args[0] = relY;
-            task_call_subroutine(regs, "hover", (uint32_t)(selectedWindow->hover_func), args, 2);
+            args[2] = relX;
+            args[1] = relY;
+            args[0] = get_cindex();
+            task_call_subroutine(regs, "hover", (uint32_t)(selectedWindow->hover_func), args, 3);
 
          }
       } else {
@@ -1382,21 +1383,21 @@ windowmgr_settings_t *windowmgr_get_settings() {
 }
 
 // get 'cindex' of currently selected window
-// main task window has index 0, children 1+
+// main task window has index -1, children 0+, not found -2
 int get_cindex() {
    int w = get_task_window(get_current_task()); // main window of current task
    if(w < 0)
-      return -1;
+      return -2;
 
    gui_window_t *window = getWindow(w);
-   if(window == NULL || !window->active)
-      return -1;
+   if(window == NULL || window->closed)
+      return -2;
    if(window == selectedWindow)
-      return 0;
+      return -1;
    for(int i = 0; i < window->child_count; i++) {
       gui_window_t *child = window->children[i];
       if(child->active && child == selectedWindow)
          return i;
    }
-   return -1;
+   return -2;
 }

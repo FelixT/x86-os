@@ -1,25 +1,19 @@
-#ifndef DIALOGS_H
-#define DIALOGS_H
+#ifndef DIALOGS2_H
+#define DIALOGS2_H
 
-#include "ui/ui_mgr.h"
-#include "ui/ui_input.h"
-#include "ui/ui_button.h"
-#include "ui/ui_label.h"
+#include "wo_api.h"
 
 typedef struct dialog_t {
    bool active;
    int type;
    int window;
-   surface_t surface;
    void (*callback)(char *out);
-   ui_mgr_t *ui;
    // txtinput specific
-   wo_t *input_wo;
+   windowobj_t *inputtxt;
 } dialog_t;
 
 bool dialog_msg(char *title, char *text);
 int dialog_input(char *text, void *return_func);
-dialog_t *get_dialog(int index);
 
 #define MAX_DIALOGS 10
 

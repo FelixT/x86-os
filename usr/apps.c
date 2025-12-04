@@ -41,7 +41,6 @@ void scroll(int deltaY, int offsetY) {
 
    clear();
 
-   int offsetIndex = (offsetY-5) / 20;
    int offsetRemainder = (offsetY-5) % 20;
 
    int y = 5;
@@ -107,15 +106,15 @@ void _start() {
    if(content->entries)
       sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_filename);
    override_draw(0);
-   override_click((uint32_t)&click);
-   override_release((uint32_t)&release);
+   override_click((uint32_t)&click, -1);
+   override_release((uint32_t)&release, -1);
    override_resize((uint32_t)&resize);
 
    items = 0;
    int y = 5;
 
    surface = get_surface();
-   ui = ui_init(&surface);
+   ui = ui_init(&surface, -1);
 
    for(int i = 0; i < content->size; i++) {
       fs_dir_entry_t *entry = &content->entries[i];

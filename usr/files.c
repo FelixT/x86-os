@@ -4,7 +4,7 @@
 #include "lib/stdio.h"
 #include "lib/wo_api.h"
 #include "lib/sort.h"
-#include "lib/dialogs.h"
+#include "lib/dialogs2.h"
 
 #include "prog.h"
 #include "prog_wo.h"
@@ -412,8 +412,8 @@ void _start(int argc, char **args) {
    framebuffer = (uint16_t*)(get_surface().buffer);
 
    create_scrollbar(&scroll);
-   override_keypress((uint32_t)&keypress);
-   override_click((uint32_t)&click);
+   override_keypress((uint32_t)&keypress, -1);
+   override_click((uint32_t)&click, -1);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
    width = get_surface().width;

@@ -31,9 +31,10 @@ int ui_string_height(char *txt, int width) {
          }
       }
    }
+   return height;
 }
 
-void draw_label(wo_t *label, surface_t *surface) {
+void draw_label(wo_t *label, surface_t *surface, int window) {
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
 
@@ -96,7 +97,7 @@ void draw_label(wo_t *label, surface_t *surface) {
       } else {
          // somewhat inefficient
          char buf[2] = {display_label[i], '\0'};
-         write_strat(buf, text_x, text_y, txt);
+         write_strat_w(buf, text_x, text_y, txt, window);
          text_x += get_font_info().width + get_font_info().padding;
          if(text_x + get_font_info().width + get_font_info().padding > x + width) {
             text_y += get_font_info().height + get_font_info().padding;
@@ -106,10 +107,11 @@ void draw_label(wo_t *label, surface_t *surface) {
    }
 }
 
-void release_label(wo_t *label, surface_t *surface, int x, int y) {
+void release_label(wo_t *label, surface_t *surface, int window, int x, int y) {
    (void)x;
    (void)y;
    (void)surface;
+   (void)window;
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
    if(label_data->release_func)
@@ -125,7 +127,7 @@ wo_t *create_label(int x, int y, int width, int height, char *text) {
    label_data->colour_txt_hover = 0x0000;
    label_data->colour_txt_clicked = 0x0000;
    label_data->colour_border_light = rgb16(235, 235, 235);
-   label_data->colour_border_dark = rgb16(145, 145, 145);
+   label_data->colour_border_dark = rgb16(200, 200, 200);
    label_data->bordered = true;
    label_data->valign = true;
    label_data->halign = true;

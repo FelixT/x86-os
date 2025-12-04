@@ -30,6 +30,48 @@ int get_free_dialog() {
    }
 }
 
+void dialog_click(int x, int y, int window) {
+   debug_println("clicked window %i\n", window);
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_click(dialog->ui, x, y);
+   end_subroutine();
+}
+
+void dialog_release(int x, int y, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_release(dialog->ui, x, y);
+   end_subroutine();
+}
+
+void dialog_hover(int x, int y, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_hover(dialog->ui, x, y);
+   end_subroutine();
+}
+
+void dialog_keypress(int c, int window) {
+   printf("keypress %c in window %i\n", (char)c, window);
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_keypress(dialog->ui, c);
+   end_subroutine();
+}
+
 void dialog_close(void *wo, int window) {
    (void)wo;
    if(!dialog_from_window(window)) {
@@ -52,18 +94,31 @@ bool dialog_msg(char *title, char *text) {
    msg->active = true;
    msg->type = DIALOG_MSG;
 
-   windowobj_t *txt = create_text_static_w(msg->window, NULL, 15, y, text);
-   txt->width = 260 - 30;
-   txt->texthalign = true;
+   // create ui mgr
+   msg->surface = get_surface_w(msg->window);
+   msg->ui = ui_init(&msg->surface, msg->window);
+
+   override_click((uint32_t)&dialog_click, msg->window);
+   override_release((uint32_t)&dialog_release, msg->window);
+   override_hover((uint32_t)&dialog_hover, msg->window);
+   override_keypress((uint32_t)&dialog_keypress, msg->window);
+
+   wo_t *label_wo = create_label(15, y, 260 - 30, 20, text);
+   ui_add(msg->ui, label_wo);
 
    y += 25;
    int x = (260 - 50)/2;
-   windowobj_t *btn = create_button_w(msg->window, NULL, x, y, "Ok");
+   wo_t *btn_wo = create_button(x, y, 50, 20, "Ok");
+   button_t *btn = (button_t *)btn_wo->data;
    btn->release_func = (void*)&dialog_close;
-   btn->width = 50;
+   ui_add(msg->ui, btn_wo);
+
+   ui_draw(msg->ui);
 
    if(title)
       set_window_title_w(msg->window, title);
+   else
+      set_window_title_w(msg->window, "Message");
 
    return true;
 }
@@ -72,11 +127,16 @@ void dialog_complete(void *wo, int window) {
    (void)wo;
    // find dialog
    dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog");
+      end_subroutine();
+   }
    if(!dialog->active) {
       debug_println("Dialog not active\n");
-      return;
+      end_subroutine();
    }
-   char *text = dialog->inputtxt->text;
+   input_t *input = (input_t *)dialog->input_wo->data;
+   char *text = input->text;
    if(dialog->callback)
       dialog->callback(text);
 
@@ -94,7 +154,8 @@ void dialog_cancel(void *wo, int window) {
       debug_println("Couldn't find dialog");
       end_subroutine();
    }
-   char *text = dialog->inputtxt->text;
+   input_t *input = (input_t *)dialog->input_wo->data;
+   char *text = input->text;
    debug_println("Dialog output %s", text);
 
    if(dialog->callback)
@@ -116,20 +177,29 @@ int dialog_input(char *text, void *return_func) {
    input->active = true;
    input->type = DIALOG_INPUT;
 
+   set_window_title_w(input->window, "Input Dialog");
+
+   // create ui mgr
+   input->surface = get_surface_w(input->window);
+   input->ui = ui_init(&input->surface, input->window);
+
+   override_click((uint32_t)&dialog_click, input->window);
+   override_release((uint32_t)&dialog_release, input->window);
+   override_hover((uint32_t)&dialog_hover, input->window);
+   override_keypress((uint32_t)&dialog_keypress, input->window);
+
    int y = 10;
    
    // dialog text
-   windowobj_t *txt = create_text_static_w(input->window, NULL, 15, y, text);
-   txt->width = 260 - 30;
-   txt->texthalign = true;
 
+   wo_t *msg = create_label(15, y, 260 - 30, 20, text);
+   ui_add(input->ui, msg);
+   
    // text input
    y += 25;
-   input->inputtxt = create_text_w(input->window, NULL, (260 - 160)/2, y, "");
-   input->inputtxt->width = 160;
-   input->inputtxt->clicked = true;
-   input->inputtxt->oneline = true;
-   input->inputtxt->return_func = (void*)&dialog_complete;
+
+   input->input_wo = create_input((260-160)/2, y, 160, 20);
+   ui_add(input->ui, input->input_wo);
 
    // buttons
    y += 25;
@@ -137,15 +207,25 @@ int dialog_input(char *text, void *return_func) {
    int btnsx = (260 - btnswidth)/2;
 
    int x = btnsx;
-   windowobj_t *btn = create_button_w(input->window, NULL, x, y, "Ok");
-   btn->release_func = (void*)&dialog_complete;
-   btn->width = 50;
+   wo_t *btn_wo = create_button(x, y, 50, 20, "Ok");
+   button_t *btn = (button_t *)btn_wo->data;
+   btn->release_func = (void *)&dialog_complete;
+   ui_add(input->ui, btn_wo);
 
    x += 50 + 10;
 
-   windowobj_t *btn_cancel = create_button_w(input->window, NULL, x, y, "Cancel");
-   btn_cancel->width = 50;
+   wo_t *btn_cancel_wo = create_button(x, y, 50, 20, "Cancel");
+   button_t *btn_cancel = (button_t *)btn_cancel_wo->data;
    btn_cancel->release_func = (void*)&dialog_close;
+   ui_add(input->ui, btn_cancel_wo);
+
+   ui_draw(input->ui);
 
    return index;
+}
+
+dialog_t *get_dialog(int index) {
+   if(index < 0 || index >= dialog_count)
+      return NULL;
+   return dialogs[index];
 }

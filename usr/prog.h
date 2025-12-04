@@ -43,14 +43,19 @@ static inline void write_uint(uint32_t num) {
    );
 }
 
-static inline surface_t get_surface(void) {
+static inline surface_t get_surface_w(int window) {
    surface_t surface;
    asm volatile (
       "int $0x30"
       : "=b" (surface.buffer), "=c" (surface.width), "=d" (surface.height)
-      : "a" (7)
+      : "a" (7),
+      "b" (window)
    );
    return surface;
+}
+
+static inline surface_t get_surface() {
+   return get_surface_w(-1);
 }
 
 static inline void write_newline() {
@@ -91,11 +96,12 @@ static inline void end_subroutine() {
    );
 }
 
-static inline void override_click(uint32_t addr) {
+static inline void override_click(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (13),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
    );
 }
 
@@ -107,28 +113,38 @@ static inline void override_draw(uint32_t addr) {
    );
 }
 
-static inline int get_width() {
+static inline int get_width_w(int window) {
    uint32_t output;
 
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (output)
-      : "a" (14)
+      : "a" (14),
+      "b" (window)
+   );
+
+   return output;
+}
+
+static inline int get_width() {
+   return get_width_w(-1);
+}
+
+static inline int get_height_w(int window) {
+   uint32_t output;
+
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (output)
+      : "a" (15),
+      "b" (window)
    );
 
    return output;
 }
 
 static inline int get_height() {
-   uint32_t output;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (output)
-      : "a" (15)
-   );
-
-   return output;
+   return get_height_w(-1);
 }
 
 static inline void *malloc(uint32_t size) {
@@ -176,7 +192,7 @@ static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is
    );
 }
 
-static inline void write_strat(char *str, int x, int y, int colour) {
+static inline void write_strat_w(char *str, int x, int y, int colour, int window) {
    // colour=-1 for window text colour
    asm volatile(
       "int $0x30"
@@ -184,8 +200,13 @@ static inline void write_strat(char *str, int x, int y, int colour) {
       "b" ((uint32_t)str),
       "c" ((uint32_t)x),
       "d" ((uint32_t)y),
-      "S" ((uint32_t)colour)
+      "S" ((uint32_t)colour),
+      "D" ((uint32_t)window)
    );
+}
+
+static inline void write_strat(char *str, int x, int y, int colour) {
+   write_strat_w(str, x, y, colour, -1);
 }
 
 static inline void clear() {
@@ -250,27 +271,30 @@ static inline void override_drag(uint32_t addr) {
    );
 }
 
-static inline void override_release(uint32_t addr) {
+static inline void override_release(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (38),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
    );
 }
 
-static inline void override_keypress(uint32_t addr) {
+static inline void override_keypress(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (64),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
    );
 }
 
-static inline void override_hover(uint32_t addr) {
+static inline void override_hover(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (11),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
    );
 }
 

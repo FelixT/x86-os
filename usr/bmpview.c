@@ -5,7 +5,7 @@
 #include "../lib/string.h"
 #include "lib/wo_api.h"
 #include "lib/stdio.h"
-#include "lib/dialogs.h"
+#include "lib/dialogs2.h"
 
 typedef struct {
    uint32_t headerSize; // size of this header
@@ -491,9 +491,9 @@ void _start(int argc, char **args) {
    
    load_img();
 
-   override_click((uint32_t)&click);
+   override_click((uint32_t)&click, -1);
    override_drag((uint32_t)&click);
-   override_release((uint32_t)&release);
+   override_release((uint32_t)&release, -1);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
 

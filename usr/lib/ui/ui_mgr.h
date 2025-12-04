@@ -7,6 +7,7 @@ typedef struct ui_mgr_t ui_mgr_t;
 
 typedef struct ui_mgr_t {
    surface_t *surface;
+   int window;
    wo_t* wos[MAX_WO];
    int wo_count;
    
@@ -15,7 +16,7 @@ typedef struct ui_mgr_t {
    wo_t *clicked;
 } ui_mgr_t;
 
-ui_mgr_t *ui_init(surface_t *surface);
+ui_mgr_t *ui_init(surface_t *surface, int window);
 void ui_destroy(ui_mgr_t *ui);
 int ui_add(ui_mgr_t *ui, wo_t *wo);
 void ui_remove(ui_mgr_t *ui, wo_t *wo);

@@ -13,11 +13,11 @@ typedef struct button_t {
    uint16_t colour_bg_hover;
    uint16_t colour_border_light;
    uint16_t colour_border_dark;
-   void (*click_func)(wo_t *wo);
-   void (*release_func)(wo_t *wo);
+   void (*click_func)(wo_t *wo, int window);
+   void (*release_func)(wo_t *wo, int window);
 } button_t;
 
 wo_t *create_button(int x, int y, int width, int height, char *text);
-void draw_button(wo_t *button, surface_t *surface);
+void draw_button(wo_t *button, surface_t *surface, int window);
 
 #endif

@@ -6,7 +6,7 @@
 #include "../lib/string.h"
 #include "lib/wo_api.h"
 #include "lib/stdio.h"
-#include "lib/dialogs.h"
+#include "lib/dialogs2.h"
 
 windowobj_t *wo_menu_o;
 windowobj_t *wo_path_o;
