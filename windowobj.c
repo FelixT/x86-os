@@ -42,7 +42,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->colour_bg = COLOUR_WHITE;
    windowobj->colour_text = COLOUR_BLACK;
    windowobj->colour_border = rgb16(120, 120, 120);
-   windowobj->colour_bg_hover = rgb16(240, 240, 240);
+   windowobj->colour_bg_hover = rgb16(247, 247, 247);
    windowobj->colour_border_hover = rgb16(40, 40, 40);
 
    // default funcs

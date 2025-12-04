@@ -38,7 +38,7 @@ wo_t *create_button(int x, int y, int width, int height, char *text) {
    btn_data->colour_bg = 0xD6BA;
    btn_data->colour_bg2 = 0xDF1B;
    btn_data->colour_txt = 0x0000;
-   btn_data->colour_bg_hover = 0xCCCC;
+   btn_data->colour_bg_hover = 0xDF1B;
    btn_data->colour_txt_hover = 0x0000;
    btn_data->colour_border_light = rgb16(235, 235, 235);
    btn_data->colour_border_dark = rgb16(145, 145, 145);

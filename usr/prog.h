@@ -266,6 +266,14 @@ static inline void override_keypress(uint32_t addr) {
    );
 }
 
+static inline void override_hover(uint32_t addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (11),
+      "b" (addr)
+   );
+}
+
 static inline void write_numat(int num, int x, int y) {
    asm volatile(
       "int $0x30"

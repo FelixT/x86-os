@@ -24,12 +24,12 @@ void draw_input(wo_t *input, surface_t *surface) {
       txt = input_data->colour_txt_clicked;
 
       light = dark;
-   } else if(input->hovering) {
-      bg = input_data->colour_bg_hover;
-      txt = input_data->colour_txt_hover;
    } else if(input->selected) {
       light = rgb16(100, 149, 237); // cornflower blue
       dark = rgb16(100, 149, 237);
+   } else if(input->hovering) {
+      bg = input_data->colour_bg_hover;
+      txt = input_data->colour_txt_hover;
    }
 
    int x = input->x;
@@ -37,8 +37,13 @@ void draw_input(wo_t *input, surface_t *surface) {
    int width = input->width;
    int height = input->height;
 
-   draw_rect(surface, bg, x, y, width, height);
+   // bg
+   if(input_data->bordered)
+      draw_rect(surface, bg, x+1, y+1, width-2, height-2);
+   else
+      draw_rect(surface, bg, x, y, width, height);
 
+   // border
    if(input_data->bordered) {
       draw_line(surface, dark,  x, y, true,  height);
       draw_line(surface, dark,  x, y, false, width);
@@ -83,7 +88,7 @@ void draw_input(wo_t *input, surface_t *surface) {
    write_strat(display_text, text_x, text_y, txt);
 
    // draw cursor
-   int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width);
+   int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width) + 1;
    if(input->selected && cursor_x <= x + width) {
       draw_line(surface, light, cursor_x, text_y, true, get_font_info().height);
    }

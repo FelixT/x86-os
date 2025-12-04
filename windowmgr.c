@@ -275,6 +275,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->drag_func = NULL;
    window->resize_func = NULL;
    window->release_func = NULL;
+   window->hover_func = NULL;
    window->read_func = NULL;
 }
 
@@ -289,6 +290,7 @@ void window_removefuncs(gui_window_t *window) {
    window->drag_func = NULL;
    window->resize_func = NULL;
    window->release_func = NULL;
+   window->hover_func = NULL;
    window->read_func = NULL;
 }
 
@@ -1222,6 +1224,19 @@ void windowmgr_mousemove(int x, int y) {
                   windowobj_redraw((void*)selectedWindow, (void*)wo);
                }
             }
+         }
+
+         // call hover function
+         if(selectedWindow->hover_func) {
+            int task = get_task_from_window(getSelectedWindowIndex());
+            registers_t *regs = get_regs();
+            if(task < 0) return;
+            if(!switch_to_task(task, regs)) return;
+            uint32_t *args = malloc(sizeof(uint32_t) * 2);
+            args[1] = relX;
+            args[0] = relY;
+            task_call_subroutine(regs, "hover", (uint32_t)(selectedWindow->hover_func), args, 2);
+
          }
       } else {
          // set all window objs as not hovered

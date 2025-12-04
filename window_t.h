@@ -49,7 +49,7 @@ typedef struct gui_window_t {
    void (*click_func)(int x, int y);
    void (*drag_func)(int x, int y);
    void (*draw_func)(void *window);
-   //void (*write_func)(void *window, char *string);
+   void (*hover_func)(int x, int y);
    void (*resize_func)(uint32_t fb, uint32_t w, uint32_t h);
    void (*release_func)();
    void (*checkcmd_func)(void *regs, void *window); // override terminal behaviour

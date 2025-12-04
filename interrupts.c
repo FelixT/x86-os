@@ -185,9 +185,9 @@ void software_handler(registers_t *regs) {
       case 10:
          api_end_task(regs);
          break;
-      //case 11:
-      //   api_override_uparrow(regs);
-      //   break;
+      case 11:
+         api_override_hover(regs);
+         break;
       case 12:
          api_end_subroutine(regs);
          break;

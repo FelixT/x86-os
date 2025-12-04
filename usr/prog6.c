@@ -49,6 +49,11 @@ void resize() {
    end_subroutine();
 }
 
+void hover(int x, int y) {
+   ui_hover(ui, x, y);
+   end_subroutine();
+}
+
 void _start() {
 
    set_window_title("Prog6");
@@ -61,6 +66,7 @@ void _start() {
    override_release((uint32_t)&release);
    override_keypress((uint32_t)&keypress);
    override_resize((uint32_t)&resize);
+   override_hover((uint32_t)&hover);
 
    // create & register elements
    wo_t *btn = create_button(10, 40, 150, 20, "Test");

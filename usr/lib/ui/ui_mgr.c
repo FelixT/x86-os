@@ -88,9 +88,33 @@ void ui_keypress(ui_mgr_t *ui, uint16_t c) {
    }
 }
 
-void ui_hover(int x, int y) {
-   (void)x;
-   (void)y;
+void ui_hover(ui_mgr_t *ui, int x, int y) {
+   wo_t *hovered = ui->hovered;
+   if(hovered) {
+      ui->hovered->hovering = false;
+      ui->hovered = NULL;
+   }
+
+   for(int i = 0; i < ui->wo_count; i++) {
+      wo_t *wo = ui->wos[i];
+      if(!(wo && wo->enabled && wo->visible))
+         continue;
+      if(x >= wo->x && x < wo->x + wo->width
+      && y >= wo->y && y < wo->y + wo->height) {
+         wo->hovering = true;
+         ui->hovered = wo;
+         // draw on hover
+         if(wo != hovered && wo->draw_func)
+            wo->draw_func(wo, ui->surface);
+      }
+   }
+
+   // draw on unhover
+   if(hovered != ui->hovered) {
+      if(hovered && hovered->draw_func)
+         hovered->draw_func(hovered, ui->surface);
+   }
+
 }
 
 void ui_unfocus() {
