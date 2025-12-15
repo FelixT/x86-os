@@ -17,11 +17,12 @@ typedef struct input_t {
    bool bordered;
    bool valign;
    bool halign;
-   void (*return_func)(wo_t *wo);
+   void (*return_func)(wo_t *wo, int window);
 
    int cursor_pos;
 } input_t;
 
 wo_t *create_input(int x, int y, int width, int height);
+void set_input_text(wo_t *input, char *text);
 
 #endif

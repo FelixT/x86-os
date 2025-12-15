@@ -300,8 +300,15 @@ void mouse_update(int relX, int relY) {
 
    gui_mouse_x += relX;
    gui_mouse_y -= relY;
-   gui_mouse_x = (gui_mouse_x + surface.width) % surface.width;
-   gui_mouse_y = (gui_mouse_y + surface.height) % surface.height;
+
+   // wrap around
+   /*gui_mouse_x = (gui_mouse_x + surface.width) % surface.width;
+   gui_mouse_y = (gui_mouse_y + surface.height) % surface.height;*/
+   // clamp
+   if(gui_mouse_x < 0) gui_mouse_x = 0;
+   if(gui_mouse_y < 0) gui_mouse_y = 0;
+   if(gui_mouse_x >= surface.width - 4) gui_mouse_x = surface.width - 5;
+   if(gui_mouse_y >= surface.height) gui_mouse_y = surface.height - 1;
 
    gui_cursor_restore_bg();
    windowmgr_mousemove(gui_mouse_x, gui_mouse_y);

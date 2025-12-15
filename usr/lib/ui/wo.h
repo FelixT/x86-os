@@ -30,12 +30,13 @@ typedef struct wo_t {
    bool needs_redraw;
    void *data; // actual object e.g. button_t, label_t, etc.
    
-   void (*draw_func)(struct wo_t *wo, surface_t *surface, int window);
+   void (*draw_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
    void (*click_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
    void (*release_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
+   void (*unfocus_func)(struct wo_t *wo, surface_t *surface, int window);
    void (*hover_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
    void (*drag_func)(struct wo_t *wo, int x, int y);
-   void (*keypress_func)(struct wo_t *wo, uint16_t c);
+   void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);
 } wo_t;
 
 wo_t *create_wo(int x, int y, int width, int height);

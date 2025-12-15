@@ -34,7 +34,7 @@ int ui_string_height(char *txt, int width) {
    return height;
 }
 
-void draw_label(wo_t *label, surface_t *surface, int window) {
+void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int offsetY) {
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
 
@@ -48,8 +48,8 @@ void draw_label(wo_t *label, surface_t *surface, int window) {
       txt = label_data->colour_txt_hover;
    }
 
-   int x = label->x;
-   int y = label->y;
+   int x = label->x + offsetX;
+   int y = label->y + offsetY;
    int width = label->width;
    int height = label->height;
 

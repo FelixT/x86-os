@@ -502,7 +502,7 @@ void exception_handler(int int_no, registers_t *regs) {
       bool kernel = cpl == 0;
 
       if(kernel) {
-         debug_printf("Exception %i in kernel mode with eip %i", int_no, regs->eip);
+         debug_printf("Exception %i in kernel mode with eip 0x%h\n", int_no, regs->eip);
 
          page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
 
@@ -512,28 +512,6 @@ void exception_handler(int int_no, registers_t *regs) {
             window_writestr("> ", gui_rgb16(255, 100, 100), 0);
 
             debug_printf("offset 0x%h\n", regs->eip - KERNEL_START);
-            // show hexdump
-            int bytes = 32;
-            int rowlen = 8;
-            
-            char *buf = malloc(rowlen);
-            buf[rowlen] = '\0';
-            uint8_t *mem = (uint8_t*)regs->eip;
-            for(int i = 0; i < bytes; i++) {
-               if(mem[i] <= 0x0F)
-                  debug_printf("0");
-               debug_printf("%h ", mem[i]);
-               buf[i%rowlen] = mem[i];
-
-               if((i%rowlen) == (rowlen-1) || i==(bytes-1)) {
-                  for(int x = 0; x < rowlen; x++) {
-                     if(buf[x] != '\n')
-                        debug_printf("%c", buf[x]);
-                  }
-                  debug_printf("\n");
-               }
-            }
-            free((uint32_t)buf, rowlen);
 
          }
       }

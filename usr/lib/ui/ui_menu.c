@@ -5,7 +5,7 @@
 #include "wo.h"
 #include "../stdio.h"
 
-void draw_menu(wo_t *menu, surface_t *surface, int window) {
+void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offsetY) {
    if(menu == NULL || menu->data == NULL) return;
    ui_menu_t *menu_data = (ui_menu_t *)menu->data;
 
@@ -23,35 +23,38 @@ void draw_menu(wo_t *menu, surface_t *surface, int window) {
       bg = rgb16(248, 248, 248);
    }
 
+   int x = menu->x + offsetX;
+   int y = menu->y + offsetY;
+
    // draw border
-   draw_line(surface, border_dark,  menu->x, menu->y, true,  menu->height);
-   draw_line(surface, border_dark,  menu->x, menu->y, false, menu->width);
-   draw_line(surface, border_light, menu->x, menu->y + menu->height - 1, false, menu->width);
-   draw_line(surface, border_light, menu->x + menu->width - 1, menu->y, true, menu->height);
+   draw_line(surface, border_dark,  x, y, true,  menu->height);
+   draw_line(surface, border_dark,  x, y, false, menu->width);
+   draw_line(surface, border_light, x, y + menu->height - 1, false, menu->width);
+   draw_line(surface, border_light, x + menu->width - 1, y, true, menu->height);
 
    int item_height = get_font_info().height + 8;
 
    // draw background
    int offset_y = menu_data->item_count * item_height;
-   draw_rect(surface, bg, menu->x + 1, menu->y + 1 + offset_y, menu->width - 2, menu->height - 2 - offset_y);
+   draw_rect(surface, bg, x + 1, y + 1 + offset_y, menu->width - 2, menu->height - 2 - offset_y);
 
    // draw items
    for(int i = 0; i < menu_data->item_count; i++) {
       ui_menu_item_t *item = &menu_data->items[i];
-      int item_y = menu->y + (i * item_height) + 1;
+      int item_y = y + (i * item_height) + 1;
       // highlight if selected
       if(i == menu_data->selected_index) {
-         write_strat_w(item->text, menu->x + 5, item_y + 5, 0xFFFF, window);
-         draw_rect(surface, bg_selected, menu->x + 1, item_y, menu->width - 2, item_height);
+         write_strat_w(item->text, x + 5, item_y + 5, 0xFFFF, window);
+         draw_rect(surface, bg_selected, x + 1, item_y, menu->width - 2, item_height);
       } else if(i == menu_data->hover_index && menu->hovering) {
-         draw_rect(surface, bg_hover, menu->x + 1, item_y, menu->width - 2, item_height);
+         draw_rect(surface, bg_hover, x + 1, item_y, menu->width - 2, item_height);
       } else {
-         draw_rect(surface, bg_item, menu->x + 1, item_y, menu->width - 2, item_height);
+         draw_rect(surface, bg_item, x + 1, item_y, menu->width - 2, item_height);
       }
       // draw text
-      write_strat_w(item->text, menu->x + 5, item_y + 4, 0, window);
+      write_strat_w(item->text, x + 5, item_y + 4, 0, window);
       // border
-      draw_line(surface, border_light, menu->x + 1, item_y + item_height - 1, false, menu->width - 2);
+      draw_line(surface, border_light, x + 1, item_y + item_height - 1, false, menu->width - 2);
    }
 }
 
@@ -101,7 +104,7 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y) {
 
    if(index < 0 || index >= menu_data->item_count) {
       menu_data->selected_index = -1;
-      draw_menu(menu, surface, window);
+      draw_menu(menu, surface, window, 0, 0);
       return;
    }
 
@@ -112,10 +115,11 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y) {
       item->func(menu, index, window);
    }
 
-   draw_menu(menu, surface, window);
+   draw_menu(menu, surface, window, 0, 0);
 }
 
-void menu_keypress(wo_t *menu, uint16_t c) {
+void menu_keypress(wo_t *menu, uint16_t c, int window) {
+   (void)window;
    if(menu == NULL || menu->data == NULL) return;
    ui_menu_t *menu_data = (ui_menu_t *)menu->data;
 
@@ -147,7 +151,7 @@ void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y) {
    }
 
    if(old_index != menu_data->hover_index)
-      draw_menu(menu, surface, window);
+      draw_menu(menu, surface, window, 0, 0);
 }
 
 wo_t *create_menu(int x, int y, int width, int height) {

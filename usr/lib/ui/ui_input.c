@@ -10,7 +10,7 @@ static inline int ui_string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
 }
 
-void draw_input(wo_t *input, surface_t *surface, int window) {
+void draw_input(wo_t *input, surface_t *surface, int window, int offsetX, int offsetY) {
    if(input == NULL || input->data == NULL) return;
    input_t *input_data = (input_t *)input->data;
 
@@ -23,17 +23,19 @@ void draw_input(wo_t *input, surface_t *surface, int window) {
       bg = input_data->colour_bg_clicked;
       txt = input_data->colour_txt_clicked;
 
-      light = rgb16(220, 220, 220);
+      light = rgb16(180, 180, 180);
    } else if(input->selected) {
       light = rgb16(100, 149, 237); // cornflower blue
       dark = rgb16(100, 149, 237);
    } else if(input->hovering) {
       bg = input_data->colour_bg_hover;
       txt = input_data->colour_txt_hover;
+
+      light = rgb16(210, 210, 210);
    }
 
-   int x = input->x;
-   int y = input->y;
+   int x = input->x + offsetX;
+   int y = input->y + offsetY;
    int width = input->width;
    int height = input->height;
 
@@ -94,7 +96,7 @@ void draw_input(wo_t *input, surface_t *surface, int window) {
    }
 }
 
-void keypress_input(wo_t *input, uint16_t c) {
+void keypress_input(wo_t *input, uint16_t c, int window) {
    if(input == NULL || input->data == NULL) return;
    input_t *input_data = (input_t *)input->data;
 
@@ -122,7 +124,7 @@ void keypress_input(wo_t *input, uint16_t c) {
    } else if(c == 0x0D) {
       // enter
       if(input_data->return_func != NULL)
-         input_data->return_func(input);
+         input_data->return_func(input, window);
    } else if(c > 0) {
       // add char at cursor position
       if((unsigned)len < sizeof(input_data->text) - 1) {
@@ -160,4 +162,13 @@ wo_t *create_input(int x, int y, int width, int height) {
    input->draw_func = &draw_input;
    input->keypress_func = &keypress_input;
    return input;
+}
+
+void set_input_text(wo_t *input, char *text) {
+   if(input == NULL || input->data == NULL) return;
+   input_t *input_data = (input_t *)input->data;
+
+   strncpy(input_data->text, text, sizeof(input_data->text) - 1);
+   input_data->text[sizeof(input_data->text) - 1] = '\0';
+   input_data->cursor_pos = strlen(input_data->text);
 }

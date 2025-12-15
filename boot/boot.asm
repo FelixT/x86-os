@@ -6,6 +6,22 @@
    %include "boot/print.asm"
 
 start:
+
+   ; clear screen
+   mov ax, 0xB800
+   mov es, ax
+   xor di, di
+   mov cx, 2000
+   mov ah, 0x07
+   mov al, ' '
+   rep stosw
+
+   ; set cursor to top left
+   mov ah, 0x02
+   mov bh, 0x00
+   xor dx, dx
+   int 0x10
+
    mov ax, 0
    mov ds, ax ; data segment=0
    mov es, ax

@@ -8,7 +8,7 @@ dialog_t *dialogs[MAX_DIALOGS];
 
 dialog_t *dialog_from_window(int window) {
    for(int i = 0; i < dialog_count; i++) {
-      if(dialogs[i]->window == window)
+      if(dialogs[i]->active && dialogs[i]->window == window)
          return dialogs[i];
    }
    return NULL;
@@ -31,7 +31,6 @@ int get_free_dialog() {
 }
 
 void dialog_click(int x, int y, int window) {
-   debug_println("clicked window %i\n", window);
    dialog_t *dialog = dialog_from_window(window);
    if(!dialog) {
       debug_println("Couldn't find dialog for window %i\n", window);
@@ -61,16 +60,6 @@ void dialog_hover(int x, int y, int window) {
    end_subroutine();
 }
 
-void dialog_keypress(int c, int window) {
-   dialog_t *dialog = dialog_from_window(window);
-   if(!dialog) {
-      debug_println("Couldn't find dialog for window %i\n", window);
-      end_subroutine();
-   }
-   ui_keypress(dialog->ui, c);
-   end_subroutine();
-}
-
 void dialog_close(void *wo, int window) {
    (void)wo;
    if(!dialog_from_window(window)) {
@@ -80,6 +69,20 @@ void dialog_close(void *wo, int window) {
    }
    dialog_from_window(window)->active = false;
    close_window(window);
+   end_subroutine();
+}
+
+void dialog_keypress(int c, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_keypress(dialog->ui, c);
+   if(c == 0x1B) {
+      dialog_close(NULL, window);
+   }
+
    end_subroutine();
 }
 
@@ -144,25 +147,6 @@ void dialog_complete(void *wo, int window) {
    end_subroutine();
 }
 
-void dialog_cancel(void *wo, int window) {
-   (void)wo;
-   debug_println("Cancel window %i", window);
-   // find dialog
-   dialog_t *dialog = dialog_from_window(window);
-   if(!dialog) {
-      debug_println("Couldn't find dialog");
-      end_subroutine();
-   }
-   input_t *input = (input_t *)dialog->input_wo->data;
-   char *text = input->text;
-   debug_println("Dialog output %s", text);
-
-   if(dialog->callback)
-      dialog->callback(text);
-
-   end_subroutine();
-}
-
 int dialog_input(char *text, void *return_func) {
    if(dialog_count == MAX_DIALOGS) {
       debug_println("Can't create dialog\n");
@@ -198,6 +182,12 @@ int dialog_input(char *text, void *return_func) {
    y += 25;
 
    input->input_wo = create_input((260-160)/2, y, 160, 20);
+   input_t *inputbox = (input_t *)input->input_wo->data;
+   inputbox->return_func = (void *)&dialog_complete;
+   inputbox->valign = true;
+   inputbox->halign = true;
+   input->input_wo->selected = true;
+   input->ui->focused = input->input_wo;
    ui_add(input->ui, input->input_wo);
 
    // buttons

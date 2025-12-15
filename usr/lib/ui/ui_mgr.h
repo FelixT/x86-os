@@ -1,3 +1,6 @@
+#ifndef UI_MGR_H
+#define UI_MGR_H
+
 typedef struct ui_mgr_t ui_mgr_t;
 
 #include "../../prog.h"
@@ -25,3 +28,5 @@ void ui_click(ui_mgr_t *ui, int x, int y);
 void ui_release(ui_mgr_t *ui, int x, int y);
 void ui_keypress(ui_mgr_t *ui, uint16_t c);
 void ui_hover(ui_mgr_t *ui, int x, int y);
+
+#endif

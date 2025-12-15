@@ -2,6 +2,7 @@
 
 #include "../../../lib/string.h"
 #include "../stdio.h"
+#include "../../prog.h"
 
 ui_mgr_t *ui_init(surface_t *surface, int window) {
    ui_mgr_t *ui = malloc(sizeof(ui_mgr_t));
@@ -27,7 +28,7 @@ int ui_add(ui_mgr_t *ui, wo_t *wo) {
 void ui_draw(ui_mgr_t *ui) {
    for(int i = 0; i < ui->wo_count; i++) {
       if(ui->wos[i] && ui->wos[i]->enabled && ui->wos[i]->visible && ui->wos[i]->draw_func)
-         ui->wos[i]->draw_func(ui->wos[i], ui->surface, ui->window);
+         ui->wos[i]->draw_func(ui->wos[i], ui->surface, ui->window, 0, 0);
    }
 }
 
@@ -36,7 +37,11 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
    if(ui->focused) {
       ui->focused->selected = false;
       if(ui->focused->draw_func)
-         ui->focused->draw_func(ui->focused, ui->surface, ui->window);
+         ui->focused->draw_func(ui->focused, ui->surface, ui->window, 0, 0);
+
+      if(ui->focused->unfocus_func)
+         ui->focused->unfocus_func(ui->focused, ui->surface, ui->window);
+
       ui->focused = NULL;
    }
 
@@ -49,10 +54,10 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
          ui->clicked = wo;
          wo->clicked = true;
          if(wo->draw_func)
-            wo->draw_func(wo, ui->surface, ui->window);
+            wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          if(wo->click_func)
             wo->click_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
-         return;
+         break;
       }
    }
 }
@@ -65,17 +70,17 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
       wo->clicked = false;
       wo->selected = false;
       if(wo->draw_func)
-         wo->draw_func(wo, ui->surface, ui->window);
+         wo->draw_func(wo, ui->surface, ui->window, 0, 0);
       if(x >= wo->x && x < wo->x + wo->width
       && y >= wo->y && y < wo->y + wo->height) {
          // call release func
          if(wo->release_func)
             wo->release_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
-         if(wo->type == WO_INPUT || wo->type == WO_MENU) {
+         if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS) {
             ui->focused = wo;
             wo->selected = true;
             if(wo->draw_func)
-               wo->draw_func(wo, ui->surface, ui->window);
+               wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          }
          break;
       }
@@ -87,9 +92,9 @@ void ui_keypress(ui_mgr_t *ui, uint16_t c) {
    if(ui->focused) {
       wo_t *wo = ui->focused;
       if(wo->keypress_func)
-         wo->keypress_func(wo, c);
+         wo->keypress_func(wo, c, ui->window);
       if(wo->draw_func)
-         wo->draw_func(wo, ui->surface, ui->window);
+         wo->draw_func(wo, ui->surface, ui->window, 0, 0);
    }
 }
 
@@ -111,7 +116,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
 
          // draw on hover
          if(wo != hovered && wo->draw_func)
-            wo->draw_func(wo, ui->surface, ui->window);
+            wo->draw_func(wo, ui->surface, ui->window, 0, 0);
 
          if(wo->hover_func)
             wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
@@ -121,7 +126,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
    // draw on unhover
    if(hovered != ui->hovered) {
       if(hovered && hovered->draw_func)
-         hovered->draw_func(hovered, ui->surface, ui->window);
+         hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
    }
 
 }

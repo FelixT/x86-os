@@ -63,7 +63,7 @@ void destroy_button(wo_t *button) {
    free(button, sizeof(wo_t));
 }
 
-void draw_button(wo_t *button, surface_t *surface, int window) {
+void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int offsetY) {
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
 
@@ -82,8 +82,8 @@ void draw_button(wo_t *button, surface_t *surface, int window) {
       txt = btn_data->colour_txt_hover;
    }
 
-   int x = button->x;
-   int y = button->y;
+   int x = button->x + offsetX;
+   int y = button->y + offsetY;
    int width = button->width;
    int height = button->height;
    bool gradient = true;

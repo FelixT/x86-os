@@ -234,6 +234,7 @@ bool window_init(gui_window_t *window) {
    window->scrolledY = 0;
    window->scrollable_content_height = 0;
    window->scrollbar = NULL;
+   window->child_count = 0;
 
    window_resetfuncs(window);
    // no window objects
@@ -1396,7 +1397,7 @@ int get_cindex() {
       return -1;
    for(int i = 0; i < window->child_count; i++) {
       gui_window_t *child = window->children[i];
-      if(child->active && child == selectedWindow)
+      if(child && child->active && child == selectedWindow)
          return i;
    }
    return -2;

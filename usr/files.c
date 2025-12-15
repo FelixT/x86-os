@@ -2,12 +2,14 @@
 #include <stdbool.h>
 #include "../lib/string.h"
 #include "lib/stdio.h"
-#include "lib/wo_api.h"
 #include "lib/sort.h"
-#include "lib/dialogs2.h"
+#include "lib/dialogs.h"
+#include "lib/ui/ui_mgr.h"
+#include "lib/ui/ui_button.h"
+#include "lib/ui/ui_input.h"
+#include "lib/ui/ui_canvas.h"
 
 #include "prog.h"
-#include "prog_wo.h"
 
 volatile uint16_t *framebuffer;
 volatile uint32_t width;
@@ -19,10 +21,12 @@ fs_dir_content_t *dir_content;
 int shown_items;
 
 char cur_path[512];
-windowobj_t *wo_menu;
-windowobj_t *wo_path;
-windowobj_t *wo_newfile;
-windowobj_t *wo_newfolder;
+surface_t surface;
+ui_mgr_t *ui;
+wo_t *wo_menu;
+wo_t *wo_path;
+wo_t *wo_newfile;
+wo_t *wo_newfolder;
 
 char tolower_c(char c) {
    if(c >= 'A' && c <= 'Z')
@@ -110,18 +114,18 @@ void display_items() {
 
    set_content_height(y + 25*offset + 10);
 
-   set_text(wo_path, cur_path);
+   input_t *path_data = (input_t *)wo_path->data;
+   path_data->valign = true;
+   set_input_text(wo_path, cur_path);
+
+   ui_draw(ui);
 }
 
 void path_callback() {
-   if(wo_path->text == NULL) {
-      debug_write_str("Text is null\n");
-      end_subroutine();
-      return;
-   }
+   input_t *path_data = (input_t *)wo_path->data;
 
    char path[500];
-   strcpy(path, wo_path->text);
+   strcpy(path, path_data->text);
    int len = strlen(path);
    if(len > 0 && path[len-1] != '/') {
       strcat(path, "/");
@@ -133,7 +137,7 @@ void path_callback() {
       sprintf(buffer, "Location '%s' not found", path);
       dialog_msg("Error", buffer);
    } else {
-      strcpy(cur_path, wo_path->text);
+      strcpy(cur_path, path_data->text);
       dir_content = read_dir(cur_path);
       sort_dir();
       offset = 0;
@@ -146,12 +150,13 @@ void path_callback() {
 
 void click(int x, int y) {
 
-   (void)(x);
    // clicked scrollbar
    if(x > (int)width - 20) {
       end_subroutine();
       return;
    }
+
+   ui_click(ui, x, y);
 
    // clicked menu
    if(y > (int)height - 20) {
@@ -214,6 +219,7 @@ void click(int x, int y) {
       dir_content = read_dir(cur_path);
       sort_dir();
       display_items();
+
       redraw();
 
    } else {
@@ -276,8 +282,10 @@ void click(int x, int y) {
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)w;
    framebuffer = (uint16_t*)fb;
-   width = get_surface().width;
+   surface = get_surface();
+   width = surface.width;
    height = h;
+   ui->surface = &surface;
 
    wo_menu->width = w;
    wo_menu->y = height - 20;
@@ -319,11 +327,8 @@ void add_file_callback(char *filename) {
    }
 }
 
-void add_file(void *wo, void *regs) {
-   (void)wo;
-   (void)regs;
+void add_file() {
    dialog_input("Enter filename", (void*)&add_file_callback);
-   end_subroutine();
 }
 
 void add_folder_callback(char *name) {
@@ -345,11 +350,8 @@ void add_folder_callback(char *name) {
    }
 }
 
-void add_folder(void *wo, void *regs) {
-   (void)wo;
-   (void)regs;
+void add_folder() {
    dialog_input("Enter folder name", &add_folder_callback);
-   end_subroutine();
 }
 
 void keypress(uint16_t c, int window) {
@@ -373,8 +375,20 @@ void keypress(uint16_t c, int window) {
       redraw();
    }
 
+   ui_keypress(ui, c);
+
    end_subroutine();
 
+}
+
+void release(int x, int y, int window) {
+   ui_release(ui, x, y);
+   end_subroutine();
+}
+
+void hover(int x, int y) {
+   ui_hover(ui, x, y);
+   end_subroutine();
 }
 
 void _start(int argc, char **args) {
@@ -384,6 +398,9 @@ void _start(int argc, char **args) {
    // init
    set_window_size(320, 265);
    set_window_title("File Manager");
+
+   surface = get_surface();
+   ui = ui_init(&surface, -1);
 
    dir_content = read_dir("/");
    sort_dir();
@@ -416,28 +433,38 @@ void _start(int argc, char **args) {
    override_click((uint32_t)&click, -1);
    override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize);
+   override_release((uint32_t)&release, -1);
+   override_hover((uint32_t)&hover, -1);
    width = get_surface().width;
    height = get_height();
 
    int displayedwidth = get_width();
 
-   wo_menu = create_canvas(NULL, 0, height - 20, displayedwidth, 20);
-   wo_menu->bordered = false;
+   wo_menu = create_canvas(0, height - 20, displayedwidth, 20);
+   canvas_t *menu_data = (canvas_t *)wo_menu->data;
+   menu_data->bordered = false;
+   ui_add(ui, wo_menu);
 
    strcpy(cur_path, "/");
    int x = 4;
-   int y = 3;
-   wo_newfile = create_button(wo_menu, x, y, "+ File");
-   wo_newfile->click_func = &add_file;
+   int y = 2;
+   wo_newfile = create_button(x, y, 60, 16, "+ File");
+   button_t *newfile_data = (button_t *)wo_newfile->data;
+   newfile_data->release_func = (void *)&add_file;
+   canvas_add(wo_menu, wo_newfile);
    x += wo_newfile->width + 2;
-   wo_newfolder = create_button(wo_menu, x, y, "+ Folder");
-   wo_newfolder->click_func = &add_folder;
+
+   wo_newfolder = create_button(x, y, 60, 16, "+ Folder");
+   button_t *newfolder_data = (button_t *)wo_newfolder->data;
+   newfolder_data->release_func = (void *)&add_folder;
+   canvas_add(wo_menu, wo_newfolder);
    x += wo_newfolder->width + 2;
    
-   wo_path = create_text(wo_menu, x, 3, cur_path);
-   wo_path->width = displayedwidth - x - 5;
-   wo_path->return_func = &path_callback;
-   wo_path->oneline = true;
+   wo_path = create_input(x, y, displayedwidth - x - 5, 16);
+   set_input_text(wo_path, cur_path);
+   input_t *path_data = (input_t *)wo_path->data;
+   path_data->return_func = &path_callback;
+   canvas_add(wo_menu, wo_path);
    x += wo_path->width + 2;
 
    display_items();

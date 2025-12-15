@@ -18,6 +18,6 @@ typedef struct button_t {
 } button_t;
 
 wo_t *create_button(int x, int y, int width, int height, char *text);
-void draw_button(wo_t *button, surface_t *surface, int window);
+void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int offsetY);
 
 #endif
