@@ -1,6 +1,7 @@
 #include "lib/ui/ui_button.h"
 #include "lib/ui/ui_label.h"
 #include "lib/ui/ui_input.h"
+#include "lib/ui/ui_menu.h"
 #include "lib/ui/ui_mgr.h"
 #include "lib/stdio.h"
 
@@ -54,6 +55,19 @@ void hover(int x, int y) {
    end_subroutine();
 }
 
+wo_t *menu = NULL;
+
+void toggle_menu(wo_t *wo, surface_t *surface, int window, int x, int y) {
+   (void)wo;
+   (void)surface;
+   (void)window;
+   (void)x;
+   (void)y;
+   clear();
+   menu->visible = !menu->visible;
+   ui_draw(ui);
+}
+
 void _start() {
 
    set_window_title("Prog6");
@@ -79,6 +93,15 @@ void _start() {
 
    wo_t *input = create_input(10, 70, 150, 20);
    ui_add(ui, input);
+
+   wo_t *togglemenu = create_button(170, 95, 80, 20, "Menu");
+   togglemenu->release_func = &toggle_menu;
+   ui_add(ui, togglemenu);
+
+   menu = create_menu(10, 95, 150, 100);
+   ui_add(ui, menu);
+   add_menu_item(menu, "Item 1", NULL);
+   add_menu_item(menu, "Item 2", NULL);
 
    // draw
    ui_draw(ui);

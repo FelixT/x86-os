@@ -23,7 +23,7 @@ void draw_input(wo_t *input, surface_t *surface, int window) {
       bg = input_data->colour_bg_clicked;
       txt = input_data->colour_txt_clicked;
 
-      light = dark;
+      light = rgb16(220, 220, 220);
    } else if(input->selected) {
       light = rgb16(100, 149, 237); // cornflower blue
       dark = rgb16(100, 149, 237);
@@ -119,6 +119,10 @@ void keypress_input(wo_t *input, uint16_t c) {
       input_data->cursor_pos++;
       if(input_data->cursor_pos > len)
          input_data->cursor_pos = len;
+   } else if(c == 0x0D) {
+      // enter
+      if(input_data->return_func != NULL)
+         input_data->return_func(input);
    } else if(c > 0) {
       // add char at cursor position
       if((unsigned)len < sizeof(input_data->text) - 1) {
@@ -137,7 +141,7 @@ wo_t *create_input(int x, int y, int width, int height) {
    input_t *input_data = malloc(sizeof(input_t));
 
    input_data->colour_bg = rgb16(255, 255, 255);
-   input_data->colour_bg_hover = rgb16(245, 245, 245);
+   input_data->colour_bg_hover = rgb16(248, 248, 248);
    input_data->colour_bg_clicked = rgb16(255, 255, 255);
    input_data->colour_txt = rgb16(40, 40, 40);
    input_data->colour_txt_hover = rgb16(0, 0, 0);

@@ -62,7 +62,6 @@ void dialog_hover(int x, int y, int window) {
 }
 
 void dialog_keypress(int c, int window) {
-   printf("keypress %c in window %i\n", (char)c, window);
    dialog_t *dialog = dialog_from_window(window);
    if(!dialog) {
       debug_println("Couldn't find dialog for window %i\n", window);

@@ -1,0 +1,24 @@
+#ifndef UI_MENU_H
+#define UI_MENU_H
+
+#include <stdint.h>
+
+#include "wo.h"
+
+typedef struct ui_menu_item_t {
+   char text[64];
+   void (*func)(wo_t *item, int index, int window);
+} ui_menu_item_t;
+
+typedef struct ui_menu_t {
+   ui_menu_item_t *items;
+   int item_count;
+   int selected_index;
+   int hover_index;
+} ui_menu_t;
+
+wo_t *create_menu(int x, int y, int width, int height);
+void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window));
+void destroy_menu(wo_t *menu);
+
+#endif

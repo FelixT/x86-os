@@ -12,6 +12,8 @@
 #include "window_popup.h"
 #include "fs.h"
 
+// helper funcs
+
 inline gui_window_t *api_get_window() {
    return &gui_get_windows()[get_current_task_window()];
 }
@@ -28,6 +30,19 @@ void api_printf(char *format, ...) {
    va_end(args);
    api_write_to_task(buffer);
    free((uint32_t)buffer, 512);
+}
+
+gui_window_t *api_get_cwindow(int cindex) {
+   gui_window_t *mainwindow = api_get_window();
+   if(!mainwindow)
+      return NULL;
+   if(cindex == -1)
+      return mainwindow;
+   // get child window
+   if(cindex < 0 || cindex > mainwindow->child_count)
+      return NULL;
+
+   return mainwindow->children[cindex];
 }
 
 // api funcs
@@ -63,11 +78,14 @@ void api_write_string_at(registers_t *regs) {
    // IN: ecx = x
    // IN: edx = y
    // IN: esi = colour (-1 for window colour)
-   gui_window_t *window = api_get_window();
+   // IN: edi = cindex (-1 for main window)
+   gui_window_t *window = api_get_cwindow(regs->edi);
+   if(!window) return;
    int colour = regs->esi;
    if(colour == -1)
       colour = window->txtcolour;
-   window_writestrat((char*)regs->ebx, colour, regs->ecx, regs->edx, get_current_task_window());
+   int windowindex = get_window_index_from_pointer(window);
+   window_writestrat((char*)regs->ebx, colour, regs->ecx, regs->edx, windowindex);
 }
 
 void api_write_number_at(registers_t *regs) {
@@ -98,27 +116,47 @@ void api_print_stack() {
 }
 
 void api_return_framebuffer(registers_t *regs) {
-   // get framebuffer in ebx, width in ecx, height in edx
-   uint32_t framebuffer = (uint32_t)gui_get_window_framebuffer(get_current_task_window());
-   uint32_t size = api_get_window()->framebuffer_size;
+   // IN: ebx = window index
+   // OUT: ebx = framebuffer address
+   // OUT: ecx = width
+   // OUT: edx = height
+   // NULL ebx on fail
+   gui_window_t *window = api_get_cwindow(regs->ebx);
+   if(!window) {
+      regs->ebx = (uint32_t)NULL;
+      return;
+   }
+   uint32_t framebuffer = (uint32_t)window->framebuffer;
+   uint32_t size = window->framebuffer_size;
    // map to task
    for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size+0xFFF)/0x1000; i++) {
       map(get_current_task_state()->page_dir, i*0x1000, i*0x1000, 1, 1);
    }
    regs->ebx = framebuffer;
-   regs->ecx = api_get_window()->surface.width;
-   regs->edx = api_get_window()->surface.height;
+   regs->ecx = window->surface.width;
+   regs->edx = window->surface.height;
 }
 
 void api_return_window_width(registers_t *regs) {
-   // get window framebuffer width in ebx
-   gui_window_t *window = api_get_window();
+   // IN: ebx = window index
+   // OUT: ebx = framebuffer width
+   gui_window_t *window = api_get_cwindow(regs->ebx);
+   if(!window) {
+      regs->ebx = 0;
+      return;
+   }
    regs->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
 }
 
 void api_return_window_height(registers_t *regs) {
-   // get window framebuffer height in ebx
-   regs->ebx = api_get_window()->height - TITLEBAR_HEIGHT;
+   // IN: ebx = window index
+   // OUT: ebx = framebuffer height
+   gui_window_t *window = api_get_cwindow(regs->ebx);
+   if(!window) {
+      regs->ebx = 0;
+      return;
+   }
+   regs->ebx = window->height - TITLEBAR_HEIGHT;
 }
 
 void api_redraw_window() {
@@ -149,9 +187,11 @@ void api_override_checkcmd(registers_t *regs) {
 }
 
 void api_override_mouseclick(registers_t *regs) {
-   // override mouse left click function with ebx
-   uint32_t addr = regs->ebx;
-   api_get_window()->click_func = (void *)(addr);
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->click_func = (void *)(regs->ebx);
 }
 
 void api_override_draw(registers_t *regs) {
@@ -173,21 +213,27 @@ void api_override_drag(registers_t *regs) {
 }
 
 void api_override_release(registers_t *regs) {
-   // override mouse release function with ebx
-   uint32_t addr = regs->ebx;
-   api_get_window()->release_func = (void *)(addr);
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->release_func = (void *)(regs->ebx);
 }
 
 void api_override_keypress(registers_t *regs) {
-   // override (main) window keypress function with ebx
-   uint32_t addr = regs->ebx;
-   api_get_window()->keypress_func = (void *)(addr);
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->keypress_func = (void *)(regs->ebx);
 }
 
 void api_override_hover(registers_t *regs) {
-   // override (main) window hover function with ebx
-   uint32_t addr = regs->ebx;
-   api_get_window()->hover_func = (void *)(addr);
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->hover_func = (void *)(regs->ebx);
 }
 
 

@@ -33,8 +33,12 @@ void ui_draw(ui_mgr_t *ui) {
 
 void ui_click(ui_mgr_t *ui, int x, int y) {
    // check if any ui elements are clicked
-   if(ui->focused)
+   if(ui->focused) {
+      ui->focused->selected = false;
+      if(ui->focused->draw_func)
+         ui->focused->draw_func(ui->focused, ui->surface, ui->window);
       ui->focused = NULL;
+   }
 
    for(int i = 0; i < ui->wo_count; i++) {
       wo_t *wo = ui->wos[i];
@@ -67,7 +71,7 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
          // call release func
          if(wo->release_func)
             wo->release_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
-         if(wo->type == WO_INPUT) {
+         if(wo->type == WO_INPUT || wo->type == WO_MENU) {
             ui->focused = wo;
             wo->selected = true;
             if(wo->draw_func)
@@ -81,11 +85,11 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
 
 void ui_keypress(ui_mgr_t *ui, uint16_t c) {
    if(ui->focused) {
-      wo_t *input = ui->focused;
-      if(input->keypress_func)
-         input->keypress_func(input, c);
-      if(input->draw_func)
-         input->draw_func(input, ui->surface, ui->window);
+      wo_t *wo = ui->focused;
+      if(wo->keypress_func)
+         wo->keypress_func(wo, c);
+      if(wo->draw_func)
+         wo->draw_func(wo, ui->surface, ui->window);
    }
 }
 
@@ -104,9 +108,13 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
       && y >= wo->y && y < wo->y + wo->height) {
          wo->hovering = true;
          ui->hovered = wo;
+
          // draw on hover
          if(wo != hovered && wo->draw_func)
             wo->draw_func(wo, ui->surface, ui->window);
+
+         if(wo->hover_func)
+            wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
       }
    }
 
