@@ -76,7 +76,7 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
          // call release func
          if(wo->release_func)
             wo->release_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
-         if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS) {
+         if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_GRID) {
             ui->focused = wo;
             wo->selected = true;
             if(wo->draw_func)
@@ -125,6 +125,9 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
 
    // draw on unhover
    if(hovered != ui->hovered) {
+      if(hovered && hovered->unhover_func)
+         hovered->unhover_func(hovered, ui->surface, ui->window);
+
       if(hovered && hovered->draw_func)
          hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
    }

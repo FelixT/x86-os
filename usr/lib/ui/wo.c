@@ -19,6 +19,7 @@ wo_t *create_wo(int x, int y, int width, int height) {
    obj->release_func = NULL;
    obj->unfocus_func = NULL;
    obj->hover_func = NULL;
+   obj->unhover_func = NULL;
    obj->drag_func = NULL;
    return obj;
 }

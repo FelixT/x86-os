@@ -14,7 +14,8 @@ typedef enum {
    WO_CANVAS,
    WO_MENU,
    WO_SCROLLBAR,
-   WO_SCROLLER
+   WO_SCROLLER,
+   WO_GRID
 } wo_type_t;
 
 typedef struct wo_t {
@@ -35,6 +36,7 @@ typedef struct wo_t {
    void (*release_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
    void (*unfocus_func)(struct wo_t *wo, surface_t *surface, int window);
    void (*hover_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
+   void (*unhover_func)(struct wo_t *wo, surface_t *surface, int window);
    void (*drag_func)(struct wo_t *wo, int x, int y);
    void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);
 } wo_t;

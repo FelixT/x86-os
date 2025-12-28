@@ -8,3 +8,4 @@ $GCC $FLAGS -c usr/lib/ui/ui_label.c -o o/lib/ui_label.o
 $GCC $FLAGS -c usr/lib/ui/ui_input.c -o o/lib/ui_input.o
 $GCC $FLAGS -c usr/lib/ui/ui_menu.c -o o/lib/ui_menu.o
 $GCC $FLAGS -c usr/lib/ui/ui_canvas.c -o o/lib/ui_canvas.o
+$GCC $FLAGS -c usr/lib/ui/ui_grid.c -o o/lib/ui_grid.o

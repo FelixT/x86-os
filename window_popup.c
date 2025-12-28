@@ -24,7 +24,6 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    int index = get_window_index_from_pointer(window);
    int parent_index = get_window_index_from_pointer(dialog->parent);
-   setSelectedWindowIndex(parent_index);
 
    // launch callback if exists
    if(dialog->callback_func == NULL)
@@ -38,6 +37,8 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
          window_draw(getSelectedWindow());
       }
    }
+   
+   setSelectedWindowIndex(parent_index);
 
    // self destruct
    debug_printf("Closing window %i\n", index);

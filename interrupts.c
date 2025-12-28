@@ -28,7 +28,7 @@ static idt_entry_t idt[256];
 
 static idtr_t idtr;
 
-void (*irqs[32])(registers_t *regs);
+void (*irqs[32])(registers_t *regs); // unused
 
 registers_t *cur_regs = NULL;
 

@@ -3,6 +3,7 @@
 #include "lib/ui/ui_input.h"
 #include "lib/ui/ui_menu.h"
 #include "lib/ui/ui_mgr.h"
+#include "lib/ui/ui_grid.h"
 #include "lib/stdio.h"
 
 // test program for UI library
@@ -47,6 +48,7 @@ void keypress(uint16_t c, int window) {
 void resize() {
    s = get_surface();
    ui->surface = &s;
+   ui_draw(ui);
    end_subroutine();
 }
 
@@ -66,6 +68,10 @@ void toggle_menu(wo_t *wo, surface_t *surface, int window, int x, int y) {
    clear();
    menu->visible = !menu->visible;
    ui_draw(ui);
+}
+
+void click_grid(int row, int col) {
+   debug_println("Clicked %i %i", row, col);
 }
 
 void _start() {
@@ -98,10 +104,19 @@ void _start() {
    togglemenu->release_func = &toggle_menu;
    ui_add(ui, togglemenu);
 
-   menu = create_menu(10, 95, 150, 100);
+   menu = create_menu(10, 95, 150, 65);
    ui_add(ui, menu);
    add_menu_item(menu, "Item 1", NULL);
    add_menu_item(menu, "Item 2", NULL);
+
+   wo_t *grid = create_grid(10, 175, 100, 100, 2, 2);
+   grid_t *grid_data = (grid_t*)grid->data;
+   wo_t *label2 = create_label(5, 5, 20, 20, "xx");
+   wo_t *input2 = create_input(5, 5, 30, 20);
+   grid_add(grid, label2, 0, 0);
+   grid_add(grid, input2, 1, 0);
+   grid_data->click_func = &click_grid;
+   ui_add(ui, grid);
 
    // draw
    ui_draw(ui);
