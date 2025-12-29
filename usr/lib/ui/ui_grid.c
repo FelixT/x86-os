@@ -79,13 +79,12 @@ void grid_add(wo_t *grid, wo_t *child, int row, int col) {
    cell->children[cell->child_count++] = child;
 }
 
-void grid_click(wo_t *grid, surface_t *surface, int window, int x, int y) {
+void grid_click(wo_t *grid, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
    int cellWidth = grid->width/grid_data->cols;
    int cellHeight = grid->height/grid_data->rows;
-
 
    for(int i = 0; i < grid_data->rows; i++) {
       for(int j = 0; j < grid_data->cols; j++) {
@@ -109,7 +108,7 @@ void grid_click(wo_t *grid, surface_t *surface, int window, int x, int y) {
             if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
             && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
                if(child->click_func)
-                  child->click_func(child, surface, window, x - (child->x + grid->x + cellOffsetX), y - (child->y + grid->y + cellOffsetY));
+                  child->click_func(child, surface, window, x - (child->x + cellOffsetX), y - (child->y + cellOffsetY), offsetX + grid->x + cellOffsetX, offsetY + grid->y + cellOffsetY);
                
                child->clicked = true;
                child->draw_func(child, surface, window, grid->x + cellOffsetX, grid->y + cellOffsetY);
@@ -120,7 +119,7 @@ void grid_click(wo_t *grid, surface_t *surface, int window, int x, int y) {
    }
 }
 
-void grid_release(wo_t *grid, surface_t *surface, int window, int x, int y) {
+void grid_release(wo_t *grid, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -134,18 +133,21 @@ void grid_release(wo_t *grid, surface_t *surface, int window, int x, int y) {
 
             if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
             && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
+               int totalOffsetX = grid->x + cellOffsetX + offsetX;
+               int totalOffsetY = grid->y + cellOffsetY + offsetY;
+
                if(child->release_func)
-                  child->release_func(child, surface, window, x - (child->x + grid->x + cellOffsetX), y - (child->y + grid->y + cellOffsetY));
+                  child->release_func(child, surface, window, x - (child->x + cellOffsetX), y - (child->y + cellOffsetY), totalOffsetX, totalOffsetY);
                if(child->type == WO_INPUT)
                   child->selected = true;
-               child->draw_func(child, surface, window, grid->x + cellOffsetX, grid->y + cellOffsetY);
+               child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
             }
          }
       }
    }
 }
 
-void grid_hover(wo_t *grid, surface_t *surface, int window, int x, int y) {
+void grid_hover(wo_t *grid, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -175,24 +177,27 @@ void grid_hover(wo_t *grid, surface_t *surface, int window, int x, int y) {
 
             bool was_hovering = child->hovering;
 
+            int totalOffsetX = grid->x + cellOffsetX + offsetX;
+            int totalOffsetY = grid->y + cellOffsetY + offsetY;
+
             if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
             && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
                if(was_hovering) continue;
                if(child->hover_func)
-                  child->hover_func(child, surface, window, x - (child->x + grid->x + cellOffsetX), y - (child->y + grid->y + cellOffsetY));
+                  child->hover_func(child, surface, window, x - (child->x + cellOffsetX), y - (child->y + cellOffsetY), totalOffsetX, totalOffsetY);
                child->hovering = true;
-               child->draw_func(child, surface, window, grid->x + cellOffsetX, grid->y + cellOffsetY);
+               child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
             } else {
                if(!was_hovering) continue;
                child->hovering = false;
-               child->draw_func(child, surface, window, grid->x + cellOffsetX, grid->y + cellOffsetY);
+               child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
             }
          }
       }
    }
 }
 
-void grid_unfocus(wo_t *grid, surface_t *surface, int window) {
+void grid_unfocus(wo_t *grid, surface_t *surface, int window, int offsetX, int offsetY) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -208,10 +213,13 @@ void grid_unfocus(wo_t *grid, surface_t *surface, int window) {
          for(int k = 0; k < cell->child_count; k++) {
             wo_t *child = cell->children[k];
             if(!child->selected) continue;
+
+            int totalOffsetX = grid->x + cellOffsetX + offsetX;
+            int totalOffsetY = grid->y + cellOffsetY + offsetY;
             if(child->unfocus_func)
-               child->unfocus_func(child, surface, window);
+               child->unfocus_func(child, surface, window, totalOffsetX, totalOffsetY);
             child->selected = false;
-            child->draw_func(child, surface, window, grid->x + cellOffsetX, grid->y + cellOffsetY);
+            child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
          }
       }
    }

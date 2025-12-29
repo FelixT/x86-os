@@ -40,7 +40,7 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
          ui->focused->draw_func(ui->focused, ui->surface, ui->window, 0, 0);
 
       if(ui->focused->unfocus_func)
-         ui->focused->unfocus_func(ui->focused, ui->surface, ui->window);
+         ui->focused->unfocus_func(ui->focused, ui->surface, ui->window, 0, 0);
 
       ui->focused = NULL;
    }
@@ -56,7 +56,7 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
          if(wo->draw_func)
             wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          if(wo->click_func)
-            wo->click_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
+            wo->click_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
          break;
       }
    }
@@ -75,8 +75,8 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
       && y >= wo->y && y < wo->y + wo->height) {
          // call release func
          if(wo->release_func)
-            wo->release_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
-         if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_GRID) {
+            wo->release_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+         if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_GRID || wo->type == WO_GROUPBOX) {
             ui->focused = wo;
             wo->selected = true;
             if(wo->draw_func)
@@ -119,7 +119,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
             wo->draw_func(wo, ui->surface, ui->window, 0, 0);
 
          if(wo->hover_func)
-            wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y);
+            wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
       }
    }
 

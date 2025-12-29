@@ -15,7 +15,8 @@ typedef enum {
    WO_MENU,
    WO_SCROLLBAR,
    WO_SCROLLER,
-   WO_GRID
+   WO_GRID,
+   WO_GROUPBOX
 } wo_type_t;
 
 typedef struct wo_t {
@@ -32,10 +33,10 @@ typedef struct wo_t {
    void *data; // actual object e.g. button_t, label_t, etc.
    
    void (*draw_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
-   void (*click_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
-   void (*release_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
-   void (*unfocus_func)(struct wo_t *wo, surface_t *surface, int window);
-   void (*hover_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y);
+   void (*click_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
+   void (*release_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
+   void (*unfocus_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
+   void (*hover_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
    void (*unhover_func)(struct wo_t *wo, surface_t *surface, int window);
    void (*drag_func)(struct wo_t *wo, int x, int y);
    void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);

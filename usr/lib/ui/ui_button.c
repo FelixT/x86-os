@@ -9,22 +9,26 @@ static inline int string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
 }
 
-void click_button(wo_t *button, surface_t *surface, int window, int x, int y) {
+void click_button(wo_t *button, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    (void)x;
    (void)y;
    (void)surface;
    (void)window;
+   (void)offsetX;
+   (void)offsetY;
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
    if(btn_data->click_func)
       btn_data->click_func(button, window);
 }
 
-void release_button(wo_t *button, surface_t *surface, int window, int x, int y) {
+void release_button(wo_t *button, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    (void)x;
    (void)y;
    (void)surface;
    (void)window;
+   (void)offsetX;
+   (void)offsetY;
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
    if(btn_data->release_func)

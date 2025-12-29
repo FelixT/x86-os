@@ -4,6 +4,8 @@
 #include "lib/ui/ui_menu.h"
 #include "lib/ui/ui_mgr.h"
 #include "lib/ui/ui_grid.h"
+#include "lib/ui/ui_groupbox.h"
+#include "lib/ui/ui_canvas.h"
 #include "lib/stdio.h"
 
 // test program for UI library
@@ -59,12 +61,9 @@ void hover(int x, int y) {
 
 wo_t *menu = NULL;
 
-void toggle_menu(wo_t *wo, surface_t *surface, int window, int x, int y) {
+void toggle_menu(wo_t *wo, int window) {
    (void)wo;
-   (void)surface;
    (void)window;
-   (void)x;
-   (void)y;
    clear();
    menu->visible = !menu->visible;
    ui_draw(ui);
@@ -101,7 +100,7 @@ void _start() {
    ui_add(ui, input);
 
    wo_t *togglemenu = create_button(170, 95, 80, 20, "Menu");
-   togglemenu->release_func = &toggle_menu;
+   ((button_t*)togglemenu->data)->release_func = &toggle_menu;
    ui_add(ui, togglemenu);
 
    menu = create_menu(10, 95, 150, 65);
@@ -117,6 +116,16 @@ void _start() {
    grid_add(grid, input2, 1, 0);
    grid_data->click_func = &click_grid;
    ui_add(ui, grid);
+
+   wo_t *groupbox = create_groupbox(120, 175, 100, 100, "Test");
+   wo_t *input3 = create_input(5, 5, 30, 20);
+   groupbox_add(groupbox, input3);
+   ui_add(ui, groupbox);
+
+   wo_t *canvas = create_canvas(230, 175, 100, 100);
+   wo_t *label3 = create_label(5, 5, 40, 20, "Canvas");
+   canvas_add(canvas, label3);
+   ui_add(ui, canvas);
 
    // draw
    ui_draw(ui);

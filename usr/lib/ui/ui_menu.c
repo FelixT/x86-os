@@ -94,7 +94,7 @@ void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int in
    menu_data->item_count++;
 }
 
-void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y) {
+void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    (void)x;
    if(menu == NULL || menu->data == NULL) return;
    ui_menu_t *menu_data = (ui_menu_t *)menu->data;
@@ -104,7 +104,7 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y) {
 
    if(index < 0 || index >= menu_data->item_count) {
       menu_data->selected_index = -1;
-      draw_menu(menu, surface, window, 0, 0);
+      draw_menu(menu, surface, window, offsetX, offsetY);
       return;
    }
 
@@ -115,7 +115,7 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y) {
       item->func(menu, index, window);
    }
 
-   draw_menu(menu, surface, window, 0, 0);
+   draw_menu(menu, surface, window, offsetX, offsetY);
 }
 
 void menu_keypress(wo_t *menu, uint16_t c, int window) {
@@ -136,7 +136,7 @@ void menu_keypress(wo_t *menu, uint16_t c, int window) {
    }
 }
 
-void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y) {
+void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    (void)x;
    if(menu == NULL || menu->data == NULL) return;
    ui_menu_t *menu_data = (ui_menu_t *)menu->data;
@@ -151,7 +151,7 @@ void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y) {
    }
 
    if(old_index != menu_data->hover_index)
-      draw_menu(menu, surface, window, 0, 0);
+      draw_menu(menu, surface, window, offsetX, offsetY);
 }
 
 wo_t *create_menu(int x, int y, int width, int height) {

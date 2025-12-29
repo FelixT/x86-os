@@ -55,7 +55,9 @@ $GCC $FLAGS usr/prog6.c -o o/prog6.elf \
     o/lib/ui_label.o \
     o/lib/ui_input.o \
     o/lib/ui_menu.o \
-    o/lib/ui_grid.o
+    o/lib/ui_grid.o \
+    o/lib/ui_groupbox.o \
+    o/lib/ui_canvas.o
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
