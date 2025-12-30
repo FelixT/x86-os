@@ -164,12 +164,15 @@ void grid_hover(wo_t *grid, surface_t *surface, int window, int x, int y, int of
          // hovering cell?
          if(x >= cellOffsetX && x < cellOffsetX + cellWidth
          && y >= cellOffsetY && y < cellOffsetY + cellHeight) {
-            cell->hovering = true;
-            draw_grid_cell(grid, surface, window, 0, 0, cell, i, j);
+            if(!cell->hovering) {
+               cell->hovering = true;
+               draw_grid_cell(grid, surface, window, offsetX, offsetY, cell, i, j);
+            }
          } else {
-            cell->hovering = false;
-            draw_grid_cell(grid, surface, window, 0, 0, cell, i, j);
-            continue;
+            if(cell->hovering) {
+               cell->hovering = false;
+               draw_grid_cell(grid, surface, window, offsetX, offsetY, cell, i, j);
+            }
          }
 
          for(int k = 0; k < cell->child_count; k++) {
@@ -243,17 +246,25 @@ void grid_keypress(wo_t *grid, uint16_t c, int window) {
    }
 }
 
-void grid_unhover(wo_t *grid, surface_t *surface, int window) {
+void grid_unhover(wo_t *grid, surface_t *surface, int window, int offsetX, int offsetY) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
    for(int i = 0; i < grid_data->rows; i++) {
       for(int j = 0; j < grid_data->cols; j++) {
          grid_cell_t *cell = &grid_data->cells[i][j];
-         if(cell->hovering) {
-            cell->hovering = false;
-            draw_grid_cell(grid, surface, window, 0, 0, cell, i, j);
+         if(!cell->hovering) continue;
+
+         cell->hovering = false;
+         // unhover children
+         for(int k = 0; k < cell->child_count; k++) {
+            wo_t *child = cell->children[k];
+            if(!child->hovering) continue;
+            child->hovering = false;
          }
+         draw_grid_cell(grid, surface, window, offsetX, offsetY, cell, i, j);
+
+         return;
       }
    }
 }
@@ -273,6 +284,7 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid_data->cols = cols;
    grid_data->click_func = NULL;
 
+   grid_data->cells = malloc(sizeof(grid_cell_t*) * rows);
    for(int i = 0; i < rows; i++) {
       grid_data->cells[i] = malloc(sizeof(grid_cell_t) * cols);
       for(int j = 0; j < cols; j++) {

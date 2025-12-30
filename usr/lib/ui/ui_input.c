@@ -111,6 +111,12 @@ void keypress_input(wo_t *input, uint16_t c, int window) {
          }
          input_data->cursor_pos--;
       }
+   } else if(c == 0x100) {
+      // up arrow
+      input_data->cursor_pos = 0;
+   } else if(c == 0x101) {
+      // down arrow
+      input_data->cursor_pos = len;
    } else if(c == 0x102) {
       // left arrow
       input_data->cursor_pos--;

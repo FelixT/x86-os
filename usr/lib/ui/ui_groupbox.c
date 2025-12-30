@@ -17,7 +17,7 @@ void click_groupbox(wo_t *groupbox, surface_t *surface, int window, int x, int y
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
-      canvas->click_func(canvas, surface, window, x, y, groupbox->x + offsetX, groupbox->y + offsetY);
+      canvas->click_func(canvas, surface, window, x - canvas->x, y - canvas->y, groupbox->x + offsetX, groupbox->y + offsetY);
    }
 }
 
@@ -51,6 +51,14 @@ void hover_groupbox(wo_t *groupbox, surface_t *surface, int window, int x, int y
    && y >= canvas->y && y < canvas->y + canvas->height) {
       canvas->hover_func(canvas, surface, window, x - canvas->x, y - canvas->y, offsetX + groupbox->x, offsetY + groupbox->y);
    }
+}
+
+void keypress_groupbox(wo_t *groupbox, uint16_t c, int window) {
+   if(groupbox == NULL || groupbox->data == NULL) return;
+   groupbox_t *groupbox_data = groupbox->data;
+
+   wo_t *canvas = groupbox_data->canvas;
+   canvas->keypress_func(canvas, c, window);
 }
 
 void draw_groupbox(wo_t *groupbox, surface_t *surface, int window, int offsetX, int offsetY) {
@@ -92,6 +100,7 @@ wo_t *create_groupbox(int x, int y, int width, int height, char *label) {
    groupbox->release_func = &release_groupbox;
    groupbox->hover_func = &hover_groupbox;
    groupbox->unfocus_func = &unfocus_groupbox;
+   groupbox->keypress_func = &keypress_groupbox;
    groupbox->type = WO_GROUPBOX;
 
    return groupbox;

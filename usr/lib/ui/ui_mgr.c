@@ -114,22 +114,24 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
          wo->hovering = true;
          ui->hovered = wo;
 
-         // draw on hover
-         if(wo != hovered && wo->draw_func)
-            wo->draw_func(wo, ui->surface, ui->window, 0, 0);
-
-         if(wo->hover_func)
+         if(wo->hover_func) {
             wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+         } else {
+            if(wo != hovered && wo->draw_func)
+               wo->draw_func(wo, ui->surface, ui->window, 0, 0);
+         }
+
       }
    }
 
    // draw on unhover
    if(hovered != ui->hovered) {
-      if(hovered && hovered->unhover_func)
-         hovered->unhover_func(hovered, ui->surface, ui->window);
-
-      if(hovered && hovered->draw_func)
-         hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
+      if(hovered && hovered->unhover_func) {
+         hovered->unhover_func(hovered, ui->surface, ui->window, 0, 0);
+      } else {
+         if(hovered && hovered->draw_func)
+            hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
+      }
    }
 
 }

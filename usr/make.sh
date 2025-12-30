@@ -42,7 +42,8 @@ $GCC $FLAGS usr/apps.c -o o/apps.elf \
     o/lib/ui_mgr.o \
     o/lib/wo.o \
     o/lib/ui_button.o \
-    o/lib/ui_label.o
+    o/lib/ui_label.o \
+    o/lib/ui_grid.o
 
 $GCC $FLAGS usr/prog6.c -o o/prog6.elf \
     o/lib/string.o \

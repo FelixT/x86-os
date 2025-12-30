@@ -382,6 +382,7 @@ void keypress(uint16_t c, int window) {
 }
 
 void release(int x, int y, int window) {
+   (void)window;
    ui_release(ui, x, y);
    end_subroutine();
 }

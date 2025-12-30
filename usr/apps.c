@@ -8,16 +8,17 @@
 #include "../lib/string.h"
 #include "lib/ui/ui_mgr.h"
 #include "lib/ui/ui_button.h"
-#include "lib/ui/ui_label.h"
+#include "lib/ui/ui_grid.h"
 #include "lib/sort.h"
 #include "lib/draw.h"
 
 int items = 0;
 ui_mgr_t *ui = NULL;
+wo_t *grid;
 surface_t surface;
 
 void app_launch(wo_t *label) {
-   label_t *label_data = (label_t *)label->data;  
+   button_t *label_data = label->data;  
    if(!label_data)
       return;
    char path[256];
@@ -41,19 +42,9 @@ void scroll(int deltaY, int offsetY) {
 
    clear();
 
-   int offsetRemainder = (offsetY-5) % 20;
-
-   int y = 5;
-
-   for(int i = 0; i < items; i++) {
-      ui->wos[i]->y = y - offsetY;
-      // draw line
-      int lineY = y + 12 - offsetRemainder;
-      if(lineY >= 0 && lineY < surface.height)
-         draw_line(&surface, rgb16(230, 230, 230), 15, y+12 - offsetRemainder, false, 85);
-
-      y += 20;
-   }
+   int y = 2;
+   grid->y = y - offsetY;
+   
    if(ui)
       ui_draw(ui);
    redraw();
@@ -81,19 +72,23 @@ void release(int x, int y, int window) {
    end_subroutine();
 }
 
+void hover(int x, int y, int window) {
+   (void)window;
+   if(!ui)
+      end_subroutine();
+
+   ui_hover(ui, x, y);
+
+   end_subroutine();
+}
+
 void resize() {
+   if(!ui)
+      end_subroutine();
+
    surface = get_surface();
    ui->surface = &surface;
    ui_draw(ui);
-   int y = 5;
-   // draw lines
-   for(int i = 0; i < items; i++) {
-      int lineY = y + 17;
-      if(lineY < surface.height)
-         draw_line(&surface, rgb16(230, 230, 230), 15, lineY, false, 85);
-
-      y += 20;
-   }
    end_subroutine();
 }
 
@@ -109,40 +104,55 @@ void _start() {
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
    override_resize((uint32_t)&resize);
+   override_hover((uint32_t)&hover, -1);
 
    items = 0;
-   int y = 5;
 
    surface = get_surface();
    ui = ui_init(&surface, -1);
 
+   // get number of items
+   for(int i = 0; i < content->size; i++) {
+      fs_dir_entry_t *entry = &content->entries[i];
+      if(strendswith(entry->filename, ".elf"))
+         items++;
+   }
+
+   create_scrollbar(&scroll);
+   set_content_height(items*20 + 4);
+
+   int width = get_width() - 4;
+
+   // create items*1 grid, with each cell having 20px height
+   grid = create_grid(2, 2, width, items*20, items, 1);
+   grid_t *grid_data = grid->data;
+   grid_data->colour_border_light = rgb16(230, 230, 230);
+   grid_data->colour_border_dark = grid_data->colour_border_light;
+
+   int row = 0;
+
+   // add buttons for each app to grid
    for(int i = 0; i < content->size; i++) {
       fs_dir_entry_t *entry = &content->entries[i];
       if(strendswith(entry->filename, ".elf")) {
          char name[10];
          strsplit(name, NULL, entry->filename, '.');
-         wo_t *wo = create_label(20, y, 75, 16, name);
-         label_t *label = (label_t *)wo->data;
-         label->colour_txt = rgb16(10, 30, 100);
-         label->release_func = (void*)&app_launch;
-         ui_add(ui, wo);
+         wo_t *wo = create_button(1, 1, width-2, 18, name);
+         button_t *button = wo->data;
+         button->colour_txt = rgb16(10, 30, 100);
+         button->release_func = (void*)&app_launch;
+         button->colour_bg_hover = rgb16(255, 255, 255);
+         grid_add(grid, wo, row, 0);
 
-         // draw line
-         int lineY = y + 17;
-         if(lineY < surface.height)
-            draw_line(&surface, rgb16(230, 230, 230), 15, lineY, false, 85);
-
-         y += 20;
-         items++;
+         row++;
       }
    }
+
+   ui_add(ui, grid);
 
    ui_draw(ui);
 
    free(content, sizeof(fs_dir_content_t) * content->size);
-
-   create_scrollbar(&scroll);
-   set_content_height(y);
 
    redraw();
    

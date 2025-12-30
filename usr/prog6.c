@@ -19,7 +19,6 @@ void click(int x, int y, int window) {
       end_subroutine();
 
    ui_click(ui, x, y);
-
    end_subroutine();
 }
 
@@ -29,7 +28,6 @@ void release(int x, int y, int window) {
       end_subroutine();
 
    ui_release(ui, x, y);
-
    end_subroutine();
 }
 
@@ -43,6 +41,9 @@ void btn_release() {
 
 void keypress(uint16_t c, int window) {
    (void)window;
+   if(!ui)
+      end_subroutine();
+      
    ui_keypress(ui, c);
    end_subroutine();
 }
@@ -55,6 +56,9 @@ void resize() {
 }
 
 void hover(int x, int y) {
+   if(!ui)
+      end_subroutine();
+
    ui_hover(ui, x, y);
    end_subroutine();
 }
