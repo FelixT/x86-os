@@ -59,5 +59,6 @@ void api_get_font_info(registers_t *regs);
 void api_create_window(registers_t *regs);
 void api_close_window(registers_t *regs);
 void api_override_keypress(registers_t *regs);
+void api_create_thread(registers_t *regs);
 
 #endif

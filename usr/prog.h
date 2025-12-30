@@ -554,6 +554,17 @@ static inline bool close_window(int index) {
    return (bool)success;
 }
 
+static inline int create_thread(uint32_t addr) {
+   int id;
+   asm volatile(
+      "int $0x30"
+      : "=b" (id)
+      : "a" (65),
+      "b" (addr)
+   );
+   return id;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(uint32_t addr) {

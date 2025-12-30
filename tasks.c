@@ -4,9 +4,6 @@
 #include "paging.h"
 #include "events.h"
 
-uint32_t USR_CODE_SEG = 8*3;
-uint32_t USR_DATA_SEG = 8*4;
-
 task_state_t *tasks;
 int current_task = 0;
 bool switching = false; // preemptive multitasking
@@ -35,6 +32,8 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
    tasks[index].registers.eip = entry;
+
+   tasks[index].parent_task = NULL;
 
    strcpy(tasks[index].working_dir, "/sys");
 }

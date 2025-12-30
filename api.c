@@ -489,6 +489,13 @@ void api_sbrk(registers_t *regs) {
    // IN: ebx - int increment/delta
    int delta = (int)regs->ebx;
    task_state_t *task = &gettasks()[get_current_task()];
+
+   if(task->parent_task != NULL) {
+      debug_printf("Can only call sbrk from the main thread!\n");
+      regs->ebx = -1;
+      return;
+   }
+
    int old_heapsize = (int)(task->heap_end - task->heap_start);
    int new_heapsize = old_heapsize + delta;
    debug_printf("Resizing task %u heap from %u to %u\n", get_current_task(), old_heapsize, new_heapsize);
@@ -813,4 +820,47 @@ void api_close_window(registers_t *regs) {
    window_close(NULL, index);
    mainwindow->children[cindex] = NULL;
    setSelectedWindowIndex(get_current_task_state()->window);
+}
+
+void api_create_thread(registers_t *regs) {
+   // create new task with parent_task pointing to current task
+   // TODO: refactor task_state_t to separate processes from threads
+
+   // IN: ebx: location of routine to invoke for new thread
+   // OUT: ebx: task index, -1 on failure
+
+   int task_index = get_free_task_index();
+   if(task_index == -1) {
+      regs->ebx = -1;
+      return;
+   }
+
+   task_state_t *parent = get_current_task_state();
+
+   create_task_entry(task_index, regs->ebx, parent->prog_size, parent->privileged);
+
+   // copy over essential fields
+   task_state_t *thread = &gettasks()[task_index];
+   thread->parent_task = parent;
+   thread->vmem_start = parent->vmem_start;
+   thread->vmem_end = parent->vmem_end;
+   thread->prog_start = parent->prog_start;
+   thread->page_dir = parent->page_dir;
+   // threads can't use heap functions for now
+   thread->heap_start = parent->heap_start;
+   thread->heap_end = parent->heap_end;
+   thread->window = parent->window;
+   strcpy(thread->working_dir, parent->working_dir);
+
+   thread->registers.ds = USR_DATA_SEG | 3;
+   thread->registers.cs = USR_CODE_SEG | 3; // user code segment
+   thread->registers.ss = USR_DATA_SEG | 3;
+   thread->registers.eflags = regs->eflags;
+   thread->registers.useresp = thread->stack_top;
+
+   thread->fd_count = parent->fd_count;
+   for(int i = 0; i < thread->fd_count; i++)
+      thread->file_descriptors[i] = parent->file_descriptors[i];
+
+   thread->enabled = true;
 }

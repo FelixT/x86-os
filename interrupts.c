@@ -347,6 +347,9 @@ void software_handler(registers_t *regs) {
       case 64:
          api_override_keypress(regs);
          break;
+      case 65:
+         api_create_thread(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -598,6 +601,11 @@ void exception_handler(int int_no, registers_t *regs) {
             window_writestr(" paused due to exception ", gui_rgb16(255, 100, 100), 0);
             window_writenum(int_no, 0, 0);
             window_writestr("\n", 0, 0);
+            
+            if(get_current_task_state()->in_routine)
+               debug_printf("Task was in routine %s\n", get_current_task_state()->routine_name);
+            if(get_current_task_state()->in_syscall)
+               debug_printf("Task was in syscall %i\n", get_current_task_state()->syscall_no);
 
             window_resetfuncs(&(gui_get_windows()[get_current_task_window()]));
             show_endtask_dialog(int_no, regs); // + pauses task
