@@ -33,6 +33,7 @@ $GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o
 $GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o
 $GCC $FLAGS usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/map.o
 $GCC $FLAGS usr/prog5.c -o o/prog5.elf o/lib/string.o o/lib/stdio.o o/lib/dialogs.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/drawusr.o o/lib/wo.o
+$GCC $FLAGS usr/prog7.c -o o/prog7.elf
 
 $GCC $FLAGS usr/apps.c -o o/apps.elf \
     o/lib/string.o \
@@ -75,3 +76,4 @@ cp o/apps.elf fs_root/sys/apps.elf
 cp o/interp.elf fs_root/sys/interp.elf
 cp o/prog5.elf fs_root/sys/prog5.elf
 cp o/prog6.elf fs_root/sys/prog6.elf
+cp o/prog7.elf fs_root/sys/prog7.elf

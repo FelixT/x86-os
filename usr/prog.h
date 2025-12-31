@@ -554,13 +554,13 @@ static inline bool close_window(int index) {
    return (bool)success;
 }
 
-static inline int create_thread(uint32_t addr) {
+static inline int create_thread(void (*func)()) {
    int id;
    asm volatile(
       "int $0x30"
       : "=b" (id)
       : "a" (65),
-      "b" (addr)
+      "b" ((uint32_t)func)
    );
    return id;
 }

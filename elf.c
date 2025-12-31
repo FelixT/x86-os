@@ -116,14 +116,15 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
       prog_header++;
    }
 
-   create_task_entry(task_index, elf_header->entry, (vmem_end - vmem_start), false);
+   // create new process
+   create_task_entry(task_index, elf_header->entry, (vmem_end - vmem_start), false, NULL);
    task_state_t *task = &gettasks()[task_index];
-   task->vmem_start = vmem_start;
-   task->vmem_end = vmem_end;
-   task->prog_start = (uint32_t)newProg;
-   task->page_dir = dir;
-   task->heap_start = heap_start;
-   task->heap_end = heap_start;
+   task->process->vmem_start = vmem_start;
+   task->process->vmem_end = vmem_end;
+   task->process->prog_start = (uint32_t)newProg;
+   task->process->page_dir = dir;
+   task->process->heap_start = heap_start;
+   task->process->heap_end = heap_start;
    launch_task(task_index, regs, true);
 
    // push args

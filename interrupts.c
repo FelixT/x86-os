@@ -507,7 +507,8 @@ void exception_handler(int int_no, registers_t *regs) {
       if(kernel) {
          debug_printf("Exception %i in kernel mode with eip 0x%h\n", int_no, regs->eip);
 
-         page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
+         task_state_t *task = get_current_task_state();
+         page_dir_entry_t *dir = task->process->page_dir;
 
          if(page_getphysical(dir, regs->eip) != (uint32_t)-1) {
             window_writestr(" <", gui_rgb16(255, 100, 100), 0);
@@ -529,7 +530,8 @@ void exception_handler(int int_no, registers_t *regs) {
 
          if(int_no == 14) {
             // page error
-            page_dir_entry_t *dir = gettasks()[get_current_task()].page_dir;
+            task_state_t *task = get_current_task_state();
+            page_dir_entry_t *dir = task->process->page_dir;
 
             uint32_t addr;
 	         asm volatile("mov %%cr2, %0" : "=r" (addr));
@@ -547,11 +549,11 @@ void exception_handler(int int_no, registers_t *regs) {
                debug_writehex(page_getphysical(dir, regs->eip));
                window_writestr(">", gui_rgb16(255, 100, 100), 0);
 
-               uint32_t offset = page_getphysical(dir, regs->eip) - gettasks()[get_current_task()].prog_start;
+               uint32_t offset = page_getphysical(dir, regs->eip) - task->process->prog_start;
                debug_printf(" offset 0x%h, ", offset);
             }
 
-            window_writestr("ebp ", gui_rgb16(255, 100, 100), 0);
+            window_writestr(" ebp ", gui_rgb16(255, 100, 100), 0);
             debug_writehex(regs->ebp);
             if(page_getphysical(dir, regs->ebp) != (uint32_t)-1) {
                window_writestr(" <", gui_rgb16(255, 100, 100), 0);

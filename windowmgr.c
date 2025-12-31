@@ -156,7 +156,7 @@ void window_close(void *regs, int windowIndex) {
 
    if(regs) {
       int task = get_task_from_window(windowIndex);
-      if(gettasks()[task].window == windowIndex) {
+      if(task > -1 && gettasks()[task].process->window == windowIndex) {
          end_task(task, regs); // don't kill task if closing child window
          // re-establish pointer as gui_windows may have been resized in end_task
          window = getWindow(windowIndex);
@@ -1033,7 +1033,7 @@ bool windowmgr_click(void *regs, int x, int y) {
       args[2] = x - selectedWindow->x;
       args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
       args[0] = get_cindex();
-      map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+      map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
 
       task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 3);
    }
@@ -1347,7 +1347,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[1] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
       args[0] = height - TITLEBAR_HEIGHT;
       for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size+0xFFF)/0x1000; i++)
-         map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
+         map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1);
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
    }
    

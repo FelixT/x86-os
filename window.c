@@ -71,7 +71,7 @@ void window_drawchar(char c, uint16_t colour, int windowIndex) {
       }
 
       // immediately output each line
-      if(!selected->minimised)
+      if(!selected->minimised && !selected->dragged)
          window_draw_content_region(selected, 0, selected->text_y - getFont()->height - getFont()->padding_y, selected->width, getFont()->height + getFont()->padding_y);
 
       return;
@@ -519,7 +519,7 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
             args[1] = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
             args[0] = window->height - TITLEBAR_HEIGHT;
             for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size+0xFFF)/0x1000; i++)
-               map(gettasks()[get_current_task()].page_dir, i*0x1000, i*0x1000, 1, 1);
+               map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1);
             window_clearbuffer(window, window->bgcolour);
             task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
          }

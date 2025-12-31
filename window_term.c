@@ -127,8 +127,8 @@ void window_term_return(void *regs, void *window) {
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)buffer;
          // map both to prog
-         map(gettasks()[get_current_task()].page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-         map(gettasks()[get_current_task()].page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1);
+         map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
+         map(get_current_task_pagedir(), (uint32_t)buffer, (uint32_t)buffer, 1, 1);
 
          task_call_subroutine(regs, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
       }
@@ -243,21 +243,42 @@ void term_cmd_tasks() {
    task_state_t *tasks = gettasks();
 
    extern bool switching;
-   window_term_printf("Scheduling ");
-   if(switching) window_term_printf("enabled\n");
-   else window_term_printf("disabled\n");
-   
+   if(!switching) {
+      window_term_printf("Scheduling disabled\n");
+      return;
+   }
+
    for(int i = 0; i < TOTAL_TASKS; i++) {
       window_term_printf("\n%i: ", i);
       if(tasks[i].enabled) {
-         window_term_printf("<w%i %s>", tasks[i].window, gui_get_windows()[tasks[i].window].title);
+         window_term_printf("<w%i: %s>", tasks[i].process->window, gui_get_windows()[tasks[i].process->window].title);
          if(tasks[i].in_routine)
             window_term_printf(" <routine %s>", tasks[i].routine_name);
-         if(tasks[i].privileged)
+         if(tasks[i].process->privileged)
             window_term_printf(" privileged");
          if(tasks[i].paused)
             window_term_printf(" paused");
-         window_term_printf(" eip 0x%h, allocated %i / %i kb, heap size %i", tasks[i].registers.eip, tasks[i].no_allocated, tasks[i].no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].heap_end - tasks[i].heap_start);
+         if(tasks[i].process->threads[0] == &tasks[i]) {
+            // main thread
+            window_term_printf(" main thread (%i children", tasks[i].process->no_threads-1);
+
+            for(int t = 1; t < tasks[i].process->no_threads; t++) {
+               if(t > 1)
+                  window_term_printf(", ");
+               else
+                  window_term_printf(": ");
+               
+               window_term_printf("%i", tasks[i].process->threads[t]->task_id);
+            }
+
+            window_term_printf(")");
+         } else {
+            window_term_printf(" child");
+         }
+         int tmp = getSelectedWindow()->txtcolour;
+         getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
+         window_term_printf("\n   (eip 0x%h, allocated %i/%ikb, heap size %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_end - tasks[i].process->heap_start);
+         getSelectedWindow()->txtcolour = tmp;
       } else {
          window_term_printf("Disabled");
       }

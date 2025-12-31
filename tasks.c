@@ -5,37 +5,50 @@
 #include "events.h"
 
 task_state_t *tasks;
-int current_task = 0;
+int current_task = -1;
 bool switching = false; // preemptive multitasking
 
-void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged) {
+process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
+   process_t *process = malloc(sizeof(process_t));
+   process->prog_entry = entry;
+   process->prog_size = size;
+   process->privileged = privileged;
+   process->vmem_start = 0;
+   process->vmem_end = 0;
+   process->page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
+   process->no_allocated = 0;
+   process->fd_count = 0;
+   strcpy(process->working_dir, "/sys");
+   process->no_threads = 0;
+   
+   return process;
+}
+
+void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process) {
    //if(tasks[index].enabled) end_task(index, NULL);
+   // todo: clear stack
 
-   // clear stack
-
+   tasks[index].task_id = index;
    tasks[index].enabled = false;
    tasks[index].paused = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
-   tasks[index].prog_start = entry;
-   tasks[index].prog_entry = entry;
-   tasks[index].prog_size = size;
-   tasks[index].privileged = privileged;
-   tasks[index].vmem_start = 0;
-   tasks[index].vmem_end = 0;
    tasks[index].in_routine = false;
    tasks[index].in_syscall = false;
-   tasks[index].page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
-   tasks[index].no_allocated = 0;
-
-   tasks[index].fd_count = 0;
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
    tasks[index].registers.eip = entry;
 
-   tasks[index].parent_task = NULL;
-
-   strcpy(tasks[index].working_dir, "/sys");
+   if(process == NULL) {
+      // launching new process with main thread
+      tasks[index].process = create_process(entry, size, privileged);
+      tasks[index].process->threads[0] = &tasks[index];
+      tasks[index].process->no_threads++;
+   } else {
+      // launching new thread of existing process
+      tasks[index].process = process;
+      process->threads[process->no_threads++] = &tasks[index];
+   }
 }
 
 void launch_task(int index, registers_t *regs, bool focus) {
@@ -52,7 +65,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
    task->registers.ss = USR_DATA_SEG | 3;
 
    int tmpwindow = getSelectedWindowIndex();
-   tasks[current_task].window = windowmgr_add();
+   tasks[current_task].process->window = windowmgr_add();
    if(focus) { 
       window_draw_outline(getSelectedWindow(), false);
    }
@@ -61,10 +74,10 @@ void launch_task(int index, registers_t *regs, bool focus) {
    fs_file_t *stdin = fs_open("/dev/stdin");
    fs_file_t *stdout = fs_open("/dev/stdout");
    fs_file_t *stderr = fs_open("/dev/stderr");
-   task->file_descriptors[0] = stdin;
-   task->file_descriptors[1] = stdout;
-   task->file_descriptors[2] = stderr;
-   task->fd_count = 3;
+   task->process->file_descriptors[0] = stdin;
+   task->process->file_descriptors[1] = stdout;
+   task->process->file_descriptors[2] = stderr;
+   task->process->fd_count = 3;
 
    if(!focus) { 
       setSelectedWindowIndex(tmpwindow);
@@ -79,7 +92,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
    tasks[current_task].enabled = true;
 
-   swap_pagedir(tasks[current_task].page_dir);
+   swap_pagedir(get_current_task_pagedir());
    
    *regs = tasks[current_task].registers;
 }
@@ -112,43 +125,57 @@ void pause_task(int index, registers_t *regs) {
 
 void end_task(int index, registers_t *regs) {
    if(index < 0 || index >= TOTAL_TASKS) return;
-   if(!tasks[index].enabled) {
+
+   task_state_t *task = &tasks[index];
+   if(!task->enabled) {
       debug_printf("Task %u already ended\n", index);
       return;
    }
 
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
-   if(tasks[index].in_routine)
-      debug_printf("Task was in %sroutine %s\n", (tasks[index].routine_return_window>=0 ? "queued " : " "), tasks[index].routine_name);
+   if(task->in_routine)
+      debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : " "), task->routine_name);
 
-   if(tasks[index].in_syscall)
-      debug_printf("Task was in syscall %i\n", tasks[index].syscall_no);
+   if(task->in_syscall)
+      debug_printf("Task was in syscall %i\n", task->syscall_no);
 
-   if(tasks[index].window >= 0)
-      task_write_to_window(index, "<Task ended>\n");
+   if(task->process->threads[0] == task) {
+      // main thread, terminate entire process
+      debug_printf("Ending task process\n");
+
+      // free task memory
+      if(task->process->prog_size != 0)
+         free(task->process->prog_start, task->process->prog_size);
+      // todo: free args, page dir at some point & fds
+
+      if(task->process->vmem_start != 0) {
+         debug_printf("Unmapping 0x%h - 0x%h\n", task->process->vmem_start, task->process->vmem_end);
+
+         for(uint32_t i = task->process->vmem_start; i < task->process->vmem_end; i++) {
+            unmap(task->process->page_dir, i);
+         }
+      }
+
+      // kill other tasks
+      debug_printf("Ending %i other threads of process\n", task->process->no_threads - 1);
+      for(int i = 1; i < task->process->no_threads; i++) {
+         task_state_t *thread = task->process->threads[i];
+         end_task(thread->task_id, regs);
+         thread->process = NULL;
+      }
+
+      if(task->process->window >= 0)
+         task_write_to_window(index, "<Task ended>\n");
+
+      // free process
+      free((uint32_t)task->process, sizeof(process_t));
+      task->process = NULL;
+   }
 
    // todo: kill associated events
 
-   tasks[index].enabled = false;
-   tasks[index].privileged = false;
-
-   // free task memory
-   if(tasks[index].prog_size != 0)
-      free(tasks[index].prog_start, tasks[index].prog_size);
-   // TODO: free args
-   // TODO: free page dir at some point
-   // TODO: free fds
-
-   if(tasks[index].vmem_start != 0) {
-      debug_printf("Unmapping 0x%h - 0x%h\n", tasks[index].vmem_start, tasks[index].vmem_end);
-
-      for(uint32_t i = tasks[index].vmem_start; i < tasks[index].vmem_end; i++) {
-         unmap(tasks[index].page_dir, i);
-      }
-   }
-
-   tasks[index].window = -1;
+   task->enabled = false;
 
    if(index == get_current_task() || !task_exists())
       if(regs != NULL) switch_task(regs);
@@ -171,7 +198,7 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t progAddr = (uint32_t)prog;
-   create_task_entry(index, progAddr, entry->fileSize, false);
+   create_task_entry(index, progAddr, entry->fileSize, false, NULL);
    launch_task(index, regs, false);
    gui_redrawall();
 }
@@ -194,16 +221,16 @@ void tasks_init(registers_t *regs) {
 
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
-      tasks[i].window = -1;
+      //tasks[i].process->window = -1; hmm
    }
 
    // launch idle process
    window_writestr("Launching idle process\n", 0, 0);
    tasks_launch_binary(regs, "/sys/progidle.bin");
    
-   gui_get_windows()[tasks[0].window].minimised = true;
-   gui_get_windows()[tasks[0].window].draw_func = NULL;
-   strcpy(gui_get_windows()[tasks[0].window].title, "Idle Process");
+   gui_get_windows()[tasks[0].process->window].minimised = true;
+   gui_get_windows()[tasks[0].process->window].draw_func = NULL;
+   strcpy(gui_get_windows()[tasks[0].process->window].title, "Idle Process");
    //elf_run(regs, prog, 0, 0, NULL);
    //free((uint32_t)prog, entry->fileSize);
 
@@ -216,27 +243,31 @@ void switch_task(registers_t *regs) {
 
    int old_task = current_task;
 
-   if(task_exists()) {
-      // find next enabled task (round robin)
-      do {
-         current_task++;
-         current_task%=TOTAL_TASKS;
-      } while(!tasks[current_task].enabled || tasks[current_task].paused);
-         
-      if(tasks[current_task].page_dir != page_get_current())
-         swap_pagedir(tasks[current_task].page_dir);
+   // find next enabled task (round robin)
+   do {
+      current_task++;
+      current_task%=TOTAL_TASKS;
 
-      if(old_task != current_task) {
+      if(current_task == old_task && (!tasks[current_task].enabled || tasks[current_task].paused)) {
+         // no tasks, launch idle process
+         debug_printf("No tasks found\n");
          // save registers
          tasks[old_task].registers = *regs;
-
-         // restore registers
-         *regs = tasks[current_task].registers;
+         tasks_init(regs);
+         break;
       }
-   } else {
+   } while(!tasks[current_task].enabled || tasks[current_task].paused);
+   
+   task_state_t *task = get_current_task_state();
+   if(task->process->page_dir != page_get_current())
+      swap_pagedir(task->process->page_dir);
+
+   if(old_task != current_task) {
       // save registers
       tasks[old_task].registers = *regs;
-      tasks_init(regs);
+
+      // restore registers
+      *regs = tasks[current_task].registers;
    }
 }
 
@@ -257,8 +288,8 @@ bool switch_to_task(int index, registers_t *regs) {
    current_task = index;
 
    // swap page
-   if(page_get_current() != tasks[current_task].page_dir)
-      swap_pagedir(tasks[current_task].page_dir);
+   if(page_get_current() != get_current_task_pagedir())
+      swap_pagedir(get_current_task_pagedir());
 
    if(current_task != old_task) {
       // save registers
@@ -276,11 +307,11 @@ task_state_t *gettasks() {
 }
 
 int get_current_task_window() {
-   return tasks[current_task].window;
+   return tasks[current_task].process->window;
 }
 
 int get_task_window(int task) {
-   return tasks[task].window;
+   return tasks[task].process->window;
 }
 
 int get_current_task() {
@@ -291,14 +322,19 @@ task_state_t *get_current_task_state() {
    return &tasks[current_task];
 }
 
+page_dir_entry_t *get_current_task_pagedir() {
+   return get_current_task_state()->process->page_dir;
+}
+
 int get_task_from_window(int windowIndex) {
    for(int i = 0; i < TOTAL_TASKS; i++) {
-      if(!tasks[i].enabled) continue;
-      if(tasks[i].window == windowIndex) {
+      task_state_t *task = &tasks[i];
+      if(!task->enabled) continue;
+      if(task->process->window == windowIndex) {
          return i;
       } else {
          gui_window_t *searchWindow = getWindow(windowIndex);
-         gui_window_t *mainWindow = getWindow(tasks[i].window);
+         gui_window_t *mainWindow = getWindow(task->process->window);
          if(!mainWindow || mainWindow->closed) continue;
          // check children of window
          for(int x = 0; x < mainWindow->child_count; x++) {
@@ -416,9 +452,9 @@ void task_subroutine_end(registers_t *regs) {
 void task_write_to_window(int task, char *out) {
    task_state_t *t = &tasks[task];
    // write to stdio
-   int w = t->file_descriptors[1]->window_index;
+   int w = t->process->file_descriptors[1]->window_index;
    int curw = get_current_task_window();
-   if(w == curw || (w >= 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed)) {
+   if(w == curw || (w >= 0 && w < getWindowCount() && !getWindow(w)->closed)) {
       window_writestr(out, getWindow(w)->txtcolour, w);
    } else {
       debug_printf("Tried to write '%s' to task %i window %i\n", out, task, w);

@@ -674,10 +674,11 @@ typedef struct {
 
 void fat_read_file_callback(registers_t *regs, void *msg) {
    fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
+   task_state_t *task = &gettasks()[state->task];
 
    // swap page dir
-   if(page_get_current() != gettasks()[state->task].page_dir)
-      swap_pagedir(gettasks()[state->task].page_dir);
+   if(page_get_current() != task->process->page_dir)
+      swap_pagedir(task->process->page_dir);
 
    // read all sectors of cluster
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters

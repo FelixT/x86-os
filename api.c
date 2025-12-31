@@ -51,8 +51,8 @@ void api_write_string(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    // write ebx
    char *out;
-   if(task->vmem_start == 0) // not elf
-      out = (char*)(task->prog_entry + regs->ebx);
+   if(task->process->vmem_start == 0) // not elf
+      out = (char*)(task->process->prog_entry + regs->ebx);
    else // elf
       out = (char*)regs->ebx;
 
@@ -130,7 +130,7 @@ void api_return_framebuffer(registers_t *regs) {
    uint32_t size = window->framebuffer_size;
    // map to task
    for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size+0xFFF)/0x1000; i++) {
-      map(get_current_task_state()->page_dir, i*0x1000, i*0x1000, 1, 1);
+      map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1);
    }
    regs->ebx = framebuffer;
    regs->ecx = window->surface.width;
@@ -251,7 +251,7 @@ void api_malloc(registers_t *regs) {
    //task->allocated_pages[task->no_allocated] = mem;
 
    // identity map
-   task->no_allocated += map_size(task->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1);
+   task->process->no_allocated += map_size(task->process->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1);
 
    regs->ebx = (uint32_t)mem;
 
@@ -268,7 +268,7 @@ void api_free(registers_t *regs) {
    task_state_t *task = get_current_task_state();
 
    // unmap from user
-   task->no_allocated -= map_size(task->page_dir, mem, mem, regs->ecx, 1, 0);
+   task->process->no_allocated -= map_size(task->process->page_dir, mem, mem, regs->ecx, 1, 0);
 }
 
 void api_draw_bmp(registers_t *regs) {
@@ -322,7 +322,7 @@ void api_register_windowobj(registers_t *regs) {
    windowobj_t *wo = malloc(sizeof(windowobj_t));
    windowobj_init(wo, &window->surface);
    window->window_objects[window->window_object_count++] = wo;
-   map(gettasks()[get_current_task()].page_dir, (uint32_t)wo, (uint32_t)wo, 1, 1);
+   map(get_current_task_pagedir(), (uint32_t)wo, (uint32_t)wo, 1, 1);
 
    regs->ebx = (uint32_t)wo;
 }
@@ -342,7 +342,7 @@ void api_windowobj_add_child(registers_t *regs) {
          windowobj_init(child, &window->surface);
          parent->children[parent->child_count++] = child;
          child->parent = parent;
-         map(gettasks()[get_current_task()].page_dir, (uint32_t)child, (uint32_t)child, 1, 1);
+         map(get_current_task_pagedir(), (uint32_t)child, (uint32_t)child, 1, 1);
       }
    }
 
@@ -386,11 +386,11 @@ void api_launch_task(registers_t *regs) {
 
    if(copy) {
       // copy file descriptors and working dir from parent
-      for(int i = 0; i < parenttask->fd_count; i++) {
-         task->file_descriptors[i] = parenttask->file_descriptors[i];
+      for(int i = 0; i < parenttask->process->fd_count; i++) {
+         task->process->file_descriptors[i] = parenttask->process->file_descriptors[i];
       }
-      task->fd_count = parenttask->fd_count;
-      strcpy(task->working_dir, parenttask->working_dir); // inherit working dir
+      task->process->fd_count = parenttask->process->fd_count;
+      strcpy(task->process->working_dir, parenttask->process->working_dir); // inherit working dir
       window_close(NULL, getSelectedWindowIndex()); // may get issues from having task without window
       setSelectedWindowIndex(oldwindow);
       gui_redrawall();
@@ -400,10 +400,10 @@ void api_launch_task(registers_t *regs) {
    if(argc > 0 && args != NULL) {
       for(int i = 0; i < argc; i++) {
          // map args to task
-         map(task->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
+         map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
       }
    }
-   map(task->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
+   map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
 }
 
 void api_set_sys_font(registers_t *regs) {
@@ -451,12 +451,12 @@ void api_set_window_title(registers_t *regs) {
 void api_set_working_dir(registers_t *regs) {
    // IN: ebx = path
    char *path = (char*)regs->ebx;
-   strcpy(gettasks()[get_current_task()].working_dir, path);
+   strcpy(gettasks()[get_current_task()].process->working_dir, path);
 }
 
 void api_get_working_dir(registers_t *regs) {
    // IN: ebx = size 256 buf for working dif
-   strcpy((char*)regs->ebx, gettasks()[get_current_task()].working_dir);
+   strcpy((char*)regs->ebx, gettasks()[get_current_task()].process->working_dir);
 }
 
 void api_display_colourpicker(registers_t *regs) {
@@ -490,19 +490,13 @@ void api_sbrk(registers_t *regs) {
    int delta = (int)regs->ebx;
    task_state_t *task = &gettasks()[get_current_task()];
 
-   if(task->parent_task != NULL) {
-      debug_printf("Can only call sbrk from the main thread!\n");
-      regs->ebx = -1;
-      return;
-   }
-
-   int old_heapsize = (int)(task->heap_end - task->heap_start);
+   int old_heapsize = (int)(task->process->heap_end - task->process->heap_start);
    int new_heapsize = old_heapsize + delta;
    debug_printf("Resizing task %u heap from %u to %u\n", get_current_task(), old_heapsize, new_heapsize);
 
    // check if we're moving into a new page directory that needs to be mapped or freed
-   uint32_t old_end = page_align_up(task->heap_start + old_heapsize);
-   uint32_t new_end = page_align_up(task->heap_start + new_heapsize);
+   uint32_t old_end = page_align_up(task->process->heap_start + old_heapsize);
+   uint32_t new_end = page_align_up(task->process->heap_start + new_heapsize);
    if(new_end > old_end) {
       // expand
       int delta_pages = (new_end - old_end)/0x1000;
@@ -512,7 +506,7 @@ void api_sbrk(registers_t *regs) {
          debug_printf("Out of memory\n");
       }
       for(uint32_t i = 0; i < (uint32_t)delta_pages*0x1000; i+=0x1000)
-         map(task->page_dir, physical+i, old_end+i, 1, 1);
+         map(task->process->page_dir, physical+i, old_end+i, 1, 1);
 
    } else if(new_end < old_end) {
       // shrink
@@ -525,16 +519,16 @@ void api_sbrk(registers_t *regs) {
          physical_addrs = malloc(delta_pages * sizeof(uint32_t));
          if(physical_addrs) {
             for (int i = 0; i < delta_pages; i++) {
-               uint32_t virt = (uint32_t)task->heap_end - (i + 1) * 0x1000;
-               physical_addrs[i] = page_getphysical(task->page_dir, virt);
+               uint32_t virt = (uint32_t)task->process->heap_end - (i + 1) * 0x1000;
+               physical_addrs[i] = page_getphysical(task->process->page_dir, virt);
             }
          }
       }
 
       for (uint32_t i = 0; i < (uint32_t)delta_pages * 0x1000; i += 0x1000) {
-         uint32_t virt_addr = task->heap_end - 0x1000;
-         unmap(task->page_dir, virt_addr);
-         task->heap_end = virt_addr;
+         uint32_t virt_addr = task->process->heap_end - 0x1000;
+         unmap(task->process->page_dir, virt_addr);
+         task->process->heap_end = virt_addr;
       }
         
         // Free physical memory
@@ -548,7 +542,7 @@ void api_sbrk(registers_t *regs) {
       }
    }
 
-   task->heap_end = task->heap_start + new_heapsize;
+   task->process->heap_end = task->process->heap_start + new_heapsize;
    regs->ebx = old_end;
 
 }
@@ -570,14 +564,14 @@ void api_open(registers_t *regs) {
       }
    }
    task_state_t *task = get_current_task_state();
-   int fd = task->fd_count;
-   task->file_descriptors[task->fd_count++] = file;
+   int fd = task->process->fd_count;
+   task->process->file_descriptors[task->process->fd_count++] = file;
    regs->ebx = fd;
 }
 
 void api_read_stdin_callback(void *regs, char *buffer) {
    task_state_t *task = get_current_task_state();
-   int w = task->file_descriptors[0]->window_index;
+   int w = task->process->file_descriptors[0]->window_index;
    registers_t *r = (registers_t*)regs;
    if(w > 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed) {
       gui_window_t *window = getWindow(w);
@@ -608,12 +602,12 @@ void api_read(registers_t *regs) {
 
    debug_printf("api_read: fd %i, buf 0x%h, count %u\n", fd, buf, count);
    
-   if(fd < 0 || fd >= task->fd_count) {
+   if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("read: fd not found\n");
       regs->ebx = -1;
       return;
    }
-   if(!task->file_descriptors[fd]->active) {
+   if(!task->process->file_descriptors[fd]->active) {
       debug_printf("read: fd inactive\n");
       regs->ebx = -1;
       return;
@@ -622,7 +616,7 @@ void api_read(registers_t *regs) {
    if(fd == 0) {
       // read from stdin
       // note: only one task can read from a windows stdin at a time as these get overwritten
-      gui_window_t *window = getWindow(task->file_descriptors[0]->window_index);
+      gui_window_t *window = getWindow(task->process->file_descriptors[0]->window_index);
       window->read_func = &api_read_stdin_callback;
       window->read_buffer = buf;
       window->read_task = get_current_task();
@@ -632,12 +626,12 @@ void api_read(registers_t *regs) {
       // stdout/stderr - can only write to these
    } else if(fd >= 3) {
       // read from file descriptor
-      if(fd >= task->fd_count) {
+      if(fd >= task->process->fd_count) {
          debug_printf("api_read: fd not found\n");
          regs->ebx = -1;
          return;
       }
-      regs->ebx = fs_read(task->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task());
+      regs->ebx = fs_read(task->process->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task());
       if(regs->ebx > 0)
          task->paused = true;
       switch_task(regs); // yield
@@ -653,7 +647,7 @@ void api_read_dir(registers_t *regs) {
       regs->ebx = 0;
       return;
    }
-   page_dir_entry_t *page_dir = gettasks()[get_current_task()].page_dir;
+   page_dir_entry_t *page_dir = get_current_task_pagedir();
    map_size(page_dir, (uint32_t)content, (uint32_t)content, sizeof(fs_dir_content_t), 1, 1);
    uint32_t entries_size = sizeof(fs_dir_entry_t)*content->size;
    map_size(page_dir, (uint32_t)content->entries, (uint32_t)content->entries, entries_size, 1, 1);
@@ -668,11 +662,11 @@ void api_write(registers_t *regs) {
    int fd = regs->ebx;
    uint8_t *buffer = (uint8_t*)regs->ecx;
    size_t size = (size_t)regs->edx;
-   if(fd < 0 || fd > task->fd_count) {
+   if(fd < 0 || fd > task->process->fd_count) {
       debug_printf("api_write: fd not found\n");
       regs->ebx = -1;
    } else {
-      fs_write(task->file_descriptors[fd], buffer, size);
+      fs_write(task->process->file_descriptors[fd], buffer, size);
       regs->ebx = size;
    }
 }
@@ -682,10 +676,10 @@ void api_fsize(registers_t *regs) {
    // OUT: ebx - filesize
    task_state_t *task = get_current_task_state();
    int fd = regs->ebx;
-   if(fd < 0 || fd > task->fd_count) {
+   if(fd < 0 || fd > task->process->fd_count) {
       regs->ebx = -1;
    } else {
-      regs->ebx = fs_filesize(task->file_descriptors[fd]);
+      regs->ebx = fs_filesize(task->process->file_descriptors[fd]);
    }
 }
 
@@ -712,8 +706,8 @@ void api_new_file(registers_t *regs) {
       return;
    }
    task_state_t *task = get_current_task_state();
-   int fd = task->fd_count;
-   task->file_descriptors[task->fd_count++] = file;
+   int fd = task->process->fd_count;
+   task->process->file_descriptors[task->process->fd_count++] = file;
    regs->ebx = fd;
 }
 
@@ -805,7 +799,7 @@ void api_close_window(registers_t *regs) {
    if(!mainwindow) return;
    if(cindex == -1) {
       // close main window and all children without killing task
-      window_close(regs, get_current_task_state()->window);
+      window_close(regs, get_current_task_state()->process->window);
       regs->ebx = 0;
       return;
    }
@@ -819,13 +813,10 @@ void api_close_window(registers_t *regs) {
    debug_printf("Closing window %i\n", index);
    window_close(NULL, index);
    mainwindow->children[cindex] = NULL;
-   setSelectedWindowIndex(get_current_task_state()->window);
+   setSelectedWindowIndex(get_current_task_state()->process->window);
 }
 
 void api_create_thread(registers_t *regs) {
-   // create new task with parent_task pointing to current task
-   // TODO: refactor task_state_t to separate processes from threads
-
    // IN: ebx: location of routine to invoke for new thread
    // OUT: ebx: task index, -1 on failure
 
@@ -837,30 +828,15 @@ void api_create_thread(registers_t *regs) {
 
    task_state_t *parent = get_current_task_state();
 
-   create_task_entry(task_index, regs->ebx, parent->prog_size, parent->privileged);
+   create_task_entry(task_index, regs->ebx, parent->process->prog_size, parent->process->privileged, parent->process);
 
    // copy over essential fields
    task_state_t *thread = &gettasks()[task_index];
-   thread->parent_task = parent;
-   thread->vmem_start = parent->vmem_start;
-   thread->vmem_end = parent->vmem_end;
-   thread->prog_start = parent->prog_start;
-   thread->page_dir = parent->page_dir;
-   // threads can't use heap functions for now
-   thread->heap_start = parent->heap_start;
-   thread->heap_end = parent->heap_end;
-   thread->window = parent->window;
-   strcpy(thread->working_dir, parent->working_dir);
 
    thread->registers.ds = USR_DATA_SEG | 3;
    thread->registers.cs = USR_CODE_SEG | 3; // user code segment
    thread->registers.ss = USR_DATA_SEG | 3;
    thread->registers.eflags = regs->eflags;
    thread->registers.useresp = thread->stack_top;
-
-   thread->fd_count = parent->fd_count;
-   for(int i = 0; i < thread->fd_count; i++)
-      thread->file_descriptors[i] = parent->file_descriptors[i];
-
    thread->enabled = true;
 }

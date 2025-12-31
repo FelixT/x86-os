@@ -1,3 +1,12 @@
+## Debugging kernel/userland progs
+
+Work out which function/instructions is crashing:
+
+objdump -d --start-address=0x804d000 --stop-address=0x804e000 <kernel/prog6/etc.elf>
+
+
+## Misc old notes
+
 https://github.com/cirosantilli/x86-bare-metal-examples/tree/b4e4c124a3c3c329dcf09a5697237ed3b216a318#c-hello-world
 
 objdump -b binary -D -m i8086 main.bin

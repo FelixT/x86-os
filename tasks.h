@@ -15,46 +15,58 @@
 #include "paging.h"
 #include "fs.h"
 
-typedef struct task_state_t {
-   bool enabled;
-   bool paused; // task won't be scheduled
-   uint32_t stack_top; // address
+#define TOTAL_STACK_SIZE 0x0010000
+#define TASK_STACK_SIZE 0x0001000
+
+#define TOTAL_TASKS 8
+#define MAX_TASK_THREADS 4
+
+#define USR_CODE_SEG (8*3)
+#define USR_DATA_SEG (8*4)
+
+typedef struct task_state_t task_state_t;
+
+// process struct - shared between threads
+typedef struct process_t {
    uint32_t prog_start; // physical addr of start of program
    uint32_t prog_entry; // addr of program entry point, may be different from prog_start
    uint32_t prog_size;
-   registers_t registers;
    bool privileged; // 0 = user, 1 = kernel
    int window; // the task's main window. additional windows are children of this
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;
-   registers_t routine_return_regs;
-   int routine_return_window; // switch to this window after routine
-   uint32_t *routine_args;
-   int routine_argc;
-   bool in_routine;
-   char routine_name[32];
    page_dir_entry_t *page_dir;
    uint32_t *allocated_pages[128]; // pointers as returned by malloc
    int no_allocated;
-   bool in_syscall;
-   uint16_t syscall_no;
    char working_dir[256]; // current working directory
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end;
    fs_file_t *file_descriptors[64];
    int fd_count;
 
-   void *parent_task; // task_state_t* - NULL for main thread
+   task_state_t *threads[MAX_TASK_THREADS];
+   int no_threads;
+} process_t;
+
+typedef struct task_state_t {
+   bool enabled;
+   bool paused; // thread won't be scheduled
+   int task_id;
+   uint32_t stack_top; // address
+   registers_t registers;
+   registers_t routine_return_regs;
+   int routine_return_window; // switch to this window after routine
+   uint32_t *routine_args;
+   int routine_argc;
+   bool in_routine;
+   char routine_name[32];
+   bool in_syscall;
+   uint16_t syscall_no;
+
+   process_t *process; // parent process
 } task_state_t;
 
-#define TOTAL_STACK_SIZE 0x0010000
-#define TASK_STACK_SIZE 0x0001000
-#define TOTAL_TASKS 8
-
-#define USR_CODE_SEG (8*3)
-#define USR_DATA_SEG (8*4)
-
-void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged);
+void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
 void launch_task(int index, registers_t *regs, bool focus);
 void end_task(int index, registers_t *regs);
 void tasks_alloc();
@@ -72,6 +84,7 @@ int get_current_task_window();
 int get_task_window(int task);
 int get_current_task();
 task_state_t *get_current_task_state();
+page_dir_entry_t *get_current_task_pagedir();
 int get_task_from_window(int windowIndex);
 int get_free_task_index();
 

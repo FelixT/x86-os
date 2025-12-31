@@ -14,7 +14,10 @@ int 0x30
 pop ebx
 pop eax
 
+; yield loop
 loop:
+mov eax, 3
+int 0x30
 jmp loop
 
 ;section .data

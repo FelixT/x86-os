@@ -277,7 +277,7 @@ int task_get_window_index(int task) {
    if(!getSelectedWindow())
       return -2;
 
-   int task_main_window_i = gettasks()[task].window;
+   int task_main_window_i = gettasks()[task].process->window;
    gui_window_t *task_main_window = &gui_get_windows()[task_main_window_i];
    if(getSelectedWindowIndex() == task_main_window_i) {
       // main window
@@ -334,7 +334,7 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
          void **args = malloc(sizeof(void*)*2);
          args[1] = (void*)wo;
          args[0] = (void*)task_get_window_index(task);
-         map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+         map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
          task_call_subroutine(regs, "worelease", (uint32_t)(wo->release_func), (uint32_t*)args, 2);
       }
    }
@@ -409,7 +409,7 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
          void **args = malloc(sizeof(void*) * 2);
          args[1] = (void*)wo;
          args[0] = (void*)task_get_window_index(task);
-         map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+         map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
          task_call_subroutine(regs, "woclick", (uint32_t)(wo->click_func), (uint32_t*)args, 2);
       }
    }
@@ -547,7 +547,7 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
                void **args = malloc(sizeof(void*)*2);
                args[1] = (void*)wo;
                args[0] = (void*)task_get_window_index(task);
-               map(get_current_task_state()->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+               map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
                task_call_subroutine(regs, "woreturn", (uint32_t)(wo->return_func), (uint32_t*)args, 2);
             }
 
