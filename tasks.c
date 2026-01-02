@@ -273,6 +273,10 @@ void switch_task(registers_t *regs) {
 
 bool switch_to_task(int index, registers_t *regs) {
    //debug_printf("Switching from task %i to %i\n", current_task, index);
+   if(index < 0 || index > TOTAL_TASKS) {
+      debug_printf("Invalid task %i\n", index);
+      return false;
+   }
 
    if(!tasks[index].enabled) {
       debug_printf("Task switch failed: task %i is unavailable\n", index);

@@ -905,11 +905,12 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
          // calling function as task
          if(!gui_interrupt_switchtask(regs)) return;
 
-         uint32_t *args = malloc(sizeof(uint32_t) * 2);
-         args[1] = windowX;
-         args[0] = windowY;
+         uint32_t *args = malloc(sizeof(uint32_t) * 3);
+         args[2] = windowX;
+         args[1] = windowY;
+         args[0] = get_cindex();
       
-         task_call_subroutine(regs, "dragged", (uint32_t)(selectedWindow->drag_func), args, 2);
+         task_call_subroutine(regs, "dragged", (uint32_t)(selectedWindow->drag_func), args, 3);
       
          return;
       }

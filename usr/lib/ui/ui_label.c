@@ -41,6 +41,7 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
    uint16_t txt = label_data->colour_txt;
    uint16_t light = label_data->colour_border_light;
    uint16_t dark = label_data->colour_border_dark;
+   uint16_t bg = label_data->colour_bg;
 
    if(label->clicked) {
       txt = label_data->colour_txt_clicked;
@@ -58,6 +59,10 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
       draw_line(surface, light,  x, y, false, width);
       draw_line(surface, dark, x, y + height - 1, false, width);
       draw_line(surface, dark, x + width - 1, y, true, height);
+   }
+
+   if(label_data->filled) {
+      draw_rect(surface, bg, x + 1, y + 1, width - 2, height - 2);
    }
 
    // text 
@@ -130,7 +135,9 @@ wo_t *create_label(int x, int y, int width, int height, char *text) {
    label_data->colour_txt_clicked = 0x0000;
    label_data->colour_border_light = rgb16(235, 235, 235);
    label_data->colour_border_dark = rgb16(200, 200, 200);
+   label_data->colour_bg = 0xFFFF;
    label_data->bordered = true;
+   label_data->filled = false;
    label_data->valign = true;
    label_data->halign = true;
 

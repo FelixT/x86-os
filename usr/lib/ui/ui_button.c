@@ -136,3 +136,8 @@ void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int 
    int text_y = y + (height - get_font_info().height) / 2;
    write_strat_w(display_label, text_x, text_y, txt, window);
 }
+
+void set_button_release(wo_t *button, void(*release_func)(wo_t *wo, int window)) {
+   button_t *button_data = button->data;
+   button_data->release_func = release_func;
+}

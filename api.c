@@ -208,8 +208,11 @@ void api_override_resize(registers_t *regs) {
 
 void api_override_drag(registers_t *regs) {
    // override drag function with ebx
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
    uint32_t addr = regs->ebx;
-   api_get_window()->drag_func = (void *)(addr);
+   window->drag_func = (void *)(addr);
 }
 
 void api_override_release(registers_t *regs) {
@@ -832,7 +835,6 @@ void api_set_setting(registers_t *regs) {
 
    // todo require priviledge
    windowmgr_settings_t *settings = windowmgr_get_settings();
-   debug_printf("Setting %i to 0x%h\n", regs->ebx, regs->ecx);
 
    switch(regs->ebx) {
       case SETTING_DESKTOP_BGIMG_PATH:
@@ -908,7 +910,6 @@ void api_get_setting(registers_t *regs) {
    // IN ebx - setting
    // OUT ebx - value
    windowmgr_settings_t *settings = windowmgr_get_settings();
-   debug_printf("Get setting %i\n", regs->ebx);
 
    switch(regs->ebx) {
       case SETTING_DESKTOP_BGIMG_PATH:

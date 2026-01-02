@@ -263,11 +263,12 @@ static inline void override_resize(uint32_t addr) {
    );
 }
 
-static inline void override_drag(uint32_t addr) {
+static inline void override_drag(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (36),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
    );
 }
 
