@@ -681,24 +681,28 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
       swap_pagedir(task->process->page_dir);
 
    // read all sectors of cluster
-   for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
+   for(int x = 0; x < 6; x++) { // do in batches of 6 clusters
       uint32_t currentClusterSector = ((state->currentCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
       uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector;
       uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
       for(int i = 0; i < fat_bpb->sectorsPerCluster; i++) {
          uint8_t *buf = (uint8_t*)(clusterBuf + i * fat_bpb->bytesPerSector); // sector buf
          uint32_t memOffset = fat_bpb->bytesPerSector * (state->readCount*fat_bpb->sectorsPerCluster + i);
+
+         int readSize = fat_bpb->bytesPerSector;
+         if(state->readBytes + readSize > state->size)
+            readSize = state->size - state->readBytes;
+         state->readBytes += readSize;
+
          // copy to master buffer
-         for(int b = 0; b < fat_bpb->bytesPerSector; b++) {
-            if(state->readBytes >= state->size) {
-               free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-               (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
-               free((uint32_t)state, sizeof(fat_read_file_state_t));
-               switch_task(regs); // yield, tasks still paused
-               return;
-            }
-            state->buffer[memOffset + b] = buf[b];
-            state->readBytes++;
+         memcpy(state->buffer + memOffset, buf, readSize);
+
+         if(state->readBytes >= state->size) {
+            free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
+            (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
+            free((uint32_t)state, sizeof(fat_read_file_state_t));
+            switch_task(regs); // yield, tasks still paused
+            return;
          }
       }
 

@@ -328,12 +328,40 @@ static inline void launch_task(char *path, int argc, char **args, bool copy) {
    );
 }
 
-static inline void set_sys_font(char *path) {
+typedef enum {
+   SETTING_WIN_BGCOLOUR,
+   SETTING_WIN_TXTCOLOUR,
+   SETTING_DESKTOP_ENABLED,
+   SETTING_DESKTOP_BGIMG_PATH,
+   SETTING_WIN_TITLEBARCOLOUR,
+   SETTING_THEME_TYPE,
+   SETTING_WIN_TITLEBARCOLOUR2,
+   SETTING_SYS_FONT_PATH,
+   SETTING_BGCOLOUR,
+   SETTINGS_SYS_FONT_PADDING
+} setting_index_t;
+
+static inline bool set_setting(setting_index_t setting, uint32_t value) {
+   int out;
    asm volatile (
       "int $0x30;"
-      :: "a" (35),
-      "b" ((uint32_t)path)
+      : "=b" (out)
+      : "a" (35),
+      "b" ((uint32_t)setting),
+      "c" ((uint32_t)value)
    );
+   return out == 0;
+}
+
+static inline uint32_t get_setting(setting_index_t setting) {
+   uint32_t value;
+   asm volatile (
+      "int $0x30;"
+      : "=b" (value)
+      : "a" (33),
+      "b" ((uint32_t)setting)
+   );
+   return value;
 }
 
 static inline void set_window_title(char *title) {

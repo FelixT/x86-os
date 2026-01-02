@@ -27,7 +27,7 @@ void term_cmd_help() {
    // todo: mouse, tasks, prog1, prog2, files, viewbmp, test, desktop, mem, bg, bgimg, padding, redrawall, windowbg, windowtxt
    write_str("\n");
    printf(" CLEAR\n");
-   printf(" LAUNCH<w> path\n");
+   printf(" LAUNCH<W> path\n");
    printf(" FILES, TEXT <path>\n");
    printf(" FAT <path>,\n");
    printf(" FAPPEND <path> <buffer>\n");
@@ -85,7 +85,7 @@ void argtofullpath(char *buf, char *arg) {
 }
 
 void term_cmd_font(char *arg) {
-   set_sys_font(arg);
+   set_setting(SETTING_SYS_FONT_PATH, (uint32_t)arg);
 }
 
 void term_cmd_viewbmp(char *arg) {

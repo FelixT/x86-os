@@ -34,6 +34,7 @@ windowmgr_settings_t wm_settings = {
 uint8_t *icon_window = NULL;
 uint8_t *gui_bgimage = NULL;
 uint8_t *icon_files = NULL;
+int gui_bgimage_size = 0;
 
 extern bool mouse_heldright;
 windowobj_t *default_menu; // right click menu
@@ -1107,14 +1108,18 @@ void desktop_init() {
       }
 
       gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
+      gui_bgimage_size = entry->fileSize;
       gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
    }
 
    wm_settings.desktop_enabled = true;
 }
 
-void desktop_setbgimg(uint8_t *img) {
+void desktop_setbgimg(uint8_t *img, int size) {
+   if(gui_bgimage)
+      free((uint32_t)gui_bgimage, gui_bgimage_size);
    gui_bgimage = img;
+   gui_bgimage_size = size;
    gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
 }
 

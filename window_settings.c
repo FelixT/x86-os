@@ -187,7 +187,7 @@ void window_settings_set_bgimg(void *w) {
 
    strcpy(windowmgr_get_settings()->desktop_bgimg, ((windowobj_t*)w)->text);
    uint8_t *gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   desktop_setbgimg(gui_bgimage);
+   desktop_setbgimg(gui_bgimage, entry->fileSize);
 
    gui_redrawall();
 }

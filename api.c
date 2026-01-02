@@ -406,21 +406,6 @@ void api_launch_task(registers_t *regs) {
    map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
 }
 
-void api_set_sys_font(registers_t *regs) {
-   // IN: ebx = path
-
-   // todo: require privilege
-   char *path = (char*)regs->ebx;
-   fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry == NULL || entry->attributes == 0x10) {
-      window_writestr("Font not found\n", 0, get_current_task_window());
-      return;
-   }
-   fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
-   font_load(file);
-
-}
-
 void api_set_window_title(registers_t *regs) {
    // IN: ebx = title
    // IN: ecx = window child index
@@ -632,8 +617,7 @@ void api_read(registers_t *regs) {
          return;
       }
       regs->ebx = fs_read(task->process->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task());
-      if(regs->ebx > 0)
-         task->paused = true;
+      task->paused = true;
       switch_task(regs); // yield
    }
 
@@ -839,4 +823,133 @@ void api_create_thread(registers_t *regs) {
    thread->registers.eflags = regs->eflags;
    thread->registers.useresp = thread->stack_top;
    thread->enabled = true;
+}
+
+void api_set_setting(registers_t *regs) {
+   // IN: ebx: int setting
+   // IN: ecx: value
+   // OUT: ebx: 0 = success, -1 failure
+
+   // todo require priviledge
+   windowmgr_settings_t *settings = windowmgr_get_settings();
+   debug_printf("Setting %i to 0x%h\n", regs->ebx, regs->ecx);
+
+   switch(regs->ebx) {
+      case SETTING_DESKTOP_BGIMG_PATH:
+         if(page_getphysical(get_current_task_pagedir(), regs->ecx) == (uint32_t)-1) {
+            regs->ebx = -1; // not mapped
+            return;
+         }
+         fat_dir_t *entry = fat_parse_path((char*)regs->ecx, true);
+         if(entry == NULL || entry->attributes == 0x10) {
+            regs->ebx = -1; // not found
+            return;
+         }
+         strncpy(settings->desktop_bgimg, (char*)regs->ecx, sizeof(settings->desktop_bgimg));
+
+         uint8_t *img = fat_read_file(entry->firstClusterNo, entry->fileSize);
+         desktop_setbgimg(img, entry->fileSize);
+         free((uint32_t)entry, sizeof(fat_dir_t));
+         break;
+      case SETTING_DESKTOP_ENABLED:
+         settings->desktop_enabled = (bool)regs->ebx;
+         break;
+      case SETTING_SYS_FONT_PATH:
+         uint32_t physical = page_getphysical(get_current_task_pagedir(), regs->ecx);
+         if(physical == (uint32_t)-1) {
+            regs->ebx = -1; // path not mapped
+            return;
+         }
+         char *path = (char*)regs->ecx;
+         entry = fat_parse_path(path, true);
+         if(entry == NULL || entry->attributes == 0x10) {
+            regs->ebx = -1; // not found
+            return;
+         }
+         strncpy(settings->font_path, (char*)regs->ecx, sizeof(settings->font_path));
+         fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
+         font_load(file);
+         free((uint32_t)entry, sizeof(fat_dir_t));
+
+         // memory leak as never free prev file
+         break;
+      case SETTING_THEME_TYPE:
+         settings->theme = (int)regs->ecx;
+         break;
+      case SETTING_WIN_BGCOLOUR:
+         settings->default_window_bgcolour = (uint16_t)regs->ecx;
+         break;
+      case SETTING_WIN_TITLEBARCOLOUR2:
+         settings->titlebar_colour2 = (uint16_t)regs->ecx;
+         break;
+      case SETTING_WIN_TITLEBARCOLOUR:
+         settings->titlebar_colour = (uint16_t)regs->ecx;
+         break;
+      case SETTING_WIN_TXTCOLOUR:
+         settings->default_window_txtcolour = (uint16_t)regs->ecx;
+         break;
+      case SETTING_BGCOLOUR:
+         extern uint16_t gui_bg;
+         gui_bg = (uint16_t)regs->ecx;
+         gui_redrawall();
+         break;
+      case SETTINGS_SYS_FONT_PADDING:
+         getFont()->padding = (int)regs->ecx;
+         break;
+      default:
+         regs->ebx = -1;
+         return;
+   }
+
+   regs->ebx = 0;
+}
+
+void api_get_setting(registers_t *regs) {
+   // IN ebx - setting
+   // OUT ebx - value
+   windowmgr_settings_t *settings = windowmgr_get_settings();
+   debug_printf("Get setting %i\n", regs->ebx);
+
+   switch(regs->ebx) {
+      case SETTING_DESKTOP_BGIMG_PATH:
+         char *out = malloc(sizeof(settings->desktop_bgimg));
+         strcpy(out, settings->desktop_bgimg);
+         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->desktop_bgimg), 1, 1);
+         regs->ebx = (uint32_t)out;
+         break;
+      case SETTING_DESKTOP_ENABLED:
+         regs->ebx = (uint32_t)settings->desktop_enabled;
+         break;
+      case SETTING_SYS_FONT_PATH:
+         out = malloc(sizeof(settings->font_path));
+         strcpy(out, settings->font_path);
+         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->font_path), 1, 1);
+         regs->ebx = (uint32_t)out;
+         break;
+      case SETTING_THEME_TYPE:
+         regs->ebx = (uint32_t)settings->theme;
+         break;
+      case SETTING_WIN_BGCOLOUR:
+         regs->ebx = (uint32_t)settings->default_window_bgcolour;
+         break;
+      case SETTING_WIN_TITLEBARCOLOUR2:
+         regs->ebx = (uint32_t)settings->titlebar_colour2;
+         break;
+      case SETTING_WIN_TITLEBARCOLOUR:
+         regs->ebx = (uint32_t)settings->titlebar_colour;
+         break;
+      case SETTING_WIN_TXTCOLOUR:
+         regs->ebx = (uint32_t)settings->default_window_txtcolour;
+         break;
+      case SETTING_BGCOLOUR:
+         extern uint16_t gui_bg;
+         regs->ebx = (uint32_t)gui_bg;
+         break;
+      case SETTINGS_SYS_FONT_PADDING:
+         regs->ebx = (uint32_t)getFont()->padding;
+         break;
+      default:
+         regs->ebx = -1;
+         return;
+   }
 }

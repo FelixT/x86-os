@@ -265,7 +265,9 @@ void click(int x, int y) {
       }
 
       if(strequ(extension, "fon")) {
-         set_sys_font(fullpath);
+         set_setting(SETTING_SYS_FONT_PATH, (uint32_t)fullpath);
+         clear();
+         display_items();
       }
 
       if(launched) {

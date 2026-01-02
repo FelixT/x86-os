@@ -91,11 +91,11 @@ void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, in
 
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
-         if(was_hovering) continue;
          if(child->hover_func)
             child->hover_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
          child->hovering = true;
-         child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+         if(!was_hovering)
+            child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
       } else {
          if(!was_hovering) continue;
          child->hovering = false;

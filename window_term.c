@@ -277,7 +277,7 @@ void term_cmd_tasks() {
          }
          int tmp = getSelectedWindow()->txtcolour;
          getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
-         window_term_printf("\n   (eip 0x%h, allocated %i/%ikb, heap size %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_end - tasks[i].process->heap_start);
+         window_term_printf("\n   (eip 0x%h, allocated %i / %ikb, heap size %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_end - tasks[i].process->heap_start);
          getSelectedWindow()->txtcolour = tmp;
       } else {
          window_term_printf("Disabled");
@@ -335,7 +335,7 @@ void term_cmd_bgimg(char *arg) {
    }
 
    uint8_t *gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   desktop_setbgimg(gui_bgimage);
+   desktop_setbgimg(gui_bgimage, entry->fileSize);
 
    gui_redrawall();
 }

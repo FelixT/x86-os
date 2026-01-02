@@ -61,6 +61,20 @@ $GCC $FLAGS usr/prog6.c -o o/prog6.elf \
     o/lib/ui_groupbox.o \
     o/lib/ui_canvas.o
 
+$GCC $FLAGS usr/settings.c -o o/settings.elf \
+    o/lib/string.o \
+    o/lib/stdio.o \
+    o/lib/drawusr.o \
+    o/lib/ui_mgr.o \
+    o/lib/wo.o \
+    o/lib/ui_button.o \
+    o/lib/ui_label.o \
+    o/lib/ui_input.o \
+    o/lib/ui_menu.o \
+    o/lib/ui_groupbox.o \
+    o/lib/ui_canvas.o \
+    o/lib/dialogs.o
+
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
 cp o/prog2.bin fs_root/sys/prog2.bin
@@ -77,3 +91,4 @@ cp o/interp.elf fs_root/sys/interp.elf
 cp o/prog5.elf fs_root/sys/prog5.elf
 cp o/prog6.elf fs_root/sys/prog6.elf
 cp o/prog7.elf fs_root/sys/prog7.elf
+cp o/settings.elf fs_root/sys/settings.elf

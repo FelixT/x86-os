@@ -5,17 +5,17 @@
 
 #include "wo.h"
 
-typedef struct ui_menu_item_t {
+typedef struct menu_item_t {
    char text[64];
    void (*func)(wo_t *item, int index, int window);
-} ui_menu_item_t;
+} menu_item_t;
 
-typedef struct ui_menu_t {
-   ui_menu_item_t *items;
+typedef struct menu_t {
+   menu_item_t *items;
    int item_count;
    int selected_index;
    int hover_index;
-} ui_menu_t;
+} menu_t;
 
 wo_t *create_menu(int x, int y, int width, int height);
 void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window));

@@ -4,6 +4,9 @@ Work out which function/instructions is crashing:
 
 objdump -d --start-address=0x804d000 --stop-address=0x804e000 <kernel/prog6/etc.elf>
 
+## Compile user progs and boot
+
+bash usr/make.sh && bash make_hd_and_run.sh
 
 ## Misc old notes
 

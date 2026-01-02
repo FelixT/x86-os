@@ -15,7 +15,7 @@ jmp kmain
 %include "boot/gdt.asm"
 
 ; put data in text section to force it to be located within 0xFFFF and hence usable in real mode
-boot1msg db 13, 10, 'Loaded into bootloader1', 13, 10, '>> Type "gui"/[return] or "cli" to continue <<', 13, 10, 0
+boot1msg db 'Loaded into bootloader1', 13, 10, 13, 10, '>> Type "gui"/[return] or "cli" to continue <<', 13, 10, 0
 error db 'Error!', 13, 10, 0
 
 global kmain

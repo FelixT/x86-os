@@ -251,14 +251,14 @@ void software_handler(registers_t *regs) {
       case 32:
          api_launch_task(regs);
          break;
-      //case 33:
-      //   api_fat_write_file(regs);
-      //   break;
+      case 33:
+         api_get_setting(regs);
+         break;
       case 34:
          api_override_resize(regs);
          break;
       case 35:
-         api_set_sys_font(regs);
+         api_set_setting(regs);
          break;
       case 36:
          api_override_drag(regs);

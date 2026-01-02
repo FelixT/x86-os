@@ -339,6 +339,8 @@ int get_task_from_window(int windowIndex) {
          // check children of window
          for(int x = 0; x < mainWindow->child_count; x++) {
             gui_window_t *child = mainWindow->children[x];
+            if(child != NULL && child->state != NULL) // dialog
+               continue;
             if(child == searchWindow)
                return i;
          }

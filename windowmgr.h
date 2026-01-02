@@ -6,6 +6,19 @@
 #include "window_t.h"
 #include "registers_t.h"
 
+typedef enum {
+   SETTING_WIN_BGCOLOUR,
+   SETTING_WIN_TXTCOLOUR,
+   SETTING_DESKTOP_ENABLED,
+   SETTING_DESKTOP_BGIMG_PATH,
+   SETTING_WIN_TITLEBARCOLOUR,
+   SETTING_THEME_TYPE,
+   SETTING_WIN_TITLEBARCOLOUR2,
+   SETTING_SYS_FONT_PATH,
+   SETTING_BGCOLOUR,
+   SETTINGS_SYS_FONT_PADDING
+} windowmgr_setting_index_t;
+
 typedef struct {
    uint16_t default_window_bgcolour;
    uint16_t default_window_txtcolour;
@@ -45,7 +58,7 @@ void windowmgr_dragged();
 void desktop_draw();
 void desktop_click(registers_t *regs, int x, int y);
 void desktop_init();
-void desktop_setbgimg(uint8_t *img);
+void desktop_setbgimg(uint8_t *img, int size);
 void windowmgr_mousemove(int x, int y);
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height);
 void window_close(void *regs, int windowIndex);
