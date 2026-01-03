@@ -681,7 +681,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
       swap_pagedir(task->process->page_dir);
 
    // read all sectors of cluster
-   for(int x = 0; x < 6; x++) { // do in batches of 6 clusters
+   for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
       uint32_t currentClusterSector = ((state->currentCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
       uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector;
       uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);

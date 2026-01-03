@@ -22,7 +22,7 @@ typedef struct grid_t {
    int rows;
    int cols;
    grid_cell_t **cells; // cell_content[rows][cols] -> grid_cell_t
-   void (*click_func)(int row, int col);
+   int (*click_func)(wo_t *grid, int window, int row, int col);
 } grid_t;
 
 wo_t *create_grid(int x, int y, int width, int height, int rows, int cols);

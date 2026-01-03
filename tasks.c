@@ -359,6 +359,7 @@ typedef struct {
    uint32_t *args;
    int argc;
    int task;
+   int window;
 } task_event_t;
 
 void task_execute_queued_subroutine(void *regs, void *msg) {
@@ -374,16 +375,9 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
       task_call_subroutine(regs, event->name, event->addr, event->args, event->argc);
       tasks[event->task].routine_return_window = getSelectedWindowIndex();
 
-      /*debug_printf("Launching queued routine %s for task %i window %i\n", event->name, get_current_task(), get_current_task_window());
-      debug_printf("Arguments are ");
-      for(int i = 0; i < event->argc; i++) {
-         debug_printf("%i <0x%h> ", i, event->args[i]);
-      }
-      debug_printf("\n");*/
-
-      if(get_current_task_window() != getSelectedWindowIndex()) {
+      /*if(get_current_task_window() != getSelectedWindowIndex()) {
          setSelectedWindowIndex(get_current_task_window());
-      }
+      }*/
    }
 }
 

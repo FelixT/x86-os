@@ -125,6 +125,11 @@ void release_label(wo_t *label, surface_t *surface, int window, int x, int y, in
       label_data->release_func(label);
 }
 
+void destroy_label(wo_t *label) {
+   label_t *label_data = label->data;
+   free(label_data, sizeof(label_t));
+}
+
 wo_t *create_label(int x, int y, int width, int height, char *text) {
    wo_t *label = create_wo(x, y, width, height);
    label_t *label_data = malloc(sizeof(label_t));
@@ -144,6 +149,7 @@ wo_t *create_label(int x, int y, int width, int height, char *text) {
    label->data = label_data;
    label->draw_func = &draw_label;
    label->release_func = &release_label;
+   label->destroy_func = &destroy_label;
    label->type = WO_LABEL;
 
    return label;

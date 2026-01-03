@@ -180,7 +180,7 @@ void software_handler(registers_t *regs) {
          api_write_newline(regs);
          break;
       case 9:
-         api_redraw_window();
+         api_redraw_window(regs);
          break;
       case 10:
          api_end_task(regs);
@@ -233,9 +233,9 @@ void software_handler(registers_t *regs) {
       //case 26:
       //   api_get_get_dir_size(regs);
       //   break;
-      //case 27: 
-      //   api_override_downarrow(regs);
-      //   break;
+      case 27: 
+         api_override_close(regs);
+         break;
       case 28:
          api_write_number_at(regs);
          break;

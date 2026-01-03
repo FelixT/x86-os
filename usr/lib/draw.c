@@ -8,6 +8,11 @@ static inline void setpixel_safe(surface_t *surface, int index, int colour) {
    }
 }
 
+void draw_pixel(surface_t *surface, uint16_t colour, int x, int y) {
+   int index = y * (int)surface->width + x;
+   setpixel_safe(surface, index, colour);
+}
+
 void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length) {
    if(vertical) {
       for(int yi = y; yi < y+length; yi++)

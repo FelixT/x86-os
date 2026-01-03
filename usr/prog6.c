@@ -73,8 +73,11 @@ void toggle_menu(wo_t *wo, int window) {
    ui_draw(ui);
 }
 
-void click_grid(int row, int col) {
+int click_grid(wo_t *wo, int window, int row, int col) {
+   (void)wo;
+   (void)window;
    debug_println("Clicked %i %i", row, col);
+   return 0;
 }
 
 void _start() {
@@ -88,7 +91,7 @@ void _start() {
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
    override_keypress((uint32_t)&keypress, -1);
-   override_resize((uint32_t)&resize);
+   override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
 
    // create & register elements

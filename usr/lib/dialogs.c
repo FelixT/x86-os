@@ -3,7 +3,9 @@
 #include "../prog.h"
 #include "stdio.h"
 #include "draw.h"
+#include "sort.h"
 #include "../../lib/string.h"
+#include "../prog_bmp.h"
 
 int dialog_count = 0;
 dialog_t *dialogs[MAX_DIALOGS];
@@ -64,13 +66,19 @@ void dialog_hover(int x, int y, int window) {
 
 void dialog_close(wo_t *wo, int window) {
    (void)wo;
-   if(!dialog_from_window(window)) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
       debug_println("Can't find window %i", window);
       end_subroutine();
       return;
    }
-   dialog_from_window(window)->active = false;
+   dialog->active = false;
    close_window(window);
+}
+
+void dialog_window_close(int window) {
+   dialog_close(NULL, window);
+   end_subroutine();
 }
 
 void dialog_keypress(int c, int window) {
@@ -105,6 +113,7 @@ bool dialog_msg(char *title, char *text) {
    override_release((uint32_t)&dialog_release, msg->window);
    override_hover((uint32_t)&dialog_hover, msg->window);
    override_keypress((uint32_t)&dialog_keypress, msg->window);
+   override_close((uint32_t)&dialog_window_close, msg->window);
 
    wo_t *label_wo = create_label(15, y, 260 - 30, 20, text);
    ui_add(msg->ui, label_wo);
@@ -169,6 +178,7 @@ int dialog_input(char *text, void *return_func) {
    override_release((uint32_t)&dialog_release, input->window);
    override_hover((uint32_t)&dialog_hover, input->window);
    override_keypress((uint32_t)&dialog_keypress, input->window);
+   override_close((uint32_t)&dialog_window_close, input->window);
 
    int y = 10;
    
@@ -244,8 +254,6 @@ void dialog_colourpicker_click(int x, int y, int window) {
       x -= 5; // offset
       y -= 60; // offset
       if(x < 0 || x >= 256 || y < 0 || y >= 256) return; // out of bounds
-
-      uint16_t *fb = (uint16_t*)dialog->surface.buffer;
       dialog_colourpicker_update(x, y, dialog);
    } else {
       ui_click(dialog->ui, x, y);
@@ -264,42 +272,10 @@ void dialog_colourpicker_drag(int x, int y, int window) {
       x -= 5; // offset
       y -= 60; // offset
       if(x < 0 || x >= 256 || y < 0 || y >= 256) return; // out of bounds
-
-      uint16_t *fb = (uint16_t*)dialog->surface.buffer;
       dialog_colourpicker_update(x, y, dialog);
    } else {
       // no ui drag func
    }
-   end_subroutine();
-}
-
-void dialog_colourpicker_release(int x, int y, int window) {
-   dialog_t *dialog = dialog_from_window(window);
-   if(!dialog) {
-      debug_println("Couldn't find dialog for window %i\n", window);
-      end_subroutine();
-   }
-   ui_release(dialog->ui, x, y);
-   end_subroutine();
-}
-
-void dialog_colourpicker_hover(int x, int y, int window) {
-   dialog_t *dialog = dialog_from_window(window);
-   if(!dialog) {
-      debug_println("Couldn't find dialog for window %i\n", window);
-      end_subroutine();
-   }
-   ui_hover(dialog->ui, x, y);
-   end_subroutine();
-}
-
-void dialog_colourpicker_keypress(int c, int window) {
-   dialog_t *dialog = dialog_from_window(window);
-   if(!dialog) {
-      debug_println("Couldn't find dialog for window %i\n", window);
-      end_subroutine();
-   }
-   ui_keypress(dialog->ui, (uint16_t)c);
    end_subroutine();
 }
 
@@ -318,6 +294,74 @@ void dialog_colourpicker_input_return(wo_t *wo, int window) {
          fb[(y + 60) * dialog->surface.width + (x + 265)] = colour;
       }
    }
+}
+
+void dialog_colourpicker_draw(dialog_t *dialog) {
+   input_t *input = dialog->input_wo->data;
+   uint16_t colour = hextouint(input->text+2);
+
+   // draw colour square border
+   draw_unfilledrect(&dialog->surface, rgb16(0, 0, 0), 264, 59, 52, 52); // border
+   // draw colour square
+   for(int x = 0; x < 50; x++) {
+      for(int y = 0; y < 50; y++) {
+         draw_pixel(&dialog->surface, colour, x + 265, y + 60);
+      }
+   }
+   // draw the colour picker at (5, 50)
+   draw_unfilledrect(&dialog->surface, rgb16(0, 0, 0), 4, 59, 258, 258); // border
+   int xoffset = 5;
+   int yoffset = 60;
+   for(int x = 0; x < 256; x++) {
+      for(int y = 0; y < 256; y++) {
+         uint16_t colour = 0;
+         
+         if(x < 128 && y < 128) {
+            // top left - red gradient
+            uint16_t red = (x * 31) / 127;      // scale to 5-bit (0-31)
+            uint16_t green = (y * 63) / 127;    // scale to 6-bit (0-63)
+            colour = (red << 11) | (green << 5) | 0;  // blue = 0
+               
+         } else if(x >= 128 && y < 128) {
+            // top right - green gradient
+            uint16_t green = ((x - 128) * 63) / 127;  // scale (x-128) to 6-bit
+            uint16_t blue = (y * 31) / 127;           // scale y to 5-bit
+            colour = (0 << 11) | (green << 5) | blue; // red = 0
+               
+         } else if(x < 128 && y >= 128) {
+            // bottom left - blue gradient
+            uint16_t red = (x * 31) / 127;            // scale x to 5-bit
+            uint16_t blue = ((y - 128) * 31) / 127;   // scale (y-128) to 5-bit
+            colour = (red << 11) | (0 << 5) | blue;   // green = 0
+               
+         } else {
+            // bottom right - white to black gradient
+            uint16_t intensity = ((x - 128) + (y - 128)) / 2;  // 0-127
+            uint16_t red = (intensity * 31) / 127;
+            uint16_t green = (intensity * 63) / 127;
+            uint16_t blue = (intensity * 31) / 127;
+            colour = (red << 11) | (green << 5) | blue;
+         }
+         
+         draw_pixel(&dialog->surface, colour, x + xoffset, y + yoffset);
+      }
+   }
+}
+
+void dialog_colourpicker_resize(uint32_t fb, int width, int height, int window) {
+   (void)fb;
+   (void)width;
+   (void)height;
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   clear_w(window);
+   dialog->surface = get_surface_w(window);
+   ui_draw(dialog->ui);
+   dialog_colourpicker_draw(dialog);
+   end_subroutine();
 }
 
 int dialog_colourpicker(uint16_t colour, void *return_func) {
@@ -361,61 +405,335 @@ int dialog_colourpicker(uint16_t colour, void *return_func) {
 
    ui_draw(dialog->ui);
 
-   // draw
-   uint16_t *fb = (uint16_t*)dialog->surface.buffer;
-
-   // draw colour square border
-   draw_unfilledrect(&dialog->surface, rgb16(0, 0, 0), 264, 59, 52, 52); // border
-   // draw colour square
-   for(int x = 0; x < 50; x++) {
-      for(int y = 0; y < 50; y++) {
-         fb[(y + 60) * dialog->surface.width + (x + 265)] = colour;
-      }
-   }
-   // draw the colour picker at (5, 50)
-   draw_unfilledrect(&dialog->surface, rgb16(0, 0, 0), 4, 59, 258, 258); // border
-   int xoffset = 5;
-   int yoffset = 60;
-   for(int x = 0; x < 256; x++) {
-      for(int y = 0; y < 256; y++) {
-         uint16_t colour = 0;
-         
-         if(x < 128 && y < 128) {
-            // top left - red gradient
-            uint16_t red = (x * 31) / 127;      // scale to 5-bit (0-31)
-            uint16_t green = (y * 63) / 127;    // scale to 6-bit (0-63)
-            colour = (red << 11) | (green << 5) | 0;  // blue = 0
-               
-         } else if(x >= 128 && y < 128) {
-            // top right - green gradient
-            uint16_t green = ((x - 128) * 63) / 127;  // scale (x-128) to 6-bit
-            uint16_t blue = (y * 31) / 127;           // scale y to 5-bit
-            colour = (0 << 11) | (green << 5) | blue; // red = 0
-               
-         } else if(x < 128 && y >= 128) {
-            // bottom left - blue gradient
-            uint16_t red = (x * 31) / 127;            // scale x to 5-bit
-            uint16_t blue = ((y - 128) * 31) / 127;   // scale (y-128) to 5-bit
-            colour = (red << 11) | (0 << 5) | blue;   // green = 0
-               
-         } else {
-            // bottom right - white to black gradient
-            uint16_t intensity = ((x - 128) + (y - 128)) / 2;  // 0-127
-            uint16_t red = (intensity * 31) / 127;
-            uint16_t green = (intensity * 63) / 127;
-            uint16_t blue = (intensity * 31) / 127;
-            colour = (red << 11) | (green << 5) | blue;
-         }
-         
-         fb[(y+yoffset)*dialog->surface.width + x+xoffset] = colour;
-      }
-   }
+   dialog_colourpicker_draw(dialog);
 
    override_click((uint32_t)&dialog_colourpicker_click, dialog->window);
-   override_hover((uint32_t)&dialog_colourpicker_hover, dialog->window);
-   override_release((uint32_t)&dialog_colourpicker_release, dialog->window);
+   override_hover((uint32_t)&dialog_hover, dialog->window);
+   override_release((uint32_t)&dialog_release, dialog->window);
    override_drag((uint32_t)&dialog_colourpicker_drag, dialog->window);
-   override_keypress((uint32_t)&dialog_colourpicker_keypress, dialog->window);
+   override_keypress((uint32_t)&dialog_keypress, dialog->window);
+   override_close((uint32_t)&dialog_window_close, dialog->window);
+   override_resize((uint32_t)&dialog_colourpicker_resize, dialog->window);
+
+   return index;
+}
+
+// filepicker specific
+
+int dialog_filepicker_sort(const void *v1, const void *v2) {
+   const fs_dir_entry_t *d1 = (const fs_dir_entry_t*)v1;
+   const fs_dir_entry_t *d2 = (const fs_dir_entry_t*)v2;
+
+   return strcmp(d1->filename, d2->filename);
+}
+
+void dialog_filepicker_show_dir(dialog_t *dialog);
+
+int dialog_filepicker_grid_click(wo_t *grid, int window, int row, int col) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return 0;
+   }
+   if(!dialog->dir) return 0;
+   grid_t *grid_data = grid->data;
+   grid_cell_t *cell = &grid_data->cells[row][col];
+   if(cell->child_count > 0) {
+      wo_t *label = cell->children[0];
+      label_t *label_data = label->data;
+      char *filename = label_data->label;
+      char filepath[256];
+      wo_t *input = dialog->ui->wos[1];
+      input_t *input_data = input->data;
+      strcpy(filepath, input_data->text);
+      if(strlen(filepath) > 1)
+         strcat(filepath, "/");
+      strcat(filepath, filename);
+      debug_println("Full path: %s", filepath);
+
+      // find dir entry
+      for(int i = 0; i < dialog->dir->size; i++) {
+         fs_dir_entry_t *entry = &dialog->dir->entries[i];
+         if(!strequ(entry->filename, filename)) continue;
+         if(entry->type == FS_TYPE_DIR) {
+            // show dir contents
+            set_input_text(input, filepath);
+            clear_w(dialog->window);
+            dialog_filepicker_show_dir(dialog);
+            ui_draw(dialog->ui);
+            redraw_w(dialog->window);
+            return 1;
+         } else {
+            // call return func
+            if(dialog->callback)
+               dialog->callback(filepath, window);
+            dialog_close(NULL, dialog->window);
+         }
+         break;
+      }
+   }
+   return 0;
+}
+
+void dialog_filepicker_show_dir(dialog_t *dialog) {
+   ui_mgr_t *ui = dialog->ui;
+   wo_t *input = ui->wos[1];
+   char *path = ((input_t*)input->data)->text;
+
+   // delete existing grid
+   groupbox_t *groupbox = ui->wos[4]->data;
+   canvas_t *canvas = (groupbox->canvas)->data;
+   if(canvas->child_count > 0) {
+      if(ui->hovered == canvas->children[0])
+         ui->hovered = NULL;
+      destroy_wo(canvas->children[0]);
+      canvas->children[0] = NULL;
+      canvas->child_count = 0;
+   }
+
+   if(dialog->dir) {
+      free(dialog->dir->entries, dialog->dir->size * sizeof(fs_dir_entry_t));
+      free(dialog->dir, sizeof(dialog->dir));
+      dialog->dir = NULL;
+   }
+   
+   fs_dir_content_t *content = read_dir(path);
+   if(!content) {
+      dialog_msg("Error", "Couldn't read directory");
+      return;
+   }
+   
+   dialog->dir = content;
+
+   int width = get_width_w(ui->window);
+
+   int cols = (width - 20) / 100;
+   if(!cols) cols = 1;
+
+   int rows = ((content->size - 2) + cols - 1) / cols;
+
+   int grid_height = rows * 32;
+
+   int box_height = grid_height + 20;
+   if(box_height < 200)
+      box_height = 200;
+
+   int newwidth = set_content_height(ui->wos[4]->y + box_height + 10, dialog->window);
+
+   if(newwidth != width) {
+      ui->wos[3]->x = newwidth - ui->wos[3]->width - 10; // reposition cancel btn
+      ui->wos[4]->width = newwidth - 20; // resize groupbox
+      groupbox->canvas->width = ui->wos[4]->width - 2;
+      width = newwidth;
+   }
+
+   // resize groupbox and canvas
+   ui->wos[4]->height = box_height;
+   groupbox->canvas->height = grid_height;
+
+   wo_t *grid = create_grid(10, 5, groupbox->canvas->width - 20, grid_height, rows, cols);
+   grid_t *grid_data = grid->data;
+   grid_data->bordered = false;
+   grid_data->click_func = &dialog_filepicker_grid_click;
+   canvas_add(groupbox->canvas, grid);
+
+   if(content->entries)
+      sort(content->entries, content->size, sizeof(fs_dir_entry_t), dialog_filepicker_sort);
+
+   int row = 0;
+   int col = 0;
+
+   int offset = strcmp((path), "/") == 0 ? 0 : 2; // hide dot entries
+   for(int i = offset; i < content->size; i++) {
+      fs_dir_entry_t *entry = &content->entries[i];
+      if(entry->hidden)
+         continue;
+
+      // create label
+      wo_t *label = create_label(24, 6, 76, 20, entry->filename);
+      label_t *label_data = label->data;
+      label_data->valign = true;
+      label_data->halign = false;
+      label_data->bordered = false;
+      grid_add(grid, label, row, col);
+
+      // icon
+      wo_t *icon = create_image(0, 6, 20, 20, NULL);
+      image_t *icon_data = icon->data;
+      if(entry->type == FS_TYPE_DIR)
+         icon_data->data = dialog->folder_icon_data;
+      else
+         icon_data->data = dialog->file_icon_data;
+      
+      grid_add(grid, icon, row, col);
+
+      row++;
+      if(row == rows) {
+         row = 0;
+         col++;
+      }
+   }
+}
+
+void dialog_filepicker_show_parent(wo_t *wo, int window) {
+   (void)wo;
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   scroll_to(0, dialog->window);
+   input_t *input_data = dialog->ui->wos[1]->data;
+   char *text = input_data->text;
+   strsplit_last(text, NULL, text, '/');
+   if(strlen(text) == 0) {
+      strcpy(text, "/");
+   }
+   input_data->cursor_pos = strlen(text);
+   clear_w(dialog->window);
+   dialog_filepicker_show_dir(dialog);
+   ui_draw(dialog->ui);
+   redraw_w(dialog->window);
+}
+
+void dialog_filepicker_input_return(wo_t *wo, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   input_t *input_data = wo->data;
+   char *text = input_data->text;
+   if(strlen(text) == 0) {
+      strcpy(text, "/");
+      input_data->cursor_pos = 1;
+   } else if(strendswith(text, "/") && strlen(text) > 1) {
+      text[strlen(text)-1] = '\0';
+      input_data->cursor_pos--;
+   }
+   clear_w(dialog->window);
+   dialog_filepicker_show_dir(dialog);
+   ui_draw(dialog->ui);
+}
+
+void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
+   debug_println("Scroll deltaY: %i, offsetY: %i\n", deltaY, offsetY);
+
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+
+   for(int i = 0; i < dialog->ui->wo_count; i++) {
+      wo_t *wo = dialog->ui->wos[i];
+      wo->y -= deltaY;
+   }
+   clear_w(dialog->window);
+   ui_draw(dialog->ui);
+   redraw_w(dialog->window);
+   
+   end_subroutine();
+}
+
+void dialog_filepicker_resize(uint32_t fb, int width, int height, int window) {
+   (void)fb;
+   (void)height;
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   dialog->surface = get_surface_w(window);
+   dialog->ui->surface = &dialog->surface;
+   dialog->ui->wos[4]->width = width - 20; // resize groupbox
+   dialog->ui->wos[3]->x = width - dialog->ui->wos[3]->width - 10; // reposition cancel btn
+   groupbox_t *groupbox = dialog->ui->wos[4]->data;
+   groupbox->canvas->width = dialog->ui->wos[4]->width - 2;
+   dialog_filepicker_show_dir(dialog);
+   clear_w(dialog->window);
+   ui_draw(dialog->ui);
+   end_subroutine();
+}
+
+int dialog_filepicker(char *startpath, void *return_func) {
+   int index = get_free_dialog();
+   if(index < 0) return false;
+   dialog_t *dialog = dialogs[index];
+   int width = 335;
+   int height = 280;
+   dialog->window = create_window(width, height);
+   dialog->callback = return_func;
+   dialog->active = true;
+   dialog->type = DIALOG_FILEPICKER;
+   dialog->dir = NULL;
+
+   set_window_title_w(dialog->window, "File Picker");
+
+   dialog->surface = get_surface_w(dialog->window);
+   dialog->ui = ui_init(&dialog->surface, dialog->window);
+
+   wo_t *label = create_label(5, 5, 60, 20, "Path: ");
+   label_t *label_data = label->data;
+   label_data->bordered = false;
+   ui_add(dialog->ui, label);
+
+   wo_t *input = create_input(70, 5, 100, 20);
+   set_input_text(input, startpath);
+   input_t *input_data = input->data;
+   input_data->valign = true;
+   input_data->return_func = &dialog_filepicker_input_return;
+   ui_add(dialog->ui, input);
+
+   wo_t *upbtn = create_button(170, 5, 35, 20, "Up");
+   set_button_release(upbtn, &dialog_filepicker_show_parent);
+   ui_add(dialog->ui, upbtn);
+
+   wo_t *cancelbtn = create_button(width - 60, 5, 50, 20, "Cancel");
+   set_button_release(cancelbtn, &dialog_close);
+   ui_add(dialog->ui, cancelbtn);
+
+   wo_t *groupbox = create_groupbox(10, 30, width - 20, 200, "Files");
+   ui_add(dialog->ui, groupbox);
+
+   // load 20x20 icons
+   FILE *file_icon = fopen("/bmp/file20.bmp", "r");
+   FILE *folder_icon = fopen("/bmp/folder20.bmp", "r");
+   int file_icon_size = fsize(fileno(file_icon));
+   int folder_icon_size = fsize(fileno(folder_icon));
+   dialog->file_icon_data = malloc(file_icon_size);
+   dialog->folder_icon_data = malloc(folder_icon_size);
+   fread(dialog->file_icon_data, file_icon_size, 1, file_icon);
+   fread(dialog->folder_icon_data, folder_icon_size, 1, folder_icon);
+   bmp_header_t *file_icon_bmp = (bmp_header_t*)dialog->file_icon_data;
+   dialog->file_icon_data += file_icon_bmp->dataOffset/sizeof(uint16_t);
+   bmp_header_t *folder_icon_bmp = (bmp_header_t*)dialog->folder_icon_data;
+   dialog->folder_icon_data += folder_icon_bmp->dataOffset/sizeof(uint16_t);
+   // flip data upside down
+   for(int y = 0; y < 10; y++) {
+      for(int x = 0; x < 20; x++) {
+         uint16_t temp = dialog->file_icon_data[y * 20 + x];
+         dialog->file_icon_data[y * 20 + x] = dialog->file_icon_data[(19 - y) * 20 + x];
+         dialog->file_icon_data[(19 - y) * 20 + x] = temp;
+
+         temp = dialog->folder_icon_data[y * 20 + x];
+         dialog->folder_icon_data[y * 20 + x] = dialog->folder_icon_data[(19 - y) * 20 + x];
+         dialog->folder_icon_data[(19 - y) * 20 + x] = temp;
+      }
+   }
+   fclose(file_icon);
+   fclose(folder_icon);
+   create_scrollbar(&dialog_filepicker_scroll, dialog->window);
+
+   override_click((uint32_t)&dialog_click, dialog->window);
+   override_hover((uint32_t)&dialog_hover, dialog->window);
+   override_release((uint32_t)&dialog_release, dialog->window);
+   override_keypress((uint32_t)&dialog_keypress, dialog->window);
+   override_close((uint32_t)&dialog_window_close, dialog->window);
+   override_resize((uint32_t)&dialog_filepicker_resize, dialog->window);
+
+   dialog_filepicker_show_dir(dialog);
+   ui_draw(dialog->ui);
 
    return index;
 }

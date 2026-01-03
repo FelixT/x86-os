@@ -55,7 +55,7 @@ typedef struct task_state_t {
    uint32_t stack_top; // address
    registers_t registers;
    registers_t routine_return_regs;
-   int routine_return_window; // switch to this window after routine
+   int routine_return_window; // switch to this window after routine, potentially unneeded
    uint32_t *routine_args;
    int routine_argc;
    bool in_routine;

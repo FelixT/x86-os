@@ -148,12 +148,9 @@ void window_close(void *regs, int windowIndex) {
       window_draw_outline(getSelectedWindow(), false);
       getWindow(windowIndex)->minimised = true;
       getWindow(windowIndex)->active = false;
-      setSelectedWindowIndex(-1);
+      setSelectedWindowIndex(popup);
       return;
    }
-
-   if(windowIndex == getSelectedWindowIndex())
-      setSelectedWindowIndex(-1);
 
    if(regs) {
       int task = get_task_from_window(windowIndex);
@@ -161,8 +158,22 @@ void window_close(void *regs, int windowIndex) {
          end_task(task, regs); // don't kill task if closing child window
          // re-establish pointer as gui_windows may have been resized in end_task
          window = getWindow(windowIndex);
+      } else {
+         // call close func if set
+         debug_printf("Calling close func for window %i\n", windowIndex);
+         if(task > -1 && window->close_func != NULL) {
+            if(gui_interrupt_switchtask(regs)) {
+               uint32_t *args = malloc(sizeof(uint32_t) * 1);
+               args[0] = get_cindex();
+               task_call_subroutine(regs, "close", (uint32_t)(window->close_func), args, 1);
+            }
+         }
       }
    }
+
+   if(windowIndex == getSelectedWindowIndex())
+      setSelectedWindowIndex(-1);
+
    window->closed = true;
 
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
@@ -279,6 +290,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->release_func = NULL;
    window->hover_func = NULL;
    window->read_func = NULL;
+   window->close_func = NULL;
 }
 
 void window_removefuncs(gui_window_t *window) {
@@ -294,6 +306,7 @@ void window_removefuncs(gui_window_t *window) {
    window->release_func = NULL;
    window->hover_func = NULL;
    window->read_func = NULL;
+   window->close_func = NULL;
 }
 
 int windowmgr_add() {
@@ -1348,13 +1361,14 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int task = get_task_from_window(index);
    if(regs && task > -1 && window->resize_func) {
       if(!switch_to_task(task, regs)) return;
-      uint32_t *args = malloc(sizeof(uint32_t) * 3);
-      args[2] = (uint32_t)window->framebuffer;
-      args[1] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
-      args[0] = height - TITLEBAR_HEIGHT;
-      for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size+0xFFF)/0x1000; i++)
-         map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1);
-      task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
+      uint32_t *args = malloc(sizeof(uint32_t) * 4);
+      args[3] = (uint32_t)window->framebuffer;
+      args[2] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
+      args[1] = height - TITLEBAR_HEIGHT;
+      args[0] = get_cindex_from_window(window);
+      map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
+      map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
+      task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 4);
    }
    
 }
@@ -1369,7 +1383,7 @@ void window_release(registers_t *regs, gui_window_t *window) {
          args[2] = gui_mouse_x - window->x; // x relative to window content
          args[1] = gui_mouse_y - window->y - TITLEBAR_HEIGHT; // y relative to window content
          args[0] = get_cindex();
-
+         map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*3, 1, 1);
          task_call_subroutine(regs, "release", (uint32_t)(window->release_func), args, 3);
       }
    }
@@ -1404,6 +1418,24 @@ int get_cindex() {
    for(int i = 0; i < window->child_count; i++) {
       gui_window_t *child = window->children[i];
       if(child && child->active && child == selectedWindow)
+         return i;
+   }
+   return -2;
+}
+
+int get_cindex_from_window(gui_window_t *window) {
+   int w = get_task_window(get_current_task()); // main window of current task
+   gui_window_t *mainwin = getWindow(w);
+   if(w < 0)
+      return -2;
+
+   if(window == NULL || window->closed)
+      return -2;
+   if(window == mainwin)
+      return -1; // main window
+   for(int i = 0; i < mainwin->child_count; i++) {
+      gui_window_t *child = mainwin->children[i];
+      if(child && child->active && child == window)
          return i;
    }
    return -2;

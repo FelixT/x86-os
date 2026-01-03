@@ -11,6 +11,8 @@
 
 surface_t s;
 ui_mgr_t *ui;
+wo_t *bgimg_input;
+wo_t *fontpath_input;
 
 void click(int x, int y, int window) {
    (void)window;
@@ -61,6 +63,7 @@ wo_t *settings_create_label(wo_t *groupbox, int y, char *text) {
    wo_t *label = create_label(5, y, 130, 20, text);
    label_t *label_data = label->data;
    label_data->colour_border_light = 0xFFFF;
+   label_data->colour_border_dark = rgb16(220, 220, 220);
    groupbox_add(groupbox, label);
    return label;
 }
@@ -122,8 +125,9 @@ wo_t *settings_create_colourbox(wo_t *groupbox, int y, uint16_t colour) {
    return label;
 }
 
-void scroll(int deltaY, int offsetY) {
+void scroll(int deltaY, int offsetY, int window) {
    (void)offsetY;
+   (void)window;
 
    clear();
 
@@ -172,6 +176,8 @@ void set_font_padding(wo_t *wo, int window) {
    (void)window;
    input_t *input = wo->data;
    set_setting(SETTINGS_SYS_FONT_PADDING, strtoint(input->text));
+   clear_w(window);
+   ui_draw(ui);
 }
 
 void set_bgcolour(wo_t *wo, int window) {
@@ -198,6 +204,31 @@ void set_font(wo_t *wo, int window) {
    input_t *input = wo->data;
    if(!set_setting(SETTING_SYS_FONT_PATH, (uint32_t)input->text))
       dialog_msg("Error", "Couldn't set font");
+   clear_w(window);
+   ui_draw(ui);
+   redraw_w(window);
+}
+
+void bgimg_browse_callback(char *path, int window) {
+   set_input_text(bgimg_input, path);
+   set_bgimage(bgimg_input, window);
+}
+
+void fontpath_browse_callback(char *path, int window) {
+   set_input_text(fontpath_input, path);
+   set_font(fontpath_input, window);
+}
+
+void bgimg_browse(wo_t *wo, int window) {
+   (void)wo;
+   (void)window;
+   dialog_filepicker("/bmp", &bgimg_browse_callback);
+}
+
+void fontpath_browse(wo_t *wo, int window) {
+   (void)wo;
+   (void)window;
+   dialog_filepicker("/font", &fontpath_browse_callback);
 }
 
 void _start() {
@@ -210,7 +241,7 @@ void _start() {
    override_draw(0);
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
-   override_resize((uint32_t)&resize);
+   override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
    override_keypress((uint32_t)&keypress, -1);
 
@@ -276,7 +307,12 @@ void _start() {
    // font
    settings_create_label(font_group, y, "Font");
    strcpy(buffer, (char*)get_setting(SETTING_SYS_FONT_PATH));
-   settings_create_input(font_group, y, buffer, &set_font);
+   fontpath_input = settings_create_input(font_group, y, buffer, &set_font);
+   fontpath_input->width-=20;
+   wo_t *button = create_button(260, y, 20, 20, "o");
+   set_button_release(button, &fontpath_browse);
+   groupbox_add(font_group, button);
+
    y+=25;
 
    // font padding
@@ -299,7 +335,11 @@ void _start() {
    // desktop bgimg
    settings_create_label(desktop_group, y, "Background image");
    strcpy(buffer, (char*)get_setting(SETTING_DESKTOP_BGIMG_PATH));
-   settings_create_input(desktop_group, y, buffer, &set_bgimage);
+   bgimg_input = settings_create_input(desktop_group, y, buffer, &set_bgimage);
+   bgimg_input->width-=20;
+   button = create_button(260, y, 20, 20, "o");
+   set_button_release(button, &bgimg_browse);
+   groupbox_add(desktop_group, button);
    y+=25;
 
    // desktop bg colour
@@ -315,8 +355,8 @@ void _start() {
 
    ui_draw(ui);
 
-   create_scrollbar(&scroll);
-   set_content_height(370);
+   create_scrollbar(&scroll, -1);
+   set_content_height(370, -1);
 
    while(true) {
       yield();

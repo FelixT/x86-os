@@ -71,5 +71,6 @@ void window_draw_outline(gui_window_t *window, bool occlude);
 windowmgr_settings_t *windowmgr_get_settings();
 void windowmgr_launch_apps();
 int get_cindex();
+int get_cindex_from_window(gui_window_t *window);
 
 #endif

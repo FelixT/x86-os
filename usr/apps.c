@@ -37,8 +37,9 @@ int sort_filename(const void *v1, const void *v2) {
    return strcmp(d1->filename, d2->filename);
 }
 
-void scroll(int deltaY, int offsetY) {
+void scroll(int deltaY, int offsetY, int window) {
    (void)deltaY;
+   (void)window;
 
    clear();
 
@@ -103,7 +104,7 @@ void _start() {
    override_draw(0);
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
-   override_resize((uint32_t)&resize);
+   override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
 
    items = 0;
@@ -118,8 +119,8 @@ void _start() {
          items++;
    }
 
-   create_scrollbar(&scroll);
-   set_content_height(items*20 + 4);
+   create_scrollbar(&scroll, -1);
+   set_content_height(items*20 + 4, -1);
 
    int width = get_width() - 4;
 

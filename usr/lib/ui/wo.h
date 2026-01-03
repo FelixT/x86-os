@@ -16,7 +16,8 @@ typedef enum {
    WO_SCROLLBAR,
    WO_SCROLLER,
    WO_GRID,
-   WO_GROUPBOX
+   WO_GROUPBOX,
+   WO_IMAGE
 } wo_type_t;
 
 typedef struct wo_t {
@@ -40,9 +41,10 @@ typedef struct wo_t {
    void (*unhover_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
    void (*drag_func)(struct wo_t *wo, int x, int y);
    void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);
+   void (*destroy_func)(struct wo_t *wo);
 } wo_t;
 
 wo_t *create_wo(int x, int y, int width, int height);
-//wo_t *destroy_wo(int x, int y, int width, int height);
+void destroy_wo(wo_t *wo);
 
 #endif

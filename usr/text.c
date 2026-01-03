@@ -45,8 +45,8 @@ void return_fn(void *wo) {
    if(wo_text_o->cursory > wo_text_o->height - 2) {
       wo_text_o->height = wo_text_o->cursory + 12;
       content_height = wo_text_o->height + 25;
-      set_content_height(content_height);
-      scroll_to(wo_text_o->cursory);
+      set_content_height(content_height, -1);
+      scroll_to(wo_text_o->cursory, -1);
    }
    clear();
    redraw();
@@ -85,7 +85,7 @@ void load_file(char *filepath) {
    clear();
    redraw();
    content_height = wo_text_o->height + 25;
-   set_content_height(content_height);
+   set_content_height(content_height, -1);
 }
 
 void path_return() {
@@ -151,10 +151,10 @@ void _start(int argc, char **args) {
    set_window_title("Text Edit");
    
    override_draw((uint32_t)NULL);
-   override_resize((uint32_t)resize);
+   override_resize((uint32_t)resize, -1);
    clear();
 
-   create_scrollbar(NULL);
+   create_scrollbar(NULL, -1);
 
    int height = get_height();
    content_height = height;

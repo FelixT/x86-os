@@ -16,6 +16,17 @@ ui_mgr_t *ui_init(surface_t *surface, int window) {
 
 int ui_add(ui_mgr_t *ui, wo_t *wo) {
    // register wo with ui_mgr
+
+   // find free index
+   for(int i = 0; i < ui->wo_count; i++) {
+      if(!ui->wos[i] || !ui->wos[i]->enabled) {
+         if(ui->wos[i])
+            free(ui->wos[i], sizeof(wo_t));
+         ui->wos[i] = wo;
+         return i;
+      }
+   }
+
    if(ui->wo_count == MAX_WO)
       return -1;
 
@@ -125,12 +136,11 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
    }
 
    // draw on unhover
-   if(hovered != ui->hovered) {
-      if(hovered && hovered->unhover_func) {
+   if(hovered != ui->hovered && hovered && hovered->enabled && hovered->visible) {
+      if(hovered->unhover_func) {
          hovered->unhover_func(hovered, ui->surface, ui->window, 0, 0);
-      } else {
-         if(hovered && hovered->draw_func)
-            hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
+      } else if(hovered->draw_func) {
+         hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
       }
    }
 

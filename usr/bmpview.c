@@ -272,24 +272,24 @@ void toolminus_click(void *wo, void *regs) {
 void zoomout_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   scroll_to(0);
+   scroll_to(0, -1);
    if(scale > 1) scale--;
    sprintf(zoomtext_wo->text, "%i00%", scale);
    clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
-   set_content_height(info->height*scale + 20);
+   set_content_height(info->height*scale + 20, -1);
    end_subroutine();
 }
 
 void zoomin_click(void *wo, void *regs) {
    (void)wo;
    (void)regs;
-   scroll_to(0);
+   scroll_to(0, -1);
    scale++;
    sprintf(zoomtext_wo->text, "%i00%", scale);
    clear();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
-   set_content_height(info->height*scale + 20);
+   set_content_height(info->height*scale + 20, -1);
    end_subroutine();
 }
 
@@ -329,7 +329,7 @@ bool bmp_check() {
 }
 
 void load_img() {
-   scroll_to(0);
+   scroll_to(0, -1);
    // close existing
    if(current_file)
       fclose(current_file);
@@ -365,7 +365,7 @@ void open_file(char *p) {
 
    load_img();
 
-   set_content_height(info->height*scale + 20);
+   set_content_height(info->height*scale + 20, -1);
    
    end_subroutine();
 }
@@ -409,8 +409,9 @@ void save_click(void *wo, void *regs) {
    end_subroutine();
 }
 
-void scroll(int deltaY, int offY) {
+void scroll(int deltaY, int offY, int window) {
    (void)deltaY;
+   (void)window;
    offsetY = offY;
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
    end_subroutine();
@@ -495,7 +496,7 @@ void _start(int argc, char **args) {
    override_drag((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
    override_draw((uint32_t)NULL);
-   override_resize((uint32_t)&resize);
+   override_resize((uint32_t)&resize, -1);
 
    framebuffer = (uint16_t*)(get_surface().buffer);
    bufferwidth = get_surface().width;
@@ -572,8 +573,8 @@ void _start(int argc, char **args) {
 
    redraw();
 
-   create_scrollbar(&scroll);
-   set_content_height(info->height*scale + 20);
+   create_scrollbar(&scroll, -1);
+   set_content_height(info->height*scale + 20, -1);
 
    while(1==1) {
       //asm volatile("pause");

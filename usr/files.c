@@ -112,7 +112,7 @@ void display_items() {
       position++;
    }
 
-   set_content_height(y + 25*offset + 10);
+   set_content_height(y + 25*offset + 10, -1);
 
    input_t *path_data = (input_t *)wo_path->data;
    path_data->valign = true;
@@ -123,6 +123,8 @@ void display_items() {
 
 void path_callback() {
    input_t *path_data = (input_t *)wo_path->data;
+
+   scroll_to(0, -1);
 
    char path[500];
    strcpy(path, path_data->text);
@@ -188,7 +190,7 @@ void click(int x, int y) {
 
    if(clicked_entry->type == FS_TYPE_DIR) {
       offset = 0;
-      scroll_to(0);
+      scroll_to(0, -1);
 
       // update path
       if(clicked_entry->filename[0] == '.') {
@@ -299,8 +301,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    end_subroutine();
 }
 
-void scroll(int deltaY, int offsetY) {
+void scroll(int deltaY, int offsetY, int window) {
    (void)deltaY;
+   (void)window;
    offset = (offsetY + 24) / 25;
    if(offset >= shown_items) offset = shown_items - 1;
    display_items();
@@ -371,7 +374,7 @@ void keypress(uint16_t c, int window) {
       if(offset < 0) offset = 0;
       if(offset >= shown_items) offset = shown_items - 1;
 
-      scroll_to(offset * 25);
+      scroll_to(offset * 25, -1);
       display_items();
 
       redraw();
@@ -431,11 +434,11 @@ void _start(int argc, char **args) {
 
    framebuffer = (uint16_t*)(get_surface().buffer);
 
-   create_scrollbar(&scroll);
+   create_scrollbar(&scroll, -1);
    override_keypress((uint32_t)&keypress, -1);
    override_click((uint32_t)&click, -1);
    override_draw((uint32_t)NULL);
-   override_resize((uint32_t)&resize);
+   override_resize((uint32_t)&resize, -1);
    override_release((uint32_t)&release, -1);
    override_hover((uint32_t)&hover, -1);
    width = get_surface().width;

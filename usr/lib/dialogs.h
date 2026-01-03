@@ -5,6 +5,10 @@
 #include "ui/ui_input.h"
 #include "ui/ui_button.h"
 #include "ui/ui_label.h"
+#include "ui/ui_grid.h"
+#include "ui/ui_groupbox.h"
+#include "ui/ui_canvas.h"
+#include "ui/ui_image.h"
 #include "stdint.h"
 
 typedef struct dialog_t {
@@ -16,6 +20,10 @@ typedef struct dialog_t {
    ui_mgr_t *ui;
    // txtinput specific
    wo_t *input_wo;
+   // filepicker specific
+   fs_dir_content_t *dir;
+   uint16_t *file_icon_data;
+   uint16_t *folder_icon_data;
 } dialog_t;
 
 bool dialog_msg(char *title, char *text);
@@ -23,11 +31,13 @@ int dialog_input(char *text, void *return_func);
 int dialog_colourpicker(uint16_t colour, void *return_func);
 dialog_t *get_dialog(int index);
 dialog_t *dialog_from_window(int window);
+int dialog_filepicker(char *startdir, void *return_func);
 
 #define MAX_DIALOGS 10
 
 #define DIALOG_MSG 0
 #define DIALOG_INPUT 1
 #define DIALOG_COLOURPICKER 2
+#define DIALOG_FILEPICKER 2
 
 #endif

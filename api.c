@@ -159,10 +159,13 @@ void api_return_window_height(registers_t *regs) {
    regs->ebx = window->height - TITLEBAR_HEIGHT;
 }
 
-void api_redraw_window() {
-   // draw
-   api_get_window()->needs_redraw = true;
-   gui_draw_window(get_current_task_window());
+void api_redraw_window(registers_t *regs) {
+   // IN: ebx = window index
+   // check if selected?
+   gui_window_t *window = api_get_cwindow(regs->ebx);
+   if(!window) return;
+   window->needs_redraw = true;
+   gui_draw_window(get_window_index_from_pointer(window));
 }
 
 void api_redraw_pixel(registers_t *regs) {
@@ -202,8 +205,12 @@ void api_override_draw(registers_t *regs) {
 
 void api_override_resize(registers_t *regs) {
    // override resize function with ebx
+   // IN: ebx = function address
+   // IN: ecx = window cindex
    uint32_t addr = regs->ebx;
-   api_get_window()->resize_func = (void *)(addr);
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->resize_func = (void *)(addr);
 }
 
 void api_override_drag(registers_t *regs) {
@@ -239,6 +246,17 @@ void api_override_hover(registers_t *regs) {
    window->hover_func = (void *)(regs->ebx);
 }
 
+void api_override_close(registers_t *regs) {
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   if(regs->ecx == (uint32_t)-1) {
+      debug_printf("Cannot override close on main window\n");
+      return;
+   }
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->close_func = (void *)(regs->ebx);
+}
 
 void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
@@ -285,8 +303,9 @@ void api_draw_bmp(registers_t *regs) {
 }
 
 void api_clear_window(registers_t *regs) {
-   (void)regs;
-   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   // IN: ebx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ebx);
+   if(!window || window->closed) return;
    window_clearbuffer(window, window->bgcolour);
    window->text_index = 0;
    window->text_x = getFont()->padding;
@@ -700,21 +719,29 @@ void api_new_file(registers_t *regs) {
 
 void api_create_scrollbar(registers_t *regs) {
    // IN: ebx - callback (int deltaY, int offsetY)
-   window_create_scrollbar(api_get_window(), (void*)regs->ebx);
+   // IN: ecx - window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window_create_scrollbar(window, (void*)regs->ebx);
 }
 
 void api_set_scrollable_height(registers_t *regs) {
    // IN: ebx - height
+   // IN: ecx - window cindex
    // OUT: ebx - new window width (not including scrollbar)
-   gui_window_t *window = api_get_window();
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
    window_set_scrollable_height(regs, window, regs->ebx);
    regs->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
 }
 
 void api_scroll_to(registers_t *regs) {
    // IN: ebx - y
-   setSelectedWindowIndex(get_current_task_window());
-   window_scroll_to(regs->ebx);
+   // IN: ecx - window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   setSelectedWindowIndex(get_window_index_from_pointer(window));
+   window_scroll_to(regs, regs->ebx);
 }
 
 void api_set_window_size(registers_t *regs) {

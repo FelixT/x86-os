@@ -2,24 +2,44 @@
 #include <stddef.h>
 
 wo_t *create_wo(int x, int y, int width, int height) {
-   wo_t *obj = malloc(sizeof(wo_t));
-   obj->x = x;
-   obj->y = y;
-   obj->width = width;
-   obj->height = height;
-   obj->visible = true;
-   obj->enabled = true;
-   obj->hovering = false;
-   obj->clicked = false;
-   obj->selected = false;
-   obj->needs_redraw = false;
-   obj->data = NULL;
-   obj->draw_func = NULL;
-   obj->click_func = NULL;
-   obj->release_func = NULL;
-   obj->unfocus_func = NULL;
-   obj->hover_func = NULL;
-   obj->unhover_func = NULL;
-   obj->drag_func = NULL;
-   return obj;
+   wo_t *wo = malloc(sizeof(wo_t));
+   wo->x = x;
+   wo->y = y;
+   wo->width = width;
+   wo->height = height;
+   wo->visible = true;
+   wo->enabled = true;
+   wo->hovering = false;
+   wo->clicked = false;
+   wo->selected = false;
+   wo->needs_redraw = false;
+
+   wo->data = NULL;
+   wo->draw_func = NULL;
+   wo->click_func = NULL;
+   wo->release_func = NULL;
+   wo->unfocus_func = NULL;
+   wo->hover_func = NULL;
+   wo->unhover_func = NULL;
+   wo->drag_func = NULL;
+   wo->destroy_func = NULL;
+   return wo;
+}
+
+void destroy_wo(wo_t *wo) {
+   if(wo && wo->destroy_func)
+      wo->destroy_func(wo);
+
+   wo->enabled = false;
+   wo->visible = false;
+   
+   wo->data = NULL;
+   wo->draw_func = NULL;
+   wo->click_func = NULL;
+   wo->release_func = NULL;
+   wo->unfocus_func = NULL;
+   wo->hover_func = NULL;
+   wo->unhover_func = NULL;
+   wo->drag_func = NULL;
+   wo->destroy_func = NULL;
 }

@@ -52,6 +52,7 @@ typedef struct gui_window_t {
    void (*hover_func)(int x, int y);
    void (*resize_func)(uint32_t fb, uint32_t w, uint32_t h);
    void (*release_func)();
+   void (*close_func)(void *window);
    void (*checkcmd_func)(void *regs, void *window); // override terminal behaviour
    void (*read_func)(void *regs, char *buffer); // kernel override terminal behaviour
    int read_task; // task to switch on read

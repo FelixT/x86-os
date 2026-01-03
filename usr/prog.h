@@ -65,11 +65,16 @@ static inline void write_newline() {
    );
 }
 
-static inline void redraw() {
+static inline void redraw_w(int w) {
    asm volatile(
       "int $0x30"
-      :: "a" (9)
+      :: "a" (9),
+      "b" (w)
    );
+}
+
+static inline void redraw() {
+   redraw_w(-1);
 }
 
 static inline void redraw_pixel(int x, int y) {
@@ -209,10 +214,15 @@ static inline void write_strat(char *str, int x, int y, int colour) {
    write_strat_w(str, x, y, colour, -1);
 }
 
-static inline void clear() {
+static inline void clear_w(int w) {
    asm volatile(
       "int $0x30"
-      :: "a" (23));
+      :: "a" (23),
+      "b" (w));
+}
+
+static inline void clear() {
+   clear_w(-1);
 }
 
 // from fs.h
@@ -255,11 +265,12 @@ static inline void debug_write_str(char *str) {
    );
 }
 
-static inline void override_resize(uint32_t addr) {
+static inline void override_resize(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (34),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
    );
 }
 
@@ -285,6 +296,15 @@ static inline void override_keypress(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (64),
+      "b" (addr),
+      "c" (window)
+   );
+}
+
+static inline void override_close(uint32_t addr, int window) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (27),
       "b" (addr),
       "c" (window)
    );
@@ -507,31 +527,34 @@ static inline uint32_t *sbrk(uint32_t increment) {
    return (void*)addr;
 }
 
-static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY)) {
+static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY, int window), int window) {
    asm volatile (
       "int $0x30"
       :: "a" (54),
-      "b" ((uint32_t)callback)
+      "b" ((uint32_t)callback),
+      "c" ((uint32_t)window)
    );
 }
 
-static inline uint32_t set_content_height(uint32_t height) {
+static inline uint32_t set_content_height(uint32_t height, int window) {
    uint32_t width;
    asm volatile (
       "int $0x30;movl %%ebx, %0;"
       : "=r" (width)
       : "a" (55),
-      "b" (height)
+      "b" (height),
+      "c" (window)
    );
 
    return width;
 }
 
-static inline void scroll_to(uint32_t y) {
+static inline void scroll_to(uint32_t y, int window) {
    asm volatile (
       "int $0x30"
       :: "a" (56),
-      "b" (y)
+      "b" (y),
+      "c" (window)
    );
 }
 

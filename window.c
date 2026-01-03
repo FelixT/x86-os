@@ -45,7 +45,7 @@ void window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex) 
 }
 
 void window_clearbuffer(gui_window_t *window, uint16_t colour) {
-   for(int i = 0; i < window->width*(window->height-TITLEBAR_HEIGHT); i++) {
+   for(int i = 0; i < window->surface.width*(window->surface.height); i++) {
       window->framebuffer[i] = colour;
    }
 }
@@ -250,11 +250,12 @@ void window_scroll_do_callback(void *regs, void *callback, int deltaY, int offse
          (*(void(*)(int, int))callback)(deltaY, offsetY);
       } else {
          gui_interrupt_switchtask(regs);
-         uint32_t *args = malloc(sizeof(int) * 2);
-         args[1] = deltaY;
-         args[0] = offsetY;
+         uint32_t *args = malloc(sizeof(int) * 3);
+         args[2] = deltaY;
+         args[1] = offsetY;
+         args[0] = get_cindex();
 
-         task_call_subroutine(regs, "scroll", (uint32_t)(callback), args, 2);
+         task_call_subroutine(regs, "scroll", (uint32_t)(callback), args, 3);
       }
    } else {
       window_default_scroll(deltaY);
@@ -362,12 +363,12 @@ void window_reset_scroll() {
    }
 }
 
-void window_scroll_to(int y) {
+void window_scroll_to(void *regs, int y) {
    gui_window_t *window = getSelectedWindow();
    if(!window || !window->scrollbar) return;
    
    int scrollableHeight = window->scrollable_content_height - (window->height - TITLEBAR_HEIGHT);
-   if(scrollableHeight <= 0) return;
+   if(scrollableHeight <= 0) scrollableHeight = 0;
    
    int scrolledY = y;
    if(scrolledY < 0) scrolledY = 0;
@@ -378,9 +379,10 @@ void window_scroll_to(int y) {
    
    windowobj_t *scroller = (windowobj_t*)window->scrollbar->children[0];
    int scrollarea = window->height - TITLEBAR_HEIGHT - 28;
-   scroller->y = 14 + (window->scrolledY * (scrollarea - scroller->height)) / scrollableHeight;
+   if(scrollableHeight > 0)
+      scroller->y = 14 + (window->scrolledY * (scrollarea - scroller->height)) / scrollableHeight;
    
-   window_scroll_do_callback(NULL, window->scrollbar->return_func, deltaY, window->scrolledY);
+   window_scroll_do_callback(regs, window->scrollbar->return_func, deltaY, window->scrolledY);
 }
 
 void window_scroll_start(void *wo, void *regs) {
@@ -514,14 +516,15 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
          int task = get_task_from_window(index);
          if(regs && task > -1 && window->resize_func) {
             if(!switch_to_task(task, regs)) return;
-            uint32_t *args = malloc(sizeof(uint32_t) * 3);
-            args[2] = (uint32_t)window->framebuffer;
-            args[1] = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
-            args[0] = window->height - TITLEBAR_HEIGHT;
-            for(uint32_t i = (uint32_t)window->framebuffer/0x1000; i < ((uint32_t)window->framebuffer+window->framebuffer_size+0xFFF)/0x1000; i++)
-               map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1);
+            uint32_t *args = malloc(sizeof(uint32_t) * 4);
+            args[3] = (uint32_t)window->framebuffer;
+            args[2] = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
+            args[1] = window->height - TITLEBAR_HEIGHT;
+            args[0] = get_cindex_from_window(window);
+            map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
+            map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
             window_clearbuffer(window, window->bgcolour);
-            task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 3);
+            task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 4);
          }
       }
    }

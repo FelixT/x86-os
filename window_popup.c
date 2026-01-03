@@ -26,8 +26,12 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    int parent_index = get_window_index_from_pointer(dialog->parent);
 
    // launch callback if exists
-   if(dialog->callback_func == NULL)
+   if(dialog->callback_func == NULL) {
+      // self destruct
+      debug_printf("Closing window %i\n", index);
+      window_close(NULL, index);
       return;
+   }
 
    if(get_task_from_window(getSelectedWindowIndex()) == -1) {
       // call as kernel
@@ -66,6 +70,7 @@ window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *p
 
    window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
+   dialog->callback_func = NULL;
    window->state = (void*)dialog;
    window->state_size = sizeof(window_popup_dialog_t);
    window->resizable = false;

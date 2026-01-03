@@ -13,7 +13,7 @@ void draw_grid_cell(wo_t *grid, surface_t *surface, int window, int offsetX, int
 
    uint16_t bg = cell->hovering ? grid_data->colour_bg_hovered : grid_data->colour_bg;
 
-   draw_rect(surface, bg, grid->x + cellOffsetX + 1, grid->y + cellOffsetY + 1, cellWidth - 2, cellHeight - 2);
+   draw_rect(surface, bg, grid->x + cellOffsetX + 1 + offsetX, grid->y + cellOffsetY + offsetY + 1, cellWidth - 2, cellHeight - 2);
    
    // cell content
    for(int k = 0; k < cell->child_count; k++) {
@@ -21,7 +21,6 @@ void draw_grid_cell(wo_t *grid, surface_t *surface, int window, int offsetX, int
       if(child && child->draw_func)
          child->draw_func(child, surface, window, grid->x + offsetX + cellOffsetX, grid->y + offsetY + cellOffsetY);
    }
-      
 }
 
 void draw_grid(wo_t *grid, surface_t *surface, int window, int offsetX, int offsetY) {
@@ -32,8 +31,8 @@ void draw_grid(wo_t *grid, surface_t *surface, int window, int offsetX, int offs
    uint16_t dark = grid_data->colour_border_dark;
    uint16_t bg = grid_data->colour_bg;
 
-   int x = grid->x;
-   int y = grid->y;
+   int x = grid->x + offsetX;
+   int y = grid->y + offsetY;
    int width = grid->width;
    int height = grid->height;
 
@@ -95,8 +94,10 @@ void grid_click(wo_t *grid, surface_t *surface, int window, int x, int y, int of
          // clicked cell
          if(x >= cellOffsetX && x < cellOffsetX + cellWidth
          && y >= cellOffsetY && y < cellOffsetY + cellHeight) {
-            if(grid_data->click_func)
-               grid_data->click_func(i, j);
+            if(grid_data->click_func) {
+               if(grid_data->click_func(grid, window, i, j))
+                  return;
+            }
          } else {
             continue;
          }
@@ -111,7 +112,7 @@ void grid_click(wo_t *grid, surface_t *surface, int window, int x, int y, int of
                   child->click_func(child, surface, window, x - (child->x + cellOffsetX), y - (child->y + cellOffsetY), offsetX + grid->x + cellOffsetX, offsetY + grid->y + cellOffsetY);
                
                child->clicked = true;
-               child->draw_func(child, surface, window, grid->x + cellOffsetX, grid->y + cellOffsetY);
+               child->draw_func(child, surface, window, grid->x + cellOffsetX + offsetX, grid->y + cellOffsetY + offsetY);
                child->clicked = false;
             }
          }
@@ -269,6 +270,27 @@ void grid_unhover(wo_t *grid, surface_t *surface, int window, int offsetX, int o
    }
 }
 
+void destroy_grid(wo_t *grid) {
+   grid_t *grid_data = grid->data;
+   for(int i = 0; i < grid_data->rows*grid_data->cols; i++) {
+   }
+
+   for(int i = 0; i < grid_data->rows; i++) {
+      for(int j = 0; j < grid_data->cols; j++) {
+         for(int k = 0; k < grid_data->cells[i][j].child_count; j++) {
+         wo_t *child = grid_data->cells[i][j].children[k];
+            if(child)
+               destroy_wo(child);
+         }
+      }
+
+      free(grid_data->cells[i], sizeof(grid_cell_t) * grid_data->cols);
+   }
+   free(grid_data->cells, sizeof(grid_cell_t*) * grid_data->rows);
+
+   free(grid_data, sizeof(grid_data));
+}
+
 wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    wo_t *grid = create_wo(x, y, width, height);
    if(!grid) return NULL;
@@ -303,6 +325,7 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid->unhover_func = &grid_unhover;
    grid->unfocus_func = &grid_unfocus;
    grid->keypress_func = &grid_keypress;
+   grid->destroy_func = &destroy_grid;
 
    return grid;
 }
