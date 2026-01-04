@@ -25,6 +25,7 @@ void api_override_drag(registers_t *regs);
 void api_override_release(registers_t *regs);
 void api_override_checkcmd(registers_t *regs);
 void api_override_hover(registers_t *regs);
+void api_override_rightclick(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_free(registers_t *regs);

@@ -16,6 +16,7 @@ int items = 0;
 ui_mgr_t *ui = NULL;
 wo_t *grid;
 surface_t surface;
+int scrollOffsetY = 0;
 
 void app_launch(wo_t *label) {
    button_t *label_data = label->data;  
@@ -49,6 +50,8 @@ void scroll(int deltaY, int offsetY, int window) {
    if(ui)
       ui_draw(ui);
    redraw();
+
+   scrollOffsetY = offsetY;
 
    end_subroutine();
 }
@@ -93,6 +96,18 @@ void resize() {
    end_subroutine();
 }
 
+void keypress(int c, int window) {
+   if(c == 0x100)
+      scroll_to(scrollOffsetY - 10, window);
+   else if(c == 0x101)
+      scroll_to(scrollOffsetY + 10, window);
+   else if(c == 0x1B) {
+      close_window(-1);
+      exit(0);
+   }
+   end_subroutine();
+}
+
 void _start() {
    
    set_window_size(120, 280);
@@ -101,11 +116,13 @@ void _start() {
    fs_dir_content_t *content = read_dir("/sys");
    if(content->entries)
       sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_filename);
+
    override_draw(0);
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
    override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
+   override_keypress((uint32_t)&keypress, -1);
 
    items = 0;
 

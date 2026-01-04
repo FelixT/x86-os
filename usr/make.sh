@@ -23,7 +23,7 @@ $GCC -c usr/lib/draw.c $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
 
-export UI_LIB="o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o"
+export UI_LIB="o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o"
 
 # c progs
 $GCC $FLAGS usr/prog3.c -o o/prog3.elf 

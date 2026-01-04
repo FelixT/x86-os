@@ -11,3 +11,4 @@ $GCC $FLAGS -c usr/lib/ui/ui_canvas.c -o o/lib/ui_canvas.o
 $GCC $FLAGS -c usr/lib/ui/ui_grid.c -o o/lib/ui_grid.o
 $GCC $FLAGS -c usr/lib/ui/ui_groupbox.c -o o/lib/ui_groupbox.o
 $GCC $FLAGS -c usr/lib/ui/ui_image.c -o o/lib/ui_image.o
+$GCC $FLAGS -c usr/lib/ui/ui_checkbox.c -o o/lib/ui_checkbox.o

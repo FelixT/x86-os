@@ -16,6 +16,7 @@ typedef struct label_t {
    bool filled;
    bool valign;
    bool halign;
+   int padding_left; // if halign = false
    void (*release_func)(wo_t *wo);
 } label_t;
 

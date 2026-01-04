@@ -12,7 +12,7 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
    uint16_t border_light = rgb16(235, 235, 235);
    uint16_t border_dark = rgb16(145, 145, 145);
    uint16_t bg = rgb16(255, 255, 255);
-   uint16_t bg_selected = rgb16(230, 230, 230);
+   uint16_t bg_selected = rgb16(222, 222, 222);
    uint16_t bg_hover = rgb16(243, 243, 243);
    uint16_t bg_item = rgb16(250, 250, 250);
 
@@ -32,7 +32,7 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
    draw_line(surface, border_light, x, y + menu->height - 1, false, menu->width);
    draw_line(surface, border_light, x + menu->width - 1, y, true, menu->height);
 
-   int item_height = get_font_info().height + 6;
+   int item_height = get_font_info().height + 7;
 
    // draw background
    int offset_y = menu_data->item_count * item_height;
@@ -44,8 +44,8 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
       int item_y = y + (i * item_height) + 1;
       // highlight if selected
       if(i == menu_data->selected_index) {
-         write_strat_w(item->text, x + 5, item_y + 5, 0xFFFF, window);
          draw_rect(surface, bg_selected, x + 1, item_y, menu->width - 2, item_height);
+         write_strat_w(item->text, x + 5, item_y + 5, border_light, window);
       } else if(i == menu_data->hover_index && menu->hovering) {
          draw_rect(surface, bg_hover, x + 1, item_y, menu->width - 2, item_height);
       } else {
@@ -99,7 +99,7 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y, int of
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
 
-   int item_height = get_font_info().height + 6;
+   int item_height = get_font_info().height + 7;
    int index = y / item_height;
 
    if(index < 0 || index >= menu_data->item_count) {
@@ -141,7 +141,7 @@ void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y, int of
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
 
-   int item_height = get_font_info().height + 6;
+   int item_height = get_font_info().height + 7;
    int index = y / item_height;
 
    int old_index = menu_data->hover_index;

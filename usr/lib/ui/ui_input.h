@@ -17,6 +17,7 @@ typedef struct input_t {
    bool bordered;
    bool valign;
    bool halign;
+   int padding_left; // if halign = false
    void (*return_func)(wo_t *wo, int window);
 
    int cursor_pos;

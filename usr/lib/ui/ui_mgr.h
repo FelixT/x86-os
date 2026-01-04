@@ -17,6 +17,7 @@ typedef struct ui_mgr_t {
    wo_t *focused;
    wo_t *hovered;
    wo_t *clicked;
+   wo_t *default_menu;
 } ui_mgr_t;
 
 ui_mgr_t *ui_init(surface_t *surface, int window);
@@ -24,9 +25,11 @@ void ui_destroy(ui_mgr_t *ui);
 int ui_add(ui_mgr_t *ui, wo_t *wo);
 void ui_remove(ui_mgr_t *ui, wo_t *wo);
 void ui_draw(ui_mgr_t *ui);
+void ui_redraw(ui_mgr_t *ui);
 void ui_click(ui_mgr_t *ui, int x, int y);
 void ui_release(ui_mgr_t *ui, int x, int y);
 void ui_keypress(ui_mgr_t *ui, uint16_t c);
 void ui_hover(ui_mgr_t *ui, int x, int y);
+void ui_rightclick(ui_mgr_t *ui, int x, int y);
 
 #endif

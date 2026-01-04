@@ -9,6 +9,7 @@
 #include "ui/ui_groupbox.h"
 #include "ui/ui_canvas.h"
 #include "ui/ui_image.h"
+#include "ui/ui_menu.h"
 #include "stdint.h"
 
 typedef struct dialog_t {
@@ -24,6 +25,8 @@ typedef struct dialog_t {
    fs_dir_content_t *dir;
    uint16_t *file_icon_data;
    uint16_t *folder_icon_data;
+   int content_height;
+   int content_offsetY;
 } dialog_t;
 
 bool dialog_msg(char *title, char *text);
@@ -32,6 +35,9 @@ int dialog_colourpicker(uint16_t colour, void *return_func);
 dialog_t *get_dialog(int index);
 dialog_t *dialog_from_window(int window);
 int dialog_filepicker(char *startdir, void *return_func);
+void dialog_init_overrides(int window);
+int get_free_dialog();
+void dialog_init(dialog_t *dialog, int window);
 
 #define MAX_DIALOGS 10
 

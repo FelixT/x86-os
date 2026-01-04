@@ -271,7 +271,7 @@ void window_scroll_callback(void *wo, void *regs, int x, int y) {
    int scrollArea = getSelectedWindow()->height - TITLEBAR_HEIGHT - 28;
    if(scrollArea - scroller->height <= 0) {
       getSelectedWindow()->scrollbar->visible = false;
-      window_reset_scroll();
+      window_scroll_to(regs, 0);
       return;
    }
 
@@ -350,17 +350,6 @@ void window_scroll_down_callback(void *wo, void *regs) {
       scroller->y = 14 + scrollarea - scroller->height;
 
    window_scroll_do_callback(regs, scrollbar->return_func, deltaY, window->scrolledY);
-}
-
-void window_reset_scroll() {
-   gui_window_t *window = getSelectedWindow();
-   if(window->scrollbar == NULL) return;
-   if(window->scrolledY > 0) {
-      window_default_scroll(-window->scrolledY);
-      window->scrolledY = 0;
-      windowobj_t *scroller = window->scrollbar->children[0];
-      scroller->y = 14;
-   }
 }
 
 void window_scroll_to(void *regs, int y) {
@@ -528,6 +517,4 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
          }
       }
    }
-
-   //window_reset_scroll();
 }

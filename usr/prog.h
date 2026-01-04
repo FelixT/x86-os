@@ -310,6 +310,15 @@ static inline void override_close(uint32_t addr, int window) {
    );
 }
 
+static inline void override_rightclick(uint32_t addr, int window) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (17),
+      "b" (addr),
+      "c" (window)
+   );
+}
+
 static inline void override_hover(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
@@ -359,7 +368,8 @@ typedef enum {
    SETTING_WIN_TITLEBARCOLOUR2,
    SETTING_SYS_FONT_PATH,
    SETTING_BGCOLOUR,
-   SETTINGS_SYS_FONT_PADDING
+   SETTINGS_SYS_FONT_PADDING,
+   SETTING_THEME_GRADIENTSTYLE
 } setting_index_t;
 
 static inline bool set_setting(setting_index_t setting, uint32_t value) {

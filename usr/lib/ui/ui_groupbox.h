@@ -12,5 +12,6 @@ typedef struct groupbox_t {
 
 wo_t *create_groupbox(int x, int y, int width, int height, char *label);
 void groupbox_add(wo_t *groupbox, wo_t *child);
+void groupbox_resize(wo_t *groupbox, int width, int height);
 
 #endif

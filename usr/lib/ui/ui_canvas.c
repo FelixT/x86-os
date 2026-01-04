@@ -53,13 +53,12 @@ void canvas_click(wo_t *canvas, surface_t *surface, int window, int x, int y, in
       wo_t *child = canvas_data->children[i];
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
-         if(child->click_func) {
+         if(child->click_func)
             child->click_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
-         } else {
-            child->clicked = true;
+         child->clicked = true;
+         if(child->draw_func)
             child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
-            child->clicked = false;
-         }
+         child->clicked = false;
       }
    }
 }

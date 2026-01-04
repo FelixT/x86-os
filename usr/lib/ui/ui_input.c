@@ -84,15 +84,15 @@ void draw_input(wo_t *input, surface_t *surface, int window, int offsetX, int of
    }
 
    // center text
-   int text_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+1);
-   int text_y = y + (input_data->valign ? (height - text_height) / 2 : get_font_info().padding+1);
+   int text_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+input_data->padding_left);
+   int text_y = y + (input_data->valign ? (height - text_height) / 2 : get_font_info().padding+input_data->padding_left);
 
    write_strat_w(display_text, text_x, text_y, txt, window);
 
    // draw cursor
-   int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width) + 1;
+   int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+input_data->padding_left-1) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width) + 1;
    if(input->selected && cursor_x <= x + width) {
-      draw_line(surface, light, cursor_x, text_y, true, get_font_info().height);
+      draw_line(surface, light, cursor_x, text_y-1, true, get_font_info().height+2);
    }
 }
 
@@ -162,6 +162,7 @@ wo_t *create_input(int x, int y, int width, int height) {
    input_data->return_func = NULL;
    input_data->text[0] = '\0';
    input_data->cursor_pos = 0;
+   input_data->padding_left = 1;
 
    input->type = WO_INPUT;
    input->data = input_data;

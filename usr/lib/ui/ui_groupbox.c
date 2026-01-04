@@ -126,3 +126,15 @@ void groupbox_add(wo_t *groupbox, wo_t *child) {
    wo_t *groupbox_canvas = ((groupbox_t*)groupbox->data)->canvas;
    canvas_add(groupbox_canvas, child);
 }
+
+void groupbox_resize(wo_t *groupbox, int width, int height) {
+   if(groupbox == NULL || groupbox->data == NULL) return;
+   groupbox_t *groupbox_data = groupbox->data;
+
+   groupbox->width = width;
+   groupbox->height = height;
+
+   wo_t *canvas = groupbox_data->canvas;
+   canvas->width = width - 2;
+   canvas->height = height - (get_font_info().height + 2) - 1;
+}

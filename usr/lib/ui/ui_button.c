@@ -134,6 +134,7 @@ void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int 
    // center text
    int text_x = x + (width - text_width) / 2;
    int text_y = y + (height - get_font_info().height) / 2;
+   write_strat_w(display_label, text_x, text_y + 1, button->clicked ? 0xFFFF : light, window); // shadow
    write_strat_w(display_label, text_x, text_y, txt, window);
 }
 

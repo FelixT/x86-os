@@ -80,6 +80,11 @@ int click_grid(wo_t *wo, int window, int row, int col) {
    return 0;
 }
 
+void rightclick(int x, int y, int window) {
+   ui_rightclick(ui, x, y);
+   end_subroutine();
+}
+
 void _start() {
 
    set_window_title("Prog6");
@@ -93,6 +98,7 @@ void _start() {
    override_keypress((uint32_t)&keypress, -1);
    override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
+   override_rightclick((uint32_t)&rightclick, -1);
 
    // create & register elements
    wo_t *btn = create_button(10, 40, 150, 20, "Test");
@@ -107,7 +113,7 @@ void _start() {
    ui_add(ui, input);
 
    wo_t *togglemenu = create_button(170, 95, 80, 20, "Menu");
-   ((button_t*)togglemenu->data)->release_func = &toggle_menu;
+   set_button_release(togglemenu, &toggle_menu);
    ui_add(ui, togglemenu);
 
    menu = create_menu(10, 95, 150, 65);
@@ -136,6 +142,13 @@ void _start() {
 
    // draw
    ui_draw(ui);
+
+   // setup rightclick menu
+   ui->default_menu = create_menu(0, 0, 120, 75);
+   ui->default_menu->visible = false;
+   add_menu_item(ui->default_menu, "Default 1", NULL);
+   add_menu_item(ui->default_menu, "Default 2", NULL);
+   ui_add(ui, ui->default_menu);
 
    while(true) {
       yield();

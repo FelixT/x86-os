@@ -91,7 +91,7 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
    }
 
    // center text
-   int text_x = x + (label_data->halign ? (width - text_width) / 2 : 0);
+   int text_x = x + (label_data->halign ? (width - text_width) / 2 : label_data->padding_left);
    int text_y = y + (label_data->valign ? (height - text_height) / 2 : 0);
 
    for(int i = 0; i < strlen(display_label); i++) {
@@ -145,6 +145,7 @@ wo_t *create_label(int x, int y, int width, int height, char *text) {
    label_data->filled = false;
    label_data->valign = true;
    label_data->halign = true;
+   label_data->padding_left = 0;
 
    label->data = label_data;
    label->draw_func = &draw_label;

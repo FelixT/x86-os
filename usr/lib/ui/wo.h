@@ -17,7 +17,8 @@ typedef enum {
    WO_SCROLLER,
    WO_GRID,
    WO_GROUPBOX,
-   WO_IMAGE
+   WO_IMAGE,
+   WO_CHECKBOX
 } wo_type_t;
 
 typedef struct wo_t {

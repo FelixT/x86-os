@@ -200,6 +200,7 @@ void api_override_mouseclick(registers_t *regs) {
 void api_override_draw(registers_t *regs) {
    // override draw function with ebx
    uint32_t addr = regs->ebx;
+   if(addr != 0) return;
    api_get_window()->draw_func = (void *)(addr);
 }
 
@@ -256,6 +257,14 @@ void api_override_close(registers_t *regs) {
    gui_window_t *window = api_get_cwindow(regs->ecx);
    if(!window) return;
    window->close_func = (void *)(regs->ebx);
+}
+
+void api_override_rightclick(registers_t *regs) {
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->rightclick_func = (void *)(regs->ebx);
 }
 
 void api_end_subroutine(registers_t *regs) {
@@ -881,7 +890,8 @@ void api_set_setting(registers_t *regs) {
          free((uint32_t)entry, sizeof(fat_dir_t));
          break;
       case SETTING_DESKTOP_ENABLED:
-         settings->desktop_enabled = (bool)regs->ebx;
+         settings->desktop_enabled = (bool)regs->ecx;
+         gui_redrawall();
          break;
       case SETTING_SYS_FONT_PATH:
          uint32_t physical = page_getphysical(get_current_task_pagedir(), regs->ecx);
@@ -924,6 +934,9 @@ void api_set_setting(registers_t *regs) {
          break;
       case SETTINGS_SYS_FONT_PADDING:
          getFont()->padding = (int)regs->ecx;
+         break;
+      case SETTING_THEME_GRADIENTSTYLE:
+         settings->titlebar_gradientstyle = (int)regs->ecx;
          break;
       default:
          regs->ebx = -1;
@@ -975,6 +988,9 @@ void api_get_setting(registers_t *regs) {
          break;
       case SETTINGS_SYS_FONT_PADDING:
          regs->ebx = (uint32_t)getFont()->padding;
+         break;
+      case SETTING_THEME_GRADIENTSTYLE:
+         regs->ebx = (uint32_t)settings->titlebar_gradientstyle;
          break;
       default:
          regs->ebx = -1;

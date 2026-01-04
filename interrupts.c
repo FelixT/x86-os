@@ -203,9 +203,9 @@ void software_handler(registers_t *regs) {
       case 16:
          api_malloc(regs);
          break;
-      //case 17:
-      //   api_fat_get_bpb(regs);
-      //   break;
+      case 17:
+         api_override_rightclick(regs);
+         break;
       //case 18:
       //   api_fat_read_root(regs);
       //   break;

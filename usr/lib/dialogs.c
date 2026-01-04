@@ -76,6 +76,32 @@ void dialog_close(wo_t *wo, int window) {
    close_window(window);
 }
 
+void dialog_resize(uint16_t fb, int width, int height, int window) {
+   (void)fb;
+   (void)width;
+   (void)height;
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Can't find window %i", window);
+      end_subroutine();
+      return;
+   }
+   dialog->surface = get_surface_w(window);
+   dialog->ui->surface = &dialog->surface;
+   ui_draw(dialog->ui);
+   end_subroutine();
+}
+
+void dialog_rightclick(int x, int y, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_rightclick(dialog->ui, x, y);
+   end_subroutine();
+}
+
 void dialog_window_close(int window) {
    dialog_close(NULL, window);
    end_subroutine();
@@ -91,8 +117,44 @@ void dialog_keypress(int c, int window) {
    if(c == 0x1B) {
       dialog_close(NULL, window);
    }
+   if(!dialog->ui->focused) {
+      if(c == 0x100) {
+         dialog->content_offsetY -= 15;
+         if(dialog->content_offsetY < 0) dialog->content_offsetY = 0;
+         scroll_to(dialog->content_offsetY, window);
+      } else if(c == 0x101) {
+         dialog->content_offsetY += 15;
+         if(dialog->content_offsetY > dialog->content_height - dialog->surface.height)
+            dialog->content_offsetY = dialog->content_height - dialog->surface.height;
+         scroll_to(dialog->content_offsetY, window);
+      }
+   }
 
    end_subroutine();
+}
+
+void dialog_defaultmenu_close(wo_t *menu, int item, int window) {
+   dialog_close(NULL, window);
+}
+
+void dialog_defaultmenu_settings(wo_t *menu, int item, int window) {
+   launch_task("/sys/settings.elf", 0, NULL, false);
+}
+
+void dialog_init(dialog_t *dialog, int window) {
+   dialog->window = window;
+   dialog->surface = get_surface_w(window);
+   dialog->ui = ui_init(&dialog->surface, window);
+   dialog->active = true;
+   dialog->callback = NULL;
+   dialog->content_height = 0;
+   dialog_init_overrides(window);
+   // setup default menu
+   dialog->ui->default_menu = create_menu(0, 0, 105, 40);
+   dialog->ui->default_menu->visible = false;
+   add_menu_item(dialog->ui->default_menu, "Close", &dialog_defaultmenu_close);
+   add_menu_item(dialog->ui->default_menu, "Settings", &dialog_defaultmenu_settings);
+   ui_add(dialog->ui, dialog->ui->default_menu);
 }
 
 bool dialog_msg(char *title, char *text) {
@@ -101,19 +163,8 @@ bool dialog_msg(char *title, char *text) {
    if(index < 0) return false;
    dialog_t *msg = dialogs[index];
 
-   msg->window = create_window(260, 100);
-   msg->active = true;
+   dialog_init(msg, create_window(260, 100));
    msg->type = DIALOG_MSG;
-
-   // create ui mgr
-   msg->surface = get_surface_w(msg->window);
-   msg->ui = ui_init(&msg->surface, msg->window);
-
-   override_click((uint32_t)&dialog_click, msg->window);
-   override_release((uint32_t)&dialog_release, msg->window);
-   override_hover((uint32_t)&dialog_hover, msg->window);
-   override_keypress((uint32_t)&dialog_keypress, msg->window);
-   override_close((uint32_t)&dialog_window_close, msg->window);
 
    wo_t *label_wo = create_label(15, y, 260 - 30, 20, text);
    ui_add(msg->ui, label_wo);
@@ -163,22 +214,11 @@ int dialog_input(char *text, void *return_func) {
    int index = get_free_dialog();
    if(index < 0) return false;
    dialog_t *input = dialogs[index];
-   input->window = create_window(260, 100);
+   dialog_init(input, create_window(260, 100));
    input->callback = return_func;
-   input->active = true;
    input->type = DIALOG_INPUT;
 
    set_window_title_w(input->window, "Input Dialog");
-
-   // create ui mgr
-   input->surface = get_surface_w(input->window);
-   input->ui = ui_init(&input->surface, input->window);
-
-   override_click((uint32_t)&dialog_click, input->window);
-   override_release((uint32_t)&dialog_release, input->window);
-   override_hover((uint32_t)&dialog_hover, input->window);
-   override_keypress((uint32_t)&dialog_keypress, input->window);
-   override_close((uint32_t)&dialog_window_close, input->window);
 
    int y = 10;
    
@@ -368,15 +408,11 @@ int dialog_colourpicker(uint16_t colour, void *return_func) {
    int index = get_free_dialog();
    if(index < 0) return false;
    dialog_t *dialog = dialogs[index];
-   dialog->window = create_window(320, 340);
+   dialog_init(dialog, create_window(320, 340));
    dialog->callback = return_func;
-   dialog->active = true;
    dialog->type = DIALOG_COLOURPICKER;
 
    set_window_title_w(dialog->window, "Colour Picker");
-
-   dialog->surface = get_surface_w(dialog->window);
-   dialog->ui = ui_init(&dialog->surface, dialog->window);
 
    int x = (320-165)/2;
 
@@ -408,11 +444,7 @@ int dialog_colourpicker(uint16_t colour, void *return_func) {
    dialog_colourpicker_draw(dialog);
 
    override_click((uint32_t)&dialog_colourpicker_click, dialog->window);
-   override_hover((uint32_t)&dialog_hover, dialog->window);
-   override_release((uint32_t)&dialog_release, dialog->window);
    override_drag((uint32_t)&dialog_colourpicker_drag, dialog->window);
-   override_keypress((uint32_t)&dialog_keypress, dialog->window);
-   override_close((uint32_t)&dialog_window_close, dialog->window);
    override_resize((uint32_t)&dialog_colourpicker_resize, dialog->window);
 
    return index;
@@ -518,7 +550,8 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
    if(box_height < 200)
       box_height = 200;
 
-   int newwidth = set_content_height(ui->wos[4]->y + box_height + 10, dialog->window);
+   dialog->content_height = box_height + ui->wos[4]->y + 10;
+   int newwidth = set_content_height(dialog->content_height, dialog->window);
 
    if(newwidth != width) {
       ui->wos[3]->x = newwidth - ui->wos[3]->width - 10; // reposition cancel btn
@@ -624,6 +657,7 @@ void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
       debug_println("Couldn't find dialog for window %i\n", window);
       return;
    }
+   dialog->content_offsetY = offsetY;
 
    for(int i = 0; i < dialog->ui->wo_count; i++) {
       wo_t *wo = dialog->ui->wos[i];
@@ -644,6 +678,7 @@ void dialog_filepicker_resize(uint32_t fb, int width, int height, int window) {
       debug_println("Couldn't find dialog for window %i\n", window);
       return;
    }
+   scroll_to(0, window);
    dialog->surface = get_surface_w(window);
    dialog->ui->surface = &dialog->surface;
    dialog->ui->wos[4]->width = width - 20; // resize groupbox
@@ -662,9 +697,8 @@ int dialog_filepicker(char *startpath, void *return_func) {
    dialog_t *dialog = dialogs[index];
    int width = 335;
    int height = 280;
-   dialog->window = create_window(width, height);
+   dialog_init(dialog, create_window(width, height));
    dialog->callback = return_func;
-   dialog->active = true;
    dialog->type = DIALOG_FILEPICKER;
    dialog->dir = NULL;
 
@@ -723,19 +757,24 @@ int dialog_filepicker(char *startpath, void *return_func) {
    }
    fclose(file_icon);
    fclose(folder_icon);
-   create_scrollbar(&dialog_filepicker_scroll, dialog->window);
 
-   override_click((uint32_t)&dialog_click, dialog->window);
-   override_hover((uint32_t)&dialog_hover, dialog->window);
-   override_release((uint32_t)&dialog_release, dialog->window);
-   override_keypress((uint32_t)&dialog_keypress, dialog->window);
-   override_close((uint32_t)&dialog_window_close, dialog->window);
+   create_scrollbar(&dialog_filepicker_scroll, dialog->window);
    override_resize((uint32_t)&dialog_filepicker_resize, dialog->window);
 
    dialog_filepicker_show_dir(dialog);
    ui_draw(dialog->ui);
 
    return index;
+}
+
+void dialog_init_overrides(int window) {
+   override_click((uint32_t)&dialog_click, window);
+   override_hover((uint32_t)&dialog_hover, window);
+   override_release((uint32_t)&dialog_release, window);
+   override_keypress((uint32_t)&dialog_keypress, window);
+   override_close((uint32_t)&dialog_window_close, window);
+   override_resize((uint32_t)&dialog_resize, window);
+   override_rightclick((uint32_t)&dialog_rightclick, window);
 }
 
 dialog_t *get_dialog(int index) {

@@ -291,6 +291,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->hover_func = NULL;
    window->read_func = NULL;
    window->close_func = NULL;
+   window->rightclick_func = NULL;
 }
 
 void window_removefuncs(gui_window_t *window) {
@@ -307,6 +308,7 @@ void window_removefuncs(gui_window_t *window) {
    window->hover_func = NULL;
    window->read_func = NULL;
    window->close_func = NULL;
+   window->rightclick_func = NULL;
 }
 
 int windowmgr_add() {
@@ -710,12 +712,6 @@ void windowmgr_keypress(void *regs, int scan_code) {
    if(scan_code == 0x38) {
       // alt
       keyboard_alt = !released;
-   } else if(scan_code == 0x0F) {
-      // tab
-      if(keyboard_alt) {
-         // alt+tab
-         windowmgr_swap_window();
-      }
    } else if(keyboard_alt) {
       // alt+w
       if(scan_to_char(scan_code, false, false) == 'w') {
@@ -725,6 +721,26 @@ void windowmgr_keypress(void *regs, int scan_code) {
       if(scan_to_char(scan_code, false, false) == ' ') {
          windowmgr_launch_apps((registers_t*)regs);
          return;
+      }
+      // alt+tab
+      if(scan_code == 0x0F) {
+         windowmgr_swap_window();
+         return;
+      }
+      // alt+number
+      if(scan_to_char(scan_code, false, false) >= '1' && scan_to_char(scan_code, false, false) <= '9') {
+         int num = scan_to_char(scan_code, false, false) - '1';
+         int count = 0;
+         for(int i = 0; i < getWindowCount(); i++) {
+            if(getWindow(i)->closed) continue;
+            if(count == num) {
+               setSelectedWindowIndex(i);
+               getWindow(i)->minimised = false;
+               gui_redrawall();
+               return;
+            }
+            count++;
+         }
       }
    }
 
@@ -896,15 +912,26 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
       int windowX = gui_mouse_x - selectedWindow->x;
       int windowY = gui_mouse_y - (selectedWindow->y + TITLEBAR_HEIGHT);
 
-      if(windowX < 0 || windowY < 0 || windowX >= selectedWindow->width || windowY >= selectedWindow->height - TITLEBAR_HEIGHT)
-         return;
+      // check scrollbar
+      if(selectedWindow->scrollbar != NULL && selectedWindow->scrollbar->visible) {
+         windowobj_t *scroller = selectedWindow->scrollbar->children[0];
+         if(scroller->clicked) {
+            int woX = windowX - selectedWindow->scrollbar->x;
+            int woY = windowY - selectedWindow->scrollbar->y;
+            windowobj_dragged(scroller, woX, woY, relX, relY);
+            return;
+         }
+      }
+
+      bool in_window = !(windowX < 0 || windowY < 0 || windowX >= selectedWindow->width || windowY >= selectedWindow->height - TITLEBAR_HEIGHT);
+      if(!in_window) return;
 
       // check windowobjs
       for(int i = 0; i < selectedWindow->window_object_count; i++) {
          windowobj_t *wo = selectedWindow->window_objects[i];
          int woX = windowX - wo->x;
          int woY = windowY - wo->y;
-         if(woX < 0 || woY < 0 || woX >= wo->width || woY >= wo->height)
+         if(woX < 0 || woY < 0 || woX >= wo->width || woY >= wo->height || wo == selectedWindow->scrollbar)
             continue;
          windowobj_dragged(wo, woX, woY, relX, relY);
       }
@@ -1062,6 +1089,21 @@ void windowmgr_rightclick(void *regs, int x, int y) {
    && y - selectedWindow->y >= 0 && y - selectedWindow->y < selectedWindow->height)) {
       setSelectedWindowIndex(-1);
       gui_redrawall();
+   } else {
+      // right click within selected window
+      if(selectedWindow->rightclick_func != NULL) {
+         // switch to task
+         gui_interrupt_switchtask(regs);
+         if(get_task_from_window(getSelectedWindowIndex()) > -1) {
+            uint32_t *args = malloc(sizeof(uint32_t) * 3);
+            args[2] = x - selectedWindow->x;
+            args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
+            args[0] = get_cindex();
+            map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
+            task_call_subroutine(regs, "rightclick", (uint32_t)(selectedWindow->rightclick_func), args, 3);
+            return;
+         }
+      }
    }
    // draw menu
    default_menu->visible = true;
@@ -1351,7 +1393,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
 
       window->scrollbar->visible = window->height - TITLEBAR_HEIGHT < window->scrollable_content_height;
       if(!window->scrollbar->visible)
-         window_reset_scroll();
+         window_scroll_to(regs, 0);
 
       debug_printf("%i %i\n", window->scrollbar->visible, window->scrollable_content_height);
    }
@@ -1370,7 +1412,6 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 4);
    }
-   
 }
 
 void window_release(registers_t *regs, gui_window_t *window) {
