@@ -8,7 +8,7 @@
 #include "tasks.h"
 #include "memory.h"
 
-void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args) {
+void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args, bool focus) {
 
    int task_index = get_free_task_index();
    if(task_index == -1) {
@@ -125,7 +125,7 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    task->process->page_dir = dir;
    task->process->heap_start = heap_start;
    task->process->heap_end = heap_start;
-   launch_task(task_index, regs, true);
+   launch_task(task_index, regs, focus);
 
    // push args
    regs->useresp -= 4;

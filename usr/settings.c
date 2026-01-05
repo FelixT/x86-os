@@ -27,6 +27,10 @@ wo_t *windowtxt_colourbox;
 int scrollOffsetY = 0;
 
 void title_draw(wo_t *wo, surface_t *surface, int window, int offset, int offsetY) {
+   (void)offset;
+   (void)offsetY;
+   (void)window;
+   (void)wo;
    write_strat_w("System settings:", 10, 8-scrollOffsetY, 0, -1);
    draw_line(surface, rgb16(200, 200, 200), 10, 18-scrollOffsetY, false, strlen("System settings")*(get_font_info().width+get_font_info().padding));
 }
@@ -270,6 +274,26 @@ void desktop_enable_checkbox_callback(wo_t *wo, int window) {
    set_desktop_enabled(desktopenabled_input, window);
 }
 
+void font_padding_keypress(wo_t *wo, uint16_t c, int window) {
+   if(c == 0x100) { 
+      // uparrow
+      input_t *input = wo->data;
+      char buf[4];
+      inttostr(strtoint(input->text)+1, buf);
+      set_input_text(wo, buf);
+      set_font_padding(wo, window);
+   } else if(c == 0x101) {
+      // downarrow
+      input_t *input = wo->data;
+      char buf[4];
+      inttostr(strtoint(input->text)-1, buf);
+      set_input_text(wo, buf);
+      set_font_padding(wo, window);
+   } else {
+      keypress_input(wo, c, window);
+   }
+}
+
 void _start() {
    set_window_title("System Settings");
    set_window_size(360, 280);
@@ -381,6 +405,7 @@ void _start() {
    inttostr(get_setting(SETTINGS_SYS_FONT_PADDING), buffer);
    fontpadding_input = settings_create_input(font_group, y, buffer, &set_font_padding);
    fontpadding_input->width-=20;
+   fontpadding_input->keypress_func = &font_padding_keypress;
    char btnbuf[2];
    btnbuf[0] = 0x80; // uparrow
    btnbuf[1] = '\0';

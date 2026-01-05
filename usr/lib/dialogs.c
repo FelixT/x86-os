@@ -134,10 +134,15 @@ void dialog_keypress(int c, int window) {
 }
 
 void dialog_defaultmenu_close(wo_t *menu, int item, int window) {
+   (void)menu;
+   (void)item;
    dialog_close(NULL, window);
 }
 
 void dialog_defaultmenu_settings(wo_t *menu, int item, int window) {
+   (void)menu;
+   (void)item;
+   (void)window;
    launch_task("/sys/settings.elf", 0, NULL, false);
 }
 

@@ -3,6 +3,7 @@
 #include "../../../lib/string.h"
 #include "../stdio.h"
 #include "../../prog.h"
+#include "ui_menu.h"
 
 ui_mgr_t *ui_init(surface_t *surface, int window) {
    ui_mgr_t *ui = malloc(sizeof(ui_mgr_t));
@@ -11,6 +12,7 @@ ui_mgr_t *ui_init(surface_t *surface, int window) {
    ui->hovered = NULL;
    ui->surface = surface;
    ui->window = window;
+   ui->default_menu = NULL;
    return ui;
 }
 
@@ -43,7 +45,26 @@ void ui_draw(ui_mgr_t *ui) {
    }
 }
 
+void ui_redraw(ui_mgr_t *ui) {
+   ui_draw(ui);
+   redraw_w(ui->window);
+}
+
 void ui_click(ui_mgr_t *ui, int x, int y) {
+   if(ui->default_menu && ui->default_menu->visible) {
+      ui->default_menu->visible = false;
+      if(x >= ui->default_menu->x && x < ui->default_menu->x + ui->default_menu->width
+      && y >= ui->default_menu->y && y < ui->default_menu->y + ui->default_menu->height) {
+         clear_w(ui->window);
+         ui_draw(ui);
+         redraw_w(ui->window);
+         ui->default_menu->click_func(ui->default_menu, ui->surface, ui->window, x - ui->default_menu->x, y - ui->default_menu->y, 0, 0);
+      }
+      clear_w(ui->window);
+      ui_draw(ui);
+      return;
+   }
+
    // check if any ui elements are clicked
    if(ui->focused) {
       ui->focused->selected = false;
@@ -110,6 +131,18 @@ void ui_keypress(ui_mgr_t *ui, uint16_t c) {
 }
 
 void ui_hover(ui_mgr_t *ui, int x, int y) {
+   if(ui->default_menu && ui->default_menu->visible) {
+      if(x >= ui->default_menu->x && x < ui->default_menu->x + ui->default_menu->width
+      && y >= ui->default_menu->y && y < ui->default_menu->y + ui->default_menu->height) {
+         ui->default_menu->hovering = true;
+         ui->default_menu->hover_func(ui->default_menu, ui->surface, ui->window, x - ui->default_menu->x, y - ui->default_menu->y, 0, 0);
+      } else {
+         ui->default_menu->hovering = false;
+         ui->default_menu->draw_func(ui->default_menu, ui->surface, ui->window, 0, 0);
+      }
+      return;
+   }
+
    wo_t *hovered = ui->hovered;
    if(hovered) {
       ui->hovered->hovering = false;
@@ -144,6 +177,25 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
       }
    }
 
+}
+
+void ui_rightclick(ui_mgr_t *ui, int x, int y) {
+   wo_t *menu = ui->default_menu;
+   if(menu) {
+      if(menu->visible) {
+         menu->visible = false;
+         clear_w(ui->window);
+         ui_draw(ui);
+      }
+      menu->visible = true;
+      menu->x = x;
+      menu->y = y;
+      menu_t *menu_data = menu->data;
+      menu_data->selected_index = -1;
+      menu_data->hover_index = -1;
+      if(menu->draw_func)
+         menu->draw_func(menu, ui->surface, ui->window, 0, 0);
+   }
 }
 
 void ui_unfocus() {

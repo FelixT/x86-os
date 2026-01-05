@@ -7,7 +7,7 @@
 #include "lib/stdio.h"
 #include "../lib/string.h"
 #include "lib/ui/ui_mgr.h"
-#include "lib/ui/ui_button.h"
+#include "lib/ui/ui_label.h"
 #include "lib/ui/ui_grid.h"
 #include "lib/sort.h"
 #include "lib/draw.h"
@@ -19,7 +19,7 @@ surface_t surface;
 int scrollOffsetY = 0;
 
 void app_launch(wo_t *label) {
-   button_t *label_data = label->data;  
+   label_t *label_data = label->data;  
    if(!label_data)
       return;
    char path[256];
@@ -86,9 +86,11 @@ void hover(int x, int y, int window) {
    end_subroutine();
 }
 
-void resize() {
+void resize(uint32_t fb, int w, int h, int window) {
+   (void)fb;
    if(!ui)
       end_subroutine();
+   debug_println("Resize w%i h%i window %", w, h, window);
 
    surface = get_surface();
    ui->surface = &surface;
@@ -110,9 +112,6 @@ void keypress(int c, int window) {
 
 void _start() {
    
-   set_window_size(120, 280);
-   set_window_title("Apps");
-
    fs_dir_content_t *content = read_dir("/sys");
    if(content->entries)
       sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_filename);
@@ -126,9 +125,6 @@ void _start() {
 
    items = 0;
 
-   surface = get_surface();
-   ui = ui_init(&surface, -1);
-
    // get number of items
    for(int i = 0; i < content->size; i++) {
       fs_dir_entry_t *entry = &content->entries[i];
@@ -136,16 +132,34 @@ void _start() {
          items++;
    }
 
-   create_scrollbar(&scroll, -1);
-   set_content_height(items*20 + 4, -1);
+   int content_height = items*20 + 4;
+   int w_height = content_height;
+   if(w_height > 480)
+      w_height = 480;
 
-   int width = get_width() - 4;
+   set_window_size(120, w_height);
+
+   // move to bottom right
+   int cornerx = get_surface_w(-2).width;
+   int cornery = get_surface_w(-2).height;
+   int w_x = cornerx - 120 - 4;
+   int w_y = cornery - w_height - 4;
+   set_window_position(w_x, w_y, -1);
+
+   set_window_title("Apps");
+
+   surface = get_surface();
+   ui = ui_init(&surface, -1);
+
+   create_scrollbar(&scroll, -1);
+   int width = set_content_height(content_height, -1) - 2;
 
    // create items*1 grid, with each cell having 20px height
-   grid = create_grid(2, 2, width, items*20, items, 1);
+   grid = create_grid(1, 1, width, items*20, items, 1);
    grid_t *grid_data = grid->data;
    grid_data->colour_border_light = rgb16(230, 230, 230);
    grid_data->colour_border_dark = grid_data->colour_border_light;
+   grid_data->colour_bg = rgb16(220, 220, 220);
 
    int row = 0;
 
@@ -155,11 +169,13 @@ void _start() {
       if(strendswith(entry->filename, ".elf")) {
          char name[10];
          strsplit(name, NULL, entry->filename, '.');
-         wo_t *wo = create_button(1, 1, width-2, 18, name);
-         button_t *button = wo->data;
-         button->colour_txt = rgb16(10, 30, 100);
-         button->release_func = (void*)&app_launch;
-         button->colour_bg_hover = rgb16(255, 255, 255);
+         wo_t *wo = create_label(1, 1, width-2, 18, name);
+         label_t *label = wo->data;
+         label->colour_txt = rgb16(10, 30, 100);
+         label->release_func = (void*)&app_launch;
+         label->halign = false;
+         label->padding_left = 14;
+         //label->colour_bg_hover = rgb16(255, 255, 255);
          grid_add(grid, wo, row, 0);
 
          row++;
@@ -173,6 +189,7 @@ void _start() {
    free(content, sizeof(fs_dir_content_t) * content->size);
 
    redraw();
+   set_window_minimised(false, -1);
    
    while(true) {
       yield();

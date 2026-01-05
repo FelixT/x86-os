@@ -19,9 +19,8 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
    if(menu->selected)
       border_light = rgb16(220, 220, 220);
 
-   if(menu->hovering) {
+   if(menu->hovering)
       bg = rgb16(248, 248, 248);
-   }
 
    int x = menu->x + offsetX;
    int y = menu->y + offsetY;
@@ -52,7 +51,8 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
          draw_rect(surface, bg_item, x + 1, item_y, menu->width - 2, item_height);
       }
       // draw text
-      write_strat_w(item->text, x + 5, item_y + 4, 0, window);
+      uint16_t txtcolour = item->enabled ? 0 : rgb16(200, 200, 200);
+      write_strat_w(item->text, x + 5, item_y + 4, txtcolour, window);
       // border
       draw_line(surface, border_light, x + 1, item_y + item_height - 1, false, menu->width - 2);
    }
@@ -70,8 +70,8 @@ void destroy_menu(wo_t *menu) {
    free(menu, sizeof(wo_t));
 }
 
-void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window)) {
-   if(menu == NULL || menu->data == NULL) return;
+menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window)) {
+   if(menu == NULL || menu->data == NULL) return NULL;
    menu_t *menu_data = (menu_t *)menu->data;
 
    // allocate new item array
@@ -81,8 +81,10 @@ void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int in
       new_items[i] = menu_data->items[i];
    }
    // add new item
-   strncpy(new_items[menu_data->item_count].text, text, 63);
-   new_items[menu_data->item_count].func = func;
+   menu_item_t *item = &new_items[menu_data->item_count];
+   strncpy(item->text, text, 63);
+   item->func = func;
+   item->enabled = true;
 
    // free old items
    if(menu_data->items != NULL) {
@@ -92,10 +94,14 @@ void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int in
    // update menu data
    menu_data->items = new_items;
    menu_data->item_count++;
+
+   return item;
 }
 
 void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    (void)x;
+   if(x == 0 && y == 0) return;
+
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
 
@@ -111,7 +117,7 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y, int of
    menu_data->selected_index = index;
 
    menu_item_t *item = &menu_data->items[index];
-   if(item->func != NULL) {
+   if(item->enabled && item->func != NULL) {
       item->func(menu, index, window);
    }
 

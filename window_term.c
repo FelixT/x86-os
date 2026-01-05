@@ -315,7 +315,7 @@ void term_cmd_desktop() {
 }
 
 void term_cmd_launch(registers_t *regs, char *arg) {
-   tasks_launch_elf(regs, arg, 0, NULL);
+   tasks_launch_elf(regs, arg, 0, NULL, true);
 }
 
 void term_cmd_bg(char *arg) {
@@ -411,13 +411,6 @@ void term_cmd_padding(char *arg) {
    getFont()->padding = padding;
 }
 
-void term_cmd_settings() {
-   int new = windowmgr_add();
-   gui_window_t *selected = getWindow(new);
-   window_draw_outline(selected, false);
-   window_settings_init(selected, NULL);
-}
-
 void term_cmd_default(char *command) {
    gui_drawchar('\'', 1);
    window_term_printf(command, 1);
@@ -466,8 +459,6 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_mem((char*)arg);
    else if(strequ(command, "DMPMEM"))
       term_cmd_dmpmem((char*)arg);
-   else if(strequ(command, "SETTINGS"))
-      term_cmd_settings();
    else
       term_cmd_default((char*)command);
    

@@ -203,14 +203,14 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    gui_redrawall();
 }
 
-void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args) {
+void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus) {
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Not found\n", 0);
       return;
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   elf_run(regs, prog, entry->fileSize, argc, args);
+   elf_run(regs, prog, entry->fileSize, argc, args, focus);
    free((uint32_t)prog, entry->fileSize);
 }
 
@@ -384,8 +384,10 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
 void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine) {
-      if(strequ(name, tasks[current_task].routine_name))
+      if(strequ(name, tasks[current_task].routine_name)) {
+         debug_printf("%s skipped (t %i)\n", tasks[current_task].routine_name, current_task);
          return; // don't queue up same event until current handler is done
+      }
       if(strstartswith(tasks[current_task].routine_name, "wo") && strequ(tasks[current_task].routine_name+2, name))
          return; // wo event overrides main event
       task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));

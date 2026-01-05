@@ -102,6 +102,8 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
       } else {
          // somewhat inefficient
          char buf[2] = {display_label[i], '\0'};
+         if(label_data->bordered)
+            write_strat_w(buf, text_x, text_y+1, light, window); // shadow
          write_strat_w(buf, text_x, text_y, txt, window);
          text_x += get_font_info().width + get_font_info().padding;
          if(text_x + get_font_info().width + get_font_info().padding > x + width) {

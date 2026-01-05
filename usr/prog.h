@@ -577,6 +577,25 @@ static inline void set_window_size(int width, int height) {
    );
 }
 
+static inline void set_window_position(int x, int y, int window) {
+   asm volatile (
+      "int $0x30"
+      :: "a" (20),
+      "b" (x),
+      "c" (y),
+      "d" (window)
+   );
+}
+
+static inline void set_window_minimised(bool minimised, int window) {
+   asm volatile (
+      "int $0x30"
+      :: "a" (24),
+      "b" (minimised),
+      "c" (window)
+   );
+}
+
 typedef struct font_info_t {
    int width;
    int height;

@@ -72,6 +72,7 @@ void draw_check(surface_t *surface, int x, int y, uint16_t colour, bool checked)
 }
 
 void draw_checkbox(wo_t *checkbox, surface_t *surface, int window, int offsetX, int offsetY) {
+   (void)window;
    if(checkbox == NULL || checkbox->data == NULL) return;
    // 20x20
 
@@ -115,7 +116,7 @@ void draw_checkbox(wo_t *checkbox, surface_t *surface, int window, int offsetX, 
    draw_line(surface, dark, x + w - 1, y, true, h);
 
    draw_check(surface, x, y+1, checkbox->clicked ? 0xFFFF : light, check_data->checked); // shadow
-   draw_check(surface, x, y, 0, check_data->checked);
+   draw_check(surface, x, y, txt, check_data->checked);
 }
 
 void set_checkbox_release(wo_t *checkbox, void(*release_func)(wo_t *wo, int window)) {

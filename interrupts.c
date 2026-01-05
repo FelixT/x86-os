@@ -212,9 +212,9 @@ void software_handler(registers_t *regs) {
       //case 19:
       //   api_fat_parse_path(regs);
       //   break;
-      //case 20:
-      //   api_fat_read_file(regs);
-      //   break;
+      case 20:
+         api_set_window_position(regs);
+         break;
       case 21:
          api_draw_bmp(regs);
          break;
@@ -224,9 +224,9 @@ void software_handler(registers_t *regs) {
       case 23:
          api_clear_window(regs);
          break;
-      //case 24:
-      //   api_get_get_dir_size(regs);
-      //   break;
+      case 24:
+         api_set_window_minimised(regs);
+         break;
       case 25:
          api_read_dir(regs);
          break;

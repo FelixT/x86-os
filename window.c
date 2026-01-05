@@ -476,9 +476,9 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
 
       windowobj_t *scroller = (windowobj_t*)window->scrollbar->children[0];
       // work out height
-      int scrollareaheight = (window->height - TITLEBAR_HEIGHT - 28);
+      int scrollareaheight = (window->surface.height - 28);
       if(window->scrollable_content_height)
-         scroller->height = (scrollareaheight * (window->height - TITLEBAR_HEIGHT)) / window->scrollable_content_height;
+         scroller->height = (scrollareaheight * window->surface.height) / window->scrollable_content_height;
       else
          scroller->height = 0;
       if(scroller->height < 10) scroller->height = 10;
@@ -486,7 +486,7 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
       
       bool resize = false;
 
-      if(window->scrollable_content_height > window->height - TITLEBAR_HEIGHT) {
+      if(window->scrollable_content_height > window->surface.height) {
          if(!window->scrollbar->visible) {
             resize = true;
          }

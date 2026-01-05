@@ -116,11 +116,19 @@ void api_print_stack() {
 }
 
 void api_return_framebuffer(registers_t *regs) {
-   // IN: ebx = window index
-   // OUT: ebx = framebuffer address
+   // IN: ebx = window index or -2 for screen surface
+   // OUT: ebx = framebuffer address (NULL for screen surface)
    // OUT: ecx = width
    // OUT: edx = height
    // NULL ebx on fail
+   if(regs->ebx == (uint32_t)-2) {
+      // screen surface
+      regs->ebx = 0;
+      regs->ecx = gui_get_width();
+      regs->edx = gui_get_height();
+      return;
+   }
+
    gui_window_t *window = api_get_cwindow(regs->ebx);
    if(!window) {
       regs->ebx = (uint32_t)NULL;
@@ -412,7 +420,7 @@ void api_launch_task(registers_t *regs) {
 
    int oldwindow = getSelectedWindowIndex();
 
-   tasks_launch_elf(regs, path, argc, copied_args);
+   tasks_launch_elf(regs, path, argc, copied_args, true);
    task_state_t *task = &gettasks()[get_current_task()];
 
    if(copy) {
@@ -758,7 +766,7 @@ void api_set_window_size(registers_t *regs) {
    // IN: ecx height
    // doesn't call resize function
    int width = regs->ebx;
-   int height = regs->ecx;
+   int height = regs->ecx + TITLEBAR_HEIGHT;
 
    if(width < 20 || height < 20) return;
 
@@ -996,4 +1004,32 @@ void api_get_setting(registers_t *regs) {
          regs->ebx = -1;
          return;
    }
+}
+
+void api_set_window_position(registers_t *regs) {
+   // IN: ebx x
+   // IN: ecx y
+   // IN: edx window
+   int margin = 3;
+   gui_window_t *window = api_get_cwindow(regs->edx);
+   if(!window) return;
+   int x = regs->ebx;
+   int y = regs->ecx;
+   if(x < margin) x = margin;
+   if(y < margin) y = margin;
+   if(x > (int)gui_get_width() - window->width - margin)
+      x = (int)gui_get_width() - window->width - margin;
+   if(y > (int)gui_get_height() - window->height - TOOLBAR_HEIGHT - margin)
+      y = (int)gui_get_height() - window->height - TOOLBAR_HEIGHT - margin;
+   window->x = x;
+   window->y = y;
+   gui_redrawall();
+}
+
+void api_set_window_minimised(registers_t *regs) {
+   // IN: ebx bool minimised
+   // IN: ecx window
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->minimised = regs->ebx;
 }

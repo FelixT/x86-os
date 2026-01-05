@@ -63,5 +63,7 @@ void api_override_close(registers_t *regs);
 void api_create_thread(registers_t *regs);
 void api_set_setting(registers_t *regs);
 void api_get_setting(registers_t *regs);
+void api_set_window_position(registers_t *regs);
+void api_set_window_minimised(registers_t *regs);
 
 #endif

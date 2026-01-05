@@ -24,9 +24,10 @@ char cur_path[512];
 surface_t surface;
 ui_mgr_t *ui;
 wo_t *wo_menu;
+wo_t *wo_addmenu;
 wo_t *wo_path;
 wo_t *wo_newfile;
-wo_t *wo_newfolder;
+wo_t *addnew_menu = NULL;
 
 char tolower_c(char c) {
    if(c >= 'A' && c <= 'Z')
@@ -82,7 +83,6 @@ void display_items() {
       if(offsetLeft >= 0) {
          continue;
       }
-
 
       // draw
       if(entry->type == FS_TYPE_DIR) {
@@ -152,8 +152,24 @@ void path_callback() {
 
 void click(int x, int y) {
 
+   if(ui->default_menu && ui->default_menu->visible) {
+      ui_click(ui, x, y);
+      display_items();
+      redraw();
+      end_subroutine();
+   }
+
+   if(addnew_menu && addnew_menu->visible && !wo_newfile->hovering) {
+      ui_click(ui, x, y);
+      addnew_menu->visible = false;
+      display_items();
+      redraw();
+      end_subroutine();
+      return;
+   }
+
    // clicked scrollbar
-   if(x > (int)width - 20) {
+   if(x >get_width()) {
       end_subroutine();
       return;
    }
@@ -280,7 +296,6 @@ void click(int x, int y) {
    }
 
    end_subroutine();
-
 }
 
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
@@ -293,8 +308,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 
    wo_menu->width = w;
    wo_menu->y = height - 20;
-   int btn_width = wo_newfile->width + 2 + wo_newfolder->width + 2 + 5;
+   int btn_width = wo_newfile->width + 2 + 5;
    wo_path->width = w - btn_width;
+   wo_newfile->x = w - wo_newfile->width - 2;
 
    display_items();
    redraw();
@@ -333,6 +349,11 @@ void add_file_callback(char *filename) {
 }
 
 void add_file() {
+   if(addnew_menu && addnew_menu->visible) {
+      addnew_menu->visible = false;
+      display_items();
+      ui_draw(ui);
+   }
    dialog_input("Enter filename", (void*)&add_file_callback);
 }
 
@@ -356,6 +377,12 @@ void add_folder_callback(char *name) {
 }
 
 void add_folder() {
+   if(addnew_menu && addnew_menu->visible) {
+      addnew_menu->visible = false;
+      display_items();
+      ui_draw(ui);
+      redraw();
+   }
    dialog_input("Enter folder name", &add_folder_callback);
 }
 
@@ -397,12 +424,108 @@ void hover(int x, int y) {
    end_subroutine();
 }
 
+int rightclicked_index = -1;
+
+void rightclick(int x, int y) {
+   bool menu_visible = ui->default_menu && ui->default_menu->visible;
+
+   if(ui->default_menu) {
+      // see where we clicked to determine if we can open/rename
+      int position = (y-5)/25 + offset;
+
+      if(dir_content == NULL) end_subroutine();
+
+      int index = -1;
+      int i_pos = 0;
+      for(int i = 0; i < dir_content->size; i++) {
+         fs_dir_entry_t *entry = &dir_content->entries[i];
+         bool dotentry = entry->filename[0] == '.';
+         if(entry->hidden && !dotentry)
+            continue;
+         if(i_pos == position)
+            index = i;
+         i_pos++;
+      }
+      rightclicked_index = index;
+      menu_t *menu = ui->default_menu->data;
+      menu->items[0].enabled = index > -1;
+      menu->items[1].enabled = index > -1;
+   }
+   if(menu_visible) {
+      display_items();
+      ui->default_menu->visible = false;
+      ui_rightclick(ui, x, y);
+   } else {
+      display_items();
+      ui_draw(ui);
+      ui_rightclick(ui, x, y);
+   }
+   redraw();
+   end_subroutine();
+}
+
+void rename_callback(char *out) {
+   fs_dir_entry_t *entry = &dir_content->entries[rightclicked_index];
+   char buffer[256];
+   strcpy(buffer, cur_path);
+   if(!strendswith(buffer, "/"))
+      strcat(buffer, "/");
+   strcat(buffer, entry->filename);
+   debug_println("Renaming %s to %s", buffer, out);
+   rename(buffer, out);
+   // refresh
+   dir_content = read_dir(cur_path);
+   sort_dir();
+   clear();
+   display_items();
+}
+
+void rename_menuclick(wo_t *item, int index, int window) {
+   (void)item;
+   (void)index;
+   (void)window;
+   char dialog[256];
+   fs_dir_entry_t *entry = &dir_content->entries[rightclicked_index];
+   sprintf(dialog, "Rename %s '%s'", entry->type == FS_TYPE_DIR ? "folder" : "file", entry->filename);
+   dialog_input(dialog, &rename_callback);
+}
+
+void open_menuclick(wo_t *item, int index, int window) {
+   (void)index;
+   (void)window;
+   item->visible = false;
+   click(item->x, item->y);
+}
+
+void quit() {
+   close_window(-1);
+   exit(0);
+}
+
+void add_show_menu() {
+   if(!addnew_menu) {
+      wo_t *menu = create_menu(wo_menu->width - 70, wo_menu->y - 40, 70, 40);
+      add_menu_item(menu, "New file", (void*)&add_file);
+      add_menu_item(menu, "New folder", (void*)&add_folder);
+      ui_add(ui, menu);
+      ui_draw(ui);
+      addnew_menu = menu;
+   } else {
+      addnew_menu->visible = !addnew_menu->visible;
+      if(addnew_menu->visible)
+         addnew_menu->x = wo_menu->width - 70;
+      ((menu_t*)addnew_menu->data)->selected_index = -1;
+      display_items();
+      ui_draw(ui);
+   }
+}
+
 void _start(int argc, char **args) {
    (void)argc;
    (void)args;
 
    // init
-   set_window_size(320, 265);
+   set_window_size(315, 235);
    set_window_title("File Manager");
 
    surface = get_surface();
@@ -441,6 +564,7 @@ void _start(int argc, char **args) {
    override_resize((uint32_t)&resize, -1);
    override_release((uint32_t)&release, -1);
    override_hover((uint32_t)&hover, -1);
+   override_rightclick((uint32_t)&rightclick, -1);
    width = get_surface().width;
    height = get_height();
 
@@ -454,27 +578,31 @@ void _start(int argc, char **args) {
    strcpy(cur_path, "/");
    int x = 4;
    int y = 2;
-   wo_newfile = create_button(x, y, 60, 16, "+ File");
-   button_t *newfile_data = (button_t *)wo_newfile->data;
-   newfile_data->release_func = (void *)&add_file;
-   canvas_add(wo_menu, wo_newfile);
-   x += wo_newfile->width + 2;
-
-   wo_newfolder = create_button(x, y, 60, 16, "+ Folder");
-   button_t *newfolder_data = (button_t *)wo_newfolder->data;
-   newfolder_data->release_func = (void *)&add_folder;
-   canvas_add(wo_menu, wo_newfolder);
-   x += wo_newfolder->width + 2;
    
-   wo_path = create_input(x, y, displayedwidth - x - 5, 16);
+   wo_path = create_input(x, y, displayedwidth - 45 - 4 - 5, 16);
    set_input_text(wo_path, cur_path);
    input_t *path_data = (input_t *)wo_path->data;
    path_data->return_func = &path_callback;
    canvas_add(wo_menu, wo_path);
    x += wo_path->width + 2;
 
+   wo_newfile = create_button(x, y, 45, 16, "Add");
+   button_t *newfile_data = (button_t *)wo_newfile->data;
+   newfile_data->release_func = (void *)&add_show_menu;
+   canvas_add(wo_menu, wo_newfile);
+   x += wo_newfile->width + 2;
+
    display_items();
    redraw();
+
+   // setup rightclick menu
+   ui->default_menu = create_menu(0, 0, 80, 70);
+   ui->default_menu->visible = false;
+   add_menu_item(ui->default_menu, "Open", &open_menuclick);
+   add_menu_item(ui->default_menu, "Rename", &rename_menuclick);
+   add_menu_item(ui->default_menu, "New file", (void*)&add_file);
+   add_menu_item(ui->default_menu, "New folder", (void*)&add_folder);
+   add_menu_item(ui->default_menu, "Quit", (void*)&quit);
 
    // main program loop
    while(1 == 1) {

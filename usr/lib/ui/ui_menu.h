@@ -8,6 +8,7 @@
 typedef struct menu_item_t {
    char text[64];
    void (*func)(wo_t *item, int index, int window);
+   bool enabled;
 } menu_item_t;
 
 typedef struct menu_t {
@@ -18,7 +19,7 @@ typedef struct menu_t {
 } menu_t;
 
 wo_t *create_menu(int x, int y, int width, int height);
-void add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window));
+menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window));
 void destroy_menu(wo_t *menu);
 
 #endif

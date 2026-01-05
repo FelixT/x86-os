@@ -25,5 +25,6 @@ typedef struct input_t {
 
 wo_t *create_input(int x, int y, int width, int height);
 void set_input_text(wo_t *input, char *text);
+void keypress_input(wo_t *input, uint16_t c, int window);
 
 #endif

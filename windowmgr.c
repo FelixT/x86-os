@@ -537,6 +537,11 @@ void windowmgr_getproperties() {
 
    // show selected window settings 
    gui_window_t *selected = getSelectedWindow();
+   if(!selected) {
+      // get system settings
+      tasks_launch_elf(get_regs(), "/sys/settings.elf", 0, NULL, true);
+      return;
+   }
    int new = windowmgr_add();
    gui_window_t *window = getWindow(new);
    window_draw_outline(window, false);
@@ -719,6 +724,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
       }
       // alt+space
       if(scan_to_char(scan_code, false, false) == ' ') {
+         setSelectedWindowIndex(-1);
          windowmgr_launch_apps((registers_t*)regs);
          return;
       }
@@ -985,18 +991,27 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
 }
 
 void windowmgr_launch_apps(registers_t *regs) {
+   // check if already exists
    for(int i = 0; i < windowCount; i++) {
       if(gui_windows[i].closed) continue;
       if(strequ(gui_windows[i].title, "Apps")) {
-         setSelectedWindowIndex(i);
+         if(i == getSelectedWindowIndex()) {
+            getSelectedWindow()->minimised = true;
+            setSelectedWindowIndex(-1);
+            gui_redrawall();
+         } else {
+            setSelectedWindowIndex(i);
+            if(getSelectedWindow()->minimised) {
+               getSelectedWindow()->minimised = false;
+               gui_redrawall();
+            }
+         }
          return;
       }
    }
-   tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL);
-   selectedWindow->width = 120;
-   selectedWindow->height = 280;
-   selectedWindow->x = surface.width - selectedWindow->width - 5;
-   selectedWindow->y = surface.height - selectedWindow->height - TOOLBAR_HEIGHT;
+   tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL, false);
+   gui_window_t *w = &gui_get_windows()[get_current_task_window()];
+   w->minimised = true;
 }
 
 extern bool cursor_resize;
@@ -1210,20 +1225,23 @@ void desktop_click(registers_t *regs, int x, int y) {
    int icony = 10;
    int iconheight = bmp_get_height(icon_window);
 
+   // filemgr
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
-      tasks_launch_elf(regs, "/sys/files.elf", 0, NULL);
+      tasks_launch_elf(regs, "/sys/files.elf", 0, NULL, true);
    }
 
    icony += 10*2 + iconheight + getFont()->height;
    iconheight = bmp_get_height(icon_window);
 
+   // usr terminal
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
-      tasks_launch_elf(regs, "/sys/term.elf", 0, NULL);
+      tasks_launch_elf(regs, "/sys/term.elf", 0, NULL, true);
    }
 
    icony += 10*2 + iconheight + getFont()->height;
    iconheight = bmp_get_height(icon_files);
 
+   // kterm
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
       windowmgr_add();
       window_draw_outline(getSelectedWindow(), false);

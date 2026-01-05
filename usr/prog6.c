@@ -81,6 +81,7 @@ int click_grid(wo_t *wo, int window, int row, int col) {
 }
 
 void rightclick(int x, int y, int window) {
+   (void)window;
    ui_rightclick(ui, x, y);
    end_subroutine();
 }
