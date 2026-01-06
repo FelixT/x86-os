@@ -117,7 +117,6 @@ gui_window_t *gui_get_windows();
 size_t gui_get_width();
 size_t gui_get_height();
 uint32_t gui_get_window_framebuffer(int windowIndex);
-int gui_gettextwidth(int textlength);
 surface_t *gui_get_surface(); 
 
 void gui_showtimer(int number);

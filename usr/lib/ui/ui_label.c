@@ -118,13 +118,12 @@ void release_label(wo_t *label, surface_t *surface, int window, int x, int y, in
    (void)x;
    (void)y;
    (void)surface;
-   (void)window;
    (void)offsetX;
    (void)offsetY;
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
    if(label_data->release_func)
-      label_data->release_func(label);
+      label_data->release_func(label, window);
 }
 
 void destroy_label(wo_t *label) {

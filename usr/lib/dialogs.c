@@ -102,6 +102,16 @@ void dialog_rightclick(int x, int y, int window) {
    end_subroutine();
 }
 
+void dialog_mouseout(int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_hover(dialog->ui, -1, -1);
+   end_subroutine();
+}
+
 void dialog_window_close(int window) {
    dialog_close(NULL, window);
    end_subroutine();
@@ -133,6 +143,11 @@ void dialog_keypress(int c, int window) {
    end_subroutine();
 }
 
+void dialog_set_title(dialog_t *dialog, char *title) {
+   strcpy(dialog->title, title);
+   set_window_title_w(dialog->window, title);
+}
+
 void dialog_defaultmenu_close(wo_t *menu, int item, int window) {
    (void)menu;
    (void)item;
@@ -142,8 +157,18 @@ void dialog_defaultmenu_close(wo_t *menu, int item, int window) {
 void dialog_defaultmenu_settings(wo_t *menu, int item, int window) {
    (void)menu;
    (void)item;
-   (void)window;
-   launch_task("/sys/settings.elf", 0, NULL, false);
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   dialog_window_settings(window, dialog->title);
+}
+
+void dialog_defaultmenu_minimise(wo_t *menu, int item, int window) {
+   (void)menu;
+   (void)item;
+   set_window_minimised(true, window);
 }
 
 void dialog_init(dialog_t *dialog, int window) {
@@ -153,13 +178,29 @@ void dialog_init(dialog_t *dialog, int window) {
    dialog->active = true;
    dialog->callback = NULL;
    dialog->content_height = 0;
+   map_init(&dialog->wo_map, 64);
+   strcpy(dialog->title, "Window");
    dialog_init_overrides(window);
+   if(window != -1) {
+      // set coods to relative of main window
+      coord_t mainw_pos = get_window_position(-1);
+      set_window_position(mainw_pos.x + 20, mainw_pos.y + 20, window);
+   }
    // setup default menu
-   dialog->ui->default_menu = create_menu(0, 0, 105, 40);
+   dialog->ui->default_menu = create_menu(0, 0, 105, 45);
    dialog->ui->default_menu->visible = false;
    add_menu_item(dialog->ui->default_menu, "Close", &dialog_defaultmenu_close);
+   add_menu_item(dialog->ui->default_menu, "Minimise", &dialog_defaultmenu_minimise);
    add_menu_item(dialog->ui->default_menu, "Settings", &dialog_defaultmenu_settings);
    ui_add(dialog->ui, dialog->ui->default_menu);
+}
+
+void dialog_set_wo(dialog_t *dialog, char *key, wo_t *wo) {
+   map_insert(&dialog->wo_map, key, wo);
+}
+
+wo_t *dialog_get_wo(dialog_t *dialog, char *key) {
+   return (wo_t*)map_lookup(&dialog->wo_map, key);
 }
 
 bool dialog_msg(char *title, char *text) {
@@ -184,9 +225,9 @@ bool dialog_msg(char *title, char *text) {
    ui_draw(msg->ui);
 
    if(title)
-      set_window_title_w(msg->window, title);
+      dialog_set_title(msg, title);
    else
-      set_window_title_w(msg->window, "Message");
+      dialog_set_title(msg, "Message");
 
    return true;
 }
@@ -203,12 +244,60 @@ void dialog_complete(wo_t *wo, int window) {
       debug_println("Dialog not active\n");
       end_subroutine();
    }
-   input_t *input = (input_t *)dialog->input_wo->data;
-   char *text = input->text;
+   char *text = NULL;
+   if(dialog->input_wo) {
+      input_t *input = (input_t *)dialog->input_wo->data;
+      text = input->text;
+   }
    if(dialog->callback)
       dialog->callback(text, window);
 
    dialog_close(wo, window);
+}
+
+int dialog_yesno(char *title, char *text, void *return_func) {
+   if(dialog_count == MAX_DIALOGS) {
+      debug_println("Can't create dialog\n");
+      return -1;
+   }
+   int index = get_free_dialog();
+   if(index < 0) return false;
+   dialog_t *dialog = dialogs[index];
+   dialog_init(dialog, create_window(260, 100));
+   dialog->callback = return_func;
+   dialog->type = DIALOG_YESNO;
+   dialog->input_wo = NULL;
+
+   dialog_set_title(dialog, title);
+
+   int y = 10;
+   
+   // dialog text
+
+   wo_t *msg = create_label(15, y, 260 - 30, 20, text);
+   ui_add(dialog->ui, msg);
+   
+   // buttons
+   y += 25;
+   int btnswidth = 50*2 + 10;
+   int btnsx = (260 - btnswidth)/2;
+
+   int x = btnsx;
+   wo_t *btn_wo = create_button(x, y, 50, 20, "Yes");
+   button_t *btn = (button_t *)btn_wo->data;
+   btn->release_func = (void *)&dialog_complete;
+   ui_add(dialog->ui, btn_wo);
+
+   x += 50 + 10;
+
+   wo_t *btn_cancel_wo = create_button(x, y, 50, 20, "No");
+   button_t *btn_cancel = (button_t *)btn_cancel_wo->data;
+   btn_cancel->release_func = (void*)&dialog_close;
+   ui_add(dialog->ui, btn_cancel_wo);
+
+   ui_draw(dialog->ui);
+
+   return index;
 }
 
 int dialog_input(char *text, void *return_func) {
@@ -223,7 +312,7 @@ int dialog_input(char *text, void *return_func) {
    input->callback = return_func;
    input->type = DIALOG_INPUT;
 
-   set_window_title_w(input->window, "Input Dialog");
+   dialog_set_title(input, "Input Dialog");
 
    int y = 10;
    
@@ -409,7 +498,7 @@ void dialog_colourpicker_resize(uint32_t fb, int width, int height, int window) 
    end_subroutine();
 }
 
-int dialog_colourpicker(uint16_t colour, void *return_func) {
+int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int window)) {
    int index = get_free_dialog();
    if(index < 0) return false;
    dialog_t *dialog = dialogs[index];
@@ -417,7 +506,7 @@ int dialog_colourpicker(uint16_t colour, void *return_func) {
    dialog->callback = return_func;
    dialog->type = DIALOG_COLOURPICKER;
 
-   set_window_title_w(dialog->window, "Colour Picker");
+   dialog_set_title(dialog, "Colour Picker");
 
    int x = (320-165)/2;
 
@@ -655,8 +744,6 @@ void dialog_filepicker_input_return(wo_t *wo, int window) {
 }
 
 void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
-   debug_println("Scroll deltaY: %i, offsetY: %i\n", deltaY, offsetY);
-
    dialog_t *dialog = dialog_from_window(window);
    if(!dialog) {
       debug_println("Couldn't find dialog for window %i\n", window);
@@ -696,7 +783,7 @@ void dialog_filepicker_resize(uint32_t fb, int width, int height, int window) {
    end_subroutine();
 }
 
-int dialog_filepicker(char *startpath, void *return_func) {
+int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window)) {
    int index = get_free_dialog();
    if(index < 0) return false;
    dialog_t *dialog = dialogs[index];
@@ -707,7 +794,7 @@ int dialog_filepicker(char *startpath, void *return_func) {
    dialog->type = DIALOG_FILEPICKER;
    dialog->dir = NULL;
 
-   set_window_title_w(dialog->window, "File Picker");
+   dialog_set_title(dialog, "File Picker");
 
    dialog->surface = get_surface_w(dialog->window);
    dialog->ui = ui_init(&dialog->surface, dialog->window);
@@ -772,6 +859,169 @@ int dialog_filepicker(char *startpath, void *return_func) {
    return index;
 }
 
+// custom 'colourbox' wo which launches colourpicker
+
+void dialog_colourbox_callback(char *out, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   dialog_colourbox_t *colourbox = (dialog_colourbox_t *)dialog->state;
+   dialog_t *colourbox_dialog = dialog_from_window(colourbox->window);
+   if(!colourbox_dialog) {
+      debug_println("Couldn't find dialog for window %i\n", colourbox->window);
+      return;
+   }
+   uint16_t colour = hextouint(out + 2);
+   wo_t *label = &colourbox->label;
+   label_t *label_data = label->data;
+   label_data->colour_bg = colour;
+   ui_draw(colourbox_dialog->ui);
+   colourbox->callback(out, colourbox->window, (wo_t*)&colourbox->label);
+}
+
+void dialog_colourbox_release(wo_t *wo, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   label_t *label_data = wo->data;
+   int d = dialog_colourpicker(label_data->colour_bg, &dialog_colourbox_callback);
+   get_dialog(d)->state = wo; // save colourbox as dialog's 'input_wo'
+}
+
+wo_t *dialog_create_colourbox(int x, int y, int width, int height, uint16_t colour, int window, void (*callback)(char *out, int window, wo_t *colourbox)) {
+   dialog_colourbox_t *colourbox = (dialog_colourbox_t*)create_label(x, y, width, height, "");
+   colourbox->callback = callback;
+   colourbox->window = window;
+   // ideally should resize, for now malloc gives enough space
+   wo_t *label = &colourbox->label;
+   label_t *label_data = label->data;
+   label_data->colour_bg = colour;
+   label_data->filled = true;
+   label_data->release_func = &dialog_colourbox_release;
+   return label;
+}
+
+// window settings dialog
+
+void dialog_window_set_bgcolour(char *out, int window, wo_t *colourbox) {
+   (void)colourbox;
+   dialog_t *dialog = dialog_from_window(window);
+   uint16_t colour = hextouint(out+2);
+   set_window_setting(W_SETTING_BGCOLOUR, colour, dialog->parentWindow);
+   set_input_text(dialog_get_wo(dialog, "bgcolour_input"), out);
+   ui_draw(dialog->ui);
+   dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
+   if(!parentdialog) return;
+   clear_w(dialog->parentWindow);
+   ui_draw(parentdialog->ui);
+   redraw_w(dialog->parentWindow);
+}
+
+void dialog_window_set_txtcolour(char *out, int window, wo_t *colourbox) {
+   (void)colourbox;
+   dialog_t *dialog = dialog_from_window(window);
+   uint16_t colour = hextouint(out+2);
+   set_window_setting(W_SETTING_TXTCOLOUR, colour, dialog->parentWindow);
+   set_input_text(dialog_get_wo(dialog, "txtcolour_input"), out);
+   ui_draw(dialog->ui);
+   dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
+   if(!parentdialog) return;
+   clear_w(dialog->parentWindow);
+   ui_draw(parentdialog->ui);
+   redraw_w(dialog->parentWindow);
+}
+
+void dialog_window_set_bgcolour_input(wo_t *wo, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   input_t *input = wo->data;
+   uint16_t colour = hextouint(input->text+2);
+   set_window_setting(W_SETTING_BGCOLOUR, colour, dialog->parentWindow);
+   label_t *colourbox = dialog_get_wo(dialog, "bgcolour_colourbox")->data;
+   colourbox->colour_bg = colour;
+   ui_draw(dialog->ui);
+   dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
+   if(!parentdialog) return;
+   clear_w(dialog->parentWindow);
+   ui_draw(parentdialog->ui);
+   redraw_w(dialog->parentWindow);
+}
+
+void dialog_window_set_txtcolour_input(wo_t *wo, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   input_t *input = wo->data;
+   uint16_t colour = hextouint(input->text+2);
+   set_window_setting(W_SETTING_TXTCOLOUR, colour, dialog->parentWindow);
+   label_t *colourbox = dialog_get_wo(dialog, "txtcolour_colourbox")->data;
+   colourbox->colour_bg = colour;
+   ui_draw(dialog->ui);
+   dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
+   if(!parentdialog) return;
+   clear_w(dialog->parentWindow);
+   ui_draw(parentdialog->ui);
+   redraw_w(dialog->parentWindow);
+}
+
+int dialog_window_settings(int window, char *title) {
+   int y = 10;
+   int index = get_free_dialog();
+   if(index < 0) return -1;
+   dialog_t *dialog = dialogs[index];
+
+   dialog_init(dialog, create_window(280, 100));
+   dialog->type = DIALOG_SETTINGS;
+   dialog->parentWindow = window;
+
+   char title_buffer[256];
+   snprintf(title_buffer, 256, "Window settings for '%s'", title);
+
+   wo_t *groupbox = create_groupbox(15, y, 280 - 30, 65, title_buffer);
+   char buffer[8];
+   strcpy(buffer, "0x");
+
+   uint16_t colour = get_window_setting(W_SETTING_BGCOLOUR, window);
+   wo_t *label = create_label(5, 5, 135, 20, "Background colour");
+   wo_t *input = create_input(145, 5, 80, 20);
+   input_t *input_data = input->data;
+   input_data->valign = true;
+   input_data->halign = true;
+   input_data->return_func = &dialog_window_set_bgcolour_input;
+   uinttohexstr(colour, buffer+2);
+   set_input_text(input, buffer);
+   wo_t *colourbox = dialog_create_colourbox(225, 5, 20, 20, colour, dialog->window, &dialog_window_set_bgcolour);
+   dialog_set_wo(dialog, "bgcolour_colourbox", colourbox);
+   groupbox_add(groupbox, label);
+   groupbox_add(groupbox, input);
+   groupbox_add(groupbox, colourbox);
+   dialog_set_wo(dialog, "bgcolour_input", input);
+
+   colour = get_window_setting(W_SETTING_TXTCOLOUR, window);
+   label = create_label(5, 30, 135, 20, "Text colour");
+   input = create_input(145, 30, 80, 20);
+   input_data = input->data;
+   input_data->valign = true;
+   input_data->halign = true;
+   input_data->return_func = &dialog_window_set_txtcolour_input;
+   uinttohexstr(colour, buffer+2);
+   set_input_text(input, buffer);
+   colourbox = dialog_create_colourbox(225, 30, 20, 20, 0, dialog->window, &dialog_window_set_txtcolour);
+   dialog_set_wo(dialog, "txtcolour_colourbox", colourbox);
+   groupbox_add(groupbox, label);
+   groupbox_add(groupbox, input);
+   groupbox_add(groupbox, colourbox);
+   dialog_set_wo(dialog, "txtcolour_input", input);
+
+   ui_add(dialog->ui, groupbox);
+   ui_draw(dialog->ui);
+
+   dialog_set_title(dialog, "Window Settings");
+
+   return index;
+}
+
 void dialog_init_overrides(int window) {
    override_click((uint32_t)&dialog_click, window);
    override_hover((uint32_t)&dialog_hover, window);
@@ -780,6 +1030,7 @@ void dialog_init_overrides(int window) {
    override_close((uint32_t)&dialog_window_close, window);
    override_resize((uint32_t)&dialog_resize, window);
    override_rightclick((uint32_t)&dialog_rightclick, window);
+   override_mouseout((uint32_t)&dialog_mouseout, window);
 }
 
 dialog_t *get_dialog(int index) {

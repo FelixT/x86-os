@@ -86,7 +86,8 @@ void settings_colourbox_callback(char *str, int w) {
    }
 }
 
-void settings_colourbox_release(wo_t *wo) {
+void settings_colourbox_release(wo_t *wo, int window) {
+   (void)window;
    label_t *label_data = wo->data;
    int d = dialog_colourpicker(label_data->colour_bg, &settings_colourbox_callback);
    colourpicker_wos[get_dialog(d)->window] = wo;
@@ -295,7 +296,6 @@ void font_padding_keypress(wo_t *wo, uint16_t c, int window) {
 }
 
 void _start() {
-   set_window_title("System Settings");
    set_window_size(360, 280);
    
    override_draw(0);
@@ -313,6 +313,8 @@ void _start() {
    dialog_t *dialog = get_dialog(index);
    dialog_init(dialog, -1);
    ui = dialog->ui;
+
+   dialog_set_title(dialog, "System Settings");
 
    // title
    wo_t *title_wo = create_wo(5, 10, 40, 20);

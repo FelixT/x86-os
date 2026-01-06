@@ -206,12 +206,12 @@ void software_handler(registers_t *regs) {
       case 17:
          api_override_rightclick(regs);
          break;
-      //case 18:
-      //   api_fat_read_root(regs);
-      //   break;
-      //case 19:
-      //   api_fat_parse_path(regs);
-      //   break;
+      case 18:
+         api_set_window_setting(regs);
+         break;
+      case 19:
+         api_get_window_setting(regs);
+         break;
       case 20:
          api_set_window_position(regs);
          break;
@@ -230,9 +230,9 @@ void software_handler(registers_t *regs) {
       case 25:
          api_read_dir(regs);
          break;
-      //case 26:
-      //   api_get_get_dir_size(regs);
-      //   break;
+      case 26:
+         api_get_window_position(regs);
+         break;
       case 27: 
          api_override_close(regs);
          break;
@@ -288,7 +288,7 @@ void software_handler(registers_t *regs) {
          api_get_working_dir(regs);
          break;
       case 45:
-         //api_display_popup(regs);
+         api_override_mouseout(regs);
          break;
       case 46:
          api_display_colourpicker(regs);
@@ -609,7 +609,6 @@ void exception_handler(int int_no, registers_t *regs) {
             if(get_current_task_state()->in_syscall)
                debug_printf("Task was in syscall %i\n", get_current_task_state()->syscall_no);
 
-            window_resetfuncs(&(gui_get_windows()[get_current_task_window()]));
             show_endtask_dialog(int_no, regs); // + pauses task
          }
       }

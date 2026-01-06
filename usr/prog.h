@@ -328,6 +328,15 @@ static inline void override_hover(uint32_t addr, int window) {
    );
 }
 
+static inline void override_mouseout(uint32_t addr, int window) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (45),
+      "b" (addr),
+      "c" (window)
+   );
+}
+
 static inline void write_numat(int num, int x, int y) {
    asm volatile(
       "int $0x30"
@@ -391,6 +400,34 @@ static inline uint32_t get_setting(setting_index_t setting) {
       : "=b" (value)
       : "a" (33),
       "b" ((uint32_t)setting)
+   );
+   return value;
+}
+
+#define W_SETTING_BGCOLOUR 0
+#define W_SETTING_TXTCOLOUR 1
+
+static inline bool set_window_setting(int setting, uint32_t value, int window) {
+   int out;
+   asm volatile (
+      "int $0x30;"
+      : "=b" (out)
+      : "a" (18),
+      "b" ((uint32_t)setting),
+      "c" ((uint32_t)value),
+      "d" ((uint32_t)window)
+   );
+   return out == 0;
+}
+
+static inline uint32_t get_window_setting(int setting, int window) {
+   uint32_t value;
+   asm volatile (
+      "int $0x30;"
+      : "=b" (value)
+      : "a" (19),
+      "b" ((uint32_t)setting),
+      "c" ((uint32_t)window)
    );
    return value;
 }
@@ -585,6 +622,25 @@ static inline void set_window_position(int x, int y, int window) {
       "c" (y),
       "d" (window)
    );
+}
+
+typedef struct coord_t {
+   int x;
+   int y;
+} coord_t;
+
+static inline coord_t get_window_position(int window) {
+   uint32_t x;
+   uint32_t y;
+   asm volatile (
+      "int $0x30"
+      : "=b" (x),
+      "=c" (y)
+      : "a" (26),
+      "b" (window)
+   );
+   coord_t coord = {x,y};
+   return coord;
 }
 
 static inline void set_window_minimised(bool minimised, int window) {

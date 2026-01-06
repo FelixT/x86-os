@@ -17,7 +17,7 @@ typedef struct label_t {
    bool valign;
    bool halign;
    int padding_left; // if halign = false
-   void (*release_func)(wo_t *wo);
+   void (*release_func)(wo_t *wo, int window);
 } label_t;
 
 wo_t *create_label(int x, int y, int width, int height, char *text);

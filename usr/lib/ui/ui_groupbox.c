@@ -101,7 +101,7 @@ wo_t *create_groupbox(int x, int y, int width, int height, char *label) {
 
    wo_t *groupbox = create_wo(x, y, width, height);
    groupbox_t *groupbox_data = malloc(sizeof(groupbox_t));
-   strncpy(groupbox_data->label, label, 31);
+   strncpy(groupbox_data->label, label, sizeof(groupbox_data->label)-1);
    groupbox_data->colour_label = 0;
    groupbox_data->colour_border = rgb16(200, 200, 200);
    groupbox_data->canvas = create_canvas(margin, margin_top, width - margin*2, height - margin_top - margin);

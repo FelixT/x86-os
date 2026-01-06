@@ -5,7 +5,7 @@
 
 typedef struct groupbox_t {
    wo_t *canvas;
-   char label[32];
+   char label[64];
    uint16_t colour_label;
    uint16_t colour_border;
 } groupbox_t;

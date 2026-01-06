@@ -210,6 +210,9 @@ void window_close(void *regs, int windowIndex) {
       }
    }
 
+   if(render_order[0] && !render_order[0]->closed && !render_order[0]->minimised)
+      setSelectedWindowIndex(get_window_index_from_pointer(render_order[0]));
+
    // take children with them
    for(int i = 0; i < window->child_count; i++) {
       if(window->children[i] != NULL) {
@@ -221,11 +224,11 @@ void window_close(void *regs, int windowIndex) {
 }
 
 bool window_init(gui_window_t *window) {
-   strcpy(window->title, "KTerminal");
+   strcpy(window->title, "Window");
    window->x = 20;
    window->y = 20;
-   window->width = 360;
-   window->height = 280;
+   window->width = 355;
+   window->height = 265;
    window->text_buffer[0] = '\0';
    window->text_index = 0;
    window->text_x = getFont()->padding;
@@ -246,6 +249,7 @@ bool window_init(gui_window_t *window) {
    window->scrolledY = 0;
    window->scrollable_content_height = 0;
    window->scrollbar = NULL;
+   window->hovering = false;
    window->child_count = 0;
 
    window_resetfuncs(window);
@@ -292,6 +296,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->read_func = NULL;
    window->close_func = NULL;
    window->rightclick_func = NULL;
+   window->mouseout_func = NULL;
 }
 
 void window_removefuncs(gui_window_t *window) {
@@ -309,6 +314,7 @@ void window_removefuncs(gui_window_t *window) {
    window->read_func = NULL;
    window->close_func = NULL;
    window->rightclick_func = NULL;
+   window->mouseout_func = NULL;
 }
 
 int windowmgr_add() {
@@ -369,7 +375,7 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
    // titlebar
 
    // centered text
-   int titleWidth = gui_gettextwidth(strlen(window->title));
+   int titleWidth = font_width(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
 
    if(wm_settings.theme == 1) {
@@ -568,7 +574,7 @@ void windowmgr_closeselected() {
 }
 
 void windowmgr_init() {
-   // settings
+   // init windowmgr settings
    strcpy(wm_settings.desktop_bgimg, "/bmp/bg16.bmp");
    strcpy(wm_settings.font_path, "/font/7.fon");
 
@@ -644,10 +650,15 @@ void toolbar_draw() {
          bg2 = COLOUR_LIGHTLIGHT_GREY;
          fg = COLOUR_BLACK;
       }
-      int textWidth = gui_gettextwidth(10);
+      int displayedChars = strlen(getWindow(i)->title);
+      if(displayedChars > (TOOLBAR_ITEM_WIDTH-20)/font_width(1))
+         displayedChars = (TOOLBAR_ITEM_WIDTH-20)/font_width(1);
+      if(displayedChars > 10)
+         displayedChars = 10;
+      int textWidth = font_width(displayedChars);
       int textX = TOOLBAR_ITEM_WIDTH/2 - textWidth/2;
-      char text[11] = "       ";
-      strcpy_fixed(text, getWindow(i)->title, 10);
+      char text[11];
+      strcpy_fixed(text, getWindow(i)->title, displayedChars);
       int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
       int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
       if(wm_settings.theme == 1) {
@@ -656,7 +667,10 @@ void toolbar_draw() {
          gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
       }
       gui_writestrat(text, fg, itemX+textX, itemY+TOOLBAR_PADDING/2);
-      draw_line(&surface, COLOUR_TOOLBAR_BORDER, itemX, itemY+TOOLBAR_ITEM_HEIGHT,false,TOOLBAR_ITEM_WIDTH);
+      // if selected, draw underline
+      if(getWindow(i)->active)
+         draw_line(&surface, rgb16(220, 220, 220), itemX + textX - 4, itemY + TOOLBAR_PADDING/2 + getFont()->height + 2, false, font_width(strlen(text)) + 8);
+      draw_line(&surface, COLOUR_TOOLBAR_BORDER, itemX, itemY + TOOLBAR_ITEM_HEIGHT, false, TOOLBAR_ITEM_WIDTH);
       getWindow(i)->toolbar_pos = toolbarPos;
       toolbarPos++;
    }
@@ -817,6 +831,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
 }
 
 bool clicked_on_window(void *regs, int index, int x, int y) {
+   if(index < 0) return false;
    gui_window_t *window = getWindow(index);
    if(!window || window->closed) return false;
 
@@ -1243,7 +1258,8 @@ void desktop_click(registers_t *regs, int x, int y) {
 
    // kterm
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
-      windowmgr_add();
+      int w = windowmgr_add();
+      strcpy(getWindow(w)->title, "KTerm");
       window_draw_outline(getSelectedWindow(), false);
    }
 }
@@ -1276,8 +1292,8 @@ void windowmgr_mousemove(int x, int y) {
 
       if(relX > 0 && relX < selectedWindow->width
       && relY > 0 && relY < selectedWindow->height - TITLEBAR_HEIGHT) {
+         selectedWindow->hovering = true;
          // within current window, check window objects
-
          for(int i = 0; i < selectedWindow->window_object_count; i++) {
             windowobj_t *wo = selectedWindow->window_objects[i];
             int relX_wo = relX - wo->x;
@@ -1320,6 +1336,20 @@ void windowmgr_mousemove(int x, int y) {
 
          }
       } else {
+         if(selectedWindow->hovering) {
+            // mouse out/unhover
+            selectedWindow->hovering = false;
+            if(selectedWindow->mouseout_func) {
+               // call mouseout routine
+               int task = get_task_from_window(getSelectedWindowIndex());
+               registers_t *regs = get_regs();
+               if(task < 0) return;
+               if(!switch_to_task(task, regs)) return;
+               uint32_t *args = malloc(sizeof(uint32_t) * 1);
+               args[0] = get_cindex();
+               task_call_subroutine(regs, "mouseout", (uint32_t)(selectedWindow->mouseout_func), args, 1);
+            }
+         }
          // set all window objs as not hovered
          for(int i = 0; i < selectedWindow->window_object_count; i++) {
             windowobj_t *wo = selectedWindow->window_objects[i];

@@ -93,5 +93,6 @@ void task_subroutine_end(registers_t *regs);
 void tss_init();
 
 void task_write_to_window(int task, char *out);
+void task_reset_windows(int task);
 
 #endif

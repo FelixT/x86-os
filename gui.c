@@ -402,7 +402,3 @@ void gui_showtimer(int number) {
    gui_drawrect(gui_bg, -10, 5, 7, 11);
    gui_writenumat(number, COLOUR_WHITE, -10, 5);
 }
-
-int gui_gettextwidth(int textlength) {
-   return textlength*(getFont()->width+getFont()->padding) - getFont()->padding;
-}

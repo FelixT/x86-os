@@ -26,6 +26,9 @@ void api_override_release(registers_t *regs);
 void api_override_checkcmd(registers_t *regs);
 void api_override_hover(registers_t *regs);
 void api_override_rightclick(registers_t *regs);
+void api_override_keypress(registers_t *regs);
+void api_override_close(registers_t *regs);
+void api_override_mouseout(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
 void api_malloc(registers_t *regs);
 void api_free(registers_t *regs);
@@ -58,12 +61,13 @@ void api_set_window_size(registers_t *regs);
 void api_get_font_info(registers_t *regs);
 void api_create_window(registers_t *regs);
 void api_close_window(registers_t *regs);
-void api_override_keypress(registers_t *regs);
-void api_override_close(registers_t *regs);
 void api_create_thread(registers_t *regs);
 void api_set_setting(registers_t *regs);
 void api_get_setting(registers_t *regs);
 void api_set_window_position(registers_t *regs);
 void api_set_window_minimised(registers_t *regs);
+void api_get_window_position(registers_t *regs);
+void api_set_window_setting(registers_t *regs);
+void api_get_window_setting(registers_t *regs);
 
 #endif

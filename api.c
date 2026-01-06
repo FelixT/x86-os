@@ -275,6 +275,14 @@ void api_override_rightclick(registers_t *regs) {
    window->rightclick_func = (void *)(regs->ebx);
 }
 
+void api_override_mouseout(registers_t *regs) {
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->mouseout_func = (void *)(regs->ebx);
+}
+
 void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }
@@ -844,7 +852,8 @@ void api_close_window(registers_t *regs) {
    debug_printf("Closing window %i\n", index);
    window_close(NULL, index);
    mainwindow->children[cindex] = NULL;
-   setSelectedWindowIndex(get_current_task_state()->process->window);
+   if(getSelectedWindow() == NULL)
+      setSelectedWindowIndex(get_current_task_state()->process->window);
 }
 
 void api_create_thread(registers_t *regs) {
@@ -1006,6 +1015,41 @@ void api_get_setting(registers_t *regs) {
    }
 }
 
+#define W_SETTING_BGCOLOUR 0
+#define W_SETTING_TXTCOLOUR 1
+
+void api_get_window_setting(registers_t *regs) {
+   // IN: ebx setting index
+   // IN: ecx window
+   // OUT: ebx value
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   switch(regs->ebx) {
+      case W_SETTING_BGCOLOUR:
+         regs->ebx = window->bgcolour;
+         break;
+      case W_SETTING_TXTCOLOUR:
+         regs->ebx = window->txtcolour;
+         break;
+   }
+}
+
+void api_set_window_setting(registers_t *regs) {
+   // IN: ebx setting index
+   // IN: ecx value
+   // IN: edx window
+   gui_window_t *window = api_get_cwindow(regs->edx);
+   if(!window) return;
+   switch(regs->ebx) {
+      case W_SETTING_BGCOLOUR:
+         window->bgcolour = regs->ecx;
+         break;
+      case W_SETTING_TXTCOLOUR:
+         window->txtcolour = regs->ecx;;
+         break;
+   }
+}
+
 void api_set_window_position(registers_t *regs) {
    // IN: ebx x
    // IN: ecx y
@@ -1026,10 +1070,25 @@ void api_set_window_position(registers_t *regs) {
    gui_redrawall();
 }
 
+void api_get_window_position(registers_t *regs) {
+   // IN: ebx window
+   // OUT: ebx x
+   // OUT: ecx y
+   gui_window_t *window = api_get_cwindow(regs->edx);
+   if(!window) return;
+   regs->ebx = window->x;
+   regs->ecx = window->y;
+}
+
 void api_set_window_minimised(registers_t *regs) {
    // IN: ebx bool minimised
    // IN: ecx window
    gui_window_t *window = api_get_cwindow(regs->ecx);
    if(!window) return;
    window->minimised = regs->ebx;
+   if(window == getSelectedWindow()) {
+      getSelectedWindow()->active = false;
+      setSelectedWindowIndex(-1);
+   }
+   gui_redrawall();
 }

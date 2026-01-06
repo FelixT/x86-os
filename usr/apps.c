@@ -61,6 +61,7 @@ void click(int x, int y, int window) {
    if(!ui)
       end_subroutine();
 
+   ui_hover(ui, -1, -1);
    ui_click(ui, x, y);
 
    end_subroutine();
@@ -110,6 +111,12 @@ void keypress(int c, int window) {
    end_subroutine();
 }
 
+void mouseout(int window) {
+   (void)window;
+   ui_hover(ui, -1, -1);
+   end_subroutine();
+}
+
 void _start() {
    
    fs_dir_content_t *content = read_dir("/sys");
@@ -122,6 +129,7 @@ void _start() {
    override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
    override_keypress((uint32_t)&keypress, -1);
+   override_mouseout((uint32_t)&mouseout, -1);
 
    items = 0;
 

@@ -61,5 +61,5 @@ void font_init() {
 }
 
 int font_width(int len) {
-   return len*(getFont()->width+getFont()->padding);
+   return len*(getFont()->width+getFont()->padding)-getFont()->padding;
 }

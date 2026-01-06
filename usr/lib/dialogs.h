@@ -11,33 +11,51 @@
 #include "ui/ui_image.h"
 #include "ui/ui_menu.h"
 #include "stdint.h"
+#include "map.h"
 
 typedef struct dialog_t {
    bool active;
    int type;
    int window;
+   char title[32];
    surface_t surface;
    void (*callback)(char *out, int window);
    ui_mgr_t *ui;
+   map_t wo_map; // string->wo_t* map
+   int content_height;
+   int content_offsetY;
+   
    // txtinput specific
    wo_t *input_wo;
    // filepicker specific
    fs_dir_content_t *dir;
    uint16_t *file_icon_data;
    uint16_t *folder_icon_data;
-   int content_height;
-   int content_offsetY;
+   // window settings specific
+   int parentWindow;
+
+   void *state; // for extending dialog functionality
 } dialog_t;
+
+typedef struct dialog_colourbox_t {
+   wo_t label; // colourbox
+   void (*callback)(char *out, int window, wo_t *colourbox);
+   int window; // window where this is displayed, used for callback
+} dialog_colourbox_t;
 
 bool dialog_msg(char *title, char *text);
 int dialog_input(char *text, void *return_func);
-int dialog_colourpicker(uint16_t colour, void *return_func);
+int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int window));
 dialog_t *get_dialog(int index);
 dialog_t *dialog_from_window(int window);
-int dialog_filepicker(char *startdir, void *return_func);
+int dialog_filepicker(char *startdir, void (*return_func)(char *out, int window));
 void dialog_init_overrides(int window);
 int get_free_dialog();
 void dialog_init(dialog_t *dialog, int window);
+int dialog_window_settings(int window, char *title);
+wo_t *dialog_create_colourbox(int x, int y, int width, int height, uint16_t colour, int window, void (*callback)(char *out, int window, wo_t *colourbox));
+void dialog_set_title(dialog_t *dialog, char *title);
+int dialog_yesno(char *title, char *text, void *return_func);
 
 #define MAX_DIALOGS 10
 
@@ -45,5 +63,7 @@ void dialog_init(dialog_t *dialog, int window);
 #define DIALOG_INPUT 1
 #define DIALOG_COLOURPICKER 2
 #define DIALOG_FILEPICKER 2
+#define DIALOG_SETTINGS 3
+#define DIALOG_YESNO 4
 
 #endif

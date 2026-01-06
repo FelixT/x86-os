@@ -118,9 +118,25 @@ void pause_task(int index, registers_t *regs) {
       return;
    }
 
+   task_reset_windows(index);
+
    tasks[index].paused = true;
    if(index == get_current_task() || !task_exists())
       if(regs != NULL) switch_task(regs);
+}
+
+void task_reset_windows(int task) {
+   // remove funcs from all associated windows
+   int taskw = tasks[task].process->window;
+   if(taskw >= 0 && taskw < getWindowCount() && !getWindow(taskw)->closed) {
+      gui_window_t *window = getWindow(taskw);
+      window_resetfuncs(window);
+      for(int i = 0; i < window->child_count; i++) {
+         gui_window_t *child = (gui_window_t*)window->children[i];
+         if(!child || child->closed) continue;
+         window_resetfuncs(child);
+      }
+   }
 }
 
 void end_task(int index, registers_t *regs) {
@@ -168,12 +184,12 @@ void end_task(int index, registers_t *regs) {
       if(task->process->window >= 0)
          task_write_to_window(index, "<Task ended>\n");
 
+      task_reset_windows(index);
+
       // free process
       free((uint32_t)task->process, sizeof(process_t));
       task->process = NULL;
    }
-
-   // todo: kill associated events
 
    task->enabled = false;
 

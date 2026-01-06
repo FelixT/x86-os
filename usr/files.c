@@ -464,6 +464,12 @@ void rightclick(int x, int y) {
    end_subroutine();
 }
 
+void mouseout() {
+   ui_hover(ui, -1, -1);
+   ui_draw(ui);
+   end_subroutine();
+}
+
 void rename_callback(char *out) {
    fs_dir_entry_t *entry = &dir_content->entries[rightclicked_index];
    char buffer[256];
@@ -497,9 +503,17 @@ void open_menuclick(wo_t *item, int index, int window) {
    click(item->x, item->y);
 }
 
-void quit() {
+void settings() {
+   dialog_window_settings(-1, "File Manager");
+}
+
+void quit_callback() {
    close_window(-1);
    exit(0);
+}
+
+void quit() {
+   dialog_yesno("Quit Files", "Are you sure you want to quit files", &quit_callback);
 }
 
 void add_show_menu() {
@@ -565,6 +579,7 @@ void _start(int argc, char **args) {
    override_release((uint32_t)&release, -1);
    override_hover((uint32_t)&hover, -1);
    override_rightclick((uint32_t)&rightclick, -1);
+   override_mouseout((uint32_t)&mouseout, -1);
    width = get_surface().width;
    height = get_height();
 
@@ -596,12 +611,13 @@ void _start(int argc, char **args) {
    redraw();
 
    // setup rightclick menu
-   ui->default_menu = create_menu(0, 0, 80, 70);
+   ui->default_menu = create_menu(0, 0, 80, 90);
    ui->default_menu->visible = false;
    add_menu_item(ui->default_menu, "Open", &open_menuclick);
    add_menu_item(ui->default_menu, "Rename", &rename_menuclick);
    add_menu_item(ui->default_menu, "New file", (void*)&add_file);
    add_menu_item(ui->default_menu, "New folder", (void*)&add_folder);
+   add_menu_item(ui->default_menu, "Settings", (void*)&settings);
    add_menu_item(ui->default_menu, "Quit", (void*)&quit);
 
    // main program loop
