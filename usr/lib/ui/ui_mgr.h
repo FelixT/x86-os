@@ -18,6 +18,7 @@ typedef struct ui_mgr_t {
    wo_t *hovered;
    wo_t *clicked;
    wo_t *default_menu;
+   int scrolled_y;
 } ui_mgr_t;
 
 ui_mgr_t *ui_init(surface_t *surface, int window);
@@ -31,5 +32,6 @@ void ui_release(ui_mgr_t *ui, int x, int y);
 void ui_keypress(ui_mgr_t *ui, uint16_t c);
 void ui_hover(ui_mgr_t *ui, int x, int y);
 void ui_rightclick(ui_mgr_t *ui, int x, int y);
+void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY);
 
 #endif

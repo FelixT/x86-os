@@ -390,6 +390,7 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
 
       task_call_subroutine(regs, event->name, event->addr, event->args, event->argc);
       tasks[event->task].routine_return_window = getSelectedWindowIndex();
+      free((uint32_t)event, sizeof(task_event_t));
 
       /*if(get_current_task_window() != getSelectedWindowIndex()) {
          setSelectedWindowIndex(get_current_task_window());
@@ -400,10 +401,10 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
 void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine) {
-      if(strequ(name, tasks[current_task].routine_name)) {
+      /*if(strequ(name, tasks[current_task].routine_name)) {
          debug_printf("%s skipped (t %i)\n", tasks[current_task].routine_name, current_task);
          return; // don't queue up same event until current handler is done
-      }
+      }*/
       if(strstartswith(tasks[current_task].routine_name, "wo") && strequ(tasks[current_task].routine_name+2, name))
          return; // wo event overrides main event
       task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));

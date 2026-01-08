@@ -23,45 +23,24 @@ $GCC -c usr/lib/draw.c $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
 
-export UI_LIB="o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o"
+export UI_LIB="o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o"
+export DIALOGS_LIB="$UI_LIB o/lib/stdio.o o/lib/dialogs.o o/lib/sort.o o/lib/map.o"
 
 # c progs
 $GCC $FLAGS usr/prog3.c -o o/prog3.elf 
 $GCC $FLAGS usr/prog4.c -o o/prog4.elf o/lib/string.o o/lib/stdio.o
-$GCC $FLAGS usr/files.c -o o/files.elf o/lib/string.o $UI_LIB o/lib/drawusr.o o/lib/stdio.o o/lib/sort.o o/lib/dialogs.o
+$GCC $FLAGS usr/files.c -o o/files.elf $DIALOGS_LIB
 $GCC $FLAGS usr/bmpview.c -o o/bmpview.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/dialogs2.o
 $GCC $FLAGS usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/dialogs2.o
 $GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o
 $GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o
 $GCC $FLAGS usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/map.o
-$GCC $FLAGS usr/prog5.c -o o/prog5.elf o/lib/string.o $UI_LIB o/lib/stdio.o o/lib/dialogs.o o/lib/drawusr.o o/lib/sort.o
+$GCC $FLAGS usr/prog5.c -o o/prog5.elf $DIALOGS_LIB
+$GCC $FLAGS usr/prog6.c -o o/prog6.elf o/lib/stdio.o $UI_LIB
 $GCC $FLAGS usr/prog7.c -o o/prog7.elf
-
-$GCC $FLAGS usr/apps.c -o o/apps.elf \
-    o/lib/string.o \
-    o/lib/stdio.o \
-    o/lib/sort.o \
-    o/lib/drawusr.o \
-    o/lib/ui_mgr.o \
-    o/lib/wo.o \
-    o/lib/ui_button.o \
-    o/lib/ui_label.o \
-    o/lib/ui_grid.o
-
-$GCC $FLAGS usr/prog6.c -o o/prog6.elf \
-    o/lib/string.o \
-    o/lib/stdio.o \
-    o/lib/sort.o \
-    o/lib/drawusr.o \
-    $UI_LIB
-
-$GCC $FLAGS usr/settings.c -o o/settings.elf \
-    o/lib/string.o \
-    o/lib/stdio.o \
-    o/lib/drawusr.o \
-    $UI_LIB \
-    o/lib/dialogs.o \
-    o/lib/sort.o
+$GCC $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
+$GCC $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
+$GCC $FLAGS usr/apps.c -o o/apps.elf o/lib/stdio.o o/lib/sort.o $UI_LIB
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -80,3 +59,5 @@ cp o/prog5.elf fs_root/sys/prog5.elf
 cp o/prog6.elf fs_root/sys/prog6.elf
 cp o/prog7.elf fs_root/sys/prog7.elf
 cp o/settings.elf fs_root/sys/settings.elf
+cp o/taskmgr.elf fs_root/sys/taskmgr.elf
+

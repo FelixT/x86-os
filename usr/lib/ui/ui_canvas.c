@@ -32,7 +32,7 @@ void draw_canvas(wo_t *canvas, surface_t *surface, int window, int offsetX, int 
    // draw children
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
-      if(child && child->draw_func)
+      if(child && child->visible && child->draw_func)
          child->draw_func(child, surface, window, x, y);
    }
 }
@@ -51,12 +51,13 @@ void canvas_click(wo_t *canvas, surface_t *surface, int window, int x, int y, in
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
+      if(!child->visible) continue;
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
+         child->clicked = true;
          if(child->click_func)
             child->click_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
-         child->clicked = true;
-         if(child->draw_func)
+         else if(child->draw_func)
             child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
          child->clicked = false;
       }
@@ -69,16 +70,22 @@ void canvas_release(wo_t *canvas, surface_t *surface, int window, int x, int y, 
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
+      if(!child->visible) continue;
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
-         if(child->release_func)
-            child->release_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
          if(child->type == WO_INPUT)
             child->selected = true;
-         child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+         if(child->release_func)
+            child->release_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
+         else if(child->draw_func)
+            child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
       }
    }
 }
+
+void canvas_mousein() {
+   // do nothing
+} 
 
 void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    if(canvas == NULL || canvas->data == NULL) return;
@@ -86,6 +93,7 @@ void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, in
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
+      if(!child->visible) continue;
 
       bool was_hovering = child->hovering;
 
@@ -94,10 +102,15 @@ void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, in
          if(child->hover_func)
             child->hover_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
          child->hovering = true;
-         if(!was_hovering)
+         if(was_hovering) continue;
+         // mouse in
+         if(child->mousein_func)
+            child->mousein_func(child, surface, window, x, y, canvas->x + offsetX, canvas->y + offsetY);
+         else
             child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
       } else {
          if(!was_hovering) continue;
+         // mouse out
          child->hovering = false;
          if(child->unhover_func)
             child->unhover_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
@@ -116,8 +129,9 @@ void canvas_unfocus(wo_t *canvas, surface_t *surface, int window, int offsetX, i
       if(!child->selected) continue;
       if(child->unfocus_func)
          child->unfocus_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+      else if(child->draw_func)
+         child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
       child->selected = false;
-      child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
    }
 }
 
@@ -140,7 +154,7 @@ void canvas_unhover(wo_t *canvas, surface_t *surface, int window, int offsetX, i
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
-      if(!child->hovering) continue;
+      if(!child->hovering || !child->visible) continue;
       child->hovering = false;
       if(child->unhover_func)
          child->unhover_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
@@ -170,6 +184,21 @@ wo_t *create_canvas(int x, int y, int width, int height) {
    canvas->unfocus_func = &canvas_unfocus;
    canvas->keypress_func = &canvas_keypress;
    canvas->unhover_func = &canvas_unhover;
+   canvas->mousein_func = (void*)&canvas_mousein;
 
    return canvas;
+}
+
+void canvas_item_fill(wo_t *canvas, wo_t *item) {
+   int marginX = item->x;
+   int marginY = item->y;
+   item->width = canvas->width - marginX*2;
+   item->height = canvas->height - marginY*2;
+}
+
+void canvas_item_center(wo_t *canvas, wo_t *item) {
+   int x = (canvas->width - item->width)/2;
+   int y = (canvas->height - item->height)/2;
+   item->x = x;
+   item->y = y;
 }

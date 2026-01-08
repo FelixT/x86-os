@@ -69,5 +69,7 @@ void api_set_window_minimised(registers_t *regs);
 void api_get_window_position(registers_t *regs);
 void api_set_window_setting(registers_t *regs);
 void api_get_window_setting(registers_t *regs);
+void api_get_tasks(registers_t *regs);
+void api_kill_task(registers_t *regs);
 
 #endif

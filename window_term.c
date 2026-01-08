@@ -222,7 +222,7 @@ void term_cmd_help() {
    window_term_printf("  CLEAR, MOUSE, TASKS, LAUNCH path\n");
    window_term_printf("  PROG1, PROG2\n");
    window_term_printf("  TEST, DESKTOP\n");
-   window_term_printf("  MEM <x>, DMPMEM x <y>\n");
+   window_term_printf("  MEM <page>, DMPMEM addr <bytes>\n");
    window_term_printf("  BG colour, BGIMG path\n");
    window_term_printf("  PADDING size, REDRAWALL\n");
 }

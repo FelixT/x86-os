@@ -179,3 +179,12 @@ void set_input_text(wo_t *input, char *text) {
    input_data->text[sizeof(input_data->text) - 1] = '\0';
    input_data->cursor_pos = strlen(input_data->text);
 }
+
+void set_input_return(wo_t *input, void(*return_func)(wo_t *wo, int window)) {
+   input_t *input_data = input->data;
+   input_data->return_func = return_func;
+}
+
+input_t *get_input(wo_t *input) {
+   return input->data;
+}

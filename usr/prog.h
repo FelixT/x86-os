@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "../surface_t.h"
+#include "../lib/api.h"
 
 static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
@@ -367,21 +368,15 @@ static inline void launch_task(char *path, int argc, char **args, bool copy) {
    );
 }
 
-typedef enum {
-   SETTING_WIN_BGCOLOUR,
-   SETTING_WIN_TXTCOLOUR,
-   SETTING_DESKTOP_ENABLED,
-   SETTING_DESKTOP_BGIMG_PATH,
-   SETTING_WIN_TITLEBARCOLOUR,
-   SETTING_THEME_TYPE,
-   SETTING_WIN_TITLEBARCOLOUR2,
-   SETTING_SYS_FONT_PATH,
-   SETTING_BGCOLOUR,
-   SETTINGS_SYS_FONT_PADDING,
-   SETTING_THEME_GRADIENTSTYLE
-} setting_index_t;
+static inline void end_task(int id) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (67),
+      "b" ((uint32_t)id)
+   );
+}
 
-static inline bool set_setting(setting_index_t setting, uint32_t value) {
+static inline bool set_setting(api_setting_t setting, uint32_t value) {
    int out;
    asm volatile (
       "int $0x30;"
@@ -393,7 +388,7 @@ static inline bool set_setting(setting_index_t setting, uint32_t value) {
    return out == 0;
 }
 
-static inline uint32_t get_setting(setting_index_t setting) {
+static inline uint32_t get_setting(api_setting_t setting) {
    uint32_t value;
    asm volatile (
       "int $0x30;"
@@ -403,9 +398,6 @@ static inline uint32_t get_setting(setting_index_t setting) {
    );
    return value;
 }
-
-#define W_SETTING_BGCOLOUR 0
-#define W_SETTING_TXTCOLOUR 1
 
 static inline bool set_window_setting(int setting, uint32_t value, int window) {
    int out;
@@ -700,6 +692,19 @@ static inline int create_thread(void (*func)()) {
       "b" ((uint32_t)func)
    );
    return id;
+}
+
+static inline tasks_t get_tasks() {
+   tasks_t t;
+   int addr;
+   asm volatile (
+      "int $0x30;"
+      : "=b" (addr),
+      "=c" (t.size)
+      : "a" (66)
+   );
+   t.tasks = (api_task_t*)addr;
+   return t;
 }
 
 // terminal override

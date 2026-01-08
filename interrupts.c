@@ -350,6 +350,12 @@ void software_handler(registers_t *regs) {
       case 65:
          api_create_thread(regs);
          break;
+      case 66:
+         api_get_tasks(regs);
+         break;
+      case 67:
+         api_kill_task(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

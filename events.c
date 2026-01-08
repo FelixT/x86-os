@@ -10,6 +10,10 @@ event_t *first_event = NULL;
 
 extern int timer_i;
 
+int event_time_until(event_t *event) {
+    return (event->time - timer_i + 10000000)%10000000;
+}
+
 void events_add(int delta, void *callback, void *msg, int taskid) {
     if(!events_active) {
         events_active = true;
@@ -23,7 +27,6 @@ void events_add(int delta, void *callback, void *msg, int taskid) {
     event->next = NULL;
 
     // find place for it
-    // time til event = (event.time - timer_i)%10000000
 
     // If no first event, this is it
     if(first_event == NULL) {
@@ -32,7 +35,7 @@ void events_add(int delta, void *callback, void *msg, int taskid) {
     }
 
     // If sooner than first, put this as first
-    if(delta < (first_event->time - timer_i)%10000000) {
+    if(event_time_until(event) < event_time_until(first_event)) {
         event->next = first_event;
         first_event = event;
         return;
@@ -42,8 +45,8 @@ void events_add(int delta, void *callback, void *msg, int taskid) {
     event_t *e = first_event;
     while(e->next != NULL) {
 
-        if(delta < (((event_t*)(e->next))->time - timer_i)%10000000) {
-            event->next = ((event_t*)(e->next))->next;
+        if(delta < event_time_until(e)) {
+            event->next = e->next->next;
             e->next = event;
             return;
         }

@@ -9,4 +9,17 @@ void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int wi
 void draw_rect(surface_t *surface, uint16_t colour, int x, int y, int width, int height);
 void draw_pixel(surface_t *surface, uint16_t colour, int x, int y);
 
+// 5r 6g 5b
+static inline int get_r16(uint16_t c) {
+   return (c >> 11) << 3;
+}
+
+static inline int get_g16(uint16_t c) {
+   return ((c >> 5) & 0x3F) << 2;
+}
+
+static inline int get_b16(uint16_t c) {
+   return (c & 0x1F) << 3;
+}
+
 #endif

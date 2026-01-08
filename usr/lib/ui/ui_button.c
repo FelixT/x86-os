@@ -20,6 +20,7 @@ void click_button(wo_t *button, surface_t *surface, int window, int x, int y, in
    button_t *btn_data = (button_t *)button->data;
    if(btn_data->click_func)
       btn_data->click_func(button, window);
+   draw_button(button, surface, window, offsetX, offsetY);
 }
 
 void release_button(wo_t *button, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
@@ -33,6 +34,7 @@ void release_button(wo_t *button, surface_t *surface, int window, int x, int y, 
    button_t *btn_data = (button_t *)button->data;
    if(btn_data->release_func)
       btn_data->release_func(button, window);
+   draw_button(button, surface, window, offsetX, offsetY);
 }
 
 wo_t *create_button(int x, int y, int width, int height, char *text) {

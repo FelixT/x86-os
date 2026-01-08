@@ -13,6 +13,7 @@ ui_mgr_t *ui_init(surface_t *surface, int window) {
    ui->surface = surface;
    ui->window = window;
    ui->default_menu = NULL;
+   ui->scrolled_y = 0;
    return ui;
 }
 
@@ -68,12 +69,10 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
    // check if any ui elements are clicked
    if(ui->focused) {
       ui->focused->selected = false;
-      if(ui->focused->draw_func)
-         ui->focused->draw_func(ui->focused, ui->surface, ui->window, 0, 0);
-
       if(ui->focused->unfocus_func)
          ui->focused->unfocus_func(ui->focused, ui->surface, ui->window, 0, 0);
-
+      else if(ui->focused->draw_func)
+         ui->focused->draw_func(ui->focused, ui->surface, ui->window, 0, 0);
       ui->focused = NULL;
    }
 
@@ -85,10 +84,10 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
       && y >= wo->y && y < wo->y + wo->height) {
          ui->clicked = wo;
          wo->clicked = true;
-         if(wo->draw_func)
-            wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          if(wo->click_func)
             wo->click_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+         else if(wo->draw_func)
+            wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          break;
       }
    }
@@ -111,7 +110,7 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
          if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_GRID || wo->type == WO_GROUPBOX) {
             ui->focused = wo;
             wo->selected = true;
-            if(wo->draw_func)
+            if(!wo->release_func && wo->draw_func)
                wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          }
          break;
@@ -158,13 +157,15 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
          wo->hovering = true;
          ui->hovered = wo;
 
-         if(wo->hover_func) {
+         if(wo->hover_func)
             wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
-         } else {
-            if(wo != hovered && wo->draw_func)
+         
+         if(wo != hovered) {
+            if(wo->mousein_func)
+               wo->mousein_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+            else if(wo->draw_func)
                wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          }
-
       }
    }
 
@@ -201,4 +202,15 @@ void ui_rightclick(ui_mgr_t *ui, int x, int y) {
 void ui_unfocus() {
    // window unfocus event
 
+}
+
+void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
+   ui->scrolled_y = offsetY;
+   for(int i = 0; i < ui->wo_count; i++) {
+      wo_t *wo = ui->wos[i];
+      if(wo->fixed) continue;
+      wo->y -= deltaY;
+   }
+   clear_w(ui->window);
+   ui_draw(ui);
 }

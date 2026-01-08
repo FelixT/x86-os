@@ -78,9 +78,6 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    memset(newProg, 0, vmem_size);
 
    // start of newProg maps to vmem_start  
-
-   prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
-
    debug_printf("Mapping 0x%h - 0x%h to 0x%h - 0x%h\n", (uint32_t)newProg, (uint32_t)newProg + vmem_size, vmem_start, vmem_end);
 
    // map vmem

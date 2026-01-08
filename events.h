@@ -4,10 +4,10 @@
 #include <stddef.h>
 #include "registers_t.h"
 
-typedef struct {
+typedef struct event_t {
     int time;
     void *msg;
-    void *next;
+    struct event_t *next;
     void *callback;
     int task;
 } __attribute__((packed)) event_t;

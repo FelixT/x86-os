@@ -125,21 +125,6 @@ mem_segment_status_t *memory_get_table() {
    return &memory_status[0];
 }
 
-void memcpy(void *dest, const void *src, int bytes) {
-   for(int i = 0; i < bytes; i++)
-      ((uint8_t*)dest)[i] = ((uint8_t*)src)[i];
-}
-
-int memcmp(const void *a, const void *b, int bytes) {
-   const uint8_t *pa = (const uint8_t*)a;
-   const uint8_t *pb = (const uint8_t*)b;
-   for(int i = 0; i < bytes; i++) {
-      if(pa[i] != pb[i])
-           return pa[i] - pb[i];
-   }
-   return 0; 
-}
-
 void memcpy_fast(void *dest, const void *src, size_t bytes) {
    // Use rep movsd for 4-byte blocks, then rep movsb for remaining bytes
    unsigned int dword_count = bytes / 4;

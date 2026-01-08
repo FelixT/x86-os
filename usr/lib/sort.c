@@ -1,6 +1,7 @@
 #include "sort.h"
 
 #include "stdio.h"
+#include "../../lib/string.h"
 
 // quicksort
 

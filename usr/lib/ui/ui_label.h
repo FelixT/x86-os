@@ -21,5 +21,6 @@ typedef struct label_t {
 } label_t;
 
 wo_t *create_label(int x, int y, int width, int height, char *text);
+label_t *get_label(wo_t *wo);
 
 #endif

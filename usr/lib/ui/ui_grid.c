@@ -329,3 +329,27 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
 
    return grid;
 }
+
+int get_grid_cell_width(wo_t *grid) {
+   grid_t *grid_data = grid->data;
+   return grid->width/grid_data->cols;
+}
+
+int get_grid_cell_height(wo_t *grid) {
+   grid_t *grid_data = grid->data;
+   return grid->height/grid_data->rows;
+}
+
+void grid_item_fill_cell(wo_t *grid, wo_t *item) {
+   int marginX = item->x;
+   int marginY = item->y;
+   item->width = get_grid_cell_width(grid) - marginX*2;
+   item->height = get_grid_cell_height(grid) - marginY*2;
+}
+
+void grid_item_center_cell(wo_t *grid, wo_t *item) {
+   int x = (get_grid_cell_width(grid) - item->width)/2;
+   int y = (get_grid_cell_height(grid) - item->height)/2;
+   item->x = x;
+   item->y = y;
+}

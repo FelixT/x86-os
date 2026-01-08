@@ -143,12 +143,12 @@ void window_close(void *regs, int windowIndex) {
 
    if(windowIndex == 0) {
       // debug window
-      int popup = windowmgr_add();
-      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Can't close debug window");
-      window_draw_outline(getSelectedWindow(), false);
       getWindow(windowIndex)->minimised = true;
-      getWindow(windowIndex)->active = false;
+      setSelectedWindowIndex(-1);
+      int popup = windowmgr_add();
+      window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Minimised debug window");
       setSelectedWindowIndex(popup);
+      gui_redrawall();
       return;
    }
 
@@ -391,8 +391,13 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
       draw_rect(&surface, wm_settings.titlebar_colour, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
    }
    // draw text
-   draw_string(&surface, window->title, rgb16(210,210,210), titleX, window->y+6);
+   draw_string(&surface, window->title, rgb16(210,210,210), titleX, window->y+6); // shadow
    draw_string(&surface, window->title, 0, titleX, window->y+5);
+   if(window->active) {
+      // draw underline
+      draw_line(&surface, rgb16(170,170,170), titleX, window->y+6+getFont()->height, false, titleWidth);
+      draw_line(&surface, rgb16(210,210,210), titleX, window->y+6+getFont()->height+1, false, titleWidth);
+   }
 
    // titlebar buttons
    draw_char(&surface, 0, 0, window->x+window->width-(getFont()->width+3), window->y+2);
@@ -731,20 +736,23 @@ void windowmgr_keypress(void *regs, int scan_code) {
    if(scan_code == 0x38) {
       // alt
       keyboard_alt = !released;
-   } else if(keyboard_alt) {
+   }
+   if(keyboard_alt) {
       // alt+w
       if(scan_to_char(scan_code, false, false) == 'w') {
          window_close(regs, gui_selected_window);
+         keyboard_alt = false;
       }
       // alt+space
       if(scan_to_char(scan_code, false, false) == ' ') {
-         setSelectedWindowIndex(-1);
          windowmgr_launch_apps((registers_t*)regs);
+         keyboard_alt = false;
          return;
       }
       // alt+tab
       if(scan_code == 0x0F) {
          windowmgr_swap_window();
+         keyboard_alt = false;
          return;
       }
       // alt+number
@@ -761,6 +769,12 @@ void windowmgr_keypress(void *regs, int scan_code) {
             }
             count++;
          }
+      }
+      // alt+esc
+      if(scan_code == 0x01) {
+         tasks_launch_elf(regs, "/sys/tasks.elf", 0, NULL, true);
+         keyboard_alt = false;
+         return;
       }
    }
 
@@ -1013,18 +1027,17 @@ void windowmgr_launch_apps(registers_t *regs) {
          if(i == getSelectedWindowIndex()) {
             getSelectedWindow()->minimised = true;
             setSelectedWindowIndex(-1);
-            gui_redrawall();
          } else {
             setSelectedWindowIndex(i);
-            if(getSelectedWindow()->minimised) {
+            if(getSelectedWindow()->minimised)
                getSelectedWindow()->minimised = false;
-               gui_redrawall();
-            }
          }
+         gui_redrawall();
          return;
       }
    }
    tasks_launch_elf(regs, "/sys/apps.elf", 0, NULL, false);
+   setSelectedWindowIndex(-1);
    gui_window_t *w = &gui_get_windows()[get_current_task_window()];
    w->minimised = true;
 }
@@ -1328,7 +1341,7 @@ void windowmgr_mousemove(int x, int y) {
             registers_t *regs = get_regs();
             if(task < 0) return;
             if(!switch_to_task(task, regs)) return;
-            uint32_t *args = malloc(sizeof(uint32_t) * 2);
+            uint32_t *args = malloc(sizeof(uint32_t) * 3);
             args[2] = relX;
             args[1] = relY;
             args[0] = get_cindex();

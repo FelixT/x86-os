@@ -98,7 +98,7 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
       if(display_label[i] == '\n') {
          text_y += get_font_info().height + get_font_info().padding;
          text_width = ui_string_width(display_label+i+1);
-         text_x = x + (label_data->halign ? (width - text_width) / 2 : 0);
+         text_x = x + (label_data->halign ? (width - text_width) / 2 : label_data->padding_left);
       } else {
          // somewhat inefficient
          char buf[2] = {display_label[i], '\0'};
@@ -155,4 +155,8 @@ wo_t *create_label(int x, int y, int width, int height, char *text) {
    label->type = WO_LABEL;
 
    return label;
+}
+
+label_t *get_label(wo_t *wo) {
+   return wo->data;
 }

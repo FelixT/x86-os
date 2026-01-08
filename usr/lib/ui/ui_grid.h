@@ -27,5 +27,9 @@ typedef struct grid_t {
 
 wo_t *create_grid(int x, int y, int width, int height, int rows, int cols);
 void grid_add(wo_t *grid, wo_t *child, int row, int col);
+int get_grid_cell_width(wo_t *grid);
+int get_grid_cell_height(wo_t *grid);
+void grid_item_fill_cell(wo_t *grid, wo_t *item);
+void grid_item_center_cell(wo_t *grid, wo_t *item);
 
 #endif

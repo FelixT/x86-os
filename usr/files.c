@@ -159,6 +159,7 @@ void click(int x, int y) {
       end_subroutine();
    }
 
+   // clicked outside menu while its visible
    if(addnew_menu && addnew_menu->visible && !wo_newfile->hovering) {
       ui_click(ui, x, y);
       addnew_menu->visible = false;

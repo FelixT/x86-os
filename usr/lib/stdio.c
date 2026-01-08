@@ -9,11 +9,6 @@
 static FILE file_table[MAX_FILES];
 static int files_initialized = 0;
 
-void memcpy(void *dest, const void *src, int bytes) {
-   for(int i = 0; i < bytes; i++)
-      ((uint8_t*)dest)[i] = ((uint8_t*)src)[i];
-}
-
 void init_files(void) {
     if(!files_initialized) {
         memset(file_table, 0, sizeof(file_table));

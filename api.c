@@ -1,4 +1,5 @@
 #include "api.h"
+#include "lib/api.h" // shared header
 
 #include "tasks.h"
 #include "window.h"
@@ -409,18 +410,18 @@ void api_launch_task(registers_t *regs) {
    
    // copy args
    char **copied_args = NULL;
-    if(argc > 0 && args != NULL) {
-        copied_args = malloc(sizeof(char*) * argc);
-        for(int i = 0; i < argc; i++) {
-            if(args[i] != NULL) {
-               size_t len = strlen(args[i]);
-               copied_args[i] = malloc(len + 1);
-               strcpy(copied_args[i], args[i]);
-            } else {
-               copied_args[i] = NULL;
-            }
-        }
-    }
+   if(argc > 0 && args != NULL) {
+      copied_args = malloc(sizeof(char*) * argc);
+      for(int i = 0; i < argc; i++) {
+         if(args[i] != NULL) {
+            size_t len = strlen(args[i]);
+            copied_args[i] = malloc(len + 1);
+            strcpy(copied_args[i], args[i]);
+         } else {
+            copied_args[i] = NULL;
+         }
+      }
+   }
 
    task_state_t *parenttask = &gettasks()[get_current_task()];
 
@@ -449,8 +450,8 @@ void api_launch_task(registers_t *regs) {
          // map args to task
          map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
       }
+      map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
    }
-   map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
 }
 
 void api_set_window_title(registers_t *regs) {
@@ -879,6 +880,14 @@ void api_create_thread(registers_t *regs) {
    thread->registers.eflags = regs->eflags;
    thread->registers.useresp = thread->stack_top;
    thread->enabled = true;
+
+   regs->ebx = task_index;
+}
+
+void api_kill_task(registers_t *regs) {
+   // todo: check permission
+   // IN: ebx: task index
+   end_task(regs->ebx, regs);
 }
 
 void api_set_setting(registers_t *regs) {
@@ -1015,9 +1024,6 @@ void api_get_setting(registers_t *regs) {
    }
 }
 
-#define W_SETTING_BGCOLOUR 0
-#define W_SETTING_TXTCOLOUR 1
-
 void api_get_window_setting(registers_t *regs) {
    // IN: ebx setting index
    // IN: ecx window
@@ -1089,6 +1095,46 @@ void api_set_window_minimised(registers_t *regs) {
    if(window == getSelectedWindow()) {
       getSelectedWindow()->active = false;
       setSelectedWindowIndex(-1);
+   } else {
+      if(!window->minimised)
+         setSelectedWindowIndex(get_window_index_from_pointer(window));
    }
    gui_redrawall();
+}
+
+void api_get_tasks(registers_t *regs) {
+   // OUT: ebx api_task_t *
+   // OUT: ecx size
+   api_task_t *tasks = malloc(sizeof(api_task_t)*TOTAL_TASKS);
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      task_state_t *task_state = &gettasks()[i];
+      api_task_t *api_task = &tasks[i];
+      api_task->id = task_state->task_id;
+      api_task->enabled = task_state->enabled;
+      api_task->paused = task_state->paused;
+      if(!api_task->enabled || !task_state->process || task_state->process->no_threads == 0)
+         continue;
+      api_task->parentid = task_state->process->threads[0]->task_id;
+      if(api_task->id != api_task->parentid)
+         continue; // child process
+      // parent thread
+      process_t *process = task_state->process;
+      api_task->heap_start = process->heap_start;
+      api_task->heap_end = process->heap_end;
+      api_task->prog_start = process->prog_start;
+      api_task->prog_entry = process->prog_entry;
+      api_task->prog_size = process->prog_size;
+      api_task->vmem_start = process->vmem_start;
+      api_task->vmem_end = process->vmem_start;
+      api_task->no_allocated = process->no_allocated;
+      api_task->privileged = process->privileged;
+      strcpy(api_task->working_dir, process->working_dir);
+      if(process->window > -1 && !getWindow(process->window)->closed)
+         strcpy(api_task->main_window_name, getWindow(process->window)->title);
+      else
+         strcpy(api_task->main_window_name, "");
+   }
+   map_size(get_current_task_pagedir(), (uint32_t)tasks, (uint32_t)tasks, sizeof(api_task_t)*TOTAL_TASKS, 1, 1);
+   regs->ebx = (uint32_t)tasks;
+   regs->ecx = TOTAL_TASKS;
 }

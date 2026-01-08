@@ -27,16 +27,15 @@ void term_cmd_help() {
    // todo: mouse, tasks, prog1, prog2, files, viewbmp, test, desktop, mem, bg, bgimg, padding, redrawall, windowbg, windowtxt
    write_str("\n");
    printf(" CLEAR\n");
-   printf(" LAUNCH<W> path\n");
+   printf(" LAUNCH<W> path, TASKS\n");
    printf(" FILES, TEXT <path>\n");
-   printf(" FAT <path>,\n");
    printf(" FAPPEND <path> <buffer>\n");
    printf(" FWRITE <path> <buffer>\n");
    printf(" FREAD path\n");
    printf(" LS, CD path, PWD\n");
    printf(" CAT path, TOUCH path\n");
    printf(" MKDIR path, RENAME path newname\n");
-   printf(" DMPMEM x <y>\n");
+   printf(" DMPMEM addr <bytes>\n");
    printf(" FONT path, RGBHEX r g b\n\n");
 }
 
@@ -118,7 +117,6 @@ void term_cmd_dmpmem(char *arg) {
    int bytes = 32;
    int rowlen = 8;
    char arg2[10];
-   printf("%s\n", arg);
 
    if(strsplit(arg, arg2, arg, ' ')) {
       bytes = stoi((char*)arg2);
@@ -383,6 +381,22 @@ void term_cmd_rename(char *arg) {
    }
 }
 
+void term_cmd_tasks() {
+   tasks_t tasks = get_tasks();
+   for(int i = 0; i < tasks.size; i++) {
+      api_task_t *task = &tasks.tasks[i];
+      if(!task->enabled) continue;
+      printf("\nTask %i: ", task->id);
+      if(task->parentid == task->id)
+         printf("%s (allc %i pages / heap size 0x%h)", task->main_window_name, task->no_allocated, task->heap_start - task->heap_end);
+      else
+         printf("(parent %i) ", task->parentid);
+      if(task->paused)
+         printf("paused");
+   }
+   printf("\n");
+}
+
 void checkcmd(char *buffer) {
 
    char command[10];
@@ -430,6 +444,8 @@ void checkcmd(char *buffer) {
       term_cmd_mkdir(arg);
    else if(strequ(command, "RENAME"))
       term_cmd_rename(arg);
+   else if(strequ(command, "TASKS"))
+      term_cmd_tasks(arg);
    else
       term_cmd_default(command);
 

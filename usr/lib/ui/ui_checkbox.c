@@ -16,6 +16,7 @@ void release_checkbox(wo_t *checkbox, surface_t *surface, int window, int x, int
    check_data->checked = !check_data->checked;
    if(check_data->release_func)
       check_data->release_func(checkbox, window);
+   draw_checkbox(checkbox, surface, window, offsetX, offsetY);
 }
 
 wo_t *create_checkbox(int x, int y, bool checked) {

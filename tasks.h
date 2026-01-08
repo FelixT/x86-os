@@ -31,7 +31,7 @@ typedef struct process_t {
    uint32_t prog_start; // physical addr of start of program
    uint32_t prog_entry; // addr of program entry point, may be different from prog_start
    uint32_t prog_size;
-   bool privileged; // 0 = user, 1 = kernel
+   bool privileged;
    int window; // the task's main window. additional windows are children of this
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;

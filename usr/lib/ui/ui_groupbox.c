@@ -59,6 +59,10 @@ void hover_groupbox(wo_t *groupbox, surface_t *surface, int window, int x, int y
    }
 }
 
+void mousein_groupbox() {
+   // do nothing
+}
+
 void keypress_groupbox(wo_t *groupbox, uint16_t c, int window) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
@@ -116,6 +120,7 @@ wo_t *create_groupbox(int x, int y, int width, int height, char *label) {
    groupbox->unfocus_func = &unfocus_groupbox;
    groupbox->keypress_func = &keypress_groupbox;
    groupbox->unhover_func = &unhover_groupbox;
+   groupbox->mousein_func = (void*)&mousein_groupbox;
    groupbox->type = WO_GROUPBOX;
 
    return groupbox;
@@ -137,4 +142,9 @@ void groupbox_resize(wo_t *groupbox, int width, int height) {
    wo_t *canvas = groupbox_data->canvas;
    canvas->width = width - 2;
    canvas->height = height - (get_font_info().height + 2) - 1;
+}
+
+wo_t *groupbox_get_canvas(wo_t *groupbox) {
+   groupbox_t *data = groupbox->data;
+   return data->canvas;
 }

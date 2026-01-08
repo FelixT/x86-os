@@ -60,7 +60,7 @@ window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *p
    window_popup_init(window, parent);
    // add default window objects
 
-   strcpy(window->title, "Dialog");
+   strcpy(window->title, "Msg");
    if(parent != NULL) {
       window->x = parent->x + 50;
       window->y = parent->y + 50;

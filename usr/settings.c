@@ -24,15 +24,16 @@ wo_t *colour2_colourbox;
 wo_t *windowbg_colourbox;
 wo_t *windowtxt_colourbox;
 
-int scrollOffsetY = 0;
-
 void title_draw(wo_t *wo, surface_t *surface, int window, int offset, int offsetY) {
    (void)offset;
    (void)offsetY;
    (void)window;
    (void)wo;
-   write_strat_w("System settings:", 10, 8-scrollOffsetY, 0, -1);
-   draw_line(surface, rgb16(200, 200, 200), 10, 18-scrollOffsetY, false, strlen("System settings")*(get_font_info().width+get_font_info().padding));
+   int x = ui->wos[0]->x - 10;
+   if(x < 5)
+      x = 5;
+   write_strat_w("System settings:", x, 8-ui->scrolled_y, 0, -1);
+   draw_line(surface, rgb16(200, 200, 200), x, 18-ui->scrolled_y, false, strlen("System settings")*(get_font_info().width+get_font_info().padding));
 }
 
 wo_t *settings_create_label(wo_t *groupbox, int y, char *text) {
@@ -105,21 +106,8 @@ wo_t *settings_create_colourbox(wo_t *groupbox, int y, uint16_t colour) {
 }
 
 void scroll(int deltaY, int offsetY, int window) {
-   (void)offsetY;
    (void)window;
-
-   scrollOffsetY = offsetY;
-
-   clear();
-
-   for(int i = 0; i < ui->wo_count; i++) {
-      wo_t *wo = ui->wos[i];
-      if(!wo || !wo->enabled) continue;
-      ui->wos[i]->y -= deltaY;
-   }
-
-   ui_redraw(ui);
-
+   ui_scroll(ui, deltaY, offsetY);
    end_subroutine();
 }
 
@@ -295,6 +283,18 @@ void font_padding_keypress(wo_t *wo, uint16_t c, int window) {
    }
 }
 
+void resize() {
+   int box_width = 285;
+   int box_x = (get_width() - (box_width))/2;
+   for(int i = 0; i < ui->wo_count; i++) {
+      ui->wos[i]->x = box_x;
+   }
+   clear();
+   *ui->surface = get_surface();
+   ui_draw(ui);
+   end_subroutine();
+}
+
 void _start() {
    set_window_size(360, 280);
    
@@ -302,17 +302,13 @@ void _start() {
 
    char buffer[256];
 
-   int overall_y = 30;
-
    // register as dialog
    int index = get_free_dialog();
-   if(index < 0) {
-      printf("Couldn't create dialog\n");
-      exit(0);
-   }
    dialog_t *dialog = get_dialog(index);
    dialog_init(dialog, -1);
    ui = dialog->ui;
+
+   override_resize((uint32_t)&resize, -1);
 
    dialog_set_title(dialog, "System Settings");
 
@@ -321,8 +317,13 @@ void _start() {
    title_wo->draw_func = &title_draw;
    ui_add(ui, title_wo);
 
+   int margin = 30;
+   int box_width = 285;
+   int box_x = (get_width() - (box_width))/2;
+   int box_y = margin;
+
    // theme settings
-   wo_t *theme_group = create_groupbox(30, overall_y, 325, 100, "Theme settings");
+   wo_t *theme_group = create_groupbox(box_x, box_y, box_width, 100, "Theme settings");
    ui_add(ui, theme_group);
    int y = 5;
 
@@ -384,11 +385,11 @@ void _start() {
    input->width-=20;
    y+=25;
 
-   groupbox_resize(theme_group, 285, y + 12);
-   overall_y += y + 20;
+   groupbox_resize(theme_group, box_width, y + 12);
+   box_y += y + 20;
 
    // font settings
-   wo_t *font_group = create_groupbox(30, overall_y, 285, 100, "Font settings");
+   wo_t *font_group = create_groupbox(box_x, box_y, box_width, 100, "Font settings");
    ui_add(ui, font_group);
    y = 5;
 
@@ -420,11 +421,11 @@ void _start() {
    groupbox_add(font_group, button);
    y+=25;
 
-   groupbox_resize(font_group, 285, y + 12);
-   overall_y += y + 20;
+   groupbox_resize(font_group, box_width, y + 12);
+   box_y += y + 20;
 
    // desktop settings
-   wo_t *desktop_group = create_groupbox(30, overall_y, 285, 90, "Desktop settings");
+   wo_t *desktop_group = create_groupbox(box_x, box_y, box_width, 90, "Desktop settings");
    ui_add(ui, desktop_group);
    y = 5;
 
@@ -457,8 +458,8 @@ void _start() {
    bgcolour_input->width-=20;
    y+=25;
 
-   groupbox_resize(desktop_group, 285, y + 12);
-   overall_y += y + 20;
+   groupbox_resize(desktop_group, box_width, y + 12);
+   box_y += y + 20;
 
    for(int i = 0; i < 8; i++)
       colourpicker_wos[i] = NULL;
@@ -466,8 +467,8 @@ void _start() {
    ui_draw(ui);
 
    create_scrollbar(&scroll, -1);
-   dialog->content_height = overall_y;
-   set_content_height(overall_y, -1);
+   dialog->content_height = box_y;
+   set_content_height(box_y, -1);
 
    while(true) {
       yield();

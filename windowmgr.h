@@ -6,20 +6,6 @@
 #include "window_t.h"
 #include "registers_t.h"
 
-typedef enum {
-   SETTING_WIN_BGCOLOUR,
-   SETTING_WIN_TXTCOLOUR,
-   SETTING_DESKTOP_ENABLED,
-   SETTING_DESKTOP_BGIMG_PATH,
-   SETTING_WIN_TITLEBARCOLOUR,
-   SETTING_THEME_TYPE,
-   SETTING_WIN_TITLEBARCOLOUR2,
-   SETTING_SYS_FONT_PATH,
-   SETTING_BGCOLOUR,
-   SETTINGS_SYS_FONT_PADDING,
-   SETTING_THEME_GRADIENTSTYLE
-} windowmgr_setting_index_t;
-
 typedef struct {
    uint16_t default_window_bgcolour;
    uint16_t default_window_txtcolour;

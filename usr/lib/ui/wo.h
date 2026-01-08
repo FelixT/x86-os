@@ -27,6 +27,7 @@ typedef struct wo_t {
    int width, height;
    bool visible;
    bool enabled;
+   bool fixed; // fixed position during scroll
 
    bool hovering;
    bool clicked;
@@ -39,7 +40,8 @@ typedef struct wo_t {
    void (*release_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
    void (*unfocus_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
    void (*hover_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
-   void (*unhover_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
+   void (*mousein_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
+   void (*unhover_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY); // mouseout
    void (*drag_func)(struct wo_t *wo, int x, int y);
    void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);
    void (*destroy_func)(struct wo_t *wo);

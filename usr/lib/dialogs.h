@@ -56,6 +56,8 @@ int dialog_window_settings(int window, char *title);
 wo_t *dialog_create_colourbox(int x, int y, int width, int height, uint16_t colour, int window, void (*callback)(char *out, int window, wo_t *colourbox));
 void dialog_set_title(dialog_t *dialog, char *title);
 int dialog_yesno(char *title, char *text, void *return_func);
+void dialog_add(dialog_t *dialog, char *key, wo_t *wo);
+wo_t *dialog_get(dialog_t *dialog, char *key);
 
 #define MAX_DIALOGS 10
 

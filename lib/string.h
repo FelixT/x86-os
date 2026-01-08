@@ -29,5 +29,7 @@ uint32_t hextouint(char *str);
 int strtoint(char *str);
 void *memset(void *dest, uint8_t ch, int count);
 void tolower(char *c);
+void memcpy(void *dest, const void *src, int bytes);
+int memcmp(const void *a, const void *b, int bytes);
 
 #endif
