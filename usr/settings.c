@@ -29,7 +29,7 @@ void title_draw(wo_t *wo, surface_t *surface, int window, int offset, int offset
    (void)offsetY;
    (void)window;
    (void)wo;
-   int x = ui->wos[0]->x - 10;
+   int x = ui->wos[1]->x - 10;
    if(x < 5)
       x = 5;
    write_strat_w("System settings:", x, 8-ui->scrolled_y, 0, -1);
@@ -42,6 +42,7 @@ wo_t *settings_create_label(wo_t *groupbox, int y, char *text) {
    label_data->colour_border_light = 0xFFFF;
    label_data->colour_border_dark = rgb16(220, 220, 220);
    label_data->halign = false;
+   label_data->padding_left = 4;
    groupbox_add(groupbox, label);
    return label;
 }

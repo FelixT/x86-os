@@ -40,15 +40,15 @@ void draw_rect_gradient(surface_t *surface, uint16_t color1, uint16_t color2, in
    
    int range = (direction == 0) ? width : height;
    
-   for( int yi = y; yi < y + height; yi++) {
+   for(int yi = y; yi < y + height; yi++) {
       for(int xi = x; xi < x + width; xi++) {
-            int pos = (direction == 0) ? (xi - x) : (yi - y);
-            int factor = (pos * 256) / (range - 1);
-            int r = r1 + (((r2 - r1) * factor) >> 8);
-            int g = g1 + (((g2 - g1) * factor) >> 8);
-            int b = b1 + (((b2 - b1) * factor) >> 8);
-            uint16_t gradient_color = (r << 11) | (g << 5) | b;
-            setpixel_safe(surface, yi * (int)surface->width + xi, gradient_color);
+         int pos = (direction == 0) ? (xi - x) : (yi - y);
+         int factor = (pos * 256) / (range - 1);
+         int r = r1 + (((r2 - r1) * factor) >> 8);
+         int g = g1 + (((g2 - g1) * factor) >> 8);
+         int b = b1 + (((b2 - b1) * factor) >> 8);
+         uint16_t gradient_color = (r << 11) | (g << 5) | b;
+         setpixel_safe(surface, yi * (int)surface->width + xi, gradient_color);
       }
    }
 }

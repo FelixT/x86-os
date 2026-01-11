@@ -10,7 +10,7 @@ dialog_t *dialog;
 
 int selected_task = -1;
 
-void task_show(int index) {
+void task_show_info(int index) {
    selected_task = index;
    api_task_t *task = &tasks.tasks[index];
    dialog_get(dialog, "info_label")->visible = false;
@@ -29,6 +29,11 @@ void task_show(int index) {
    }
    strcpy(label_window->label, buffer);
 
+   label_t *label_memory = dialog_get(dialog, "info_label_memory")->data;
+   int kb = task->no_allocated*0x1000/1000;
+   sprintf(buffer, "Malloc: %i pages (%i kb)\nHeap size: %i", task->no_allocated, kb, task->heap_end - task->heap_start);
+   strcpy(label_memory->label, buffer);
+
    ui_draw(dialog->ui);
 }
 
@@ -36,7 +41,7 @@ void task_click(wo_t *wo, int index, int window) {
    (void)window;
    menu_t *menu = wo->data;
    int taskid = strtoint(menu->items[index].text+strlen("Task "));
-   task_show(taskid);
+   task_show_info(taskid);
 }
 
 void show_tasks() {
@@ -64,10 +69,6 @@ void show_tasks() {
 
 void launch_task_return (char *out, int window) {
    dialog_t *dialog = dialog_from_window(window);
-   if(!dialog) {
-      debug_println("Can't find window %i", window);
-      return;
-   }
    dialog->active = false;
    close_window(window);
    // have to do this before calling launch task as it ends subroutine
@@ -89,7 +90,9 @@ void end_task_callback(wo_t *wo, int window) {
 
 void refresh_callback(wo_t *wo, int window) {
    (void)wo;
-   (void)window;
+   dialog_t *dialog = dialog_from_window(window);
+   menu_t *menu = dialog_get(dialog, "tasks_menu")->data;
+   menu->offset = 0;
    show_tasks();
 }
 
@@ -134,6 +137,7 @@ void _start() {
 
    wo_t *grid = create_grid(2, 2, 0, 0, 2, 2);
    canvas_item_fill(canvas, grid);
+   dialog_add(dialog, "info_grid", label);
    label = create_label(2, 2, 0, 0, "");
    grid_item_fill_cell(grid, label);
    ((label_t*)label->data)->halign = false;
@@ -155,6 +159,14 @@ void _start() {
    set_button_release(button, &end_task_callback);
    grid_item_fill_cell(grid, button);
    grid_add(grid, button, 0, 1);
+   label = create_label(2, 2, 0, 0, "");
+   grid_item_fill_cell(grid, label);
+   ((label_t*)label->data)->halign = false;
+   ((label_t*)label->data)->valign = true;
+   ((label_t*)label->data)->padding_left = 4;
+   ((label_t*)label->data)->bordered = false;
+   grid_add(grid, label, 1, 1);
+   dialog_add(dialog, "info_label_memory", label);
 
    // launch tasks btn
    button = create_button(5, 220, 100, 20, "Launch task");
@@ -165,7 +177,7 @@ void _start() {
    set_button_release(button, &refresh_callback);
    ui_add(dialog->ui, button);
    // close btn
-   button = create_button(220, 220, 100, 20, "Close");
+   button = create_button(215, 220, 100, 20, "Close");
    set_button_release(button, &close_callback);
    ui_add(dialog->ui, button);
 

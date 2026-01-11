@@ -560,6 +560,7 @@ int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int wind
    wo_t *r_label = create_label(264, 140, 52, 16, "Red:");
    get_label(r_label)->valign = true;
    wo_t *r_input = create_input(264, 158, 52, 16);
+   get_input(r_input)->valign = true;
    inttostr(get_r16(colour), buffer);
    set_input_text(r_input, buffer);
    set_input_return(r_input, &dialog_colourpicker_rgbinput_return);
@@ -569,6 +570,7 @@ int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int wind
    wo_t *g_label = create_label(264, 174, 52, 16, "Green:");
    get_label(g_label)->valign = true;
    wo_t *g_input = create_input(264, 192, 52, 16);
+   get_input(g_input)->valign = true;
    inttostr(get_g16(colour), buffer);
    set_input_text(g_input, buffer);
    set_input_return(g_input, &dialog_colourpicker_rgbinput_return);
@@ -578,6 +580,7 @@ int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int wind
    wo_t *b_label = create_label(264, 210, 52, 16, "Blue:");
    get_label(b_label)->valign = true;
    wo_t *b_input = create_input(264, 228, 52, 16);
+   get_input(b_input)->valign = true;
    inttostr(get_b16(colour), buffer);
    set_input_text(b_input, buffer);
    set_input_return(b_input, &dialog_colourpicker_rgbinput_return);

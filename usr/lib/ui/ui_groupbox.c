@@ -111,6 +111,7 @@ wo_t *create_groupbox(int x, int y, int width, int height, char *label) {
    groupbox_data->canvas = create_canvas(margin, margin_top, width - margin*2, height - margin_top - margin);
    canvas_t *canvas_data = groupbox_data->canvas->data;
    canvas_data->bordered = false;
+   canvas_data->filled = false;
 
    groupbox->data = groupbox_data;
    groupbox->draw_func = &draw_groupbox;

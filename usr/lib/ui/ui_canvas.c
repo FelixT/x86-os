@@ -73,7 +73,7 @@ void canvas_release(wo_t *canvas, surface_t *surface, int window, int x, int y, 
       if(!child->visible) continue;
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
-         if(child->type == WO_INPUT)
+         //if(child->type == WO_INPUT)
             child->selected = true;
          if(child->release_func)
             child->release_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
@@ -85,7 +85,7 @@ void canvas_release(wo_t *canvas, surface_t *surface, int window, int x, int y, 
 
 void canvas_mousein() {
    // do nothing
-} 
+}
 
 void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
    if(canvas == NULL || canvas->data == NULL) return;
@@ -127,11 +127,11 @@ void canvas_unfocus(wo_t *canvas, surface_t *surface, int window, int offsetX, i
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
       if(!child->selected) continue;
+      child->selected = false;
       if(child->unfocus_func)
          child->unfocus_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
       else if(child->draw_func)
          child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
-      child->selected = false;
    }
 }
 

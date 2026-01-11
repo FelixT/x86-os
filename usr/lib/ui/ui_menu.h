@@ -16,6 +16,8 @@ typedef struct menu_t {
    int item_count;
    int selected_index;
    int hover_index;
+   int offset; // used for scroll
+   bool scrolling; // showing scrollbar
 } menu_t;
 
 wo_t *create_menu(int x, int y, int width, int height);

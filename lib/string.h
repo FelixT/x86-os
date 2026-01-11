@@ -31,5 +31,7 @@ void *memset(void *dest, uint8_t ch, int count);
 void tolower(char *c);
 void memcpy(void *dest, const void *src, int bytes);
 int memcmp(const void *a, const void *b, int bytes);
+void *memmove(void *dest, const void *src, size_t n);
+void memset16(uint16_t *dest, uint16_t value, size_t count);
 
 #endif

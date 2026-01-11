@@ -225,8 +225,8 @@ void window_close(void *regs, int windowIndex) {
 
 bool window_init(gui_window_t *window) {
    strcpy(window->title, "Window");
-   window->x = 20;
-   window->y = 20;
+   window->x = gui_get_width()/16;
+   window->y = gui_get_height()/16;
    window->width = 355;
    window->height = 265;
    window->text_buffer[0] = '\0';
@@ -332,8 +332,14 @@ int windowmgr_add() {
       
    if(window_init(&gui_windows[index])) {
       setSelectedWindowIndex(index);
-      gui_windows[index].x = index * 20;
-      gui_windows[index].y = index * 20;
+      int x = gui_get_width()/16 + index * 30;
+      int y = gui_get_height()/16 + index * 30;
+      if(x > gui_windows[index].width - 20)
+         x = 20;
+      if(y > gui_windows[index].height - TOOLBAR_HEIGHT - 20)
+         y = 20;
+      gui_windows[index].x = x;
+      gui_windows[index].y = y;
 
       toolbar_draw();
 
@@ -578,6 +584,13 @@ void windowmgr_closeselected() {
    gui_redrawall();
 }
 
+void windowmgr_taskmanager() {
+   default_menu->menuselected = -1;
+   default_menu->menuhovered = -1;
+
+   tasks_launch_elf(get_regs(), "/sys/taskmgr.elf", 0, NULL, true);
+}
+
 void windowmgr_init() {
    // init windowmgr settings
    strcpy(wm_settings.desktop_bgimg, "/bmp/bg16.bmp");
@@ -617,7 +630,11 @@ void windowmgr_init() {
    default_menu->menuitems[1].func = &windowmgr_closeselected;
    default_menu->menuitems[1].disabled = false;
 
-   default_menu->menuitem_count = 2;
+   strcpy(default_menu->menuitems[2].text, "TaskMgr");
+   default_menu->menuitems[2].func = &windowmgr_taskmanager;
+   default_menu->menuitems[2].disabled = false;
+
+   default_menu->menuitem_count = 3;
 
    // set up app button
    app_button = (windowobj_t*)malloc(sizeof(windowobj_t));
@@ -1233,17 +1250,21 @@ void desktop_draw() {
 
    x = 10;
    y = 10;
+   int textw = x*2 + bmp_get_width(icon_files);
+   int textx = (textw - font_width(strlen("FileMgr"))) / 2;
    bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
-   y += 10 + bmp_get_height(icon_files);
-   draw_string(&surface, "FileMgr", 0xFFFF, x, y);
-   y += 10 + getFont()->height;
+   y += 6 + bmp_get_height(icon_files);
+   draw_string(&surface, "FileMgr", 0xFFFF, textx, y);
+   y += 14 + getFont()->height;
+   textx = (textw - font_width(strlen("UsrTerm"))) / 2;
    bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
-   y += 10 + bmp_get_height(icon_window);
-   draw_string(&surface, "UsrTerm", 0xFFFF, x, y);
-   y += 10 + getFont()->height;
+   y += 6 + bmp_get_height(icon_window);
+   draw_string(&surface, "UsrTerm", 0xFFFF, textx, y);
+   y += 14 + getFont()->height;
+   textx = (textw - font_width(strlen("KTerm"))) / 2;
    bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
-   y += 10 + bmp_get_height(icon_window);
-   draw_string(&surface, "KTerm", 0xFFFF, x, y);
+   y += 6 + bmp_get_height(icon_window);
+   draw_string(&surface, "KTerm", 0xFFFF, textx, y);
 
 }
 
@@ -1258,7 +1279,7 @@ void desktop_click(registers_t *regs, int x, int y) {
       tasks_launch_elf(regs, "/sys/files.elf", 0, NULL, true);
    }
 
-   icony += 10*2 + iconheight + getFont()->height;
+   icony += 6+14 + iconheight + getFont()->height;
    iconheight = bmp_get_height(icon_window);
 
    // usr terminal
@@ -1266,7 +1287,7 @@ void desktop_click(registers_t *regs, int x, int y) {
       tasks_launch_elf(regs, "/sys/term.elf", 0, NULL, true);
    }
 
-   icony += 10*2 + iconheight + getFont()->height;
+   icony += 6+14 + iconheight + getFont()->height;
    iconheight = bmp_get_height(icon_files);
 
    // kterm

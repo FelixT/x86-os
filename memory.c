@@ -170,5 +170,3 @@ void memcpy_fast(void *dest, const void *src, size_t bytes) {
    while(bytes--)
       *d++ = *s++;
 }*/
-
-// TODO: memmove 

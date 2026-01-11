@@ -99,9 +99,6 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
       if(!(wo && wo->enabled && wo->visible) || (!wo->clicked && !wo->selected))
          continue;
       wo->clicked = false;
-      wo->selected = false;
-      if(wo->draw_func)
-         wo->draw_func(wo, ui->surface, ui->window, 0, 0);
       if(x >= wo->x && x < wo->x + wo->width
       && y >= wo->y && y < wo->y + wo->height) {
          // call release func
@@ -211,6 +208,24 @@ void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
       if(wo->fixed) continue;
       wo->y -= deltaY;
    }
-   clear_w(ui->window);
+   int bg = get_window_setting(W_SETTING_BGCOLOUR, ui->window);
+   uint16_t *fb = (uint16_t*)ui->surface->buffer;
+   int absY = -deltaY;
+   if(deltaY > 0 && deltaY < ui->surface->height) {
+      // scroll down
+
+      // copy
+      memmove(fb, fb + deltaY*ui->surface->width, (ui->surface->height-deltaY)*ui->surface->width*sizeof(uint16_t));
+      // clear bottom
+      memset16(fb + (ui->surface->height - deltaY)*ui->surface->width, bg, deltaY*ui->surface->width);
+   } else if(deltaY < 0 && absY < ui->surface->height - 1) {
+      // scroll up
+      memmove(fb + absY*ui->surface->width, fb, (ui->surface->height-absY)*ui->surface->width*sizeof(uint16_t));
+
+      // clear top
+      memset16(fb, bg, absY*ui->surface->width);
+   }
+   //clear_w(ui->window);
    ui_draw(ui);
+   redraw_w(ui->window);
 }

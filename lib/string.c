@@ -439,6 +439,44 @@ int memcmp(const void *a, const void *b, int bytes) {
    return 0; 
 }
 
+void *memmove(void *dest, const void *src, size_t n) {
+   unsigned char *d = (unsigned char *)dest;
+   const unsigned char *s = (const unsigned char *)src;
+    
+   if(d < s) {
+      while(n--) {
+         *d++ = *s++;
+      }
+   } else if(d > s) {
+      d += n;
+      s += n;
+      while(n--) {
+         *--d = *--s;
+      }
+   }   
+   return dest;
+}
+
+
+void memset16(uint16_t *dest, uint16_t value, size_t count) {
+    // fast path, copy 2 uint16_t's at a time
+   if(count >= 2 && ((uintptr_t)dest & 3) == 0) {
+      uint32_t pattern = ((uint32_t)value << 16) | value;
+      uint32_t *dest32 = (uint32_t*)dest;
+        
+      while(count >= 2) {
+         *dest32++ = pattern;
+         count -= 2;
+         dest += 2;
+      }
+   }
+    
+   // handle remaining pixels
+   while(count--) {
+      *dest++ = value;
+   }
+}
+
 void tolower(char *c) {
    for(int i = 0; i < strlen(c); i++) {
       if(c[i] >= 'A' && c[i] <= 'Z')

@@ -14,6 +14,7 @@
 #include "draw.h"
 #include "windowmgr.h"
 #include "windowobj.h"
+#include "lib/string.h"
 
 surface_t window_getsurface(int windowIndex) {
    gui_window_t *window = &(gui_get_windows()[windowIndex]);
@@ -45,9 +46,7 @@ void window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex) 
 }
 
 void window_clearbuffer(gui_window_t *window, uint16_t colour) {
-   for(int i = 0; i < window->surface.width*(window->surface.height); i++) {
-      window->framebuffer[i] = colour;
-   }
+   memset16(window->framebuffer, colour, window->surface.width*(window->surface.height));
 }
 
 void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex) {
@@ -123,32 +122,12 @@ void window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
    window_writestr(out, colour, windowIndex);
 }
 
-void *memmove(void *dest, const void *src, size_t n) {
-    unsigned char *d = (unsigned char *)dest;
-    const unsigned char *s = (const unsigned char *)src;
-    
-   if(d < s) {
-      while(n--) {
-         *d++ = *s++;
-      }
-   } else if(d > s) {
-      d += n;
-      s += n;
-      while(n--) {
-         *--d = *--s;
-      }
-   }   
-   return dest;
-}
-
-
 void window_scroll(gui_window_t *window) {
    uint16_t *terminal_buffer = window->framebuffer;
 
    int scrollY = getFont()->height+getFont()->padding_y;
    int copy_height = window->height - TITLEBAR_HEIGHT - scrollY;
    int copy_width = window->width;
-
    memmove(terminal_buffer, terminal_buffer + scrollY * window->width, copy_height * copy_width * sizeof(uint16_t));
    // clear bottom
    int newY = window->height - (scrollY + TITLEBAR_HEIGHT);
@@ -295,13 +274,13 @@ void window_scroll_event(void *regs, void *msg) {
    windowobj_t *scroller = getSelectedWindow()->scrollbar->children[0];
    if(!scroller->clicked) return; // not being dragged
    window_scroll_callback(scroller, regs, 0, 0);
-   events_add(20, &window_scroll_event, msg, -1);
+   events_add(15, &window_scroll_event, msg, -1);
 }
 
 void window_scroll_up_callback(void *wo, void *regs) {
    (void)regs;
-   // scroll up by 10 pixels
-   int deltaY = -10;
+   // scroll up by 20 pixels
+   int deltaY = -20;
    if(getSelectedWindow()->scrolledY + deltaY < 0) {
       deltaY = -getSelectedWindow()->scrolledY; // don't scroll past the top
    }
@@ -324,7 +303,7 @@ void window_scroll_up_callback(void *wo, void *regs) {
 
 void window_scroll_down_callback(void *wo, void *regs) {
    (void)regs;
-   // scroll down by 10 pixels
+   // scroll down by 20 pixels
 
    gui_window_t *window = getSelectedWindow();
    int visible_height = window->height - TITLEBAR_HEIGHT;
@@ -332,7 +311,7 @@ void window_scroll_down_callback(void *wo, void *regs) {
    int hidden_height = scrollable_height - visible_height;
    if (hidden_height <= 0) return;
 
-   int deltaY = 10;
+   int deltaY = 20;
     
    if (window->scrolledY + deltaY > hidden_height) {
       deltaY = hidden_height - window->scrolledY;

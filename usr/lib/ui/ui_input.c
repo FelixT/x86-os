@@ -162,7 +162,7 @@ wo_t *create_input(int x, int y, int width, int height) {
    input_data->return_func = NULL;
    input_data->text[0] = '\0';
    input_data->cursor_pos = 0;
-   input_data->padding_left = 1;
+   input_data->padding_left = 2;
 
    input->type = WO_INPUT;
    input->data = input_data;

@@ -79,7 +79,7 @@ void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int 
    uint16_t light = btn_data->colour_border_light;
    uint16_t dark = btn_data->colour_border_dark;
 
-   if(button->clicked) {
+   if(button->clicked && button->hovering) {
       uint16_t tmp = light;
       light = dark;
       dark = tmp;
