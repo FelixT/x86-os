@@ -30,7 +30,7 @@ export DIALOGS_LIB="$UI_LIB o/lib/stdio.o o/lib/dialogs.o o/lib/sort.o o/lib/map
 $GCC $FLAGS usr/prog3.c -o o/prog3.elf 
 $GCC $FLAGS usr/prog4.c -o o/prog4.elf o/lib/string.o o/lib/stdio.o
 $GCC $FLAGS usr/files.c -o o/files.elf $DIALOGS_LIB
-$GCC $FLAGS usr/bmpview.c -o o/bmpview.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/dialogs2.o
+$GCC $FLAGS usr/bmpview.c -o o/bmpview.elf $DIALOGS_LIB
 $GCC $FLAGS usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/dialogs2.o
 $GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o
 $GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o

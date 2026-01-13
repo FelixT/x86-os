@@ -51,7 +51,7 @@ void ui_redraw(ui_mgr_t *ui) {
    redraw_w(ui->window);
 }
 
-void ui_click(ui_mgr_t *ui, int x, int y) {
+bool ui_click(ui_mgr_t *ui, int x, int y) {
    if(ui->default_menu && ui->default_menu->visible) {
       ui->default_menu->visible = false;
       if(x >= ui->default_menu->x && x < ui->default_menu->x + ui->default_menu->width
@@ -63,7 +63,7 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
       }
       clear_w(ui->window);
       ui_draw(ui);
-      return;
+      return true;
    }
 
    // check if any ui elements are clicked
@@ -76,12 +76,14 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
       ui->focused = NULL;
    }
 
+   bool clicked = false;
    for(int i = 0; i < ui->wo_count; i++) {
       wo_t *wo = ui->wos[i];
       if(!(wo && wo->enabled && wo->visible))
          continue;
       if(x >= wo->x && x < wo->x + wo->width
       && y >= wo->y && y < wo->y + wo->height) {
+         clicked = true;
          ui->clicked = wo;
          wo->clicked = true;
          if(wo->click_func)
@@ -91,6 +93,7 @@ void ui_click(ui_mgr_t *ui, int x, int y) {
          break;
       }
    }
+   return clicked;
 }
 
 void ui_release(ui_mgr_t *ui, int x, int y) {

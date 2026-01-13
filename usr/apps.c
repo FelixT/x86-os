@@ -165,9 +165,9 @@ void _start() {
    // create items*1 grid, with each cell having 20px height
    grid = create_grid(1, 1, width, items*20, items, 1);
    grid_t *grid_data = grid->data;
-   grid_data->colour_border_light = rgb16(230, 230, 230);
+   grid_data->colour_border_light = rgb16(240, 240, 240);
    grid_data->colour_border_dark = grid_data->colour_border_light;
-   grid_data->colour_bg = rgb16(220, 220, 220);
+   grid_data->colour_bg = rgb16(230, 230, 230);
 
    int row = 0;
 

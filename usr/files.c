@@ -312,6 +312,10 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    int btn_width = wo_newfile->width + 2 + 5;
    wo_path->width = w - btn_width;
    wo_newfile->x = w - wo_newfile->width - 2;
+   if(addnew_menu) {
+      addnew_menu->x = wo_menu->width - 70;
+      addnew_menu->y = wo_menu->y - 40;
+   }
 
    display_items();
    redraw();
@@ -517,7 +521,7 @@ void quit() {
    dialog_yesno("Quit Files", "Are you sure you want to quit files", &quit_callback);
 }
 
-void add_show_menu() {
+void show_add_menu() {
    if(!addnew_menu) {
       wo_t *menu = create_menu(wo_menu->width - 70, wo_menu->y - 40, 70, 40);
       add_menu_item(menu, "New file", (void*)&add_file);
@@ -527,8 +531,10 @@ void add_show_menu() {
       addnew_menu = menu;
    } else {
       addnew_menu->visible = !addnew_menu->visible;
-      if(addnew_menu->visible)
+      if(addnew_menu->visible) {
          addnew_menu->x = wo_menu->width - 70;
+         addnew_menu->y = wo_menu->y - 40;
+      }
       ((menu_t*)addnew_menu->data)->selected_index = -1;
       display_items();
       ui_draw(ui);
@@ -604,7 +610,7 @@ void _start(int argc, char **args) {
 
    wo_newfile = create_button(x, y, 45, 16, "Add");
    button_t *newfile_data = (button_t *)wo_newfile->data;
-   newfile_data->release_func = (void *)&add_show_menu;
+   newfile_data->release_func = (void *)&show_add_menu;
    canvas_add(wo_menu, wo_newfile);
    x += wo_newfile->width + 2;
 

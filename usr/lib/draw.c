@@ -1,4 +1,5 @@
 #include "draw.h"
+#include "../../lib/string.h"
 
 static inline void setpixel_safe(surface_t *surface, int index, int colour) {
    if(index < 0 || index >= surface->width*surface->height) {
@@ -65,4 +66,26 @@ void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int wi
 
    for(int yi = y; yi < y+height; yi++) // right
       setpixel_safe(surface, (yi)*(int)surface->width+x+width-1, colour);
+}
+
+void draw_checkeredrect(surface_t *surface, uint16_t colour1, uint16_t colour2, int x, int y, int width, int height) {
+    uint32_t pattern1 = ((uint32_t)colour1 << 16) | colour2;
+    uint32_t pattern2 = ((uint32_t)colour2 << 16) | colour1;
+    
+    uint16_t *buffer = (uint16_t*)surface->buffer;
+    
+    for(int yi = 0; yi < height; yi++) {
+      uint32_t *line32 = (uint32_t*)(buffer + (y + yi) * surface->width + x);
+      uint32_t pattern = ((yi + y) & 1) ? pattern2 : pattern1;
+      
+      for(int xi = 0; xi < width / 2; xi++) {
+         line32[xi] = pattern;
+      }
+      
+      // handle odd widths
+      if(width & 1) {
+         uint16_t *line16 = (uint16_t*)line32;
+         line16[width - 1] = ((yi + y + width - 1) & 1) ? colour2 : colour1;
+      }
+   }
 }

@@ -74,6 +74,7 @@ void event_fire(registers_t *regs, event_t *event) {
     } else {
         // call function as kernel if task is -1
         (*(void(*)(void*,void*))event->callback)((void*)regs, event->msg);
+        free((uint32_t)args, sizeof(uint32_t) * 1);
     }
 
 }

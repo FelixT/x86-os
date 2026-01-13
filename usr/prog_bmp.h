@@ -23,4 +23,10 @@ typedef struct {
    uint32_t dataOffset; // pixel data
 } __attribute__((packed)) bmp_header_t;
 
+typedef struct {
+   uint32_t redMask;
+   uint32_t greenMask;
+   uint32_t blueMask;
+} bmp_bitmasks_t;
+
 #endif

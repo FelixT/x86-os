@@ -27,7 +27,7 @@ int ui_add(ui_mgr_t *ui, wo_t *wo);
 void ui_remove(ui_mgr_t *ui, wo_t *wo);
 void ui_draw(ui_mgr_t *ui);
 void ui_redraw(ui_mgr_t *ui);
-void ui_click(ui_mgr_t *ui, int x, int y);
+bool ui_click(ui_mgr_t *ui, int x, int y);
 void ui_release(ui_mgr_t *ui, int x, int y);
 void ui_keypress(ui_mgr_t *ui, uint16_t c);
 void ui_hover(ui_mgr_t *ui, int x, int y);
