@@ -33,7 +33,8 @@ wo_t *create_wo(int x, int y, int width, int height) {
 }
 
 void destroy_wo(wo_t *wo) {
-   if(wo && wo->destroy_func)
+   if(!wo) return;
+   if(wo->destroy_func)
       wo->destroy_func(wo);
 
    wo->enabled = false;

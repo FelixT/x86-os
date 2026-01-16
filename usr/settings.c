@@ -204,26 +204,16 @@ void set_font(wo_t *wo, int window) {
    redraw_w(window);
 }
 
-void bgimg_browse_callback(char *path, int window) {
+void bgimg_browse_callback(char *path, int window, wo_t *wo) {
+   (void)wo;
    set_input_text(bgimg_input, path);
    set_bgimage(bgimg_input, window);
 }
 
-void fontpath_browse_callback(char *path, int window) {
+void fontpath_browse_callback(char *path, int window, wo_t *wo) {
+   (void)wo;
    set_input_text(fontpath_input, path);
    set_font(fontpath_input, window);
-}
-
-void bgimg_browse(wo_t *wo, int window) {
-   (void)wo;
-   (void)window;
-   dialog_filepicker("/bmp", &bgimg_browse_callback);
-}
-
-void fontpath_browse(wo_t *wo, int window) {
-   (void)wo;
-   (void)window;
-   dialog_filepicker("/font", &fontpath_browse_callback);
 }
 
 void set_gradientstyle(wo_t *wo, int index, int window) {
@@ -399,8 +389,7 @@ void _start() {
    strcpy(buffer, (char*)get_setting(SETTING_SYS_FONT_PATH));
    fontpath_input = settings_create_input(font_group, y, buffer, &set_font);
    fontpath_input->width-=20;
-   wo_t *button = create_button(260, y, 20, 20, "o");
-   set_button_release(button, &fontpath_browse);
+   wo_t *button = dialog_create_browsebtn(260, y, 20, 20, -1, "o", "/font", &fontpath_browse_callback);
    groupbox_add(font_group, button);
    y+=25;
 
@@ -445,8 +434,7 @@ void _start() {
    strcpy(buffer, (char*)get_setting(SETTING_DESKTOP_BGIMG_PATH));
    bgimg_input = settings_create_input(desktop_group, y, buffer, &set_bgimage);
    bgimg_input->width-=20;
-   button = create_button(260, y, 20, 20, "o");
-   set_button_release(button, &bgimg_browse);
+   button = dialog_create_browsebtn(260, y, 20, 20, -1, "o", "/bmp", &bgimg_browse_callback);
    groupbox_add(desktop_group, button);
    y+=25;
 

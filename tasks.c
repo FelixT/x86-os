@@ -19,6 +19,7 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->no_allocated = 0;
    process->fd_count = 0;
    strcpy(process->working_dir, "/sys");
+   strcpy(process->exe_path, "");
    process->no_threads = 0;
    
    return process;
@@ -182,7 +183,7 @@ void end_task(int index, registers_t *regs) {
       }
 
       if(task->process->window >= 0)
-         task_write_to_window(index, "<Task ended>\n");
+         task_write_to_window(index, "<Task ended>\n", true);
 
       task_reset_windows(index);
 
@@ -227,6 +228,7 @@ void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    elf_run(regs, prog, entry->fileSize, argc, args, focus);
+   strcpy(get_current_task_state()->process->exe_path, path);
    free((uint32_t)prog, entry->fileSize);
 }
 
@@ -468,13 +470,19 @@ void task_subroutine_end(registers_t *regs) {
    }
 }
 
-void task_write_to_window(int task, char *out) {
+void task_write_to_window(int task, char *out, bool children) {
    task_state_t *t = &tasks[task];
    // write to stdio
    int w = t->process->file_descriptors[1]->window_index;
    int curw = get_current_task_window();
    if(w == curw || (w >= 0 && w < getWindowCount() && !getWindow(w)->closed)) {
-      window_writestr(out, getWindow(w)->txtcolour, w);
+      gui_window_t *window = getWindow(w);
+      window_writestr(out, window->txtcolour, w);
+      if(children) {
+         for(int i = 0; i < window->child_count; i++) {
+            window_writestr(out, window->txtcolour, get_window_index_from_pointer(window->children[i]));
+         }
+      }
    } else {
       debug_printf("Tried to write '%s' to task %i window %i\n", out, task, w);
    }

@@ -916,18 +916,18 @@ void dialog_colourbox_callback(char *out, int window) {
       debug_println("Couldn't find dialog for window %i\n", window);
       return;
    }
-   dialog_colourbox_t *colourbox = (dialog_colourbox_t *)dialog->state;
+   dialog_wo_t *colourbox = (dialog_wo_t *)dialog->state;
    dialog_t *colourbox_dialog = dialog_from_window(colourbox->window);
    if(!colourbox_dialog) {
       debug_println("Couldn't find dialog for window %i\n", colourbox->window);
       return;
    }
    uint16_t colour = hextouint(out + 2);
-   wo_t *label = &colourbox->label;
+   wo_t *label = &colourbox->wo;
    label_t *label_data = label->data;
    label_data->colour_bg = colour;
    ui_draw(colourbox_dialog->ui);
-   colourbox->callback(out, colourbox->window, (wo_t*)&colourbox->label);
+   colourbox->callback(out, colourbox->window, (wo_t*)&colourbox->wo);
 }
 
 void dialog_colourbox_release(wo_t *wo, int window) {
@@ -938,20 +938,59 @@ void dialog_colourbox_release(wo_t *wo, int window) {
    }
    label_t *label_data = wo->data;
    int d = dialog_colourpicker(label_data->colour_bg, &dialog_colourbox_callback);
-   get_dialog(d)->state = wo; // save colourbox as dialog's 'input_wo'
+   get_dialog(d)->state = wo;
 }
 
 wo_t *dialog_create_colourbox(int x, int y, int width, int height, uint16_t colour, int window, void (*callback)(char *out, int window, wo_t *colourbox)) {
-   dialog_colourbox_t *colourbox = (dialog_colourbox_t*)create_label(x, y, width, height, "");
+   dialog_wo_t *colourbox = (dialog_wo_t*)create_label(x, y, width, height, "");
    colourbox->callback = callback;
    colourbox->window = window;
    // ideally should resize, for now malloc gives enough space
-   wo_t *label = &colourbox->label;
+   wo_t *label = &colourbox->wo;
    label_t *label_data = label->data;
    label_data->colour_bg = colour;
    label_data->filled = true;
    label_data->release_func = &dialog_colourbox_release;
    return label;
+}
+
+// custom 'browse for file' button
+
+void dialog_browsebtn_callback(char *out, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   dialog_wo_t *browsebtn = (dialog_wo_t *)dialog->state;
+   dialog_t *browsebtn_dialog = dialog_from_window(browsebtn->window);
+   if(!browsebtn_dialog) {
+      debug_println("Couldn't find dialog for window %i\n", browsebtn->window);
+      return;
+   }
+   browsebtn->callback(out, browsebtn->window, (wo_t*)&browsebtn->wo);
+}
+
+void dialog_browsebtn_release(wo_t *wo, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      return;
+   }
+   dialog_wo_t *browsebtn = (dialog_wo_t *)wo;
+   char *startdir = (char*)browsebtn->state;
+   int d = dialog_filepicker(startdir, &dialog_browsebtn_callback);
+   get_dialog(d)->state = wo;
+}
+
+wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, char *text, char *startpath, void (*callback)(char *out, int window, wo_t *browsebtn)) {
+   dialog_wo_t *browsebtn = (dialog_wo_t*)create_button(x, y, width, height, text);
+   browsebtn->window = window;
+   wo_t *btn = &browsebtn->wo;
+   set_button_release(btn, &dialog_browsebtn_release);
+   browsebtn->callback = callback;
+   browsebtn->state = startpath;
+   return &browsebtn->wo;
 }
 
 // window settings dialog

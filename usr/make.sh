@@ -41,6 +41,7 @@ $GCC $FLAGS usr/prog7.c -o o/prog7.elf
 $GCC $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
 $GCC $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
 $GCC $FLAGS usr/apps.c -o o/apps.elf o/lib/stdio.o o/lib/sort.o $UI_LIB
+$GCC $FLAGS usr/debug.c -o o/debug.elf $DIALOGS_LIB
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -60,4 +61,5 @@ cp o/prog6.elf fs_root/sys/prog6.elf
 cp o/prog7.elf fs_root/sys/prog7.elf
 cp o/settings.elf fs_root/sys/settings.elf
 cp o/taskmgr.elf fs_root/sys/taskmgr.elf
+cp o/debug.elf fs_root/sys/debug.elf
 

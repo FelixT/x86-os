@@ -487,12 +487,41 @@ void endtask_callback(void *regs) {
    end_task(task, regs);
 }
 
+void endtask_debug(void *window, void *regs) {
+   (void)window;
+   int task_index = strtoint(getSelectedWindow()->window_objects[0]->text+strlen("Task "));
+   task_state_t *task = &gettasks()[task_index];
+   if(!task->paused) {
+      debug_printf("Task %i no longer paused\n", task_index);
+      return;
+   }
+   uint32_t eip = task->registers.eip;
+   char *exe_path = task->process->exe_path;
+   char addrbuffer[10];
+   uinttohexstr(eip, addrbuffer);
+   int argc = 3;
+   char **args = malloc(sizeof(char*)*argc);
+   char *debug_path = "/sys/debug.elf";
+   args[2] = malloc(strlen(addrbuffer)+1);
+   strcpy(args[2], addrbuffer);
+   args[1] = malloc(strlen(exe_path)+1);
+   strcpy(args[1], exe_path);
+   args[0] = malloc(strlen(debug_path)+1);
+   strcpy(args[0], debug_path);
+   tasks_launch_elf(regs, debug_path, argc, args, true);
+   map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*argc, 1, 1);
+   for(int i = 0; i < argc; i++)
+      map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i]), 1, 1);
+}
+
 void show_endtask_dialog(int int_no, registers_t *regs) {
    int popup = windowmgr_add();
    char buffer[50];
    sprintf(buffer, "Task %i paused due to exception %i", get_current_task(), int_no);
    window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
    dialog->callback_func = &endtask_callback;
+   dialog->wo_okbtn->x = 75;
+   window_create_button(getWindow(popup), 135, 45, "Debug", &endtask_debug);
    window_disable(getWindow(get_current_task_window()));
    strcpy(getWindow(popup)->title, "Error");
    strcpy(dialog->wo_okbtn->text, "Exit");

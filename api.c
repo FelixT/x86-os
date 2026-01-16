@@ -20,7 +20,7 @@ inline gui_window_t *api_get_window() {
 }
 
 inline void api_write_to_task(char *out) {
-   task_write_to_window(get_current_task(), out);
+   task_write_to_window(get_current_task(), out, false);
 }
 
 void api_printf(char *format, ...) {

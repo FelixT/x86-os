@@ -22,8 +22,8 @@
 
 #define TITLEBAR_HEIGHT 17
 #define TOOLBAR_ITEM_WIDTH 85
-#define TOOLBAR_PADDING 4
-#define TOOLBAR_ITEM_HEIGHT 13
+#define TOOLBAR_PADDING 3
+#define TOOLBAR_ITEM_HEIGHT 15
 #define TOOLBAR_HEIGHT 20
 
 // https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial

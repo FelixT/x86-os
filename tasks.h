@@ -39,6 +39,7 @@ typedef struct process_t {
    uint32_t *allocated_pages[128]; // pointers as returned by malloc
    int no_allocated;
    char working_dir[256]; // current working directory
+   char exe_path[256]; // location of executable
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end;
    fs_file_t *file_descriptors[64];
@@ -92,7 +93,7 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
 void task_subroutine_end(registers_t *regs);
 void tss_init();
 
-void task_write_to_window(int task, char *out);
+void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);
 
 #endif

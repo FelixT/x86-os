@@ -641,7 +641,8 @@ void windowmgr_init() {
    windowobj_init(app_button, &surface);
    app_button->type = WO_BUTTON;
    app_button->x = surface.width - 55;
-   app_button->y = surface.height - 17;
+   app_button->y = surface.height - 20;
+   app_button->height = 20;
    app_button->text = "Apps";
 }
 
@@ -688,10 +689,11 @@ void toolbar_draw() {
       } else {
          gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
       }
-      gui_writestrat(text, fg, itemX+textX, itemY+TOOLBAR_PADDING/2);
+      int textY = itemY+(TOOLBAR_ITEM_HEIGHT - getFont()->height)/2;
+      gui_writestrat(text, fg, itemX+textX, textY);
       // if selected, draw underline
       if(getWindow(i)->active)
-         draw_line(&surface, rgb16(220, 220, 220), itemX + textX - 4, itemY + TOOLBAR_PADDING/2 + getFont()->height + 2, false, font_width(strlen(text)) + 8);
+         draw_line(&surface, rgb16(220, 220, 220), itemX + textX - 4, textY + getFont()->height + 2, false, font_width(strlen(text)) + 8);
       draw_line(&surface, COLOUR_TOOLBAR_BORDER, itemX, itemY + TOOLBAR_ITEM_HEIGHT, false, TOOLBAR_ITEM_WIDTH);
       getWindow(i)->toolbar_pos = toolbarPos;
       toolbarPos++;

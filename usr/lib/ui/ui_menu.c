@@ -16,7 +16,7 @@ void draw_menu_item(wo_t *menu, surface_t *surface, int window, int index, int o
    menu_t *menu_data = (menu_t *)menu->data;
 
    int bgwidth = menu->width - 2;
-   if(menu_data->scrolling)
+   if(menu_data->scrollbar_visible)
       bgwidth -= 14;
 
    int item_height = get_font_info().height + 7;
@@ -38,8 +38,45 @@ void draw_menu_item(wo_t *menu, surface_t *surface, int window, int index, int o
    uint16_t txtcolour = item->enabled ? 0 : rgb16(200, 200, 200);
    write_strat_w(item->text, x + 5, y + 4, txtcolour, window);
    // border
-   draw_line(surface, border_light, x + 1, y + item_height - 1, false, menu->width - 2);
+   draw_line(surface, border_light, x + 1, y + item_height - 1, false, bgwidth);
 
+}
+
+void draw_menu_scrollbar(wo_t *menu, surface_t *surface, int window, int offsetX, int offsetY) {
+   menu_t *menu_data = (menu_t *)menu->data;
+
+   int x = menu->x + offsetX;
+   int y = menu->y + offsetY;
+
+   uint16_t border_dark = rgb16(165, 165, 165);
+   uint16_t bg_selected = rgb16(222, 222, 222);
+   uint16_t bg_hover = rgb16(243, 243, 243);
+
+   int item_height = get_font_info().height + 7;
+   int max_items = menu->height/item_height;
+
+   int width = 14;
+   int scrollbarX = x + menu->width - width - 1;
+   int scrollbarY = y + 1;
+   int scrollAreaHeight = menu->height - width*2 - 2;
+   int scrollAreaY = scrollbarY + width;
+   int scrollerHeight = (scrollAreaHeight * menu_data->shown_items) / (menu_data->item_count ? menu_data->item_count : 1);
+   if(scrollerHeight < 4)
+      scrollerHeight = 4;
+   int scrollerY = scrollAreaY + (scrollAreaHeight * menu_data->offset) / (menu_data->item_count ? menu_data->item_count : 1);
+   menu_data->scrollerY = scrollerY - menu->y - offsetY;
+   menu_data->scrollerHeight = scrollerHeight;
+
+   draw_rect(surface, bg_hover, scrollbarX, scrollAreaY, width, scrollAreaHeight); // bg / scrollarea
+   draw_rect(surface, menu_data->scrolling ? 0 : border_dark, scrollbarX+5, scrollerY, 4, scrollerHeight); // 4px scroller
+   draw_rect(surface, menu_data->offset > 0 ? bg_selected : bg_hover, scrollbarX, scrollbarY, width, width); // up
+   char buf[2];
+   buf[0] = 0x80; // uparrow
+   buf[1] = 0;
+   write_strat_w(buf, scrollbarX + 5, scrollbarY + 4, 0, window);
+   draw_rect(surface, menu_data->offset < menu_data->item_count - max_items ? bg_selected : bg_hover, scrollbarX, scrollbarY + scrollAreaHeight + width, width, width); // down
+   buf[0] = 0x81; // downarrow
+   write_strat_w(buf, scrollbarX + 5, scrollbarY + scrollAreaHeight + width + 4, 0, window);
 }
 
 void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offsetY) {
@@ -49,8 +86,6 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
    uint16_t border_light = rgb16(235, 235, 235);
    uint16_t border_dark = rgb16(165, 165, 165);
    uint16_t bg = rgb16(255, 255, 255);
-   uint16_t bg_selected = rgb16(222, 222, 222);
-   uint16_t bg_hover = rgb16(243, 243, 243);
 
    if(menu->selected)
       border_light = rgb16(220, 220, 220);
@@ -72,10 +107,11 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
    int shown_items = menu_data->item_count;
    if(shown_items > max_items)
       shown_items = max_items;
+   menu_data->shown_items = shown_items;
    int shown_height = shown_items*item_height;
 
    int bgwidth = menu->width - 2;
-   if(menu_data->scrolling)
+   if(menu_data->scrollbar_visible)
       bgwidth -= 14;
 
    // draw background
@@ -86,21 +122,9 @@ void draw_menu(wo_t *menu, surface_t *surface, int window, int offsetX, int offs
       draw_menu_item(menu, surface, window, i, offsetX, offsetY);
    }
 
-   if(menu_data->scrolling) {
+   if(menu_data->scrollbar_visible) {
       // draw 14px wide scrollbar
-      int width = 14;
-      int scrollbarX = x + menu->width - width - 1;
-      int scrollbarY = y + 1;
-
-      draw_rect(surface, bg_hover, scrollbarX, scrollbarY + width, width, menu->height - width*2 - 2); // bg
-      draw_rect(surface, menu_data->offset > 0 ? bg_selected : bg_hover, scrollbarX, scrollbarY, width, width); // up
-      char buf[2];
-      buf[0] = 0x80; // uparrow
-      buf[1] = 0;
-      write_strat_w(buf, scrollbarX + 4, scrollbarY + 4, 0, window);
-      draw_rect(surface, menu_data->offset < menu_data->item_count - max_items ? bg_selected : bg_hover, scrollbarX, scrollbarY + menu->height - width - 4, width, width); // down
-      buf[0] = 0x81; // downarrow
-      write_strat_w(buf, scrollbarX + 4, scrollbarY + menu->height - width - 1, 0, window);
+      draw_menu_scrollbar(menu, surface, window, offsetX, offsetY);
    }
 }
 
@@ -143,24 +167,29 @@ menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item
 
    int item_height = get_font_info().height + 7;
    if(item_height*menu_data->item_count > menu->height)
-      menu_data->scrolling = true;
+      menu_data->scrollbar_visible = true;
 
    return item;
 }
 
 void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
-   (void)x;
    if(x == 0 && y == 0) return;
 
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
-   if(menu_data->scrolling && x > menu->width - 14 - 1) {
+   // scrollbar click
+   if(menu_data->scrollbar_visible && x > menu->width - 14 - 1) {
       if(y < 15) {
          // up click
          menu_data->offset--;
          if(menu_data->offset < 0)
             menu_data->offset = 0;
          draw_menu(menu, surface, window, offsetX, offsetY);
+      }
+      if(y > menu_data->scrollerY && y < menu_data->scrollerY + menu_data->scrollerHeight) {
+         // scroller click
+         menu_data->scrolling = true;
+         draw_menu_scrollbar(menu, surface, window, offsetX, offsetY);
       }
       if(y > menu->height - 14 - 1) {
          // down click
@@ -194,24 +223,48 @@ void menu_click(wo_t *menu, surface_t *surface, int window, int x, int y, int of
    draw_menu(menu, surface, window, offsetX, offsetY);
 }
 
+void menu_release(wo_t *menu, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+   (void)x;
+   (void)y;
+   menu_t *menu_data = menu->data;
+   if(menu_data->scrolling) {
+      menu_data->scrolling = false;
+      draw_menu_scrollbar(menu, surface, window, offsetX, offsetY);
+   }
+}
+
 void menu_keypress(wo_t *menu, uint16_t c, int window) {
    (void)window;
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
 
+   int item_height = get_font_info().height + 7;
+   int max_items = menu->height/item_height;
+   int shown_items = menu_data->item_count;
+   if(shown_items > max_items)
+      shown_items = max_items;
+
    if(c == 0x100) {
       // up
       menu_data->selected_index--;
-      if(menu_data->selected_index < 0)
+      if(menu_data->selected_index < 0) {
          menu_data->selected_index = menu_data->item_count - 1;
+         menu_data->offset = menu_data->selected_index - shown_items + 1;
+      }
+      if(menu_data->selected_index < menu_data->offset)
+         menu_data->offset = menu_data->selected_index;
       menu_item_t *item = &menu_data->items[menu_data->selected_index];
       if(item->enabled && item->func != NULL)
          item->func(menu, menu_data->selected_index, window);
    } else if(c == 0x101) {
       // down
       menu_data->selected_index++;
-      if(menu_data->selected_index >= menu_data->item_count)
+      if(menu_data->selected_index >= menu_data->item_count) {
          menu_data->selected_index = 0;
+         menu_data->offset = 0;
+      }
+      if(menu_data->selected_index >= menu_data->offset + shown_items)
+         menu_data->offset = menu_data->selected_index - shown_items + 1;
       menu_item_t *item = &menu_data->items[menu_data->selected_index];
       if(item->enabled && item->func != NULL)
          item->func(menu, menu_data->selected_index, window);
@@ -222,8 +275,21 @@ void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y, int of
    (void)x;
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
+
+   if(menu_data->scrolling && menu->clicked) {
+      menu_data->scrollerY = y;
+      if(menu_data->scrollerY < 14)
+         menu_data->scrollerY = 14;
+      if(menu_data->scrollerY > menu->height - 14)
+         menu_data->scrollerY = menu->height - 14;
+      menu_data->offset = ((menu_data->item_count - menu_data->shown_items) * (menu_data->scrollerY-14))/(menu->height - 14*2);
+      draw_menu(menu, surface, window, offsetX, offsetY);
+      return;
+   } else if(!menu->clicked) {
+      menu_data->scrolling = false;
+   }
    int old_index = menu_data->hover_index;
-   if(menu_data->scrolling && x > menu->width - 14 - 1) {
+   if(menu_data->scrollbar_visible && x > menu->width - 14 - 1) {
       if(menu_data->hover_index == -1) return;
       menu_data->hover_index = -1;
       draw_menu_item(menu, surface, window, old_index, offsetX, offsetY);
@@ -231,14 +297,10 @@ void menu_hover(wo_t *menu, surface_t *surface, int window, int x, int y, int of
    }
 
    int item_height = get_font_info().height + 7;
-   int max_items = menu->height/item_height;
-   int shown_items = menu_data->item_count;
-   if(shown_items > max_items)
-      shown_items = max_items;
    int index = y / item_height + menu_data->offset;
 
    menu_data->hover_index = index;
-   if(index < menu_data->offset || index >= menu_data->offset + shown_items) {
+   if(index < menu_data->offset || index >= menu_data->offset + menu_data->shown_items) {
       menu_data->hover_index = -1;
    }
 
@@ -256,11 +318,13 @@ wo_t *create_menu(int x, int y, int width, int height) {
    menu_data->selected_index = -1;
    menu_data->hover_index = -1;
    menu_data->offset = 0;
+   menu_data->scrollbar_visible = false;
    menu_data->scrolling = false;
 
    menu->data = menu_data;
    menu->draw_func = &draw_menu;
    menu->click_func = &menu_click;
+   menu->release_func = &menu_release;
    menu->keypress_func = &menu_keypress;
    menu->hover_func = &menu_hover;
    menu->type = WO_MENU;

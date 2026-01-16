@@ -254,8 +254,9 @@ void tool_click(wo_t *wo, int window) {
    (void)wo;
    (void)window;
    size++;
-   char buf[4];
+   char buf[6];
    uinttostr(size, buf);
+   strcat(buf, "px");
    set_input_text(toolsizetext_wo, buf);
    ui_draw(ui);
 }
@@ -265,8 +266,9 @@ void toolminus_click(wo_t *wo, int window) {
    (void)window;
    size--;
    if(size < 1) size = 1;
-   char buf[4];
+   char buf[6];
    uinttostr(size, buf);
+   strcat(buf, "px");
    set_input_text(toolsizetext_wo, buf);
    ui_draw(ui);
 }
@@ -603,8 +605,8 @@ void _start(int argc, char **args) {
    canvas_add(wo_menu, toolminusbtn_wo);
    x += toolminusbtn_wo->width;
 
-   toolsizetext_wo = create_input(x, y, 20, 14);
-   set_input_text(toolsizetext_wo, "2");
+   toolsizetext_wo = create_input(x, y, 35, 14);
+   set_input_text(toolsizetext_wo, "2px");
    get_input(toolsizetext_wo)->halign = true;
    get_input(toolsizetext_wo)->valign = true;
    canvas_add(wo_menu, toolsizetext_wo);

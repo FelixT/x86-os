@@ -37,11 +37,12 @@ typedef struct dialog_t {
    void *state; // for extending dialog functionality
 } dialog_t;
 
-typedef struct dialog_colourbox_t {
-   wo_t label; // colourbox
-   void (*callback)(char *out, int window, wo_t *colourbox);
+typedef struct dialog_wo_t {
+   wo_t wo;
+   void (*callback)(char *out, int window, wo_t *wo);
    int window; // window where this is displayed, used for callback
-} dialog_colourbox_t;
+   void *state;
+} dialog_wo_t;
 
 bool dialog_msg(char *title, char *text);
 int dialog_input(char *text, void *return_func);
@@ -58,6 +59,7 @@ void dialog_set_title(dialog_t *dialog, char *title);
 int dialog_yesno(char *title, char *text, void *return_func);
 void dialog_add(dialog_t *dialog, char *key, wo_t *wo);
 wo_t *dialog_get(dialog_t *dialog, char *key);
+wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, char *text, char *startpath, void (*callback)(char *out, int window, wo_t *browsebtn));
 
 #define MAX_DIALOGS 10
 
