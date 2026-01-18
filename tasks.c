@@ -21,6 +21,7 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
    process->no_threads = 0;
+   process->event_queue_size = 0;
    
    return process;
 }
@@ -372,58 +373,7 @@ int get_task_from_window(int windowIndex) {
    return -1;
 }
 
-typedef struct {
-   char *name;
-   uint32_t addr; // subroutine addr
-   uint32_t *args;
-   int argc;
-   int task;
-   int window;
-} task_event_t;
-
-void task_execute_queued_subroutine(void *regs, void *msg) {
-   // callback from queued event
-   task_event_t *event = (task_event_t*)msg;
-   if(tasks[current_task].in_routine) {
-      // queue back up again
-      events_add(8, &task_execute_queued_subroutine, (void*)event, -1);
-   } else {
-
-      if(!switch_to_task(event->task, regs)) return;
-
-      task_call_subroutine(regs, event->name, event->addr, event->args, event->argc);
-      tasks[event->task].routine_return_window = getSelectedWindowIndex();
-      free((uint32_t)event, sizeof(task_event_t));
-
-      /*if(get_current_task_window() != getSelectedWindowIndex()) {
-         setSelectedWindowIndex(get_current_task_window());
-      }*/
-   }
-}
-
-void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
-
-   if(tasks[current_task].in_routine) {
-      // i don't like this. this should be an event queue
-      /*if(strequ(name, tasks[current_task].routine_name)) {
-         debug_printf("%s skipped (t %i)\n", tasks[current_task].routine_name, current_task);
-         return; // don't queue up same event until current handler is done
-      }*/
-      if(strstartswith(tasks[current_task].routine_name, "wo") && strequ(tasks[current_task].routine_name+2, name))
-         return; // wo event overrides main event
-      task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
-      event->name = name;
-      event->addr = addr;
-      event->args = args;
-      event->argc = argc;
-      event->task = current_task;
-      events_add(5, &task_execute_queued_subroutine, (void*)event, -1);
-      return;
-   } else if(!tasks[current_task].enabled) {
-      debug_printf("Task %i is ended, exiting subroutine");
-      return;
-   }
-
+void task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
    strcpy(tasks[current_task].routine_name, name);
 
    // save registers
@@ -452,6 +402,79 @@ void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t
    tasks[current_task].in_routine = true;
 }
 
+void task_execute_queued_subroutine(void *regs, void *msg) {
+   // check events queue
+
+   int taskid = (int)msg;
+   task_state_t *task = &tasks[taskid];
+   if(task->in_routine) {
+      // do nothing - wait until task_subroutine_end to call this function
+   } else {
+
+      if(task->process->event_queue_size > 0) {
+         if(!switch_to_task(taskid, regs)) return;
+
+         task_event_t *first_event = task->process->event_queue[0];
+
+         task_execute_subroutine(regs, first_event->name, first_event->addr, first_event->args, first_event->argc);
+
+         task->process->event_queue_size--;
+
+         free((uint32_t)task->process->event_queue[0], sizeof(task_event_t));
+
+         // todo: circular queue is faster than memmove
+         memmove(&task->process->event_queue[0], &task->process->event_queue[1], task->process->event_queue_size * sizeof(task_event_t*));
+
+         task->routine_return_window = getSelectedWindowIndex();
+
+         /*if(get_current_task_window() != getSelectedWindowIndex())
+            setSelectedWindowIndex(get_current_task_window());*/
+      }
+   }
+}
+
+void task_queue_subroutine(char *name, uint32_t addr, uint32_t *args, int argc) {
+   // add to event queue
+   task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
+   event->name = name;
+   event->addr = addr;
+   event->args = args;
+   event->argc = argc;
+   event->task = current_task;
+   task_state_t *task = &tasks[current_task];
+   if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
+      debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
+      return;
+   }
+   task->process->event_queue[task->process->event_queue_size++] = event;
+}
+
+void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
+
+   task_state_t *task = &tasks[current_task];
+   if(task->in_routine) {
+      // already running routine, queue up and add event
+      if(strstartswith(task->routine_name, "wo") && strequ(task->routine_name+2, name))
+         return; // wo event overrides main event
+
+      task_queue_subroutine(name, addr, args, argc);
+      return;
+   } else if(!tasks[current_task].enabled) {
+      debug_printf("Task %i is ended, exiting subroutine");
+      return;
+   }
+
+   // if event queue is empty, launch into routine immediately
+   // otherwise just wait for queued event
+   if(task->process->event_queue_size > 0) {
+      debug_printf("Not in routine but queue has content\n");
+      task_queue_subroutine(name, addr, args, argc);
+      task_execute_subroutine(regs, name, addr, args, argc);
+   } else {
+      task_execute_subroutine(regs, name, addr, args, argc);
+   }
+}
+
 void task_subroutine_end(registers_t *regs) {
    // restore registers
    //debug_writestr("Ending subrouting\n");
@@ -463,6 +486,8 @@ void task_subroutine_end(registers_t *regs) {
    free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t*));
 
    tasks[current_task].in_routine = false;
+   // check for any other queued events and run if there are
+   task_execute_queued_subroutine(regs, (void*)current_task);
 
    if(tasks[current_task].routine_return_window >= 0)
       setSelectedWindowIndex(tasks[current_task].routine_return_window);

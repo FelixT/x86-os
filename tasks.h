@@ -26,6 +26,17 @@
 
 typedef struct task_state_t task_state_t;
 
+typedef struct {
+   char *name;
+   uint32_t addr; // subroutine addr
+   uint32_t *args;
+   int argc;
+   int task;
+   int window;
+} task_event_t;
+
+#define EVENT_QUEUE_SIZE 64
+
 // process struct - shared between threads
 typedef struct process_t {
    uint32_t prog_start; // physical addr of start of program
@@ -44,6 +55,8 @@ typedef struct process_t {
    uint32_t heap_end;
    fs_file_t *file_descriptors[64];
    int fd_count;
+   task_event_t *event_queue[EVENT_QUEUE_SIZE];
+   int event_queue_size;
 
    task_state_t *threads[MAX_TASK_THREADS];
    int no_threads;

@@ -501,9 +501,13 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
 
    extern uint16_t *draw_buffer;
    // redraw cursor if it disappeared - unless redrawing all
-   if(surface.buffer != (uint32_t)draw_buffer && width > getFont()->width && height > getFont()->height
-   && gui_mouse_x >= window->x + offsetX && gui_mouse_x <= window->x + offsetX + width && gui_mouse_x + getFont()->width <= window->width
-   && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY && gui_mouse_y <= window->y + TITLEBAR_HEIGHT + offsetY + height && gui_mouse_y + getFont()->height <= window->height) {
+   if(surface.buffer != (uint32_t)draw_buffer 
+   && width > getFont()->width 
+   && height > getFont()->height
+   && gui_mouse_x >= window->x + offsetX 
+   && gui_mouse_x + getFont()->width <= window->x + offsetX + width
+   && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY 
+   && gui_mouse_y + getFont()->height <= window->y + TITLEBAR_HEIGHT + offsetY + height) {
       gui_cursor_shown = false;
       gui_cursor_save_bg();
       gui_cursor_draw();
