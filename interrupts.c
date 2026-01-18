@@ -456,7 +456,7 @@ void timer_handler(registers_t *regs) {
       //if(timer_i%1000)
       //   gui_showtimer(timer_i%10);
 
-      if(timer_i%5 == 0) {
+      if(timer_i%11 == 0) { // ~60fps
          gui_draw();
       }
 

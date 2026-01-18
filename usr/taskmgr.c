@@ -18,7 +18,7 @@ void task_show_info(int index) {
 
    label_t *label_id = dialog_get(dialog, "info_label_id")->data;
    char buffer[64];
-   sprintf(buffer, "Task ID:\n%i", task->id);
+   sprintf(buffer, "Task ID: %i\n%s", task->id, task->exe_path);
    strcpy(label_id->label, buffer);
 
    label_t *label_window = dialog_get(dialog, "info_label_window")->data;

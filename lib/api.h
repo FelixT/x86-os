@@ -19,6 +19,7 @@ typedef struct api_task_t {
    int no_allocated;
    bool privileged;
    char working_dir[256];
+   char exe_path[256];
    char main_window_name[32];
 } api_task_t;
 
@@ -31,6 +32,7 @@ typedef enum {
    SETTING_WIN_BGCOLOUR,
    SETTING_WIN_TXTCOLOUR,
    SETTING_DESKTOP_ENABLED,
+   SETTING_DESKTOP_BGIMG_ENABLED,
    SETTING_DESKTOP_BGIMG_PATH,
    SETTING_WIN_TITLEBARCOLOUR,
    SETTING_THEME_TYPE,

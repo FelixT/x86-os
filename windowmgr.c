@@ -25,6 +25,7 @@ windowmgr_settings_t wm_settings = {
    .default_window_bgcolour = 0xFFFF,
    .default_window_txtcolour = 0x0000,
    .desktop_enabled = false,
+   .desktop_bgimg_enabled = true,
    .titlebar_colour = COLOUR_TITLEBAR_CLASSIC,
    .titlebar_colour2 = COLOUR_TITLEBAR_COLOUR2,
    .titlebar_gradientstyle = 1, // vertical
@@ -1244,14 +1245,16 @@ void desktop_setbgimg(uint8_t *img, int size) {
 void desktop_draw() {
    if(!wm_settings.desktop_enabled) return;
 
-   int32_t width = bmp_get_width(gui_bgimage);
-   int32_t height = bmp_get_height(gui_bgimage);
-   int x = (surface.width - width) / 2;
-   int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
-   bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0, 1);
+   if(wm_settings.desktop_bgimg_enabled) {
+      int32_t width = bmp_get_width(gui_bgimage);
+      int32_t height = bmp_get_height(gui_bgimage);
+      int x = (surface.width - width) / 2;
+      int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
+      bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0, 1);
+   }
 
-   x = 10;
-   y = 10;
+   int x = 10;
+   int y = 10;
    int textw = x*2 + bmp_get_width(icon_files);
    int textx = (textw - font_width(strlen("FileMgr"))) / 2;
    bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
@@ -1426,7 +1429,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int maxheight = surface.height - TOOLBAR_HEIGHT - 5;
    if(height > maxheight) height = maxheight;
    int y_overflow = window->y + height - maxheight;
-   if(y_overflow > 0) {
+   if(y_overflow >= 0) {
       window->y -= y_overflow;
    }
 
@@ -1446,7 +1449,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int scrollbarwidth = (window->scrollbar && window->scrollbar->visible) ? window->scrollbar->width : 0;
 
    int min_width = min(window->width, old_width-scrollbarwidth);
-   int min_height = min(window->height, old_height);
+   int min_height = min(window->surface.height, old_height);
    window_clearbuffer(window, window->bgcolour);
    // copy window
    for(int x = 0; x < min_width; x++) {

@@ -60,6 +60,7 @@ int dialog_yesno(char *title, char *text, void *return_func);
 void dialog_add(dialog_t *dialog, char *key, wo_t *wo);
 wo_t *dialog_get(dialog_t *dialog, char *key);
 wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, char *text, char *startpath, void (*callback)(char *out, int window, wo_t *browsebtn));
+uint16_t *dialog_load_icon(char *path, int *width, int *height);
 
 #define MAX_DIALOGS 10
 

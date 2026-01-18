@@ -18,6 +18,7 @@ wo_t *fontpath_input;
 wo_t *bgcolour_input;
 wo_t *fontpadding_input;
 wo_t *desktopenabled_input;
+wo_t *desktopbgimgenabled_input;
 wo_t *bgcolour_colourbox;
 wo_t *colour1_colourbox;
 wo_t *colour2_colourbox;
@@ -177,6 +178,12 @@ void set_desktop_enabled(wo_t *wo, int window) {
    set_setting(SETTING_DESKTOP_ENABLED, strtoint(input->text));
 }
 
+void set_desktop_bgimg_enabled(wo_t *wo, int window) {
+   (void)window;
+   input_t *input = wo->data;
+   set_setting(SETTING_DESKTOP_BGIMG_ENABLED, strtoint(input->text));
+}
+
 void set_bgimage(wo_t *wo, int window) {
    (void)window;
    input_t *input = wo->data;
@@ -252,6 +259,14 @@ void desktop_enable_checkbox_callback(wo_t *wo, int window) {
    inttostr(check_data->checked, buffer);
    set_input_text(desktopenabled_input, buffer);
    set_desktop_enabled(desktopenabled_input, window);
+}
+
+void desktop_enable_bgimg_checkbox_callback(wo_t *wo, int window) {
+   checkbox_t *check_data = wo->data;
+   char buffer[4];
+   inttostr(check_data->checked, buffer);
+   set_input_text(desktopbgimgenabled_input, buffer);
+   set_desktop_bgimg_enabled(desktopbgimgenabled_input, window);
 }
 
 void font_padding_keypress(wo_t *wo, uint16_t c, int window) {
@@ -426,6 +441,16 @@ void _start() {
    desktopenabled_input->width-=20;
    wo_t *checkbox = create_checkbox(260, y, get_setting(SETTING_DESKTOP_ENABLED));
    set_checkbox_release(checkbox, &desktop_enable_checkbox_callback);
+   groupbox_add(desktop_group, checkbox);
+   y+=25;
+
+   // desktop show bgimg
+   settings_create_label(desktop_group, y, "Show bg image");
+   inttostr(get_setting(SETTING_DESKTOP_ENABLED), buffer);
+   desktopbgimgenabled_input = settings_create_input(desktop_group, y, buffer, &set_desktop_bgimg_enabled);
+   desktopbgimgenabled_input->width-=20;
+   checkbox = create_checkbox(260, y, get_setting(SETTING_DESKTOP_BGIMG_ENABLED));
+   set_checkbox_release(checkbox, &desktop_enable_bgimg_checkbox_callback);
    groupbox_add(desktop_group, checkbox);
    y+=25;
 

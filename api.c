@@ -431,6 +431,7 @@ void api_launch_task(registers_t *regs) {
 
    tasks_launch_elf(regs, path, argc, copied_args, true);
    task_state_t *task = &gettasks()[get_current_task()];
+   strcpy(task->process->exe_path, path);
 
    if(copy) {
       // copy file descriptors and working dir from parent
@@ -899,6 +900,10 @@ void api_set_setting(registers_t *regs) {
    windowmgr_settings_t *settings = windowmgr_get_settings();
 
    switch(regs->ebx) {
+      case SETTING_DESKTOP_BGIMG_ENABLED:
+         settings->desktop_bgimg_enabled = (bool)regs->ecx;
+         gui_redrawall();
+         break;
       case SETTING_DESKTOP_BGIMG_PATH:
          if(page_getphysical(get_current_task_pagedir(), regs->ecx) == (uint32_t)-1) {
             regs->ebx = -1; // not mapped
@@ -1129,6 +1134,7 @@ void api_get_tasks(registers_t *regs) {
       api_task->no_allocated = process->no_allocated;
       api_task->privileged = process->privileged;
       strcpy(api_task->working_dir, process->working_dir);
+      strcpy(api_task->exe_path, process->exe_path);
       if(process->window > -1 && !getWindow(process->window)->closed)
          strcpy(api_task->main_window_name, getWindow(process->window)->title);
       else

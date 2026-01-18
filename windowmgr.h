@@ -6,10 +6,11 @@
 #include "window_t.h"
 #include "registers_t.h"
 
-typedef struct {
+typedef struct windowmgr_settings_t {
    uint16_t default_window_bgcolour;
    uint16_t default_window_txtcolour;
    bool desktop_enabled;
+   bool desktop_bgimg_enabled;
    char desktop_bgimg[256]; // path
    uint16_t titlebar_colour;
    int theme; // 0 = classic, 1 = gradient

@@ -220,16 +220,17 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    gui_redrawall();
 }
 
-void tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus) {
+bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus) {
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Not found\n", 0);
-      return;
+      return false;
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    elf_run(regs, prog, entry->fileSize, argc, args, focus);
    strcpy(get_current_task_state()->process->exe_path, path);
    free((uint32_t)prog, entry->fileSize);
+   return true;
 }
 
 void tasks_init(registers_t *regs) {
@@ -403,6 +404,7 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
 void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
 
    if(tasks[current_task].in_routine) {
+      // i don't like this. this should be an event queue
       /*if(strequ(name, tasks[current_task].routine_name)) {
          debug_printf("%s skipped (t %i)\n", tasks[current_task].routine_name, current_task);
          return; // don't queue up same event until current handler is done

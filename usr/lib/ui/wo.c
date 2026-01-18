@@ -11,6 +11,7 @@ void wo_reset_funcs(wo_t *wo) {
    wo->unhover_func = NULL;
    wo->drag_func = NULL;
    wo->destroy_func = NULL;
+   wo->keypress_func = NULL;
 }
 
 wo_t *create_wo(int x, int y, int width, int height) {

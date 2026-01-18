@@ -150,48 +150,59 @@ void grid_hover(wo_t *grid, surface_t *surface, int window, int x, int y, int of
    int cellWidth = grid->width/grid_data->cols;
    int cellHeight = grid->height/grid_data->rows;
 
-   for(int i = 0; i < grid_data->rows; i++) {
-      for(int j = 0; j < grid_data->cols; j++) {
-         grid_cell_t *cell = &grid_data->cells[i][j];
+   int hoverCol = x / cellWidth;
+   int hoverRow = y / cellHeight;
 
-         int cellOffsetX = j * cellWidth;
-         int cellOffsetY = i * cellHeight;
+   if(hoverCol >= 0 && hoverCol < grid_data->cols
+   && hoverRow >= 0 && hoverRow < grid_data->rows) {
+      grid_cell_t *cell = &grid_data->cells[hoverRow][hoverCol];
+      grid_cell_t *oldCell = grid_data->hovered;
 
-         // hovering cell?
-         if(x >= cellOffsetX && x < cellOffsetX + cellWidth
-         && y >= cellOffsetY && y < cellOffsetY + cellHeight) {
-            if(!cell->hovering) {
-               cell->hovering = true;
-               draw_grid_cell(grid, surface, window, offsetX, offsetY, cell, i, j);
-            }
+      if(cell != oldCell) {
+         // unhover old
+         if(oldCell) {
+            oldCell->hovering = false;
+            draw_grid_cell(grid, surface, window, offsetX, offsetY, oldCell, grid_data->hoveredrow, grid_data->hoveredcol);
+         }
+
+         // hover new
+         cell->hovering = true;
+         draw_grid_cell(grid, surface, window, offsetX, offsetY, cell, hoverRow, hoverCol);
+        
+         grid_data->hovered = cell;
+         grid_data->hoveredrow = hoverRow;
+         grid_data->hoveredcol = hoverCol;
+      }
+
+      int cellOffsetX = hoverCol*cellWidth;
+      int cellOffsetY = hoverRow*cellHeight;
+      for(int k = 0; k < cell->child_count; k++) {
+         wo_t *child = cell->children[k];
+
+         bool was_hovering = child->hovering;
+
+         int totalOffsetX = grid->x + cellOffsetX + offsetX;
+         int totalOffsetY = grid->y + cellOffsetY + offsetY;
+
+         if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
+         && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
+            if(was_hovering) continue;
+            if(child->hover_func)
+               child->hover_func(child, surface, window, x - (child->x + cellOffsetX), y - (child->y + cellOffsetY), totalOffsetX, totalOffsetY);
+            child->hovering = true;
+            child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
          } else {
-            if(cell->hovering) {
-               cell->hovering = false;
-               draw_grid_cell(grid, surface, window, offsetX, offsetY, cell, i, j);
-            }
+            if(!was_hovering) continue;
+            child->hovering = false;
+            child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
          }
-
-         for(int k = 0; k < cell->child_count; k++) {
-            wo_t *child = cell->children[k];
-
-            bool was_hovering = child->hovering;
-
-            int totalOffsetX = grid->x + cellOffsetX + offsetX;
-            int totalOffsetY = grid->y + cellOffsetY + offsetY;
-
-            if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
-            && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
-               if(was_hovering) continue;
-               if(child->hover_func)
-                  child->hover_func(child, surface, window, x - (child->x + cellOffsetX), y - (child->y + cellOffsetY), totalOffsetX, totalOffsetY);
-               child->hovering = true;
-               child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
-            } else {
-               if(!was_hovering) continue;
-               child->hovering = false;
-               child->draw_func(child, surface, window, totalOffsetX, totalOffsetY);
-            }
-         }
+      }
+   } else {
+      // unhover old
+      if(grid_data->hovered) {
+         grid_data->hovered->hovering = false;
+         grid_data->hovered = NULL;
+         draw_grid_cell(grid, surface, window, offsetX, offsetY, grid_data->hovered, grid_data->hoveredrow, grid_data->hoveredcol);
       }
    }
 }
@@ -271,12 +282,10 @@ void grid_mousein() {
 
 void destroy_grid(wo_t *grid) {
    grid_t *grid_data = grid->data;
-   for(int i = 0; i < grid_data->rows*grid_data->cols; i++) {
-   }
 
    for(int i = 0; i < grid_data->rows; i++) {
       for(int j = 0; j < grid_data->cols; j++) {
-         for(int k = 0; k < grid_data->cells[i][j].child_count; j++) {
+         for(int k = 0; k < grid_data->cells[i][j].child_count; k++) {
          wo_t *child = grid_data->cells[i][j].children[k];
             if(child)
                destroy_wo(child);
@@ -304,6 +313,7 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid_data->rows = rows;
    grid_data->cols = cols;
    grid_data->click_func = NULL;
+   grid_data->hovered = NULL;
 
    grid_data->cells = malloc(sizeof(grid_cell_t*) * rows);
    for(int i = 0; i < rows; i++) {

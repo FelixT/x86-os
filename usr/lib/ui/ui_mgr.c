@@ -77,7 +77,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
    }
 
    bool clicked = false;
-   for(int i = 0; i < ui->wo_count; i++) {
+   for(int i = ui->wo_count-1; i >= 0; i--) {
       wo_t *wo = ui->wos[i];
       if(!(wo && wo->enabled && wo->visible))
          continue;
@@ -148,7 +148,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
       ui->hovered = NULL;
    }
 
-   for(int i = 0; i < ui->wo_count; i++) {
+   for(int i = ui->wo_count-1; i >= 0; i--) {
       wo_t *wo = ui->wos[i];
       if(!(wo && wo->enabled && wo->visible))
          continue;
@@ -166,6 +166,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
             else if(wo->draw_func)
                wo->draw_func(wo, ui->surface, ui->window, 0, 0);
          }
+         break; // can only hover one object at a time
       }
    }
 
@@ -206,13 +207,18 @@ void ui_unfocus() {
 
 void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
    ui->scrolled_y = offsetY;
+
+   uint16_t *fb = (uint16_t*)ui->surface->buffer;
+   int bg = get_window_setting(W_SETTING_BGCOLOUR, ui->window);
+
    for(int i = 0; i < ui->wo_count; i++) {
       wo_t *wo = ui->wos[i];
-      if(wo->fixed) continue;
+      if(wo->fixed) {
+         memset16(fb + wo->y*ui->surface->width, bg, wo->height*ui->surface->width);
+         continue;
+      }
       wo->y -= deltaY;
    }
-   int bg = get_window_setting(W_SETTING_BGCOLOUR, ui->window);
-   uint16_t *fb = (uint16_t*)ui->surface->buffer;
    int absY = -deltaY;
    if(deltaY > 0 && deltaY < ui->surface->height) {
       // scroll down

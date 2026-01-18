@@ -832,6 +832,35 @@ void dialog_filepicker_resize(uint32_t fb, int width, int height, int window) {
    end_subroutine();
 }
 
+uint16_t *dialog_load_icon(char *path, int *width, int *height) {
+   // load 16 bit bmp
+   FILE *f = fopen(path, "r");
+   if(!f)
+      return false;
+   int size = fsize(fileno(f));
+   uint16_t *icon = malloc(size);
+   fread(icon, size, 1, f);
+   fclose(f);
+   bmp_header_t *icon_bmp = (bmp_header_t*)icon;
+   bmp_info_t *icon_info = (bmp_info_t*)((uint8_t*)icon+sizeof(bmp_header_t));
+   icon += icon_bmp->dataOffset/sizeof(uint16_t);
+   int w = icon_info->width;
+   int h = icon_info->height;
+   // flip data upside down
+   for(int y = 0; y < h / 2; y++) {
+      for(int x = 0; x < w; x++) {
+         uint16_t temp = icon[y * w + x];
+         icon[y * w + x] = icon[(h - 1 - y) * w + x];
+         icon[(h - 1 - y) * w + x] = temp;
+      }
+   }
+   if(width)
+      *width = w;
+   if(height)
+      *height = h;
+   return icon;
+}
+
 int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window)) {
    int index = get_free_dialog();
    if(index < 0) return false;
@@ -872,32 +901,8 @@ int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window
    ui_add(dialog->ui, groupbox);
 
    // load 20x20 icons
-   FILE *file_icon = fopen("/bmp/file20.bmp", "r");
-   FILE *folder_icon = fopen("/bmp/folder20.bmp", "r");
-   int file_icon_size = fsize(fileno(file_icon));
-   int folder_icon_size = fsize(fileno(folder_icon));
-   dialog->file_icon_data = malloc(file_icon_size);
-   dialog->folder_icon_data = malloc(folder_icon_size);
-   fread(dialog->file_icon_data, file_icon_size, 1, file_icon);
-   fread(dialog->folder_icon_data, folder_icon_size, 1, folder_icon);
-   bmp_header_t *file_icon_bmp = (bmp_header_t*)dialog->file_icon_data;
-   dialog->file_icon_data += file_icon_bmp->dataOffset/sizeof(uint16_t);
-   bmp_header_t *folder_icon_bmp = (bmp_header_t*)dialog->folder_icon_data;
-   dialog->folder_icon_data += folder_icon_bmp->dataOffset/sizeof(uint16_t);
-   // flip data upside down
-   for(int y = 0; y < 10; y++) {
-      for(int x = 0; x < 20; x++) {
-         uint16_t temp = dialog->file_icon_data[y * 20 + x];
-         dialog->file_icon_data[y * 20 + x] = dialog->file_icon_data[(19 - y) * 20 + x];
-         dialog->file_icon_data[(19 - y) * 20 + x] = temp;
-
-         temp = dialog->folder_icon_data[y * 20 + x];
-         dialog->folder_icon_data[y * 20 + x] = dialog->folder_icon_data[(19 - y) * 20 + x];
-         dialog->folder_icon_data[(19 - y) * 20 + x] = temp;
-      }
-   }
-   fclose(file_icon);
-   fclose(folder_icon);
+   dialog->file_icon_data = dialog_load_icon("/bmp/file20.bmp", NULL, NULL);
+   dialog->folder_icon_data = dialog_load_icon("/bmp/folder20.bmp", NULL, NULL);
 
    create_scrollbar(&dialog_filepicker_scroll, dialog->window);
    override_resize((uint32_t)&dialog_filepicker_resize, dialog->window);

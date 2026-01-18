@@ -382,8 +382,11 @@ void term_cmd_dmpmem(char *arg) {
       window_term_printf("Address not mapped\n");
       return;
    }
+   if(page_getphysical(page_get_current(), addr + bytes - 1) == (uint32_t)-1) {
+      window_term_printf("Whole range not mapped\n");
+   }
 
-   char *buf = malloc(rowlen);
+   char *buf = malloc(rowlen+1);
    buf[rowlen] = '\0';
    for(int i = 0; i < bytes; i++) {
       uint8_t *mem = (uint8_t*)addr;
@@ -393,7 +396,7 @@ void term_cmd_dmpmem(char *arg) {
       buf[i%rowlen] = mem[i];
 
       if((i%rowlen) == (rowlen-1) || i==(bytes-1)) {
-         for(int x = 0; x < rowlen; x++) {
+         for(int x = 0; x < (i%rowlen); x++) {
             if(buf[x] != '\n')
                gui_drawchar(buf[x], 0x2F);
          }

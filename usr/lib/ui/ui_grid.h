@@ -23,6 +23,9 @@ typedef struct grid_t {
    int cols;
    grid_cell_t **cells; // cell_content[rows][cols] -> grid_cell_t
    int (*click_func)(wo_t *grid, int window, int row, int col);
+   grid_cell_t *hovered;
+   int hoveredrow;
+   int hoveredcol;
 } grid_t;
 
 wo_t *create_grid(int x, int y, int width, int height, int rows, int cols);
@@ -31,5 +34,6 @@ int get_grid_cell_width(wo_t *grid);
 int get_grid_cell_height(wo_t *grid);
 void grid_item_fill_cell(wo_t *grid, wo_t *item);
 void grid_item_center_cell(wo_t *grid, wo_t *item);
+void draw_grid_cell(wo_t *grid, surface_t *surface, int window, int offsetX, int offsetY, grid_cell_t *cell, int row, int col);
 
 #endif
