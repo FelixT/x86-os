@@ -10,7 +10,7 @@ static inline int ui_string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
 }
 
-void draw_input(wo_t *input, surface_t *surface, int window, int offsetX, int offsetY) {
+void draw_input(wo_t *input, wo_draw_context_t context) {
    if(input == NULL || input->data == NULL) return;
    input_t *input_data = (input_t *)input->data;
 
@@ -34,23 +34,23 @@ void draw_input(wo_t *input, surface_t *surface, int window, int offsetX, int of
       light = rgb16(210, 210, 210);
    }
 
-   int x = input->x + offsetX;
-   int y = input->y + offsetY;
+   int x = input->x + context.offsetX;
+   int y = input->y + context.offsetY;
    int width = input->width;
    int height = input->height;
 
    // bg
    if(input_data->bordered)
-      draw_rect(surface, bg, x+1, y+1, width-2, height-2);
+      draw_rect(context.surface, bg, x+1, y+1, width-2, height-2);
    else
-      draw_rect(surface, bg, x, y, width, height);
+      draw_rect(context.surface, bg, x, y, width, height);
 
    // border
    if(input_data->bordered) {
-      draw_line(surface, dark,  x, y, true,  height);
-      draw_line(surface, dark,  x, y, false, width);
-      draw_line(surface, light, x, y + height - 1, false, width);
-      draw_line(surface, light, x + width - 1, y, true, height);
+      draw_line(context.surface, dark,  x, y, true,  height);
+      draw_line(context.surface, dark,  x, y, false, width);
+      draw_line(context.surface, light, x, y + height - 1, false, width);
+      draw_line(context.surface, light, x + width - 1, y, true, height);
    }
 
    width -= 4;
@@ -87,12 +87,12 @@ void draw_input(wo_t *input, surface_t *surface, int window, int offsetX, int of
    int text_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+input_data->padding_left);
    int text_y = y + (input_data->valign ? (height - text_height) / 2 : get_font_info().padding+input_data->padding_left);
 
-   write_strat_w(display_text, text_x, text_y, txt, window);
+   write_strat_w(display_text, text_x, text_y, txt, context.window);
 
    // draw cursor
    int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+input_data->padding_left-1) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width) + 1;
    if(input->selected && cursor_x <= x + width) {
-      draw_line(surface, light, cursor_x, text_y-1, true, get_font_info().height+2);
+      draw_line(context.surface, light, cursor_x, text_y-1, true, get_font_info().height+2);
    }
 }
 

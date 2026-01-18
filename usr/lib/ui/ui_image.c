@@ -6,8 +6,7 @@
 #include "../draw.h"
 #include "wo.h"
 
-void draw_image(wo_t *image, surface_t *surface, int window, int offsetX, int offsetY) {
-   (void)window;
+void draw_image(wo_t *image, wo_draw_context_t context) {
    if(image == NULL || image->data == NULL) return;
 
    image_t *img_data = (image_t *)image->data;
@@ -16,7 +15,7 @@ void draw_image(wo_t *image, surface_t *surface, int window, int offsetX, int of
       for(int x = 0; x < image->width; x++) {
          uint16_t colour = img_data->data[y * image->width + x];
          //if(colour != 0xFFFF) { // transparent
-            draw_pixel(surface, colour, image->x + x + offsetX, image->y + y + offsetY);
+            draw_pixel(context.surface, colour, image->x + x + context.offsetX, image->y + y + context.offsetY);
          //}
       }
    }

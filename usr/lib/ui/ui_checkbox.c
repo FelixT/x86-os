@@ -4,19 +4,15 @@
 #include "../../prog.h"
 #include "../../../lib/string.h"
 
-void release_checkbox(wo_t *checkbox, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void release_checkbox(wo_t *checkbox, wo_draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
-   (void)surface;
-   (void)window;
-   (void)offsetX;
-   (void)offsetY;
    if(checkbox == NULL || checkbox->data == NULL) return;
    checkbox_t *check_data = (checkbox_t *)checkbox->data;
    check_data->checked = !check_data->checked;
    if(check_data->release_func)
-      check_data->release_func(checkbox, window);
-   draw_checkbox(checkbox, surface, window, offsetX, offsetY);
+      check_data->release_func(checkbox, context.window);
+   draw_checkbox(checkbox, context);
 }
 
 wo_t *create_checkbox(int x, int y, bool checked) {
@@ -72,15 +68,14 @@ void draw_check(surface_t *surface, int x, int y, uint16_t colour, bool checked)
    }
 }
 
-void draw_checkbox(wo_t *checkbox, surface_t *surface, int window, int offsetX, int offsetY) {
-   (void)window;
+void draw_checkbox(wo_t *checkbox, wo_draw_context_t context) {
    if(checkbox == NULL || checkbox->data == NULL) return;
    // 20x20
 
    checkbox_t *check_data = (checkbox_t *)checkbox->data;
 
-   int x = checkbox->x + offsetX;
-   int y = checkbox->y + offsetY;
+   int x = checkbox->x + context.offsetX;
+   int y = checkbox->y + context.offsetY;
 
    int w = checkbox->width;
    int h = checkbox->height;
@@ -104,20 +99,20 @@ void draw_checkbox(wo_t *checkbox, surface_t *surface, int window, int offsetX, 
 
    if(gradient) {
       if(checkbox->hovering || checkbox->clicked)
-         draw_rect_gradient(surface, bg2, bg, x, y, w, h, gradientstyle);
+         draw_rect_gradient(context.surface, bg2, bg, x, y, w, h, gradientstyle);
       else
-         draw_rect_gradient(surface, bg, bg2, x, y, w, h, gradientstyle);
+         draw_rect_gradient(context.surface, bg, bg2, x, y, w, h, gradientstyle);
    } else {
-      draw_rect(surface, bg, x, y, w, h);
+      draw_rect(context.surface, bg, x, y, w, h);
    }
 
-   draw_line(surface, light,  x, y, true,  h);
-   draw_line(surface, light,  x, y, false, w);
-   draw_line(surface, dark, x, y + h - 1, false, w);
-   draw_line(surface, dark, x + w - 1, y, true, h);
+   draw_line(context.surface, light,  x, y, true,  h);
+   draw_line(context.surface, light,  x, y, false, w);
+   draw_line(context.surface, dark, x, y + h - 1, false, w);
+   draw_line(context.surface, dark, x + w - 1, y, true, h);
 
-   draw_check(surface, x, y+1, checkbox->clicked ? 0xFFFF : light, check_data->checked); // shadow
-   draw_check(surface, x, y, txt, check_data->checked);
+   draw_check(context.surface, x, y+1, checkbox->clicked ? 0xFFFF : light, check_data->checked); // shadow
+   draw_check(context.surface, x, y, txt, check_data->checked);
 }
 
 void set_checkbox_release(wo_t *checkbox, void(*release_func)(wo_t *wo, int window)) {

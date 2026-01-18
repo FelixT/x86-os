@@ -9,51 +9,59 @@
 // win32 style groupbox/fieldset
 // made up of a label, border & canvas wo
 
-void click_groupbox(wo_t *groupbox, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void click_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
-      canvas->click_func(canvas, surface, window, x - canvas->x, y - canvas->y, groupbox->x + offsetX, groupbox->y + offsetY);
+      canvas->click_func(canvas, context, x - canvas->x, y - canvas->y);
    }
 }
 
-void release_groupbox(wo_t *groupbox, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void release_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
-      canvas->release_func(canvas, surface, window, x - canvas->x, y - canvas->y, groupbox->x + offsetX, groupbox->y + offsetY);
+      canvas->release_func(canvas, context, x - canvas->x, y - canvas->y);
    }
 }
 
-void unfocus_groupbox(wo_t *groupbox, surface_t *surface, int window, int offsetX, int offsetY) {
+void unfocus_groupbox(wo_t *groupbox, wo_draw_context_t context) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   canvas->unfocus_func(canvas, surface, window, offsetX + groupbox->x, offsetY + groupbox->y);
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
+   canvas->unfocus_func(canvas, context);
 }
 
-void hover_groupbox(wo_t *groupbox, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void hover_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
       canvas->hovering = true;
-      canvas->hover_func(canvas, surface, window, x - canvas->x, y - canvas->y, offsetX + groupbox->x, offsetY + groupbox->y);
+      canvas->hover_func(canvas, context, x - canvas->x, y - canvas->y);
    } else {
       if(canvas->hovering) {
-         canvas->unhover_func(canvas, surface, window, offsetX + groupbox->x, offsetY + groupbox->y);
+         canvas->unhover_func(canvas, context);
          canvas->hovering = false;
       }
    }
@@ -71,32 +79,36 @@ void keypress_groupbox(wo_t *groupbox, uint16_t c, int window) {
    canvas->keypress_func(canvas, c, window);
 }
 
-void unhover_groupbox(wo_t *groupbox, surface_t *surface, int window, int offsetX, int offsetY) {
+void unhover_groupbox(wo_t *groupbox, wo_draw_context_t context) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   canvas->unhover_func(canvas, surface, window, groupbox->x + offsetX, groupbox->y + offsetY);
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
+   canvas->unhover_func(canvas, context);
 }
 
-void draw_groupbox(wo_t *groupbox, surface_t *surface, int window, int offsetX, int offsetY) {
+void draw_groupbox(wo_t *groupbox, wo_draw_context_t context) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
-   write_strat_w(groupbox_data->label, groupbox->x + 5, groupbox->y, groupbox_data->colour_label, window);
+   write_strat_w(groupbox_data->label, groupbox->x + 5, groupbox->y, groupbox_data->colour_label, context.window);
 
    // draw border
    font_info_t fontinfo = get_font_info();
    int margin_top = fontinfo.height + 2;
    int font_width = strlen(groupbox_data->label)*(fontinfo.width+fontinfo.padding);
-   draw_line(surface, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, false, 4); // top
-   draw_line(surface, groupbox_data->colour_border, groupbox->x + font_width + 5, groupbox->y + margin_top/2, false, groupbox->width - font_width - 5); // top
-   draw_line(surface, groupbox_data->colour_border, groupbox->x, groupbox->y + groupbox->height - 1, false, groupbox->width); // bottom
-   draw_line(surface, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // left
-   draw_line(surface, groupbox_data->colour_border, groupbox->x + groupbox->width - 1, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // right
+   draw_line(context.surface, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, false, 4); // top
+   draw_line(context.surface, groupbox_data->colour_border, groupbox->x + font_width + 5, groupbox->y + margin_top/2, false, groupbox->width - font_width - 5); // top
+   draw_line(context.surface, groupbox_data->colour_border, groupbox->x, groupbox->y + groupbox->height - 1, false, groupbox->width); // bottom
+   draw_line(context.surface, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // left
+   draw_line(context.surface, groupbox_data->colour_border, groupbox->x + groupbox->width - 1, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // right
 
    wo_t *canvas = groupbox_data->canvas;
-   canvas->draw_func(canvas, surface, window, groupbox->x + offsetX, groupbox->y + offsetY);
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
+   canvas->draw_func(canvas, context);
 }
 
 wo_t *create_groupbox(int x, int y, int width, int height, char *label) {

@@ -3,37 +3,39 @@
 #include "wo.h"
 #include "../stdio.h"
 
-void draw_canvas(wo_t *canvas, surface_t *surface, int window, int offsetX, int offsetY) {
+void draw_canvas(wo_t *canvas, wo_draw_context_t context) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
 
    uint16_t light = canvas_data->colour_border_light;
    uint16_t dark = canvas_data->colour_border_dark;
 
-   int x = canvas->x + offsetX;
-   int y = canvas->y + offsetY;
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
+   int x = context.offsetX;
+   int y = context.offsetY;
    int width = canvas->width;
    int height = canvas->height;
 
    // border
    if(canvas_data->bordered) {
-      draw_line(surface, dark, x, y, true, height);
-      draw_line(surface, dark, x, y, false, width);
-      draw_line(surface, light, x, y + height - 1, false, width);
-      draw_line(surface, light, x + width - 1, y, true, height);
+      draw_line(context.surface, dark, x, y, true, height);
+      draw_line(context.surface, dark, x, y, false, width);
+      draw_line(context.surface, light, x, y + height - 1, false, width);
+      draw_line(context.surface, light, x + width - 1, y, true, height);
 
       if(canvas_data->filled)
-         draw_rect(surface, canvas_data->colour_bg, x + 1, y + 1, width - 2, height - 2);
+         draw_rect(context.surface, canvas_data->colour_bg, x + 1, y + 1, width - 2, height - 2);
    } else {
       if(canvas_data->filled)
-         draw_rect(surface, canvas_data->colour_bg, x, y, width, height);
+         draw_rect(context.surface, canvas_data->colour_bg, x, y, width, height);
    }
 
    // draw children
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
       if(child && child->visible && child->draw_func)
-         child->draw_func(child, surface, window, x, y);
+         child->draw_func(child, context);
    }
 }
 
@@ -45,9 +47,11 @@ void canvas_add(wo_t *canvas, wo_t *child) {
    canvas_data->children[canvas_data->child_count++] = child;
 }
 
-void canvas_click(wo_t *canvas, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void canvas_click(wo_t *canvas, wo_draw_context_t context, int x, int y) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -56,17 +60,19 @@ void canvas_click(wo_t *canvas, surface_t *surface, int window, int x, int y, in
       && y >= child->y && y < child->y + child->height) {
          child->clicked = true;
          if(child->click_func)
-            child->click_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
+            child->click_func(child, context, x - child->x, y - child->y);
          else if(child->draw_func)
-            child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+            child->draw_func(child, context);
          child->clicked = false;
       }
    }
 }
 
-void canvas_release(wo_t *canvas, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void canvas_release(wo_t *canvas, wo_draw_context_t context, int x, int y) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -76,9 +82,9 @@ void canvas_release(wo_t *canvas, surface_t *surface, int window, int x, int y, 
          //if(child->type == WO_INPUT)
             child->selected = true;
          if(child->release_func)
-            child->release_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
+            child->release_func(child, context, x - child->x, y - child->y);
          else if(child->draw_func)
-            child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+            child->draw_func(child, context);
       }
    }
 }
@@ -87,9 +93,11 @@ void canvas_mousein() {
    // do nothing
 }
 
-void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void canvas_hover(wo_t *canvas, wo_draw_context_t context, int x, int y) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -100,38 +108,40 @@ void canvas_hover(wo_t *canvas, surface_t *surface, int window, int x, int y, in
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
          if(child->hover_func)
-            child->hover_func(child, surface, window, x - child->x, y - child->y, offsetX + canvas->x, offsetY + canvas->y);
+            child->hover_func(child, context, x - child->x, y - child->y);
          child->hovering = true;
          if(was_hovering) continue;
          // mouse in
          if(child->mousein_func)
-            child->mousein_func(child, surface, window, x, y, canvas->x + offsetX, canvas->y + offsetY);
+            child->mousein_func(child, context, x, y);
          else
-            child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+            child->draw_func(child, context);
       } else {
          if(!was_hovering) continue;
          // mouse out
          child->hovering = false;
          if(child->unhover_func)
-            child->unhover_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+            child->unhover_func(child, context);
          else if(child->draw_func)
-            child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+            child->draw_func(child, context);
       }
    }
 }
 
-void canvas_unfocus(wo_t *canvas, surface_t *surface, int window, int offsetX, int offsetY) {
+void canvas_unfocus(wo_t *canvas, wo_draw_context_t context) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
       if(!child->selected) continue;
       child->selected = false;
       if(child->unfocus_func)
-         child->unfocus_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+         child->unfocus_func(child, context);
       else if(child->draw_func)
-         child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+         child->draw_func(child, context);
    }
 }
 
@@ -148,18 +158,20 @@ void canvas_keypress(wo_t *canvas, uint16_t c, int window) {
    }
 }
 
-void canvas_unhover(wo_t *canvas, surface_t *surface, int window, int offsetX, int offsetY) {
+void canvas_unhover(wo_t *canvas, wo_draw_context_t context) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
       if(!child->hovering || !child->visible) continue;
       child->hovering = false;
       if(child->unhover_func)
-         child->unhover_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+         child->unhover_func(child, context);
       else if(child->draw_func)
-         child->draw_func(child, surface, window, canvas->x + offsetX, canvas->y + offsetY);
+         child->draw_func(child, context);
    }
 }
 

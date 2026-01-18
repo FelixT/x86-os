@@ -10,7 +10,7 @@ typedef struct checkbox_t {
 
 wo_t *create_checkbox(int x, int y, bool checked);
 void destroy_checkbox(wo_t *checkbox);
-void draw_checkbox(wo_t *checkbox, surface_t *surface, int window, int offsetX, int offsetY);
+void draw_checkbox(wo_t *checkbox, wo_draw_context_t context);
 void set_checkbox_release(wo_t *checkbox, void(*release_func)(wo_t *wo, int window));
 
 #endif

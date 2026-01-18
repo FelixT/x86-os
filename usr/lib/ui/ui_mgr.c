@@ -40,9 +40,10 @@ int ui_add(ui_mgr_t *ui, wo_t *wo) {
 }
 
 void ui_draw(ui_mgr_t *ui) {
+   wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
    for(int i = 0; i < ui->wo_count; i++) {
       if(ui->wos[i] && ui->wos[i]->enabled && ui->wos[i]->visible && ui->wos[i]->draw_func)
-         ui->wos[i]->draw_func(ui->wos[i], ui->surface, ui->window, 0, 0);
+         ui->wos[i]->draw_func(ui->wos[i], context);
    }
 }
 
@@ -52,6 +53,7 @@ void ui_redraw(ui_mgr_t *ui) {
 }
 
 bool ui_click(ui_mgr_t *ui, int x, int y) {
+   wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
    if(ui->default_menu && ui->default_menu->visible) {
       ui->default_menu->visible = false;
       if(x >= ui->default_menu->x && x < ui->default_menu->x + ui->default_menu->width
@@ -59,7 +61,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          clear_w(ui->window);
          ui_draw(ui);
          redraw_w(ui->window);
-         ui->default_menu->click_func(ui->default_menu, ui->surface, ui->window, x - ui->default_menu->x, y - ui->default_menu->y, 0, 0);
+         ui->default_menu->click_func(ui->default_menu, context, x - ui->default_menu->x, y - ui->default_menu->y);
       }
       clear_w(ui->window);
       ui_draw(ui);
@@ -70,9 +72,9 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
    if(ui->focused) {
       ui->focused->selected = false;
       if(ui->focused->unfocus_func)
-         ui->focused->unfocus_func(ui->focused, ui->surface, ui->window, 0, 0);
+         ui->focused->unfocus_func(ui->focused, context);
       else if(ui->focused->draw_func)
-         ui->focused->draw_func(ui->focused, ui->surface, ui->window, 0, 0);
+         ui->focused->draw_func(ui->focused, context);
       ui->focused = NULL;
    }
 
@@ -87,9 +89,9 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          ui->clicked = wo;
          wo->clicked = true;
          if(wo->click_func)
-            wo->click_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+            wo->click_func(wo, context, x - wo->x, y - wo->y);
          else if(wo->draw_func)
-            wo->draw_func(wo, ui->surface, ui->window, 0, 0);
+            wo->draw_func(wo, context);
          break;
       }
    }
@@ -97,6 +99,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
 }
 
 void ui_release(ui_mgr_t *ui, int x, int y) {
+   wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
    for(int i = 0; i < ui->wo_count; i++) {
       wo_t *wo = ui->wos[i];
       if(!(wo && wo->enabled && wo->visible) || (!wo->clicked && !wo->selected))
@@ -106,12 +109,12 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
       && y >= wo->y && y < wo->y + wo->height) {
          // call release func
          if(wo->release_func)
-            wo->release_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+            wo->release_func(wo, context, x - wo->x, y - wo->y);
          if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_GRID || wo->type == WO_GROUPBOX) {
             ui->focused = wo;
             wo->selected = true;
             if(!wo->release_func && wo->draw_func)
-               wo->draw_func(wo, ui->surface, ui->window, 0, 0);
+               wo->draw_func(wo, context);
          }
          break;
       }
@@ -122,22 +125,24 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
 void ui_keypress(ui_mgr_t *ui, uint16_t c) {
    if(ui->focused) {
       wo_t *wo = ui->focused;
+      wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
       if(wo->keypress_func)
          wo->keypress_func(wo, c, ui->window);
       if(wo->draw_func)
-         wo->draw_func(wo, ui->surface, ui->window, 0, 0);
+         wo->draw_func(wo, context);
    }
 }
 
 void ui_hover(ui_mgr_t *ui, int x, int y) {
+   wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
    if(ui->default_menu && ui->default_menu->visible) {
       if(x >= ui->default_menu->x && x < ui->default_menu->x + ui->default_menu->width
       && y >= ui->default_menu->y && y < ui->default_menu->y + ui->default_menu->height) {
          ui->default_menu->hovering = true;
-         ui->default_menu->hover_func(ui->default_menu, ui->surface, ui->window, x - ui->default_menu->x, y - ui->default_menu->y, 0, 0);
+         ui->default_menu->hover_func(ui->default_menu, context, x - ui->default_menu->x, y - ui->default_menu->y);
       } else {
          ui->default_menu->hovering = false;
-         ui->default_menu->draw_func(ui->default_menu, ui->surface, ui->window, 0, 0);
+         ui->default_menu->draw_func(ui->default_menu, context);
       }
       return;
    }
@@ -158,13 +163,13 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
          ui->hovered = wo;
 
          if(wo->hover_func)
-            wo->hover_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+            wo->hover_func(wo, context, x - wo->x, y - wo->y);
          
          if(wo != hovered) {
             if(wo->mousein_func)
-               wo->mousein_func(wo, ui->surface, ui->window, x - wo->x, y - wo->y, 0, 0);
+               wo->mousein_func(wo, context, x - wo->x, y - wo->y);
             else if(wo->draw_func)
-               wo->draw_func(wo, ui->surface, ui->window, 0, 0);
+               wo->draw_func(wo, context);
          }
          break; // can only hover one object at a time
       }
@@ -173,9 +178,9 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
    // draw on unhover
    if(hovered != ui->hovered && hovered && hovered->enabled && hovered->visible) {
       if(hovered->unhover_func) {
-         hovered->unhover_func(hovered, ui->surface, ui->window, 0, 0);
+         hovered->unhover_func(hovered, context);
       } else if(hovered->draw_func) {
-         hovered->draw_func(hovered, ui->surface, ui->window, 0, 0);
+         hovered->draw_func(hovered, context);
       }
    }
 
@@ -184,6 +189,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
 void ui_rightclick(ui_mgr_t *ui, int x, int y) {
    wo_t *menu = ui->default_menu;
    if(menu) {
+      wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
       if(menu->visible) {
          menu->visible = false;
          clear_w(ui->window);
@@ -196,7 +202,7 @@ void ui_rightclick(ui_mgr_t *ui, int x, int y) {
       menu_data->selected_index = -1;
       menu_data->hover_index = -1;
       if(menu->draw_func)
-         menu->draw_func(menu, ui->surface, ui->window, 0, 0);
+         menu->draw_func(menu, context);
    }
 }
 

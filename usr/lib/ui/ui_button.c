@@ -9,32 +9,24 @@ static inline int string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
 }
 
-void click_button(wo_t *button, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void click_button(wo_t *button, wo_draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
-   (void)surface;
-   (void)window;
-   (void)offsetX;
-   (void)offsetY;
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
-   draw_button(button, surface, window, offsetX, offsetY);
+   draw_button(button, context);
    if(btn_data->click_func)
-      btn_data->click_func(button, window);
+      btn_data->click_func(button, context.window);
 }
 
-void release_button(wo_t *button, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void release_button(wo_t *button, wo_draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
-   (void)surface;
-   (void)window;
-   (void)offsetX;
-   (void)offsetY;
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
-   draw_button(button, surface, window, offsetX, offsetY);
+   draw_button(button, context);
    if(btn_data->release_func)
-      btn_data->release_func(button, window);
+      btn_data->release_func(button, context.window);
 }
 
 wo_t *create_button(int x, int y, int width, int height, char *text) {
@@ -69,7 +61,7 @@ void destroy_button(wo_t *button) {
    free(button, sizeof(wo_t));
 }
 
-void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int offsetY) {
+void draw_button(wo_t *button, wo_draw_context_t context) {
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
 
@@ -88,8 +80,8 @@ void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int 
       txt = btn_data->colour_txt_hover;
    }
 
-   int x = button->x + offsetX;
-   int y = button->y + offsetY;
+   int x = button->x + context.offsetX;
+   int y = button->y + context.offsetY;
    int width = button->width;
    int height = button->height;
    bool gradient = true;
@@ -97,17 +89,17 @@ void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int 
 
    if(gradient) {
       if(button->hovering || button->clicked)
-         draw_rect_gradient(surface, bg2, bg, x, y, width, height, gradientstyle);
+         draw_rect_gradient(context.surface, bg2, bg, x, y, width, height, gradientstyle);
       else
-         draw_rect_gradient(surface, bg, bg2, x, y, width, height, gradientstyle);
+         draw_rect_gradient(context.surface, bg, bg2, x, y, width, height, gradientstyle);
    } else {
-      draw_rect(surface, bg, x, y, width, height);
+      draw_rect(context.surface, bg, x, y, width, height);
    }
 
-   draw_line(surface, light,  x, y, true,  height);
-   draw_line(surface, light,  x, y, false, width);
-   draw_line(surface, dark, x, y + height - 1, false, width);
-   draw_line(surface, dark, x + width - 1, y, true, height);
+   draw_line(context.surface, light,  x, y, true,  height);
+   draw_line(context.surface, light,  x, y, false, width);
+   draw_line(context.surface, dark, x, y + height - 1, false, width);
+   draw_line(context.surface, dark, x + width - 1, y, true, height);
 
    // text 
    int text_width = string_width(btn_data->label);
@@ -136,8 +128,8 @@ void draw_button(wo_t *button, surface_t *surface, int window, int offsetX, int 
    // center text
    int text_x = x + (width - text_width) / 2;
    int text_y = y + (height - get_font_info().height) / 2;
-   write_strat_w(display_label, text_x, text_y + 1, button->clicked ? 0xFFFF : light, window); // shadow
-   write_strat_w(display_label, text_x, text_y, txt, window);
+   write_strat_w(display_label, text_x, text_y + 1, button->clicked ? 0xFFFF : light, context.window); // shadow
+   write_strat_w(display_label, text_x, text_y, txt, context.window);
 }
 
 void set_button_release(wo_t *button, void(*release_func)(wo_t *wo, int window)) {

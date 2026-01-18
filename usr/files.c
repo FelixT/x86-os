@@ -451,7 +451,8 @@ void release(int x, int y, int window) {
 
 void hover(int x, int y) {
    ui_hover(ui, x, y);
-   wo_menu->draw_func(wo_menu, ui->surface, -1, 0, 0);
+   wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
+   wo_menu->draw_func(wo_menu, context);
    redraw();
    end_subroutine();
 }

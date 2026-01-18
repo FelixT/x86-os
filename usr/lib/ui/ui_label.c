@@ -34,7 +34,7 @@ int ui_string_height(char *txt, int width) {
    return height;
 }
 
-void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int offsetY) {
+void draw_label(wo_t *label, wo_draw_context_t context) {
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
 
@@ -49,20 +49,20 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
       txt = label_data->colour_txt_hover;
    }
 
-   int x = label->x + offsetX;
-   int y = label->y + offsetY;
+   int x = label->x + context.offsetX;
+   int y = label->y + context.offsetY;
    int width = label->width;
    int height = label->height;
 
    if(label_data->bordered) {
-      draw_line(surface, light,  x, y, true,  height);
-      draw_line(surface, light,  x, y, false, width);
-      draw_line(surface, dark, x, y + height - 1, false, width);
-      draw_line(surface, dark, x + width - 1, y, true, height);
+      draw_line(context.surface, light, x, y, true,  height);
+      draw_line(context.surface, light, x, y, false, width);
+      draw_line(context.surface, dark, x, y + height - 1, false, width);
+      draw_line(context.surface, dark, x + width - 1, y, true, height);
    }
 
    if(label_data->filled) {
-      draw_rect(surface, bg, x + 1, y + 1, width - 2, height - 2);
+      draw_rect(context.surface, bg, x + 1, y + 1, width - 2, height - 2);
    }
 
    // text 
@@ -103,8 +103,8 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
          // somewhat inefficient
          char buf[2] = {display_label[i], '\0'};
          if(label_data->bordered)
-            write_strat_w(buf, text_x, text_y+1, light, window); // shadow
-         write_strat_w(buf, text_x, text_y, txt, window);
+            write_strat_w(buf, text_x, text_y+1, light, context.window); // shadow
+         write_strat_w(buf, text_x, text_y, txt, context.window);
          text_x += get_font_info().width + get_font_info().padding;
          if(text_x + get_font_info().width + get_font_info().padding > x + width) {
             text_y += get_font_info().height + get_font_info().padding;
@@ -114,16 +114,13 @@ void draw_label(wo_t *label, surface_t *surface, int window, int offsetX, int of
    }
 }
 
-void release_label(wo_t *label, surface_t *surface, int window, int x, int y, int offsetX, int offsetY) {
+void release_label(wo_t *label, wo_draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
-   (void)surface;
-   (void)offsetX;
-   (void)offsetY;
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
    if(label_data->release_func)
-      label_data->release_func(label, window);
+      label_data->release_func(label, context.window);
 }
 
 void destroy_label(wo_t *label) {

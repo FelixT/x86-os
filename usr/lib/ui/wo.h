@@ -21,6 +21,13 @@ typedef enum {
    WO_CHECKBOX
 } wo_type_t;
 
+typedef struct wo_draw_context_t {
+   surface_t *surface;
+   int window;
+   int offsetX;
+   int offsetY;
+} wo_draw_context_t;
+
 typedef struct wo_t {
    wo_type_t type;
    int x, y;
@@ -35,13 +42,13 @@ typedef struct wo_t {
    bool needs_redraw;
    void *data; // actual object e.g. button_t, label_t, etc.
    
-   void (*draw_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
-   void (*click_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
-   void (*release_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
-   void (*unfocus_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY);
-   void (*hover_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
-   void (*mousein_func)(struct wo_t *wo, surface_t *surface, int window, int x, int y, int offsetX, int offsetY);
-   void (*unhover_func)(struct wo_t *wo, surface_t *surface, int window, int offsetX, int offsetY); // mouseout
+   void (*draw_func)(struct wo_t *wo, wo_draw_context_t draw_context);
+   void (*click_func)(struct wo_t *wo, wo_draw_context_t draw_context, int x, int y);
+   void (*release_func)(struct wo_t *wo, wo_draw_context_t draw_context, int x, int y);
+   void (*unfocus_func)(struct wo_t *wo, wo_draw_context_t draw_context);
+   void (*hover_func)(struct wo_t *wo, wo_draw_context_t draw_context, int x, int y);
+   void (*mousein_func)(struct wo_t *wo, wo_draw_context_t draw_context, int x, int y);
+   void (*unhover_func)(struct wo_t *wo, wo_draw_context_t draw_context); // mouseout
    void (*drag_func)(struct wo_t *wo, int x, int y);
    void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);
    void (*destroy_func)(struct wo_t *wo);
