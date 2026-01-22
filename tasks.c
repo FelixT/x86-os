@@ -153,7 +153,7 @@ void end_task(int index, registers_t *regs) {
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
    if(task->in_routine)
-      debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : " "), task->routine_name);
+      debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : ""), task->routine_name);
 
    if(task->in_syscall)
       debug_printf("Task was in syscall %i\n", task->syscall_no);

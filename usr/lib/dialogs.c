@@ -129,14 +129,17 @@ void dialog_keypress(int c, int window) {
    }
    if(!dialog->ui->focused) {
       if(c == 0x100) {
-         dialog->content_offsetY -= 15;
-         if(dialog->content_offsetY < 0) dialog->content_offsetY = 0;
-         scroll_to(dialog->content_offsetY, window);
+         dialog->ui->scrolled_y -= 15;
+         if(dialog->ui->scrolled_y < 0)
+            dialog->ui->scrolled_y = 0;
+         scroll_to(dialog->ui->scrolled_y, window);
       } else if(c == 0x101) {
-         dialog->content_offsetY += 15;
-         if(dialog->content_offsetY > dialog->content_height - dialog->surface.height)
-            dialog->content_offsetY = dialog->content_height - dialog->surface.height;
-         scroll_to(dialog->content_offsetY, window);
+         dialog->ui->scrolled_y += 15;
+         if(dialog->ui->scrolled_y > dialog->content_height - dialog->surface.height)
+            dialog->ui->scrolled_y = dialog->content_height - dialog->surface.height;
+         if(dialog->ui->scrolled_y < 0)
+            dialog->ui->scrolled_y = 0;
+         scroll_to(dialog->ui->scrolled_y, window);
       }
    }
 
@@ -805,8 +808,6 @@ void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
       debug_println("Couldn't find dialog for window %i\n", window);
       return;
    }
-   dialog->content_offsetY = offsetY;
-
    ui_scroll(dialog->ui, deltaY, offsetY);
    
    end_subroutine();

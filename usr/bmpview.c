@@ -17,7 +17,6 @@ int width = 0;
 int height = 0;
 char path[256];
 surface_t surface;
-ui_mgr_t *ui;
 
 wo_t *wo_menu; // canvas
 wo_t *options = NULL;
@@ -36,6 +35,7 @@ int colour = 0;
 int offsetX = 0;
 int offsetY = 0;
 FILE *current_file = NULL;
+dialog_t *dialog = NULL;
 
 void drawbg() {
    draw_checkeredrect(&surface, 0xBDF7, 0xDEDB, 0, 0, width, height);
@@ -45,6 +45,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
 
    surface = get_surface();
+   *dialog->ui->surface = surface;
    width = w;
    height = h;
    bufferwidth = surface.width;
@@ -52,7 +53,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_menu->width = w;
    drawbg();
    bmp_draw(bmp, -offsetX, -offsetY, scale, false);
-   ui_draw(ui);
+   ui_draw(dialog->ui);
    redraw();
    end_subroutine();
 }
@@ -210,11 +211,11 @@ void click(int x, int y) {
       end_subroutine();
 
    if(options && options->visible) {
-      ui_click(ui, x, y);
+      ui_click(dialog->ui, x, y);
       end_subroutine();
    }
 
-   if(ui_click(ui, x, y))
+   if(ui_click(dialog->ui, x, y))
       end_subroutine();
 
    set(x, y);
@@ -239,13 +240,13 @@ void release(int x, int y, int window) {
    prevX = -1;
    prevY = -1;
 
-   ui_release(ui, x, y);
+   ui_release(dialog->ui, x, y);
 
    end_subroutine();
 }
 
 void hover(int x, int y) {
-   ui_hover(ui, x, y);
+   ui_hover(dialog->ui, x, y);
 
    end_subroutine();
 }
@@ -258,7 +259,7 @@ void tool_click(wo_t *wo, int window) {
    uinttostr(size, buf);
    strcat(buf, "px");
    set_input_text(toolsizetext_wo, buf);
-   ui_draw(ui);
+   ui_draw(dialog->ui);
 }
 
 void toolminus_click(wo_t *wo, int window) {
@@ -270,7 +271,7 @@ void toolminus_click(wo_t *wo, int window) {
    uinttostr(size, buf);
    strcat(buf, "px");
    set_input_text(toolsizetext_wo, buf);
-   ui_draw(ui);
+   ui_draw(dialog->ui);
 }
 
 void zoomout_click(wo_t *wo, int window) {
@@ -283,8 +284,9 @@ void zoomout_click(wo_t *wo, int window) {
    set_input_text(zoomtext_wo, buf);
    drawbg();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
-   ui_draw(ui);
-   set_content_height(info->height*scale + 20, -1);
+   ui_draw(dialog->ui);
+   dialog->content_height = info->height*scale + 20;
+   set_content_height(dialog->content_height, -1);
 }
 
 void zoomin_click(wo_t *wo, int window) {
@@ -297,15 +299,16 @@ void zoomin_click(wo_t *wo, int window) {
    set_input_text(zoomtext_wo, buf);
    drawbg();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
-   ui_draw(ui);
-   set_content_height(info->height*scale + 20, -1);
+   ui_draw(dialog->ui);
+   dialog->content_height = info->height*scale + 20;
+   set_content_height(dialog->content_height, -1);
 }
 
 void colour_callback(char *out, int window, wo_t *wo) {
    (void)window;
    (void)wo;
    colour = hextouint(out+2);
-   ui_draw(ui);
+   ui_draw(dialog->ui);
 }
 
 bool bmp_check() {
@@ -366,9 +369,10 @@ void open_file(char *p, int window) {
    strcpy(path, p);
 
    load_img();
-   ui_draw(ui);
+   ui_draw(dialog->ui);
 
-   set_content_height(info->height*scale + 20, -1);
+   dialog->content_height = info->height*scale + 20;
+   set_content_height(dialog->content_height, -1);
 }
 
 void open_click(wo_t *wo, int window) {
@@ -417,8 +421,10 @@ void scroll(int deltaY, int offY, int window) {
    (void)deltaY;
    (void)window;
    offsetY = offY;
+   dialog->ui->scrolled_y = offY;
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
-   ui_draw(ui);
+   ui_draw(dialog->ui);
+   redraw();
    end_subroutine();
 }
 
@@ -434,7 +440,7 @@ void brush_close(wo_t *wo, int window) {
    options->visible = false;
    drawbg();
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
-   ui_draw(ui);
+   ui_draw(dialog->ui);
 }
 
 void brush_click(wo_t *wo, int window) {
@@ -443,7 +449,7 @@ void brush_click(wo_t *wo, int window) {
 
    if(options != NULL) {
       options->visible = true;
-      ui_draw(ui);
+      ui_draw(dialog->ui);
       return;
    }
 
@@ -461,14 +467,14 @@ void brush_click(wo_t *wo, int window) {
    wo_t *close = create_button(5, 100, 40, 14, "Close");
    set_button_release(close, &brush_close);
    canvas_add(options, close);
-   ui_add(ui, options);
-   ui_draw(ui);
+   ui_add(dialog->ui, options);
+   ui_draw(dialog->ui);
 }
 
 // discard changes
 void clear_confirm() {
-   load_img(path);
-   ui_draw(ui);
+   load_img();
+   ui_draw(dialog->ui);
 }
 
 void clear_click(wo_t *wo, int window) {
@@ -478,22 +484,23 @@ void clear_click(wo_t *wo, int window) {
 }
 
 void _start(int argc, char **args) {
+   override_draw((uint32_t)NULL);
    surface = get_surface();
    width = get_width();
    height = get_height();
    drawbg();
 
-   if(argc == 1) {
-      if(*args[0] != '\0') {
-         if(args[0][0] != '/') {
+   if(argc == 2) {
+      if(*args[1] != '\0') {
+         if(args[1][0] != '/') {
             // relative path
             getwd(path);
             if(!strequ(path, "/"))
                strcat(path, "/");
-            strcat(path, args[0]);
+            strcat(path, args[1]);
          } else {
             // absolute path
-            strcpy(path, args[0]);
+            strcpy(path, args[1]);
          }
       }
       
@@ -535,20 +542,18 @@ void _start(int argc, char **args) {
    }
 
    int index = get_free_dialog();
-   dialog_t *dialog = get_dialog(index);
+   dialog = get_dialog(index);
    dialog_init(dialog, -1);
    dialog_set_title(dialog, "BMP Viewer");
 
    override_click((uint32_t)&click, -1);
    override_drag((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
-   override_draw((uint32_t)NULL);
    override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
 
    framebuffer = (uint16_t*)(surface.buffer);
    bufferwidth = surface.width;
-   ui = ui_init(&surface, -1);
 
    // menu
    wo_menu = create_canvas(0, height - 18, width, 18);
@@ -617,14 +622,15 @@ void _start(int argc, char **args) {
    canvas_add(wo_menu, toolplusbtn_wo);
    x += toolplusbtn_wo->width + margin;
 
-   ui_add(ui, wo_menu);
+   ui_add(dialog->ui, wo_menu);
 
-   ui_draw(ui);
+   ui_draw(dialog->ui);
 
    redraw();
 
    create_scrollbar(&scroll, -1);
-   set_content_height(info->height*scale + 20, -1);
+   dialog->content_height = info->height*scale + 20;
+   set_content_height(dialog->content_height, -1);
 
    while(1==1) {
       //asm volatile("pause");

@@ -14,12 +14,12 @@ nasm usr/progidle.asm -f bin -o o/progidle.bin
 
 # c libs
 $GCC -c usr/lib/wo_api.c $FLAGS -o o/lib/wo_api.o
-$GCC -c usr/lib/stdio.c $FLAGS -o o/lib/stdio.o
+$GCC -c usr/lib/stdio.c -O2 $FLAGS -o o/lib/stdio.o
 $GCC -c usr/lib/map.c $FLAGS -o o/lib/map.o
-$GCC -c usr/lib/sort.c $FLAGS -o o/lib/sort.o
-$GCC -c usr/lib/dialogs.c $FLAGS -o o/lib/dialogs.o
+$GCC -c usr/lib/sort.c -O2 $FLAGS -o o/lib/sort.o
+$GCC -c usr/lib/dialogs.c -O2 $FLAGS -o o/lib/dialogs.o
 $GCC -c usr/lib/dialogs2.c $FLAGS -o o/lib/dialogs2.o
-$GCC -c usr/lib/draw.c $FLAGS -o o/lib/drawusr.o
+$GCC -c usr/lib/draw.c -O2 $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
 
@@ -38,9 +38,9 @@ $GCC $FLAGS usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/std
 $GCC $FLAGS usr/prog5.c -o o/prog5.elf $DIALOGS_LIB
 $GCC $FLAGS usr/prog6.c -o o/prog6.elf o/lib/stdio.o $UI_LIB
 $GCC $FLAGS usr/prog7.c -o o/prog7.elf
-$GCC $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
-$GCC $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
-$GCC $FLAGS usr/apps.c -o o/apps.elf o/lib/stdio.o o/lib/sort.o $UI_LIB
+$GCC -O2 $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
+$GCC -O2 $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
+$GCC -O2 $FLAGS usr/apps.c -o o/apps.elf o/lib/stdio.o o/lib/sort.o $UI_LIB
 $GCC $FLAGS usr/debug.c -o o/debug.elf $DIALOGS_LIB
 
 # copy programs to fs

@@ -511,7 +511,7 @@ void endtask_debug(void *window, void *regs) {
    tasks_launch_elf(regs, debug_path, argc, args, true);
    map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*argc, 1, 1);
    for(int i = 0; i < argc; i++)
-      map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i]), 1, 1);
+      map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1);
 }
 
 void show_endtask_dialog(int int_no, registers_t *regs) {

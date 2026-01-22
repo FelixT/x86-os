@@ -18,6 +18,7 @@ static inline void write_str(char *str) {
       "int $0x30"
       :: "a" (1),
       "b" ((uint32_t)str)
+      : "cc", "memory"
    );
 }
 
@@ -26,6 +27,7 @@ static inline void write_num(int num) {
       "int $0x30"
       :: "a" (2),
       "b" (num)
+      : "cc", "memory"
    );
 }
 
@@ -33,6 +35,7 @@ static inline void yield() {
    asm volatile(
       "int $0x30"
       :: "a" (3)
+      : "cc", "memory"
    );
 }
 
@@ -41,6 +44,7 @@ static inline void write_uint(uint32_t num) {
       "int $0x30"
       :: "a" (6),
       "b" (num)
+      : "cc", "memory"
    );
 }
 
@@ -51,6 +55,7 @@ static inline surface_t get_surface_w(int window) {
       : "=b" (surface.buffer), "=c" (surface.width), "=d" (surface.height)
       : "a" (7),
       "b" (window)
+      : "cc", "memory"
    );
    return surface;
 }
@@ -63,6 +68,7 @@ static inline void write_newline() {
    asm volatile(
       "int $0x30"
       :: "a" (8)
+      : "cc", "memory"
    );
 }
 
@@ -71,6 +77,7 @@ static inline void redraw_w(int w) {
       "int $0x30"
       :: "a" (9),
       "b" (w)
+      : "cc", "memory"
    );
 }
 
@@ -84,6 +91,7 @@ static inline void redraw_pixel(int x, int y) {
       :: "a" (37),
       "b" ((uint32_t)x),
       "c" ((uint32_t)y)
+      : "cc", "memory"
    );
 }
 
@@ -92,6 +100,7 @@ static inline void exit(int status) {
       "int $0x30"
       :: "a" (10),
       "b" (status)
+      : "cc", "memory"
    );
 }
 
@@ -99,6 +108,7 @@ static inline void end_subroutine() {
    asm volatile(
       "int $0x30"
       :: "a" (12)
+      : "cc", "memory"
    );
 }
 
@@ -108,6 +118,7 @@ static inline void override_click(uint32_t addr, int window) {
       :: "a" (13),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -116,6 +127,7 @@ static inline void override_draw(uint32_t addr) {
       "int $0x30"
       :: "a" (29),
       "b" (addr)
+      : "cc", "memory"
    );
 }
 
@@ -127,6 +139,7 @@ static inline int get_width_w(int window) {
       : "=r" (output)
       : "a" (14),
       "b" (window)
+      : "cc", "memory"
    );
 
    return output;
@@ -144,6 +157,7 @@ static inline int get_height_w(int window) {
       : "=r" (output)
       : "a" (15),
       "b" (window)
+      : "cc", "memory"
    );
 
    return output;
@@ -161,6 +175,7 @@ static inline void *malloc(uint32_t size) {
       : "=r" (addr)
       : "a" (16),
       "b" (size)
+      : "cc", "memory"
    );
 
    return (void*)addr;
@@ -172,6 +187,7 @@ static inline void free(void *addr, uint32_t size) {
       :: "a" (40),
       "b" ((uint32_t*)addr),
       "c" (size)
+      : "cc", "memory"
    );
 }
 
@@ -182,6 +198,7 @@ static inline bool mkdir(char *path) {
       : "=r" (success)
       : "a" (50),
       "b" ((uint32_t)path)
+      : "cc", "memory"
    );
    return (bool)success;
 }
@@ -195,6 +212,7 @@ static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is
       "d" ((uint32_t)y),
       "S" ((uint32_t)scale),
       "D" ((uint32_t)white_is_transparent)
+      : "cc", "memory"
    );
 }
 
@@ -208,6 +226,7 @@ static inline void write_strat_w(char *str, int x, int y, int colour, int window
       "d" ((uint32_t)y),
       "S" ((uint32_t)colour),
       "D" ((uint32_t)window)
+      : "cc", "memory"
    );
 }
 
@@ -219,7 +238,9 @@ static inline void clear_w(int w) {
    asm volatile(
       "int $0x30"
       :: "a" (23),
-      "b" (w));
+      "b" (w)
+      : "cc", "memory"
+   );
 }
 
 static inline void clear() {
@@ -253,6 +274,7 @@ static inline fs_dir_content_t *read_dir(char *path) {
       : "=r" (addr)
       : "a" (25),
       "b" ((uint32_t)path)
+      : "cc", "memory"
    );
 
    return (fs_dir_content_t*)addr;
@@ -263,6 +285,7 @@ static inline void debug_write_str(char *str) {
       "int $0x30"
       :: "a" (49),
       "b" (str)
+      : "cc", "memory"
    );
 }
 
@@ -272,6 +295,7 @@ static inline void override_resize(uint32_t addr, int window) {
       :: "a" (34),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -281,6 +305,7 @@ static inline void override_drag(uint32_t addr, int window) {
       :: "a" (36),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -290,6 +315,7 @@ static inline void override_release(uint32_t addr, int window) {
       :: "a" (38),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -299,6 +325,7 @@ static inline void override_keypress(uint32_t addr, int window) {
       :: "a" (64),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -308,6 +335,7 @@ static inline void override_close(uint32_t addr, int window) {
       :: "a" (27),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -317,6 +345,7 @@ static inline void override_rightclick(uint32_t addr, int window) {
       :: "a" (17),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -326,6 +355,7 @@ static inline void override_hover(uint32_t addr, int window) {
       :: "a" (11),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -335,6 +365,7 @@ static inline void override_mouseout(uint32_t addr, int window) {
       :: "a" (45),
       "b" (addr),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -345,6 +376,7 @@ static inline void write_numat(int num, int x, int y) {
       "b" ((uint32_t)num),
       "c" ((uint32_t)x),
       "d" ((uint32_t)y)
+      : "cc", "memory"
    );
 }
 
@@ -354,6 +386,7 @@ static inline void queue_event(uint32_t callback, int delta) {
       :: "a" (30),
       "b" ((uint32_t)callback),
       "c" ((uint32_t)delta)
+      : "cc", "memory"
    );
 }
 
@@ -365,6 +398,7 @@ static inline void launch_task(char *path, int argc, char **args, bool copy) {
       "c" ((uint32_t)argc),
       "d" ((uint32_t)args),
       "S" ((uint32_t)copy) // inherit fds and wd from current task
+      : "cc", "memory"
    );
 }
 
@@ -373,6 +407,7 @@ static inline void end_task(int id) {
       "int $0x30;"
       :: "a" (67),
       "b" ((uint32_t)id)
+      : "cc", "memory"
    );
 }
 
@@ -384,6 +419,7 @@ static inline bool set_setting(api_setting_t setting, uint32_t value) {
       : "a" (35),
       "b" ((uint32_t)setting),
       "c" ((uint32_t)value)
+      : "cc", "memory"
    );
    return out == 0;
 }
@@ -395,6 +431,7 @@ static inline uint32_t get_setting(api_setting_t setting) {
       : "=b" (value)
       : "a" (33),
       "b" ((uint32_t)setting)
+      : "cc", "memory"
    );
    return value;
 }
@@ -408,6 +445,7 @@ static inline bool set_window_setting(int setting, uint32_t value, int window) {
       "b" ((uint32_t)setting),
       "c" ((uint32_t)value),
       "d" ((uint32_t)window)
+      : "cc", "memory"
    );
    return out == 0;
 }
@@ -420,6 +458,7 @@ static inline uint32_t get_window_setting(int setting, int window) {
       : "a" (19),
       "b" ((uint32_t)setting),
       "c" ((uint32_t)window)
+      : "cc", "memory"
    );
    return value;
 }
@@ -430,6 +469,7 @@ static inline void set_window_title(char *title) {
       :: "a" (42),
       "b" ((uint32_t)title),
       "c" ((uint32_t)-1)
+      : "cc", "memory"
    );
 }
 
@@ -439,6 +479,7 @@ static inline void set_window_title_w(int window, char *title) {
       :: "a" (42),
       "b" ((uint32_t)title),
       "c" ((uint32_t)window)
+      : "cc", "memory"
    );
 }
 
@@ -447,6 +488,7 @@ static inline void chdir(char *path) {
       "int $0x30;"
       :: "a" (43),
       "b" ((uint32_t)path)
+      : "cc", "memory"
    );
 }
 
@@ -455,6 +497,7 @@ static inline void getwd(char *buf) {
       "int $0x30;"
       :: "a" (44),
       "b" ((uint32_t)buf)
+      : "cc", "memory"
    );
 }
 
@@ -464,6 +507,7 @@ static inline void display_colourpicker(uint16_t colour, void *callback) {
       :: "a" (46),
       "b" ((uint32_t)colour),
       "c" ((uint32_t)callback)
+      : "cc", "memory"
    );
 }
 
@@ -472,6 +516,7 @@ static inline void display_filepicker(void *callback) {
       "int $0x30;"
       :: "a" (48),
       "b" ((uint32_t)callback)
+      : "cc", "memory"
    );
 }
 
@@ -483,6 +528,7 @@ static inline int open(char *path, int flag) {
       : "a" (52),
       "b" ((uint32_t)path),
       "c" (flag)
+      : "cc", "memory"
    );
    return fd;
 }
@@ -494,6 +540,7 @@ static inline int fsize(int fd) {
       : "=r" (size)
       : "a" (59),
       "b" ((uint32_t)fd)
+      : "cc", "memory"
    );
    return size;
 }
@@ -507,6 +554,7 @@ static inline int read(int fd, char *buf, size_t count) {
       "b" ((uint32_t)fd),
       "c" ((uint32_t)buf),
       "d" ((uint32_t)count)
+      : "cc", "memory"
    );
    return c;
 }
@@ -520,6 +568,7 @@ static inline int write(int fd, char *buf, size_t count) {
       "b" ((uint32_t)fd),
       "c" ((uint32_t)buf),
       "d" ((uint32_t)count)
+      : "cc", "memory"
    );
    return c;
 }
@@ -531,6 +580,7 @@ static inline int new_file(char *path) {
       : "=r" (fd)
       : "a" (41),
       "b" ((uint32_t)path)
+      : "cc", "memory"
    );
    return fd;
 }
@@ -549,6 +599,7 @@ static inline bool rename(char *path, char *newname) {
       : "a" (58),
       "b" ((uint32_t)path),
       "c" ((uint32_t)newname)
+      : "cc", "memory"
    );
    return (bool)success;
 }
@@ -561,6 +612,7 @@ static inline uint32_t *sbrk(uint32_t increment) {
       : "=r" (addr)
       : "a" (51),
       "b" ((uint32_t)increment)
+      : "cc", "memory"
    );
 
    return (void*)addr;
@@ -572,6 +624,7 @@ static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY, in
       :: "a" (54),
       "b" ((uint32_t)callback),
       "c" ((uint32_t)window)
+      : "cc", "memory"
    );
 }
 
@@ -583,6 +636,7 @@ static inline uint32_t set_content_height(uint32_t height, int window) {
       : "a" (55),
       "b" (height),
       "c" (window)
+      : "cc", "memory"
    );
 
    return width;
@@ -594,6 +648,7 @@ static inline void scroll_to(uint32_t y, int window) {
       :: "a" (56),
       "b" (y),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -603,6 +658,7 @@ static inline void set_window_size(int width, int height) {
       :: "a" (60),
       "b" (width),
       "c" (height)
+      : "cc", "memory"
    );
 }
 
@@ -613,6 +669,7 @@ static inline void set_window_position(int x, int y, int window) {
       "b" (x),
       "c" (y),
       "d" (window)
+      : "cc", "memory"
    );
 }
 
@@ -630,6 +687,7 @@ static inline coord_t get_window_position(int window) {
       "=c" (y)
       : "a" (26),
       "b" (window)
+      : "cc", "memory"
    );
    coord_t coord = {x,y};
    return coord;
@@ -641,6 +699,7 @@ static inline void set_window_minimised(bool minimised, int window) {
       :: "a" (24),
       "b" (minimised),
       "c" (window)
+      : "cc", "memory"
    );
 }
 
@@ -656,6 +715,7 @@ static inline font_info_t get_font_info() {
       "int $0x30"
       : "=b" (info.width), "=c" (info.height), "=d" (info.padding)
       : "a" (61)
+      : "cc", "memory"
    );
    return info;
 }
@@ -668,6 +728,7 @@ static inline int create_window(int width, int height) {
       : "a" (62),
       "b" (width),
       "c" (height)
+      : "cc", "memory"
    );
    return index;
 }
@@ -679,6 +740,7 @@ static inline bool close_window(int index) {
       : "=b" (success)
       : "a" (63),
       "b" (index)
+      : "cc", "memory"
    );
    return (bool)success;
 }
@@ -690,6 +752,7 @@ static inline int create_thread(void (*func)()) {
       : "=b" (id)
       : "a" (65),
       "b" ((uint32_t)func)
+      : "cc", "memory"
    );
    return id;
 }
@@ -702,6 +765,7 @@ static inline tasks_t get_tasks() {
       : "=b" (addr),
       "=c" (t.size)
       : "a" (66)
+      : "cc", "memory"
    );
    t.tasks = (api_task_t*)addr;
    return t;
@@ -714,6 +778,7 @@ static inline void override_term_checkcmd(uint32_t addr) {
       "int $0x30;"
       :: "a" (39),
       "b" ((uint32_t)addr)
+      : "cc", "memory"
    );
 }
 

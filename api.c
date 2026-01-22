@@ -423,15 +423,18 @@ void api_launch_task(registers_t *regs) {
       }
    }
 
+   // copy path (as page directory will change)
+   char pathbuf[256];
+   strcpy(pathbuf, path);
+
    task_state_t *parenttask = &gettasks()[get_current_task()];
 
    task_subroutine_end(regs);
 
    int oldwindow = getSelectedWindowIndex();
 
-   tasks_launch_elf(regs, path, argc, copied_args, true);
+   tasks_launch_elf(regs, pathbuf, argc, copied_args, true);
    task_state_t *task = &gettasks()[get_current_task()];
-   strcpy(task->process->exe_path, path);
 
    if(copy) {
       // copy file descriptors and working dir from parent

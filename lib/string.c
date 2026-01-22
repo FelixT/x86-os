@@ -269,61 +269,78 @@ char *strcat(char *dest, const char *src) {
    return dest;
 }
 
+char *strncat(char *dest, const char *src, size_t size) {
+   char *ptr = dest;
+   while(*ptr) ptr++;
+   while(*src && size > 0) {
+      *ptr++ = *src++;
+      size--;
+   }    
+   *ptr = '\0';
+   return dest;
+}
+
 void vsnprintf(char *buffer, size_t size, char *format, va_list args) {
    char *pfmt = format;
-   char x[2] = "x";
-
    buffer[0] = '\0';
+   size_t remaining = size - 1;
+   char tmp[20];
 
-   int i = 0;
-   while((size_t)i < size && *pfmt) {
+   while(*pfmt && remaining > 0) {
       if(*pfmt == '%' && *(pfmt + 1)) {
          pfmt++;
+         char *append = NULL;
          switch (*pfmt) {
             case 'i':
                int i = va_arg(args, int);
-               char istr[20];
-               inttostr(i, istr);
-               strcat(buffer, istr);
+               inttostr(i, tmp);
+               append = tmp;
                break;
             case 'u':
                uint32_t u = va_arg(args, uint32_t);
-               char ustr[20];
-               uinttostr(u, ustr);
-               strcat(buffer, ustr);
+               uinttostr(u, tmp);
+               append = tmp;
                break;
             case 'h':
                uint32_t h = va_arg(args, uint32_t);
-               char hstr[20];
-               uinttohexstr(h, hstr);
-               strcat(buffer, hstr);
+               uinttohexstr(h, tmp);
+               append = tmp;
                break;
             case 's':
                char *s = va_arg(args, char *);
-               strcat(buffer, s);
+               append = s;
                break;
             case 'c':
-               x[0] = (char)va_arg(args, int);
-               strcat(buffer, x);
+               tmp[0] = (char)va_arg(args, int);
+               tmp[1] = '\0';
+               append = tmp;
                break;
             case 'p':
-               uint32_t p = va_arg(args, uint32_t);
-               strcat(buffer, "0x");
-               uinttohexstr(p, hstr);
-               strcat(buffer, hstr);
+               uint32_t val = va_arg(args, uint32_t);
+               strncat(buffer, "0x", remaining);
+               remaining -= (remaining > 2) ? 2 : remaining;
+               uinttohexstr(val, tmp);
+               append = tmp;
                break;
             default:
-               x[0] = '%';
-               strcat(buffer, x);
-               x[0] = *pfmt;
-               strcat(buffer, pfmt);
+               tmp[0] = '%';
+               tmp[1] = *pfmt;
+               tmp[2] = '\0';
+               append = tmp;
+         }
+         
+         if(append) {
+            size_t len = strlen(append);
+            strncat(buffer, append, remaining);
+            remaining -= (len < remaining) ? len : remaining;
          }
       } else {
-         x[0] = *pfmt;
-         strcat(buffer, x);
+         tmp[0] = *pfmt;
+         tmp[1] = '\0';
+         strncat(buffer, tmp, remaining);
+         if(remaining > 0) remaining--;
       }
       pfmt++;
-      i++;
    }
 
 }

@@ -289,13 +289,16 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
       // handle supported extensions
       // bmp, elf, txt
       if(strequ(extension, "bmp")) {
-         char **args = (char**)malloc(1*sizeof(char*));
-         args[0] = malloc(strlen(fullpath)+1);
-         strcpy(args[0], fullpath);
+         char **args = (char**)malloc(2*sizeof(char*));
+         char elfpath[32] = "/sys/bmpview.elf";
+         args[0] = malloc(strlen(elfpath)+1);
+         strcpy(args[0], elfpath);
+         args[1] = malloc(strlen(fullpath)+1);
+         strcpy(args[1], fullpath);
 
          // note: this also ends the subroutine
          launched = true;
-         launch_task("/sys/bmpview.elf", 1, args, false);
+         launch_task(elfpath, 2, args, false);
       }
 
       if(strequ(extension, "elf")) {
@@ -452,7 +455,7 @@ void release(int x, int y, int window) {
 
 void hover(int x, int y) {
    ui_hover(ui, x, y);
-   draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
+   draw_context_t context = ui_get_context(ui);
    wo_menu->draw_func(wo_menu, context);
    redraw();
    end_subroutine();

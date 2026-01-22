@@ -126,14 +126,14 @@ void show_symbols(elf_header_t *elf) {
       if(sym->st_name == 0) continue;
       if(ELF32_ST_TYPE(sym->st_info) == STT_FILE) {
          char *name = strings + sym->st_name;
-         char buf[63];
-         sprintf(buf, "file %s", name);
+         char buf[64];
+         snprintf(buf, 63, "file %s", name);
          add_menu_item(menu, buf, NULL);
       }
       if(ELF32_ST_TYPE(sym->st_info) == STT_FUNC) {
          char *name = strings + sym->st_name;
-         char buf[63];
-         sprintf(buf, " 0x%h: %s (size: %u)", sym->st_value, name, sym->st_size);
+         char buf[64];
+         snprintf(buf, 63, " 0x%h: %s (size: %u)", sym->st_value, name, sym->st_size);
          add_menu_item(menu, buf, NULL);
       }
    }
@@ -204,7 +204,7 @@ void search_callback(wo_t *input, int window) {
          if(addr >= sym->st_value && addr < sym->st_value + sym->st_size) {
             char buf[128];
             char *name = strings + sym->st_name;
-            sprintf(buf, "Found function %s\nat 0x%h in %s", name, sym->st_value, curfilename);
+            snprintf(buf, 127, "Found function %s\nat 0x%h in %s", name, sym->st_value, curfilename);
             dialog_msg("Msg", buf);
             found = menu_i;
          }

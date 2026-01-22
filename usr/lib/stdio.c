@@ -187,7 +187,7 @@ void debug_println(const char *format, ...) {
    char buffer[1024];
    va_list args;
    va_start(args, format);
-   vsnprintf(buffer, 1024, (char*)format, args);
+   vsnprintf(buffer, 1023, (char*)format, args);
    va_end(args);
    debug_write_str(buffer);
 }
@@ -196,7 +196,7 @@ void printf(const char *format, ...) {
    char buffer[1024];
    va_list args;
    va_start(args, format);
-   vsnprintf(buffer, 1024, (char*)format, args);
+   vsnprintf(buffer, 1023, (char*)format, args);
    va_end(args);
    write_str(buffer);
 }

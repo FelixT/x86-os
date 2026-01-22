@@ -22,8 +22,7 @@ typedef struct dialog_t {
    void (*callback)(char *out, int window);
    ui_mgr_t *ui;
    map_t wo_map; // string->wo_t* map
-   int content_height;
-   int content_offsetY;
+   int content_height; // should probably be in ui
    
    // txtinput specific
    wo_t *input_wo;
