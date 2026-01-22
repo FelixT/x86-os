@@ -1382,7 +1382,7 @@ void windowmgr_mousemove(int x, int y) {
          if(selectedWindow->hovering) {
             // mouse out/unhover
             selectedWindow->hovering = false;
-            if(selectedWindow->mouseout_func) {
+            if(!selectedWindow->resized && selectedWindow->mouseout_func) {
                // call mouseout routine
                int task = get_task_from_window(getSelectedWindowIndex());
                registers_t *regs = get_regs();
@@ -1442,6 +1442,9 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int old_width = window->surface.width;
    int old_height = window->surface.height;
 
+   // unmap previous framebuffer
+   map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1);
+
    window->framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
    window->framebuffer = malloc(window->framebuffer_size);
    window->width = width;
@@ -1464,6 +1467,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
 
    free((uint32_t)old_framebuffer, old_framebuffer_size);
 
+   bool scrollerhidden = false; // scrollbar is now hidden after resize
    if(window->scrollbar != NULL) {
       // resize scrollbar
       window->scrollbar->x = width - 14;
@@ -1482,11 +1486,10 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       windowobj_t *downbtn = window->scrollbar->children[2];
       downbtn->y = height - TITLEBAR_HEIGHT - 14;
 
+      bool visible = window->scrollbar->visible;
       window->scrollbar->visible = window->height - TITLEBAR_HEIGHT < window->scrollable_content_height;
-      if(!window->scrollbar->visible)
-         window_scroll_to(regs, 0);
-
-      debug_printf("%i %i\n", window->scrollbar->visible, window->scrollable_content_height);
+      if(visible && !window->scrollbar->visible)
+         scrollerhidden = true;
    }
 
    // call resize func if exists
@@ -1502,6 +1505,12 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
       map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
       task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 4);
+   }
+
+   if(scrollerhidden) {
+      // scrollbar has become hidden, scroll right to top
+      // needs to be done after resize event as framebuffer changed
+      window_scroll_to(regs, 0);
    }
 }
 

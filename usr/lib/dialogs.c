@@ -445,16 +445,17 @@ void dialog_colourpicker_draw(dialog_t *dialog) {
    input_t *input = dialog->input_wo->data;
    uint16_t colour = hextouint(input->text+2);
 
+   draw_context_t context = ui_get_context(dialog->ui);
    // draw colour square border
-   draw_unfilledrect(&dialog->surface, rgb16(0, 0, 0), 264, 59, 52, 52); // border
+   draw_unfilledrect(&context, rgb16(0, 0, 0), 264, 59, 52, 52); // border
    // draw colour square
    for(int x = 0; x < 50; x++) {
       for(int y = 0; y < 50; y++) {
-         draw_pixel(&dialog->surface, colour, x + 265, y + 60);
+         draw_pixel(&context, colour, x + 265, y + 60);
       }
    }
    // draw the colour picker at (5, 50)
-   draw_unfilledrect(&dialog->surface, rgb16(0, 0, 0), 4, 59, 258, 258); // border
+   draw_unfilledrect(&context, rgb16(0, 0, 0), 4, 59, 258, 258); // border
    int xoffset = 5;
    int yoffset = 60;
    for(int x = 0; x < 256; x++) {
@@ -488,7 +489,7 @@ void dialog_colourpicker_draw(dialog_t *dialog) {
             colour = (red << 11) | (green << 5) | blue;
          }
          
-         draw_pixel(&dialog->surface, colour, x + xoffset, y + yoffset);
+         draw_pixel(&context, colour, x + xoffset, y + yoffset);
       }
    }
 }

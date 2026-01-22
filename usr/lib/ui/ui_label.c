@@ -34,7 +34,7 @@ int ui_string_height(char *txt, int width) {
    return height;
 }
 
-void draw_label(wo_t *label, wo_draw_context_t context) {
+void draw_label(wo_t *label, draw_context_t context) {
    if(label == NULL || label->data == NULL) return;
    label_t *label_data = (label_t *)label->data;
 
@@ -55,14 +55,14 @@ void draw_label(wo_t *label, wo_draw_context_t context) {
    int height = label->height;
 
    if(label_data->bordered) {
-      draw_line(context.surface, light, x, y, true,  height);
-      draw_line(context.surface, light, x, y, false, width);
-      draw_line(context.surface, dark, x, y + height - 1, false, width);
-      draw_line(context.surface, dark, x + width - 1, y, true, height);
+      draw_line(&context, light, x, y, true,  height);
+      draw_line(&context, light, x, y, false, width);
+      draw_line(&context, dark, x, y + height - 1, false, width);
+      draw_line(&context, dark, x + width - 1, y, true, height);
    }
 
    if(label_data->filled) {
-      draw_rect(context.surface, bg, x + 1, y + 1, width - 2, height - 2);
+      draw_rect(&context, bg, x + 1, y + 1, width - 2, height - 2);
    }
 
    // text 
@@ -114,7 +114,7 @@ void draw_label(wo_t *label, wo_draw_context_t context) {
    }
 }
 
-void release_label(wo_t *label, wo_draw_context_t context, int x, int y) {
+void release_label(wo_t *label, draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
    if(label == NULL || label->data == NULL) return;

@@ -27,7 +27,7 @@
 typedef struct task_state_t task_state_t;
 
 typedef struct {
-   char *name;
+   char name[16];
    uint32_t addr; // subroutine addr
    uint32_t *args;
    int argc;

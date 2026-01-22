@@ -13,7 +13,7 @@ typedef struct image_t {
 } image_t;
 
 wo_t *create_image(int x, int y, int width, int height, uint16_t *data);
-void draw_image(wo_t *button, wo_draw_context_t context);
+void draw_image(wo_t *button, draw_context_t context);
 void destroy_image(wo_t *image);
 
 #endif

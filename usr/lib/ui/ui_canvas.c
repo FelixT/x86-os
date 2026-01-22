@@ -3,33 +3,43 @@
 #include "wo.h"
 #include "../stdio.h"
 
-void draw_canvas(wo_t *canvas, wo_draw_context_t context) {
+void draw_canvas(wo_t *canvas, draw_context_t context) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
 
    uint16_t light = canvas_data->colour_border_light;
    uint16_t dark = canvas_data->colour_border_dark;
 
-   context.offsetX += canvas->x;
-   context.offsetY += canvas->y;
-   int x = context.offsetX;
-   int y = context.offsetY;
+   int x = context.offsetX + canvas->x;
+   int y = context.offsetY + canvas->y;
    int width = canvas->width;
    int height = canvas->height;
 
    // border
    if(canvas_data->bordered) {
-      draw_line(context.surface, dark, x, y, true, height);
-      draw_line(context.surface, dark, x, y, false, width);
-      draw_line(context.surface, light, x, y + height - 1, false, width);
-      draw_line(context.surface, light, x + width - 1, y, true, height);
+      draw_line(&context, dark, x, y, true, height);
+      draw_line(&context, dark, x, y, false, width);
+      draw_line(&context, light, x, y + height - 1, false, width);
+      draw_line(&context, light, x + width - 1, y, true, height);
 
       if(canvas_data->filled)
-         draw_rect(context.surface, canvas_data->colour_bg, x + 1, y + 1, width - 2, height - 2);
+         draw_rect(&context, canvas_data->colour_bg, x + 1, y + 1, width - 2, height - 2);
    } else {
       if(canvas_data->filled)
-         draw_rect(context.surface, canvas_data->colour_bg, x, y, width, height);
+         draw_rect(&context, canvas_data->colour_bg, x, y, width, height);
    }
+
+   context.offsetX += canvas->x;
+   context.offsetY += canvas->y;
+
+   rect_t canvasRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = canvas->width,
+      .height = canvas->height
+   };
+
+   context.clipRect = rect_intersect(context.clipRect, canvasRect);
 
    // draw children
    for(int i = 0; i < canvas_data->child_count; i++) {
@@ -47,11 +57,20 @@ void canvas_add(wo_t *canvas, wo_t *child) {
    canvas_data->children[canvas_data->child_count++] = child;
 }
 
-void canvas_click(wo_t *canvas, wo_draw_context_t context, int x, int y) {
+void canvas_click(wo_t *canvas, draw_context_t context, int x, int y) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
    context.offsetX += canvas->x;
    context.offsetY += canvas->y;
+
+   rect_t canvasRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = canvas->width,
+      .height = canvas->height
+   };
+
+   context.clipRect = rect_intersect(context.clipRect, canvasRect);
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -68,11 +87,20 @@ void canvas_click(wo_t *canvas, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void canvas_release(wo_t *canvas, wo_draw_context_t context, int x, int y) {
+void canvas_release(wo_t *canvas, draw_context_t context, int x, int y) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
    context.offsetX += canvas->x;
    context.offsetY += canvas->y;
+   
+   rect_t canvasRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = canvas->width,
+      .height = canvas->height
+   };
+
+   context.clipRect = rect_intersect(context.clipRect, canvasRect);
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -93,11 +121,20 @@ void canvas_mousein() {
    // do nothing
 }
 
-void canvas_hover(wo_t *canvas, wo_draw_context_t context, int x, int y) {
+void canvas_hover(wo_t *canvas, draw_context_t context, int x, int y) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
    context.offsetX += canvas->x;
    context.offsetY += canvas->y;
+   
+   rect_t canvasRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = canvas->width,
+      .height = canvas->height
+   };
+
+   context.clipRect = rect_intersect(context.clipRect, canvasRect);
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -128,11 +165,20 @@ void canvas_hover(wo_t *canvas, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void canvas_unfocus(wo_t *canvas, wo_draw_context_t context) {
+void canvas_unfocus(wo_t *canvas, draw_context_t context) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
    context.offsetX += canvas->x;
    context.offsetY += canvas->y;
+
+   rect_t canvasRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = canvas->width,
+      .height = canvas->height
+   };
+
+   context.clipRect = rect_intersect(context.clipRect, canvasRect);
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];
@@ -158,11 +204,19 @@ void canvas_keypress(wo_t *canvas, uint16_t c, int window) {
    }
 }
 
-void canvas_unhover(wo_t *canvas, wo_draw_context_t context) {
+void canvas_unhover(wo_t *canvas, draw_context_t context) {
    if(canvas == NULL || canvas->data == NULL) return;
    canvas_t *canvas_data = (canvas_t *)canvas->data;
    context.offsetX += canvas->x;
    context.offsetY += canvas->y;
+   rect_t canvasRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = canvas->width,
+      .height = canvas->height
+   };
+
+   context.clipRect = rect_intersect(context.clipRect, canvasRect);
 
    for(int i = 0; i < canvas_data->child_count; i++) {
       wo_t *child = canvas_data->children[i];

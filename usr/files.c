@@ -20,6 +20,7 @@ uint16_t *folder_icon;
 volatile int offset;
 fs_dir_content_t *dir_content;
 int shown_items;
+int scrollable_height = 0;
 
 char cur_path[512];
 surface_t surface;
@@ -82,7 +83,7 @@ void display_items() {
    if(wo_grid)
       destroy_wo(wo_grid);
 
-   wo_t *grid = create_grid(0, 0, get_width(), grid_height, shown, 1);
+   wo_t *grid = create_grid(0, -ui->scrolled_y, get_width(), grid_height, shown, 1);
    ui_add(ui, grid);
    wo_grid = grid;
    grid_t *grid_data = grid->data;
@@ -141,7 +142,8 @@ void display_items() {
 
    ui_draw(ui);
 
-   set_content_height(grid->height + 20, -1);
+   scrollable_height = grid->height + 20;
+   set_content_height(scrollable_height, -1);
 
    input_t *path_data = (input_t *)wo_path->data;
    path_data->valign = true;
@@ -354,6 +356,7 @@ void scroll(int deltaY, int offsetY, int window) {
    (void)window;
    // clear menu
    ui_scroll(ui, deltaY, offsetY);
+   offset = offsetY/27;
    end_subroutine();
 }
 
@@ -423,18 +426,16 @@ void keypress(uint16_t c, int window) {
    bool downarrow = c == 0x101;
 
    if(uparrow || downarrow) {
+      int scroll_offset = ui->scrolled_y;
       if(uparrow)
-         offset--;
+         scroll_offset-=15;
       else
-         offset++;
-      
-      if(offset < 0) offset = 0;
-      if(offset >= shown_items) offset = shown_items - 1;
+         scroll_offset+=15;
 
-      scroll_to(offset * 25, -1);
-      display_items();
+      if(scroll_offset < 0) offset = 0;
+      if(scroll_offset >= scrollable_height - ui->surface->height) offset = scrollable_height - ui->surface->height;
 
-      redraw();
+      scroll_to(scroll_offset, -1);
    }
 
    ui_keypress(ui, c);
@@ -451,7 +452,7 @@ void release(int x, int y, int window) {
 
 void hover(int x, int y) {
    ui_hover(ui, x, y);
-   wo_draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
+   draw_context_t context = { .surface = ui->surface, .window = ui->window, .offsetX = 0, .offsetY = 0 };
    wo_menu->draw_func(wo_menu, context);
    redraw();
    end_subroutine();
@@ -464,7 +465,7 @@ void rightclick(int x, int y) {
 
    if(ui->default_menu) {
       // see where we clicked to determine if we can open/rename
-      int position = (y-5)/25 + offset;
+      int position = y/27+offset;
 
       if(dir_content == NULL) end_subroutine();
 

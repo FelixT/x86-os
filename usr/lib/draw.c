@@ -9,28 +9,33 @@ static inline void setpixel_safe(surface_t *surface, int index, int colour) {
    }
 }
 
-void draw_pixel(surface_t *surface, uint16_t colour, int x, int y) {
-   int index = y * (int)surface->width + x;
-   setpixel_safe(surface, index, colour);
+void draw_pixel(draw_context_t *ctx, uint16_t colour, int x, int y) {
+   // bounds check
+   if(x < ctx->clipRect.x || y < ctx->clipRect.y
+   || x >= ctx->clipRect.x + ctx->clipRect.width
+   || y >= ctx->clipRect.y + ctx->clipRect.height)
+      return;
+   int index = y * (int)ctx->surface->width + x;
+   setpixel_safe(ctx->surface, index, colour);
 }
 
-void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length) {
+void draw_line(draw_context_t *ctx, uint16_t colour, int x, int y, bool vertical, int length) {
    if(vertical) {
       for(int yi = y; yi < y+length; yi++)
-         setpixel_safe(surface, yi*(int)surface->width+x, colour);
+         draw_pixel(ctx, colour, x, yi);
    } else {
       for(int xi = x; xi < x+length; xi++)
-         setpixel_safe(surface, y*(int)surface->width+xi, colour);
+         draw_pixel(ctx, colour, xi, y);
    }
 }
 
-void draw_rect(surface_t *surface, uint16_t colour, int x, int y, int width, int height) {
+void draw_rect(draw_context_t *ctx, uint16_t colour, int x, int y, int width, int height) {
    for(int yi = y; yi < y+height; yi++)
       for(int xi = x; xi < x+width; xi++)
-         setpixel_safe(surface, yi*(int)surface->width+xi, colour);
+         draw_pixel(ctx, colour, xi, yi);
 }
 
-void draw_rect_gradient(surface_t *surface, uint16_t color1, uint16_t color2, int x, int y, int width, int height, int direction) {
+void draw_rect_gradient(draw_context_t *ctx, uint16_t color1, uint16_t color2, int x, int y, int width, int height, int direction) {
    int r1 = (color1 >> 11) & 0x1F;
    int g1 = (color1 >> 5) & 0x3F;
    int b1 = color1 & 0x1F;
@@ -49,23 +54,23 @@ void draw_rect_gradient(surface_t *surface, uint16_t color1, uint16_t color2, in
          int g = g1 + (((g2 - g1) * factor) >> 8);
          int b = b1 + (((b2 - b1) * factor) >> 8);
          uint16_t gradient_color = (r << 11) | (g << 5) | b;
-         setpixel_safe(surface, yi * (int)surface->width + xi, gradient_color);
+         draw_pixel(ctx, gradient_color, xi, yi);
       }
    }
 }
 
-void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height) {
+void draw_unfilledrect(draw_context_t *ctx, uint16_t colour, int x, int y, int width, int height) {
    for(int xi = x; xi < x+width; xi++) // top
-      setpixel_safe(surface, y*(int)surface->width+xi, colour);
+      draw_pixel(ctx, colour, xi, y);
 
    for(int xi = x; xi < x+width; xi++) // bottom
-      setpixel_safe(surface, (y+height-1)*(int)surface->width+xi, colour);
+      draw_pixel(ctx, colour, xi, y+height-1);
 
    for(int yi = y; yi < y+height; yi++) // left
-      setpixel_safe(surface, (yi)*(int)surface->width+x, colour);
+      draw_pixel(ctx, colour, x, yi);
 
    for(int yi = y; yi < y+height; yi++) // right
-      setpixel_safe(surface, (yi)*(int)surface->width+x+width-1, colour);
+      draw_pixel(ctx, colour, x+width-1, yi);
 }
 
 void draw_checkeredrect(surface_t *surface, uint16_t colour1, uint16_t colour2, int x, int y, int width, int height) {
@@ -88,4 +93,21 @@ void draw_checkeredrect(surface_t *surface, uint16_t colour1, uint16_t colour2, 
          line16[width - 1] = ((yi + y + width - 1) & 1) ? colour2 : colour1;
       }
    }
+}
+
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+rect_t rect_intersect(rect_t a, rect_t b) {
+   int x1 = MAX(a.x, b.x);
+   int y1 = MAX(a.y, b.y);
+   int x2 = MIN(a.x + a.width, b.x + b.width);
+   int y2 = MIN(a.y + a.height, b.y + b.height);
+   
+   return (rect_t) {
+      .x = x1,
+      .y = y1,
+      .width = MAX(0, x2 - x1),
+      .height = MAX(0, y2 - y1)
+   };
 }

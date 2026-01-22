@@ -25,13 +25,13 @@ wo_t *colour2_colourbox;
 wo_t *windowbg_colourbox;
 wo_t *windowtxt_colourbox;
 
-void title_draw(wo_t *wo, wo_draw_context_t context) {
+void title_draw(wo_t *wo, draw_context_t context) {
    (void)wo;
    int x = ui->wos[1]->x - 10;
    if(x < 5)
       x = 5;
    write_strat_w("System settings:", x, 8-ui->scrolled_y, 0, -1);
-   draw_line(context.surface, rgb16(200, 200, 200), x, 18-ui->scrolled_y, false, strlen("System settings")*(get_font_info().width+get_font_info().padding));
+   draw_line(&context, rgb16(200, 200, 200), x, 18-ui->scrolled_y, false, strlen("System settings")*(get_font_info().width+get_font_info().padding));
 }
 
 wo_t *settings_create_label(wo_t *groupbox, int y, char *text) {

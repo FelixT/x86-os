@@ -9,7 +9,7 @@ static inline int string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
 }
 
-void click_button(wo_t *button, wo_draw_context_t context, int x, int y) {
+void click_button(wo_t *button, draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
    if(button == NULL || button->data == NULL) return;
@@ -19,7 +19,7 @@ void click_button(wo_t *button, wo_draw_context_t context, int x, int y) {
       btn_data->click_func(button, context.window);
 }
 
-void release_button(wo_t *button, wo_draw_context_t context, int x, int y) {
+void release_button(wo_t *button, draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
    if(button == NULL || button->data == NULL) return;
@@ -61,7 +61,7 @@ void destroy_button(wo_t *button) {
    free(button, sizeof(wo_t));
 }
 
-void draw_button(wo_t *button, wo_draw_context_t context) {
+void draw_button(wo_t *button, draw_context_t context) {
    if(button == NULL || button->data == NULL) return;
    button_t *btn_data = (button_t *)button->data;
 
@@ -89,17 +89,17 @@ void draw_button(wo_t *button, wo_draw_context_t context) {
 
    if(gradient) {
       if(button->hovering || button->clicked)
-         draw_rect_gradient(context.surface, bg2, bg, x, y, width, height, gradientstyle);
+         draw_rect_gradient(&context, bg2, bg, x, y, width, height, gradientstyle);
       else
-         draw_rect_gradient(context.surface, bg, bg2, x, y, width, height, gradientstyle);
+         draw_rect_gradient(&context, bg, bg2, x, y, width, height, gradientstyle);
    } else {
-      draw_rect(context.surface, bg, x, y, width, height);
+      draw_rect(&context, bg, x, y, width, height);
    }
 
-   draw_line(context.surface, light,  x, y, true,  height);
-   draw_line(context.surface, light,  x, y, false, width);
-   draw_line(context.surface, dark, x, y + height - 1, false, width);
-   draw_line(context.surface, dark, x + width - 1, y, true, height);
+   draw_line(&context, light,  x, y, true,  height);
+   draw_line(&context, light,  x, y, false, width);
+   draw_line(&context, dark, x, y + height - 1, false, width);
+   draw_line(&context, dark, x + width - 1, y, true, height);
 
    // text 
    int text_width = string_width(btn_data->label);
@@ -109,7 +109,7 @@ void draw_button(wo_t *button, wo_draw_context_t context) {
       // truncate
       int max_chars = width / (get_font_info().width + get_font_info().padding);
       
-      if(max_chars < 4) {
+      if(max_chars < 3) {
          // no room for '...'
          return; // don't draw any text
       }

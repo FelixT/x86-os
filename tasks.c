@@ -436,7 +436,7 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
 void task_queue_subroutine(char *name, uint32_t addr, uint32_t *args, int argc) {
    // add to event queue
    task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
-   event->name = name;
+   strcpy(event->name, name);
    event->addr = addr;
    event->args = args;
    event->argc = argc;

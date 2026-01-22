@@ -5,7 +5,7 @@
 #include "wo.h"
 #include "../stdio.h"
 
-void draw_menu_item(wo_t *menu, wo_draw_context_t context, int index) {
+void draw_menu_item(wo_t *menu, draw_context_t context, int index) {
    if(index < 0) return;
 
    uint16_t bg_selected = rgb16(222, 222, 222);
@@ -27,22 +27,22 @@ void draw_menu_item(wo_t *menu, wo_draw_context_t context, int index) {
    menu_item_t *item = &menu_data->items[index];
    // highlight if selected
    if(index == menu_data->selected_index) {
-      draw_rect(context.surface, bg_selected, x + 1, y, bgwidth, item_height);
+      draw_rect(&context, bg_selected, x + 1, y, bgwidth, item_height);
       write_strat_w(item->text, x + 5, y + 5, border_light, context.window);
    } else if(index == menu_data->hover_index && menu->hovering) {
-      draw_rect(context.surface, bg_hover, x + 1, y, bgwidth, item_height);
+      draw_rect(&context, bg_hover, x + 1, y, bgwidth, item_height);
    } else {
-      draw_rect(context.surface, bg_item, x + 1, y, bgwidth, item_height);
+      draw_rect(&context, bg_item, x + 1, y, bgwidth, item_height);
    }
    // draw text
    uint16_t txtcolour = item->enabled ? 0 : rgb16(200, 200, 200);
    write_strat_w(item->text, x + 5, y + 4, txtcolour, context.window);
    // border
-   draw_line(context.surface, border_light, x + 1, y + item_height - 1, false, bgwidth);
+   draw_line(&context, border_light, x + 1, y + item_height - 1, false, bgwidth);
 
 }
 
-void draw_menu_scrollbar(wo_t *menu, wo_draw_context_t context) {
+void draw_menu_scrollbar(wo_t *menu, draw_context_t context) {
    menu_t *menu_data = (menu_t *)menu->data;
 
    int x = menu->x + context.offsetX;
@@ -67,19 +67,19 @@ void draw_menu_scrollbar(wo_t *menu, wo_draw_context_t context) {
    menu_data->scrollerY = scrollerY - menu->y - context.offsetY;
    menu_data->scrollerHeight = scrollerHeight;
 
-   draw_rect(context.surface, bg_hover, scrollbarX, scrollAreaY, width, scrollAreaHeight); // bg / scrollarea
-   draw_rect(context.surface, menu_data->scrolling ? 0 : border_dark, scrollbarX+5, scrollerY, 4, scrollerHeight); // 4px scroller
-   draw_rect(context.surface, menu_data->offset > 0 ? bg_selected : bg_hover, scrollbarX, scrollbarY, width, width); // up
+   draw_rect(&context, bg_hover, scrollbarX, scrollAreaY, width, scrollAreaHeight); // bg / scrollarea
+   draw_rect(&context, menu_data->scrolling ? 0 : border_dark, scrollbarX+5, scrollerY, 4, scrollerHeight); // 4px scroller
+   draw_rect(&context, menu_data->offset > 0 ? bg_selected : bg_hover, scrollbarX, scrollbarY, width, width); // up
    char buf[2];
    buf[0] = 0x80; // uparrow
    buf[1] = 0;
    write_strat_w(buf, scrollbarX + 5, scrollbarY + 4, 0, context.window);
-   draw_rect(context.surface, menu_data->offset < menu_data->item_count - max_items ? bg_selected : bg_hover, scrollbarX, scrollbarY + scrollAreaHeight + width, width, width); // down
+   draw_rect(&context, menu_data->offset < menu_data->item_count - max_items ? bg_selected : bg_hover, scrollbarX, scrollbarY + scrollAreaHeight + width, width, width); // down
    buf[0] = 0x81; // downarrow
    write_strat_w(buf, scrollbarX + 5, scrollbarY + scrollAreaHeight + width + 4, 0, context.window);
 }
 
-void draw_menu(wo_t *menu, wo_draw_context_t context) {
+void draw_menu(wo_t *menu, draw_context_t context) {
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
 
@@ -97,10 +97,10 @@ void draw_menu(wo_t *menu, wo_draw_context_t context) {
    int y = menu->y + context.offsetY;
 
    // draw border
-   draw_line(context.surface, border_dark,  x, y, true,  menu->height);
-   draw_line(context.surface, border_dark,  x, y, false, menu->width);
-   draw_line(context.surface, border_light, x, y + menu->height - 1, false, menu->width);
-   draw_line(context.surface, border_light, x + menu->width - 1, y, true, menu->height);
+   draw_line(&context, border_dark,  x, y, true,  menu->height);
+   draw_line(&context, border_dark,  x, y, false, menu->width);
+   draw_line(&context, border_light, x, y + menu->height - 1, false, menu->width);
+   draw_line(&context, border_light, x + menu->width - 1, y, true, menu->height);
 
    int item_height = get_font_info().height + 7;
    int max_items = menu->height/item_height;
@@ -115,7 +115,7 @@ void draw_menu(wo_t *menu, wo_draw_context_t context) {
       bgwidth -= 14;
 
    // draw background
-   draw_rect(context.surface, bg, x + 1, y + 1 + shown_height, bgwidth, menu->height - 2 - shown_height);
+   draw_rect(&context, bg, x + 1, y + 1 + shown_height, bgwidth, menu->height - 2 - shown_height);
 
    // draw items
    for(int i = menu_data->offset; i < shown_items + menu_data->offset; i++) {
@@ -172,7 +172,7 @@ menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item
    return item;
 }
 
-void menu_click(wo_t *menu, wo_draw_context_t context, int x, int y) {
+void menu_click(wo_t *menu, draw_context_t context, int x, int y) {
    if(x == 0 && y == 0) return;
 
    if(menu == NULL || menu->data == NULL) return;
@@ -223,7 +223,7 @@ void menu_click(wo_t *menu, wo_draw_context_t context, int x, int y) {
    draw_menu(menu, context);
 }
 
-void menu_release(wo_t *menu, wo_draw_context_t context, int x, int y) {
+void menu_release(wo_t *menu, draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
    menu_t *menu_data = menu->data;
@@ -271,7 +271,7 @@ void menu_keypress(wo_t *menu, uint16_t c, int window) {
    }
 }
 
-void menu_hover(wo_t *menu, wo_draw_context_t context, int x, int y) {
+void menu_hover(wo_t *menu, draw_context_t context, int x, int y) {
    (void)x;
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;

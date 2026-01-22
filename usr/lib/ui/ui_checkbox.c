@@ -4,7 +4,7 @@
 #include "../../prog.h"
 #include "../../../lib/string.h"
 
-void release_checkbox(wo_t *checkbox, wo_draw_context_t context, int x, int y) {
+void release_checkbox(wo_t *checkbox, draw_context_t context, int x, int y) {
    (void)x;
    (void)y;
    if(checkbox == NULL || checkbox->data == NULL) return;
@@ -38,37 +38,37 @@ void destroy_checkbox(wo_t *checkbox) {
    free(checkbox, sizeof(wo_t));
 }
 
-void draw_check(surface_t *surface, int x, int y, uint16_t colour, bool checked) {
+void draw_check(draw_context_t *ctx, int x, int y, uint16_t colour, bool checked) {
    if(checked) {
       // draw check mark
-      draw_pixel(surface, colour, x+6, y+10);
-      draw_pixel(surface, colour, x+7, y+11);
-      draw_pixel(surface, colour, x+8, y+12);
-      draw_pixel(surface, colour, x+9, y+11);
-      draw_pixel(surface, colour, x+10, y+10);
-      draw_pixel(surface, colour, x+11, y+9);
-      draw_pixel(surface, colour, x+12, y+8);
-      draw_pixel(surface, colour, x+13, y+7);
+      draw_pixel(ctx, colour, x+6, y+10);
+      draw_pixel(ctx, colour, x+7, y+11);
+      draw_pixel(ctx, colour, x+8, y+12);
+      draw_pixel(ctx, colour, x+9, y+11);
+      draw_pixel(ctx, colour, x+10, y+10);
+      draw_pixel(ctx, colour, x+11, y+9);
+      draw_pixel(ctx, colour, x+12, y+8);
+      draw_pixel(ctx, colour, x+13, y+7);
    } else {
       // draw cross
-      draw_pixel(surface, colour, x+6, y+6);
-      draw_pixel(surface, colour, x+6, y+12);
-      draw_pixel(surface, colour, x+7, y+7);
-      draw_pixel(surface, colour, x+7, y+11);
-      draw_pixel(surface, colour, x+8, y+8);
-      draw_pixel(surface, colour, x+8, y+10);
-      draw_pixel(surface, colour, x+9, y+9);
-      draw_pixel(surface, colour, x+10, y+10);
-      draw_pixel(surface, colour, x+10, y+8);
-      draw_pixel(surface, colour, x+11, y+11);
-      draw_pixel(surface, colour, x+11, y+7);
-      draw_pixel(surface, colour, x+12, y+12);
-      draw_pixel(surface, colour, x+12, y+6);
+      draw_pixel(ctx, colour, x+6, y+6);
+      draw_pixel(ctx, colour, x+6, y+12);
+      draw_pixel(ctx, colour, x+7, y+7);
+      draw_pixel(ctx, colour, x+7, y+11);
+      draw_pixel(ctx, colour, x+8, y+8);
+      draw_pixel(ctx, colour, x+8, y+10);
+      draw_pixel(ctx, colour, x+9, y+9);
+      draw_pixel(ctx, colour, x+10, y+10);
+      draw_pixel(ctx, colour, x+10, y+8);
+      draw_pixel(ctx, colour, x+11, y+11);
+      draw_pixel(ctx, colour, x+11, y+7);
+      draw_pixel(ctx, colour, x+12, y+12);
+      draw_pixel(ctx, colour, x+12, y+6);
 
    }
 }
 
-void draw_checkbox(wo_t *checkbox, wo_draw_context_t context) {
+void draw_checkbox(wo_t *checkbox, draw_context_t context) {
    if(checkbox == NULL || checkbox->data == NULL) return;
    // 20x20
 
@@ -99,20 +99,20 @@ void draw_checkbox(wo_t *checkbox, wo_draw_context_t context) {
 
    if(gradient) {
       if(checkbox->hovering || checkbox->clicked)
-         draw_rect_gradient(context.surface, bg2, bg, x, y, w, h, gradientstyle);
+         draw_rect_gradient(&context, bg2, bg, x, y, w, h, gradientstyle);
       else
-         draw_rect_gradient(context.surface, bg, bg2, x, y, w, h, gradientstyle);
+         draw_rect_gradient(&context, bg, bg2, x, y, w, h, gradientstyle);
    } else {
-      draw_rect(context.surface, bg, x, y, w, h);
+      draw_rect(&context, bg, x, y, w, h);
    }
 
-   draw_line(context.surface, light,  x, y, true,  h);
-   draw_line(context.surface, light,  x, y, false, w);
-   draw_line(context.surface, dark, x, y + h - 1, false, w);
-   draw_line(context.surface, dark, x + w - 1, y, true, h);
+   draw_line(&context, light,  x, y, true,  h);
+   draw_line(&context, light,  x, y, false, w);
+   draw_line(&context, dark, x, y + h - 1, false, w);
+   draw_line(&context, dark, x + w - 1, y, true, h);
 
-   draw_check(context.surface, x, y+1, checkbox->clicked ? 0xFFFF : light, check_data->checked); // shadow
-   draw_check(context.surface, x, y, txt, check_data->checked);
+   draw_check(&context, x, y+1, checkbox->clicked ? 0xFFFF : light, check_data->checked); // shadow
+   draw_check(&context, x, y, txt, check_data->checked);
 }
 
 void set_checkbox_release(wo_t *checkbox, void(*release_func)(wo_t *wo, int window)) {

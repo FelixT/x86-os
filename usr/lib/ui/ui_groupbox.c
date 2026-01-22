@@ -9,13 +9,26 @@
 // win32 style groupbox/fieldset
 // made up of a label, border & canvas wo
 
-void click_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
+draw_context_t groupbox_get_context(wo_t *groupbox, draw_context_t context) {
+   context.offsetX += groupbox->x;
+   context.offsetY += groupbox->y;
+   context.clipRect.x = context.offsetX;
+   context.clipRect.y = context.offsetY;
+   context.clipRect.width -= groupbox->x;
+   context.clipRect.height -= groupbox->y;
+   if(context.clipRect.width > groupbox->width)
+      context.clipRect.width = groupbox->width;
+   if(context.clipRect.height > groupbox->height)
+      context.clipRect.height = groupbox->height;
+   return context;
+}
+
+void click_groupbox(wo_t *groupbox, draw_context_t context, int x, int y) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   context.offsetX += groupbox->x;
-   context.offsetY += groupbox->y;
+   context = groupbox_get_context(groupbox, context);
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
@@ -23,13 +36,12 @@ void click_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void release_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
+void release_groupbox(wo_t *groupbox, draw_context_t context, int x, int y) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   context.offsetX += groupbox->x;
-   context.offsetY += groupbox->y;
+   context = groupbox_get_context(groupbox, context);
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
@@ -37,23 +49,21 @@ void release_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void unfocus_groupbox(wo_t *groupbox, wo_draw_context_t context) {
+void unfocus_groupbox(wo_t *groupbox, draw_context_t context) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   context.offsetX += groupbox->x;
-   context.offsetY += groupbox->y;
+   context = groupbox_get_context(groupbox, context);
    canvas->unfocus_func(canvas, context);
 }
 
-void hover_groupbox(wo_t *groupbox, wo_draw_context_t context, int x, int y) {
+void hover_groupbox(wo_t *groupbox, draw_context_t context, int x, int y) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   context.offsetX += groupbox->x;
-   context.offsetY += groupbox->y;
+   context = groupbox_get_context(groupbox, context);
 
    if(x >= canvas->x && x < canvas->x + canvas->width
    && y >= canvas->y && y < canvas->y + canvas->height) {
@@ -79,17 +89,16 @@ void keypress_groupbox(wo_t *groupbox, uint16_t c, int window) {
    canvas->keypress_func(canvas, c, window);
 }
 
-void unhover_groupbox(wo_t *groupbox, wo_draw_context_t context) {
+void unhover_groupbox(wo_t *groupbox, draw_context_t context) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
    wo_t *canvas = groupbox_data->canvas;
-   context.offsetX += groupbox->x;
-   context.offsetY += groupbox->y;
+   context = groupbox_get_context(groupbox, context);
    canvas->unhover_func(canvas, context);
 }
 
-void draw_groupbox(wo_t *groupbox, wo_draw_context_t context) {
+void draw_groupbox(wo_t *groupbox, draw_context_t context) {
    if(groupbox == NULL || groupbox->data == NULL) return;
    groupbox_t *groupbox_data = groupbox->data;
 
@@ -99,15 +108,14 @@ void draw_groupbox(wo_t *groupbox, wo_draw_context_t context) {
    font_info_t fontinfo = get_font_info();
    int margin_top = fontinfo.height + 2;
    int font_width = strlen(groupbox_data->label)*(fontinfo.width+fontinfo.padding);
-   draw_line(context.surface, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, false, 4); // top
-   draw_line(context.surface, groupbox_data->colour_border, groupbox->x + font_width + 5, groupbox->y + margin_top/2, false, groupbox->width - font_width - 5); // top
-   draw_line(context.surface, groupbox_data->colour_border, groupbox->x, groupbox->y + groupbox->height - 1, false, groupbox->width); // bottom
-   draw_line(context.surface, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // left
-   draw_line(context.surface, groupbox_data->colour_border, groupbox->x + groupbox->width - 1, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // right
+   draw_line(&context, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, false, 4); // top
+   draw_line(&context, groupbox_data->colour_border, groupbox->x + font_width + 5, groupbox->y + margin_top/2, false, groupbox->width - font_width - 5); // top
+   draw_line(&context, groupbox_data->colour_border, groupbox->x, groupbox->y + groupbox->height - 1, false, groupbox->width); // bottom
+   draw_line(&context, groupbox_data->colour_border, groupbox->x, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // left
+   draw_line(&context, groupbox_data->colour_border, groupbox->x + groupbox->width - 1, groupbox->y + margin_top/2, true, groupbox->height - margin_top/2); // right
 
    wo_t *canvas = groupbox_data->canvas;
-   context.offsetX += groupbox->x;
-   context.offsetY += groupbox->y;
+   context = groupbox_get_context(groupbox, context);
    canvas->draw_func(canvas, context);
 }
 

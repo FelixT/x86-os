@@ -3,21 +3,28 @@
 #include "wo.h"
 #include "../stdio.h"
 
-void draw_grid_cell(wo_t *grid, wo_draw_context_t context, grid_cell_t *cell, int row, int col) {
+void draw_grid_cell(wo_t *grid, draw_context_t context, grid_cell_t *cell, int row, int col) {
    grid_t *grid_data = (grid_t *)grid->data;
-   int cellOffsetX = col*(grid->width/grid_data->cols);
-   int cellOffsetY = row*(grid->height/grid_data->rows);
-
    int cellWidth = grid->width/grid_data->cols;
    int cellHeight = grid->height/grid_data->rows;
 
+   int cellOffsetX = col*cellWidth;
+   int cellOffsetY = row*cellHeight;
+
    context.offsetX += grid->x + cellOffsetX;
    context.offsetY += grid->y + cellOffsetY;
+   rect_t cellRect = {
+      .x = context.offsetX,
+      .y = context.offsetY,
+      .width = cellWidth,
+      .height = cellHeight
+   };
+   context.clipRect = rect_intersect(context.clipRect, cellRect);
 
    uint16_t bg = cell->hovering ? grid_data->colour_bg_hovered : grid_data->colour_bg;
 
    if(grid_data->filled)
-      draw_rect(context.surface, bg, context.offsetX + 1, context.offsetY + 1, cellWidth - 2, cellHeight - 2);
+      draw_rect(&context, bg, context.offsetX + 1, context.offsetY + 1, cellWidth - 2, cellHeight - 2);
    
    // cell content
    for(int k = 0; k < cell->child_count; k++) {
@@ -27,7 +34,7 @@ void draw_grid_cell(wo_t *grid, wo_draw_context_t context, grid_cell_t *cell, in
    }
 }
 
-void draw_grid(wo_t *grid, wo_draw_context_t context) {
+void draw_grid(wo_t *grid, draw_context_t context) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -41,19 +48,19 @@ void draw_grid(wo_t *grid, wo_draw_context_t context) {
 
    // border
    if(grid_data->bordered) {
-      draw_line(context.surface, dark, x, y, true, height);
-      draw_line(context.surface, dark, x, y, false, width);
-      draw_line(context.surface, light, x, y + height - 1, false, width);
-      draw_line(context.surface, light, x + width - 1, y, true, height);
+      draw_line(&context, dark, x, y, true, height);
+      draw_line(&context, dark, x, y, false, width);
+      draw_line(&context, light, x, y + height - 1, false, width);
+      draw_line(&context, light, x + width - 1, y, true, height);
 
       // grid lines
       for(int i = 0; i < grid_data->rows - 1; i++) {
          int lineY = (i+1)*(grid->height/grid_data->rows) + y;
-         draw_line(context.surface, light, x + 1, lineY, false, width - 2);
+         draw_line(&context, light, x + 1, lineY, false, width - 2);
       }
       for(int i = 0; i < grid_data->cols - 1; i++) {
          int lineX = (i+1)*(grid->width/grid_data->cols) + x;
-         draw_line(context.surface, light, lineX, y + 1, true, height - 2);
+         draw_line(&context, light, lineX, y + 1, true, height - 2);
       }
    }
 
@@ -75,7 +82,7 @@ void grid_add(wo_t *grid, wo_t *child, int row, int col) {
    cell->children[cell->child_count++] = child;
 }
 
-void grid_click(wo_t *grid, wo_draw_context_t context, int x, int y) {
+void grid_click(wo_t *grid, draw_context_t context, int x, int y) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -88,8 +95,8 @@ void grid_click(wo_t *grid, wo_draw_context_t context, int x, int y) {
    for(int i = 0; i < grid_data->rows; i++) {
       for(int j = 0; j < grid_data->cols; j++) {
          grid_cell_t *cell = &grid_data->cells[i][j];
-         int cellOffsetX = j*(grid->width/grid_data->cols);
-         int cellOffsetY = i*(grid->height/grid_data->rows);
+         int cellOffsetX = j*cellWidth;
+         int cellOffsetY = i*cellHeight;
 
          // clicked cell
          if(x >= cellOffsetX && x < cellOffsetX + cellWidth
@@ -104,6 +111,13 @@ void grid_click(wo_t *grid, wo_draw_context_t context, int x, int y) {
 
          context.offsetX = grid->x + cellOffsetX + offsetX;
          context.offsetY = grid->y + cellOffsetY + offsetY;
+         rect_t cellRect = {
+            .x = context.offsetX,
+            .y = context.offsetY,
+            .width = cellWidth,
+            .height = cellHeight
+         };
+         context.clipRect = rect_intersect(context.clipRect, cellRect);
 
          // clicked cell elements
          for(int k = 0; k < cell->child_count; k++) {
@@ -123,9 +137,11 @@ void grid_click(wo_t *grid, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void grid_release(wo_t *grid, wo_draw_context_t context, int x, int y) {
+void grid_release(wo_t *grid, draw_context_t context, int x, int y) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
+   int cellWidth = grid->width/grid_data->cols;
+   int cellHeight = grid->height/grid_data->rows;
 
    int offsetX = context.offsetX;
    int offsetY = context.offsetY;
@@ -135,13 +151,21 @@ void grid_release(wo_t *grid, wo_draw_context_t context, int x, int y) {
          grid_cell_t *cell = &grid_data->cells[i][j];
          for(int k = 0; k < cell->child_count; k++) {
             wo_t *child = cell->children[k];
-            int cellOffsetX = j*(grid->width/grid_data->cols);
-            int cellOffsetY = i*(grid->height/grid_data->rows);
+            int cellOffsetX = j*cellWidth;
+            int cellOffsetY = i*cellHeight;
 
             if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
             && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
                context.offsetX = grid->x + cellOffsetX + offsetX;
                context.offsetY = grid->y + cellOffsetY + offsetY;
+               rect_t cellRect = {
+                  .x = context.offsetX,
+                  .y = context.offsetY,
+                  .width = cellWidth,
+                  .height = cellHeight
+               };
+               context.clipRect = rect_intersect(context.clipRect, cellRect);
+
                //if(child->type == WO_INPUT)
                   child->selected = true;
 
@@ -155,7 +179,7 @@ void grid_release(wo_t *grid, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void grid_hover(wo_t *grid, wo_draw_context_t context, int x, int y) {
+void grid_hover(wo_t *grid, draw_context_t context, int x, int y) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -198,6 +222,13 @@ void grid_hover(wo_t *grid, wo_draw_context_t context, int x, int y) {
 
          context.offsetX = grid->x + cellOffsetX + offsetX;
          context.offsetY = grid->y + cellOffsetY + offsetY;
+         rect_t cellRect = {
+            .x = context.offsetX,
+            .y = context.offsetY,
+            .width = cellWidth,
+            .height = cellHeight
+         };
+         context.clipRect = rect_intersect(context.clipRect, cellRect);
 
          if(x >= child->x + cellOffsetX && x < child->x + child->width + cellOffsetX
          && y >= child->y + cellOffsetY && y < child->y + child->height + cellOffsetY) {
@@ -222,7 +253,7 @@ void grid_hover(wo_t *grid, wo_draw_context_t context, int x, int y) {
    }
 }
 
-void grid_unfocus(wo_t *grid, wo_draw_context_t context) {
+void grid_unfocus(wo_t *grid, draw_context_t context) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 
@@ -236,14 +267,20 @@ void grid_unfocus(wo_t *grid, wo_draw_context_t context) {
       for(int j = 0; j < grid_data->cols; j++) {
          int cellOffsetX = j * cellWidth;
          int cellOffsetY = i * cellHeight;
+         context.offsetX = grid->x + cellOffsetX + offsetX;
+         context.offsetY = grid->y + cellOffsetY + offsetY;
+         rect_t cellRect = {
+            .x = context.offsetX,
+            .y = context.offsetY,
+            .width = cellWidth,
+            .height = cellHeight
+         };
+         context.clipRect = rect_intersect(context.clipRect, cellRect);
 
          grid_cell_t *cell = &grid_data->cells[i][j];
          for(int k = 0; k < cell->child_count; k++) {
             wo_t *child = cell->children[k];
             if(!child->selected) continue;
-
-            context.offsetX = grid->x + cellOffsetX + offsetX;
-            context.offsetY = grid->y + cellOffsetY + offsetY;
             if(child->unfocus_func)
                child->unfocus_func(child, context);
             child->selected = false;
@@ -271,7 +308,7 @@ void grid_keypress(wo_t *grid, uint16_t c, int window) {
    }
 }
 
-void grid_unhover(wo_t *grid, wo_draw_context_t context) {
+void grid_unhover(wo_t *grid, draw_context_t context) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
 

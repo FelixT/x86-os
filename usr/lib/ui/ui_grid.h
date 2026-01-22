@@ -34,6 +34,6 @@ int get_grid_cell_width(wo_t *grid);
 int get_grid_cell_height(wo_t *grid);
 void grid_item_fill_cell(wo_t *grid, wo_t *item);
 void grid_item_center_cell(wo_t *grid, wo_t *item);
-void draw_grid_cell(wo_t *grid, wo_draw_context_t context, grid_cell_t *cell, int row, int col);
+void draw_grid_cell(wo_t *grid, draw_context_t context, grid_cell_t *cell, int row, int col);
 
 #endif

@@ -7,11 +7,16 @@
 #include "lib/ui/ui_groupbox.h"
 #include "lib/ui/ui_canvas.h"
 #include "lib/stdio.h"
+#include "lib/draw.h"
 
 // test program for UI library
 
 ui_mgr_t *ui;
 surface_t s;
+
+void drawbg() {
+   draw_checkeredrect(&s, 0xBDF7, 0xDEDB, 0, 0, s.width, s.height);
+}
 
 void click(int x, int y, int window) {
    (void)window;
@@ -51,6 +56,7 @@ void keypress(uint16_t c, int window) {
 void resize() {
    s = get_surface();
    ui->surface = &s;
+   drawbg();
    ui_draw(ui);
    end_subroutine();
 }
@@ -69,6 +75,7 @@ void toggle_menu(wo_t *wo, int window) {
    (void)wo;
    (void)window;
    clear();
+   drawbg();
    menu->visible = !menu->visible;
    ui_draw(ui);
 }
@@ -138,10 +145,13 @@ void _start() {
 
    wo_t *canvas = create_canvas(230, 175, 100, 100);
    wo_t *label3 = create_label(5, 5, 40, 20, "Canvas");
+   wo_t *label4 = create_label(50, 50, 70, 70, "Overflowing label");
    canvas_add(canvas, label3);
+   canvas_add(canvas, label4);
    ui_add(ui, canvas);
 
    // draw
+   drawbg();
    ui_draw(ui);
 
    // setup rightclick menu
