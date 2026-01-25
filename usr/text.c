@@ -2,55 +2,62 @@
 #include <stdbool.h>
 
 #include "prog.h"
-#include "prog_wo.h"
 #include "../lib/string.h"
-#include "lib/wo_api.h"
 #include "lib/stdio.h"
-#include "lib/dialogs2.h"
+#include "lib/dialogs.h"
+#include "lib/ui/ui_textarea.h"
 
-windowobj_t *wo_menu_o;
-windowobj_t *wo_path_o;
-windowobj_t *wo_text_o;
-windowobj_t *wo_status_o;
-windowobj_t *wo_save_o;
-windowobj_t *wo_open_o;
-windowobj_t *wo_new_o;
+wo_t *wo_menu;
+wo_t *wo_path;
+wo_t *wo_text;
+wo_t *wo_status;
+wo_t *wo_save;
+wo_t *wo_open;
+wo_t *wo_new;
 
 int content_height = 0;
 
 FILE *current_file = NULL;
 
+dialog_t *dialog;
+ui_mgr_t *ui;
+
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    (void)fb;
    (void)h;
    clear();
+   *ui->surface = get_surface();
 
-   wo_menu_o->width = w;
-   wo_text_o->width = w - 10;
+   wo_menu->width = w;
+   wo_text->width = w - 4;
    int padding = 2;
-   int x = wo_open_o->x + wo_open_o->width + padding;
-   wo_path_o->width = (((w - 10) - x) * 2) / 3;
-   x += wo_path_o->width + padding;
+   int x = wo_path->x;
+   wo_path->width = ((w - 10 - x) * 2) / 3;
+   x += wo_path->width + padding;
 
-   wo_status_o->width = wo_path_o->width/2;
-   wo_status_o->x = x;
+   wo_status->width = wo_path->width/2;
+   wo_status->x = x;
 
+   ui_draw(ui);
    redraw();
    end_subroutine();
 }
 
-void return_fn(void *wo) {
-   (void)wo;
-   redraw();
-   if(wo_text_o->cursory > wo_text_o->height - 2) {
-      wo_text_o->height = wo_text_o->cursory + 12;
-      content_height = wo_text_o->height + 25;
+void text_keypress(wo_t *wo, uint16_t c, int window) {
+   // resize
+   keypress_textarea(wo, c, window);
+   int height = textarea_get_rows(wo) * (get_font_info().height + get_font_info().padding) + 6;
+   if(height != wo->height) {
+      wo->height = height;
+      content_height = height + 25;
       set_content_height(content_height, -1);
-      scroll_to(wo_text_o->cursory, -1);
+      int row, col;
+      textarea_get_pos_from_index(wo, get_textarea(wo)->cursor_pos, &row, &col);
+      scroll_to(25 + row*(get_font_info().height + get_font_info().padding) + 6, -1);
+      clear();
+      ui_draw(ui);
+      redraw();
    }
-   clear();
-   redraw();
-   end_subroutine();
 }
 
 void load_file(char *filepath) {
@@ -59,102 +66,108 @@ void load_file(char *filepath) {
       char buffer[250];
       sprintf(buffer, "File '%s' not found", filepath);
       dialog_msg("Error", buffer);
-      wo_text_o->textpos = 0;
-      wo_text_o->text[wo_text_o->textpos] = '\0';
+      set_textarea_text(wo_text, "");
       return;
    }
 
    int size = fsize(fileno(f));
    current_file = f;
 
-   set_text((windowobj_t*)wo_path_o, filepath);
-   uinttostr(size, wo_status_o->text);
-   wo_status_o->textpos = strlen(wo_status_o->text);
-   wo_status_o->cursor_textpos = wo_status_o->textpos;
+   set_input_text(wo_path, filepath);
+   char buffer[8];
+   uinttostr(size, buffer);
+   set_input_text(wo_status, buffer);
 
    char *txtbuffer = (char*)malloc(size+1);
    fread(txtbuffer, size, 1, f);
-
-   wo_text_o->text = txtbuffer;
-   wo_text_o->textpos = size;
-   wo_text_o->cursor_textpos = size;
-   wo_text_o->text[wo_text_o->textpos] = '\0';
+   txtbuffer[size] = '\0';
+   set_textarea_text(wo_text, txtbuffer);
    
-   redraw();
-   wo_text_o->height = wo_text_o->cursory + 10;
+   int height = textarea_get_rows(wo_text) * (get_font_info().height + get_font_info().padding) + 6;
+   wo_text->height = height;
    clear();
+   ui_draw(ui);
    redraw();
-   content_height = wo_text_o->height + 25;
+   content_height = wo_text->height + 25;
    set_content_height(content_height, -1);
 }
 
-void path_return() {
-   load_file(wo_path_o->text);
-   end_subroutine();
+void path_return(wo_t *wo, int window) {
+   (void)window;
+   load_file(get_input(wo)->text);
 }
 
 void error(char *msg) {
    dialog_msg("Error", msg);
-   set_text(wo_status_o, "Error");
+   set_input_text(wo_status, "Error");
 }
 
-void save_func(void *wo, void *regs) {
+void save_func(wo_t *wo, int window) {
    (void)wo;
-   (void)regs;
-   set_text(wo_status_o, "Saving...");
+   (void)window;
+   set_input_text(wo_status, "Saving...");
    if(current_file == NULL) {
       // new file
-      if(wo_path_o->text[0] == '/') {
-         FILE *f = fopen(wo_path_o->text, "w");
+      if(get_input(wo_path)->text[0] == '/') {
+         FILE *f = fopen(get_input(wo_path)->text, "w");
          if(!f) {
             error("Couldn't create file");
          }
          current_file = f;
       } else {
-         error("Invalid path");
+         char buffer[256];
+         sprintf(buffer, "Invalid path '%s'", get_input(wo_path)->text);
+         error(buffer);
       }
    }
 
    fseek(current_file, 0, SEEK_SET);
-   int w = fwrite(wo_text_o->text, strlen(wo_text_o->text), 1, current_file);
-   debug_println("Wrote %i bytes", w);
-   if(w <= 0 && strlen(wo_text_o->text) > 0) {
+   int w = fwrite(get_textarea(wo_text)->text, strlen(get_textarea(wo_text)->text), 1, current_file);
+   debug_println("Wrote %i bytes %i", w, strlen(get_textarea(wo_text)->text));
+   if(w <= 0 && strlen(get_textarea(wo_text)->text) > 0) {
       error("Write failed");
    } else {
       fflush(current_file);
-      set_text(wo_status_o, "Saved");
+      set_input_text(wo_status, "Saved");
    }
-
-   end_subroutine();
 }
 
-void filepicker_return(char *path) {
+void filepicker_return(char *path, int window) {
+   (void)window;
    load_file(path);
-   end_subroutine();
 }
 
-void open_func(void *wo, void *regs) {
+void open_func(wo_t *wo, int window) {
    (void)wo;
-   (void)regs;
-   display_filepicker(&filepicker_return);
-   end_subroutine();
+   (void)window;
+   dialog_filepicker("/", &filepicker_return);
 }
 
-void new_func(void *wo, void *regs) {
+void new_func(wo_t *wo, int window) {
    (void)wo;
-   (void)regs;
+   (void)window;
    launch_task("/sys/text.elf", 0, NULL, false);
+}
+
+void scroll(int deltaY, int offsetY, int window) {
+   ui_scroll(ui, deltaY, offsetY);
+   ui_draw(ui);
+   redraw();
    end_subroutine();
 }
 
 void _start(int argc, char **args) {
-   set_window_title("Text Edit");
+
+   int index = get_free_dialog();
+   dialog = get_dialog(index);
+   dialog_init(dialog, -1);
+   dialog_set_title(dialog, "Text Edit");
+   ui = dialog->ui;
    
-   override_draw((uint32_t)NULL);
    override_resize((uint32_t)resize, -1);
    clear();
 
-   create_scrollbar(NULL, -1);
+   create_scrollbar(&scroll, -1);
 
    int height = get_height();
    content_height = height;
@@ -163,41 +176,46 @@ void _start(int argc, char **args) {
    int x = 5;
    int padding = 2;
 
-   wo_menu_o = create_canvas(NULL, 0, 0, width, 20);
-   wo_menu_o->bordered = false;
+   wo_menu = create_canvas(0, 0, width, 20);
+   ui_add(ui, wo_menu);
 
-   wo_save_o = create_button(wo_menu_o, x, 2, "Save");
-   wo_save_o->width = 35;
-   wo_save_o->click_func = &save_func;
-   x += wo_save_o->width + padding;
+   wo_save = create_button(x, 2, 30, 16, "Save");
+   wo_save->width = 35;
+   set_button_release(wo_save, &save_func);
+   x += wo_save->width + padding;
+   canvas_add(wo_menu, wo_save);
 
-   wo_open_o = create_button(wo_menu_o, x, 2, "Open");
-   wo_open_o->width = 35;
-   wo_open_o->click_func = &open_func;
-   x += wo_open_o->width + padding;
+   wo_open = create_button(x, 2, 30, 16, "Open");
+   wo_open->width = 35;
+   set_button_release(wo_open, &open_func);
+   x += wo_open->width + padding;
+   canvas_add(wo_menu, wo_open);
 
-   wo_new_o = create_button(wo_menu_o, x, 2, "New");
-   wo_new_o->width = 35;
-   wo_new_o->click_func = &new_func;
-   x += wo_new_o->width + padding;
+   wo_new = create_button(x, 2, 30, 16, "New");
+   wo_new->width = 35;
+   set_button_release(wo_new, &new_func);
+   x += wo_new->width + padding;
+   canvas_add(wo_menu, wo_new);
 
-   wo_path_o = create_text(wo_menu_o, x, 2, "<path>");
-   wo_path_o->width = (((width - 10) - x) * 2) / 3;
-   wo_path_o->return_func = &path_return;
-   wo_path_o->textvalign = true;
-   wo_path_o->oneline = true;
-   x += wo_path_o->width + padding;
+   wo_path = create_input(x, 2, ((width - 10 - x) * 2) / 3, 16);
+   set_input_text(wo_path, "<new>");
+   set_input_return(wo_path, &path_return);
+   get_input(wo_path)->valign = true;
+   get_input(wo_path)->halign = true;
+   get_input(wo_path)->placeholder = true;
+   x += wo_path->width + padding;
+   canvas_add(wo_menu, wo_path);
 
-   wo_status_o = create_text(wo_menu_o, x, 2, "New");
-   wo_status_o->disabled = true;
-   wo_status_o->width = wo_path_o->width/2;
-   wo_status_o->textvalign = true;
-   wo_status_o->texthalign = true;
+   wo_status = create_input(x, 2, wo_path->width/2, 16);
+   set_input_text(wo_status, "New");
+   wo_status->focusable = false;
+   get_input(wo_status)->valign = true;
+   get_input(wo_status)->halign = true;
+   canvas_add(wo_menu, wo_status);
 
-   wo_text_o = create_text(NULL, 5, 22, "");
-   //resize() // resize text buffer
-   wo_text_o->width = width - 10;
-   wo_text_o->return_func = return_fn;
+   wo_text = create_textarea(2, 22, width - 4, get_font_info().height + get_font_info().padding + 6);
+   wo_text->keypress_func = &text_keypress;
+   ui_add(ui, wo_text);
 
    if(argc == 1 && *args[0] != '\0') {
       if(args[0][0] != '/') {
@@ -214,6 +232,7 @@ void _start(int argc, char **args) {
       }
    }
 
+   ui_draw(ui);
    redraw();
 
    while(true) {

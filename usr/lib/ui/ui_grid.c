@@ -2,6 +2,7 @@
 #include "../draw.h"
 #include "wo.h"
 #include "../stdio.h"
+#include "../../../lib/string.h"
 
 void draw_grid_cell(wo_t *grid, draw_context_t context, grid_cell_t *cell, int row, int col) {
    grid_t *grid_data = (grid_t *)grid->data;
@@ -23,8 +24,20 @@ void draw_grid_cell(wo_t *grid, draw_context_t context, grid_cell_t *cell, int r
 
    uint16_t bg = cell->hovering ? grid_data->colour_bg_hovered : grid_data->colour_bg;
 
-   if(grid_data->filled)
-      draw_rect(&context, bg, context.offsetX + 1, context.offsetY + 1, cellWidth - 2, cellHeight - 2);
+   if(grid_data->filled) {
+      int bgx = context.offsetX;
+      int bgy = context.offsetY;
+      int bgw = cellWidth;
+      int bgh = cellHeight;
+      if(grid_data->bordered) {
+         bgx++;
+         bgy++;
+         bgw-=2;
+         bgh-=2;
+      }
+
+      draw_rect(&context, bg, bgx, bgy, bgw, bgh);
+   }
    
    // cell content
    for(int k = 0; k < cell->child_count; k++) {
@@ -79,6 +92,10 @@ void grid_add(wo_t *grid, wo_t *child, int row, int col) {
    grid_t *grid_data = (grid_t *)grid->data;
 
    grid_cell_t *cell = &grid_data->cells[row][col];
+   if(cell->child_count == MAX_GRID_CELL_CHILDREN) {
+      debug_println("Couldn't add child to grid cell %i %i", row, col);
+      return;
+   }
    cell->children[cell->child_count++] = child;
 }
 
@@ -166,7 +183,7 @@ void grid_release(wo_t *grid, draw_context_t context, int x, int y) {
                };
                context.clipRect = rect_intersect(context.clipRect, cellRect);
 
-               //if(child->type == WO_INPUT)
+               if(child->focusable)
                   child->selected = true;
 
                if(child->release_func)
@@ -373,10 +390,10 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid_data->cells = malloc(sizeof(grid_cell_t*) * rows);
    for(int i = 0; i < rows; i++) {
       grid_data->cells[i] = malloc(sizeof(grid_cell_t) * cols);
+      
       for(int j = 0; j < cols; j++) {
          grid_cell_t *cell = &grid_data->cells[i][j];
-         cell->child_count = 0;
-         cell->hovering = false;
+         memset(cell, 0, sizeof(grid_cell_t));
       }
    }
 
@@ -391,6 +408,7 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid->keypress_func = &grid_keypress;
    grid->mousein_func = &grid_mousein;
    grid->destroy_func = &destroy_grid;
+   grid->focusable = true;
 
    return grid;
 }

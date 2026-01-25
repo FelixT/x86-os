@@ -107,6 +107,9 @@ wo_t *settings_create_colourbox(wo_t *groupbox, int y, uint16_t colour) {
 void scroll(int deltaY, int offsetY, int window) {
    (void)window;
    ui_scroll(ui, deltaY, offsetY);
+   //clear_w(ui->window);
+   ui_draw(ui);
+   redraw_w(ui->window);
    end_subroutine();
 }
 

@@ -107,7 +107,7 @@ void canvas_release(wo_t *canvas, draw_context_t context, int x, int y) {
       if(!child->visible) continue;
       if(x >= child->x && x < child->x + child->width
       && y >= child->y && y < child->y + child->height) {
-         //if(child->type == WO_INPUT)
+         if(child->focusable)
             child->selected = true;
          if(child->release_func)
             child->release_func(child, context, x - child->x, y - child->y);
@@ -251,6 +251,7 @@ wo_t *create_canvas(int x, int y, int width, int height) {
    canvas->keypress_func = &canvas_keypress;
    canvas->unhover_func = &canvas_unhover;
    canvas->mousein_func = (void*)&canvas_mousein;
+   canvas->focusable = true;
 
    return canvas;
 }

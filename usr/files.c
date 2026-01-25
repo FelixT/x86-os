@@ -79,13 +79,15 @@ void display_items() {
 
    int grid_height = shown * 27;
 
-   // destroy existing
-   if(wo_grid)
-      destroy_wo(wo_grid);
-
+   wo_t *old_grid = wo_grid;
    wo_t *grid = create_grid(0, -ui->scrolled_y, get_width(), grid_height, shown, 1);
-   ui_add(ui, grid);
    wo_grid = grid;
+
+   // destroy existing
+   if(old_grid)
+      destroy_wo(old_grid);
+
+   ui_add(ui, grid);
    grid_t *grid_data = grid->data;
    grid_data->click_func = &entry_clicked;
    grid_data->bordered = false;
@@ -358,7 +360,12 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 void scroll(int deltaY, int offsetY, int window) {
    (void)window;
    // clear menu
-   ui_scroll(ui, deltaY, offsetY);
+   draw_context_t context = ui_get_context(ui);
+   context.clipRect.height -= wo_menu->height;
+   ui_scroll_buffer_c(ui, deltaY, context);
+   wo_grid->y -= deltaY;
+   wo_grid->draw_func(wo_grid, context);
+   wo_menu->draw_func(wo_menu, ui_get_context(ui));
    offset = offsetY/27;
    end_subroutine();
 }
@@ -652,6 +659,7 @@ void _start(int argc, char **args) {
    add_menu_item(ui->default_menu, "New folder", (void*)&add_folder);
    add_menu_item(ui->default_menu, "Settings", (void*)&settings);
    add_menu_item(ui->default_menu, "Quit", (void*)&quit);
+   resize_menu(ui->default_menu);
 
    // main program loop
    while(1 == 1) {

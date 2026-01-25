@@ -23,7 +23,7 @@ $GCC -c usr/lib/draw.c -O2 $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
 
-export UI_LIB="o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o"
+export UI_LIB="o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o o/lib/ui_textarea.o"
 export DIALOGS_LIB="$UI_LIB o/lib/stdio.o o/lib/dialogs.o o/lib/sort.o o/lib/map.o"
 
 # c progs
@@ -31,7 +31,7 @@ $GCC $FLAGS usr/prog3.c -o o/prog3.elf
 $GCC $FLAGS usr/prog4.c -o o/prog4.elf o/lib/string.o o/lib/stdio.o
 $GCC $FLAGS usr/files.c -o o/files.elf $DIALOGS_LIB
 $GCC $FLAGS usr/bmpview.c -o o/bmpview.elf $DIALOGS_LIB
-$GCC $FLAGS usr/text.c -o o/text.elf o/lib/string.o o/lib/wo_api.o o/lib/stdio.o o/lib/dialogs2.o
+$GCC $FLAGS usr/text.c -o o/text.elf $DIALOGS_LIB
 $GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o
 $GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o
 $GCC $FLAGS usr/interp.c -o o/interp.elf o/lib/wo_api.o o/lib/string.o o/lib/stdio.o o/lib/map.o

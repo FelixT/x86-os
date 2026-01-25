@@ -15,9 +15,9 @@ void draw_input(wo_t *input, draw_context_t context) {
    input_t *input_data = (input_t *)input->data;
 
    uint16_t bg = input_data->colour_bg;
-   uint16_t txt = input_data->colour_txt;
    uint16_t light = input_data->colour_border_light;
    uint16_t dark = input_data->colour_border_dark;
+   uint16_t txt = input_data->colour_txt;
 
    if(input->clicked) {
       bg = input_data->colour_bg_clicked;
@@ -33,6 +33,8 @@ void draw_input(wo_t *input, draw_context_t context) {
 
       light = rgb16(210, 210, 210);
    }
+   if(input_data->placeholder)
+      txt = rgb16(140, 140, 140);
 
    int x = input->x + context.offsetX;
    int y = input->y + context.offsetY;
@@ -99,6 +101,11 @@ void draw_input(wo_t *input, draw_context_t context) {
 void keypress_input(wo_t *input, uint16_t c, int window) {
    if(input == NULL || input->data == NULL) return;
    input_t *input_data = (input_t *)input->data;
+   if(input_data->placeholder) {
+      input_data->text[0] = '\0';
+      input_data->placeholder = false;
+      input_data->cursor_pos = 0;
+   }
 
    int len = strlen(input_data->text);
 
@@ -163,11 +170,13 @@ wo_t *create_input(int x, int y, int width, int height) {
    input_data->text[0] = '\0';
    input_data->cursor_pos = 0;
    input_data->padding_left = 2;
+   input_data->placeholder = false;
 
    input->type = WO_INPUT;
    input->data = input_data;
    input->draw_func = &draw_input;
    input->keypress_func = &keypress_input;
+   input->focusable = true;
    return input;
 }
 

@@ -32,6 +32,7 @@ void ui_release(ui_mgr_t *ui, int x, int y);
 void ui_keypress(ui_mgr_t *ui, uint16_t c);
 void ui_hover(ui_mgr_t *ui, int x, int y);
 void ui_rightclick(ui_mgr_t *ui, int x, int y);
+void ui_scroll_buffer_c(ui_mgr_t *ui, int deltaY, draw_context_t context);
 void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY);
 draw_context_t ui_get_context(ui_mgr_t *ui);
 

@@ -6,6 +6,7 @@
 #include "lib/ui/ui_grid.h"
 #include "lib/ui/ui_groupbox.h"
 #include "lib/ui/ui_canvas.h"
+#include "lib/ui/ui_textarea.h"
 #include "lib/stdio.h"
 #include "lib/draw.h"
 
@@ -93,6 +94,14 @@ void rightclick(int x, int y, int window) {
    end_subroutine();
 }
 
+void scroll(int deltaY, int offsetY, int window) {
+   ui_scroll(ui, deltaY, offsetY);
+   drawbg();
+   ui_draw(ui);
+   redraw();
+   end_subroutine(deltaY, offsetY);
+}
+
 void _start() {
 
    set_window_title("Prog6");
@@ -107,6 +116,9 @@ void _start() {
    override_resize((uint32_t)&resize, -1);
    override_hover((uint32_t)&hover, -1);
    override_rightclick((uint32_t)&rightclick, -1);
+
+   create_scrollbar(&scroll, -1);
+   set_content_height(420, -1);
 
    // create & register elements
    wo_t *btn = create_button(10, 40, 150, 20, "Test");
@@ -149,6 +161,9 @@ void _start() {
    canvas_add(canvas, label3);
    canvas_add(canvas, label4);
    ui_add(ui, canvas);
+
+   wo_t *textarea = create_textarea(5, 300, 100, 100);
+   ui_add(ui, textarea);
 
    // draw
    drawbg();

@@ -140,6 +140,13 @@ void destroy_menu(wo_t *menu) {
    free(menu, sizeof(wo_t));
 }
 
+menu_item_t *get_menu_item(wo_t *menu, int index) {
+   menu_t *menu_data = menu->data;
+   if(index < 0 || index > menu_data->item_count)
+      return NULL;
+   return &menu_data->items[index];
+}
+
 menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item, int index, int window)) {
    if(menu == NULL || menu->data == NULL) return NULL;
    menu_t *menu_data = (menu_t *)menu->data;
@@ -214,13 +221,12 @@ void menu_click(wo_t *menu, draw_context_t context, int x, int y) {
    }
 
    menu_data->selected_index = index;
+   draw_menu(menu, context);
 
    menu_item_t *item = &menu_data->items[index];
    if(item->enabled && item->func != NULL) {
       item->func(menu, index, context.window);
    }
-
-   draw_menu(menu, context);
 }
 
 void menu_release(wo_t *menu, draw_context_t context, int x, int y) {
@@ -310,6 +316,13 @@ void menu_hover(wo_t *menu, draw_context_t context, int x, int y) {
    }
 }
 
+void resize_menu(wo_t *menu) {
+   menu_t *menu_data = (menu_t *)menu->data;
+   int item_height = get_font_info().height + 7;
+   menu->height = menu_data->item_count*item_height;
+   menu_data->scrollbar_visible = false;
+}
+
 wo_t *create_menu(int x, int y, int width, int height) {
    wo_t *menu = create_wo(x, y, width, height);
    menu_t *menu_data = malloc(sizeof(menu_t));
@@ -328,6 +341,7 @@ wo_t *create_menu(int x, int y, int width, int height) {
    menu->keypress_func = &menu_keypress;
    menu->hover_func = &menu_hover;
    menu->type = WO_MENU;
+   menu->focusable = true;
 
    return menu;
 }

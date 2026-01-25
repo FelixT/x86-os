@@ -809,6 +809,9 @@ void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
       return;
    }
    ui_scroll(dialog->ui, deltaY, offsetY);
+   //clear_w(ui->window);
+   ui_draw(dialog->ui);
+   redraw_w(dialog->window);
    
    end_subroutine();
 }

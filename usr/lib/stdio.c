@@ -95,7 +95,7 @@ size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
     
     size_t total_bytes = size * count;
     
-    debug_println("Position %i bytes %i size %i", stream->position, total_bytes, stream->size);
+    debug_println("fwrite: Position %i bytes %i size %i", stream->position, total_bytes, stream->size);
 
     // expand buffer if needed
     if(stream->position + total_bytes > stream->size) {
@@ -111,8 +111,10 @@ size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
     
     // copy data to buffer
     memcpy(stream->buffer + stream->position, ptr, total_bytes);
+    if(stream->position + total_bytes > stream->content_size) {
+        stream->content_size = stream->position + total_bytes;
+    }
     stream->position += total_bytes;
-    stream->content_size += total_bytes;
     stream->dirty = 1;
     
     return count;

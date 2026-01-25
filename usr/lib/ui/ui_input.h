@@ -19,6 +19,7 @@ typedef struct input_t {
    bool halign;
    int padding_left; // if halign = false
    void (*return_func)(wo_t *wo, int window);
+   bool placeholder; // text is placeholder
 
    int cursor_pos;
 } input_t;

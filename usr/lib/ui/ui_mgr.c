@@ -68,6 +68,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          ui_draw(ui);
          redraw_w(ui->window);
          ui->default_menu->click_func(ui->default_menu, context, x - ui->default_menu->x, y - ui->default_menu->y);
+         return true;
       }
       clear_w(ui->window);
       ui_draw(ui);
@@ -116,7 +117,7 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
          // call release func
          if(wo->release_func)
             wo->release_func(wo, context, x - wo->x, y - wo->y);
-         if(wo->type == WO_INPUT || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_GRID || wo->type == WO_GROUPBOX) {
+         if(wo->focusable) {
             ui->focused = wo;
             wo->selected = true;
             if(!wo->release_func && wo->draw_func)
@@ -217,20 +218,10 @@ void ui_unfocus() {
 
 }
 
-void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
-   ui->scrolled_y = offsetY;
-
+void ui_scroll_buffer(ui_mgr_t *ui, int deltaY) {
    uint16_t *fb = (uint16_t*)ui->surface->buffer;
    int bg = get_window_setting(W_SETTING_BGCOLOUR, ui->window);
 
-   for(int i = 0; i < ui->wo_count; i++) {
-      wo_t *wo = ui->wos[i];
-      if(wo->fixed) {
-         memset16(fb + wo->y*ui->surface->width, bg, wo->height*ui->surface->width);
-         continue;
-      }
-      wo->y -= deltaY;
-   }
    int absY = -deltaY;
    if(deltaY > 0 && deltaY < ui->surface->height) {
       // scroll down
@@ -246,7 +237,61 @@ void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
       // clear top
       memset16(fb, bg, absY*ui->surface->width);
    }
-   //clear_w(ui->window);
-   ui_draw(ui);
-   redraw_w(ui->window);
+}
+
+void ui_scroll_buffer_c(ui_mgr_t *ui, int deltaY, draw_context_t context) {
+   uint16_t *fb = (uint16_t*)ui->surface->buffer;
+   int bg = get_window_setting(W_SETTING_BGCOLOUR, ui->window);
+   int absY = -deltaY;
+    
+   int clip_x = context.clipRect.x;
+   int clip_y = context.clipRect.y;
+   int clip_w = context.clipRect.width;
+   int clip_h = context.clipRect.height;
+   int buffer_w = ui->surface->width;
+    
+   if(deltaY > 0 && deltaY < clip_h) {
+      // scroll down
+      for(int row = clip_h - 1; row >= deltaY; row--) {
+         uint16_t *dst = fb + (clip_y + row) * buffer_w + clip_x;
+         uint16_t *src = fb + (clip_y + row - deltaY) * buffer_w + clip_x;
+         memmove(dst, src, clip_w * sizeof(uint16_t));
+      }
+      // clear top
+      for(int row = 0; row < deltaY; row++) {
+         uint16_t *dst = fb + (clip_y + row) * buffer_w + clip_x;
+         memset16(dst, bg, clip_w);
+      }
+   } else if(deltaY < 0 && absY < clip_h) {
+      // scroll up
+      for(int row = 0; row < clip_h - absY; row++) {
+         uint16_t *dst = fb + (clip_y + row) * buffer_w + clip_x;
+         uint16_t *src = fb + (clip_y + row + absY) * buffer_w + clip_x;
+         memmove(dst, src, clip_w * sizeof(uint16_t));
+      }
+      // clear bottom
+      for(int row = clip_h - absY; row < clip_h; row++) {
+         uint16_t *dst = fb + (clip_y + row) * buffer_w + clip_x;
+         memset16(dst, bg, clip_w);
+      }
+   }
+}
+
+// default ui scroll behaviour
+void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
+   ui->scrolled_y = offsetY;
+   
+   uint16_t *fb = (uint16_t*)ui->surface->buffer;
+   int bg = get_window_setting(W_SETTING_BGCOLOUR, ui->window);
+
+   for(int i = 0; i < ui->wo_count; i++) {
+      wo_t *wo = ui->wos[i];
+      if(wo->fixed) {
+         memset16(fb + wo->y*ui->surface->width, bg, wo->height*ui->surface->width);
+         continue;
+      }
+      wo->y -= deltaY;
+   }
+
+   ui_scroll_buffer(ui, deltaY);
 }

@@ -19,7 +19,8 @@ typedef enum {
    WO_GRID,
    WO_GROUPBOX,
    WO_IMAGE,
-   WO_CHECKBOX
+   WO_CHECKBOX,
+   WO_TEXTAREA
 } wo_type_t;
 
 typedef struct wo_t {
@@ -29,6 +30,7 @@ typedef struct wo_t {
    bool visible;
    bool enabled;
    bool fixed; // fixed position during scroll
+   bool focusable;
 
    bool hovering;
    bool clicked;

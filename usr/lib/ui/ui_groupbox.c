@@ -143,6 +143,7 @@ wo_t *create_groupbox(int x, int y, int width, int height, char *label) {
    groupbox->unhover_func = &unhover_groupbox;
    groupbox->mousein_func = (void*)&mousein_groupbox;
    groupbox->type = WO_GROUPBOX;
+   groupbox->focusable = true;
 
    return groupbox;
 }

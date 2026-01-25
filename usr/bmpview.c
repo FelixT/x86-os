@@ -215,8 +215,16 @@ void click(int x, int y) {
       end_subroutine();
    }
 
-   if(ui_click(dialog->ui, x, y))
+   bool menu_visible = dialog->ui->default_menu->visible;
+   if(ui_click(dialog->ui, x, y)) {
+      if(menu_visible && !dialog->ui->default_menu->visible) {
+         drawbg();
+         bmp_draw(bmp, -offsetX, -offsetY, scale, false);
+         ui_draw(dialog->ui);
+         redraw();
+      }
       end_subroutine();
+   }
 
    set(x, y);
    if(prevX == -1) prevX = x;
@@ -354,8 +362,10 @@ void load_img() {
    bmp = (uint8_t*)buf;
 
    info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
-   if(bmp_check())
+   if(bmp_check()) {
+      drawbg();
       bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   }
 
    bmp_header_t *header = (bmp_header_t*)bmp;
    bmpbuffer = (uint16_t*)(&bmp[0] + header->dataOffset);
@@ -481,6 +491,25 @@ void clear_click(wo_t *wo, int window) {
    (void)wo;
    (void)window;
    dialog_yesno("Reset", "Reset image back to saved state", &clear_confirm);
+}
+
+void invert_colours(wo_t *wo, int index, int window) {
+   if(info->bpp != 16) return;
+
+   for(int y = 0; y < info->height; y++) {
+      int rowOffset = (info->height - 1 - y) * rowSize;
+      uint16_t *row = (uint16_t *)((uint8_t *)bmpbuffer + rowOffset);
+
+      for(int x = 0; x < info->width; x++) {
+         int index = x;
+         if(rowOffset + x * 2 >= info->dataSize) continue;
+         int tmp = row[index];
+         uint16_t r = 255 - get_r16(row[index]);
+         uint16_t g = 255 - get_g16(row[index]);
+         uint16_t b = 255 - get_b16(row[index]);
+         row[index] = rgb16(r, g, b);
+      }
+   }
 }
 
 void _start(int argc, char **args) {
@@ -631,6 +660,11 @@ void _start(int argc, char **args) {
    create_scrollbar(&scroll, -1);
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
+
+   // right click menu
+   strcpy(get_menu_item(dialog->ui->default_menu, 0)->text, "Quit");
+   add_menu_item(dialog->ui->default_menu, "Invert colours", &invert_colours);
+   resize_menu(dialog->ui->default_menu);
 
    while(1==1) {
       //asm volatile("pause");

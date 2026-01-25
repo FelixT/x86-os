@@ -27,6 +27,7 @@ wo_t *create_wo(int x, int y, int width, int height) {
    wo->clicked = false;
    wo->selected = false;
    wo->needs_redraw = false;
+   wo->focusable = false;
 
    wo->data = NULL;
    wo_reset_funcs(wo);
