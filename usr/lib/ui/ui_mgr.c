@@ -23,8 +23,15 @@ int ui_add(ui_mgr_t *ui, wo_t *wo) {
    // find free index
    for(int i = 0; i < ui->wo_count; i++) {
       if(!ui->wos[i] || !ui->wos[i]->enabled) {
-         if(ui->wos[i])
+         if(ui->wos[i]) {
+            if(ui->hovered == ui->wos[i])
+               ui->hovered = NULL;
+            if(ui->focused == ui->wos[i])
+               ui->focused = NULL;
+            if(ui->clicked == ui->wos[i])
+               ui->clicked = NULL;
             free(ui->wos[i], sizeof(wo_t));
+         }
          ui->wos[i] = wo;
          return i;
       }

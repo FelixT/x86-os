@@ -28,8 +28,14 @@ ui_mgr_t *ui;
 wo_t *wo_menu;
 wo_t *wo_path;
 wo_t *wo_newfile;
+wo_t *wo_viewmenu;
 wo_t *wo_grid = NULL;
 wo_t *addnew_menu = NULL;
+wo_t *view_menu = NULL;
+
+wo_t *visible_menu = NULL;
+
+bool gridview = true;
 
 char tolower_c(char c) {
    if(c >= 'A' && c <= 'Z')
@@ -77,37 +83,50 @@ void display_items() {
       shown++;
    }
 
-   int grid_height = shown * 27;
+   int cols = gridview ? (get_width()/76) : 1;
+   int rows = gridview ? shown/cols+1 : shown;
+   int grid_height = rows * (gridview ? 52 : 27);
+   int cell_width = get_width()/cols;
 
    wo_t *old_grid = wo_grid;
-   wo_t *grid = create_grid(0, -ui->scrolled_y, get_width(), grid_height, shown, 1);
+   wo_t *grid = create_grid(0, -ui->scrolled_y, get_width(), grid_height, rows, cols);
    wo_grid = grid;
 
    // destroy existing
-   if(old_grid)
+   if(old_grid && old_grid->enabled)
       destroy_wo(old_grid);
 
    ui_add(ui, grid);
    grid_t *grid_data = grid->data;
    grid_data->click_func = &entry_clicked;
    grid_data->bordered = false;
+   grid_data->fill_hovered_empty_cells = false;
+
+   scrollable_height = grid->height + 20;
+   int w = get_width();
+   if(w != (int)set_content_height(scrollable_height, -1)) {
+      return;
+   }
 
    int row = 0;
+   int col = 0;
    for(int i = 0; i < dir_content->size; i++) {
       fs_dir_entry_t *entry = &dir_content->entries[i];
       bool dotentry = entry->filename[0] == '.';
       if(entry->hidden && !dotentry)
          continue;
-      wo_t *label = create_label(25, 2, 85, 23, entry->filename);
+      wo_t *label = create_label(gridview ? 0 : 25, gridview ? 25 : 2, gridview ? cell_width : 85, 23, entry->filename);
       label_t *label_data = label->data;
-      label_data->padding_left = 5;
+      label_data->padding_left = gridview ? 0 : 5;
       label_data->halign = false;
       label_data->bordered = false;
-      grid_add(grid, label, row, 0);
+      label_data->halign = gridview;
+      grid_add(grid, label, row, col);
 
-      wo_t *icon = create_image(4, 3, 20, 20, NULL);
+      int icon_x = gridview ? (cell_width-20)/2 : 4;
+      wo_t *icon = create_image(icon_x, 6, 20, 20, NULL);
       image_t *icon_data = icon->data;
-      grid_add(grid, icon, row, 0);
+      grid_add(grid, icon, row, col);
       
       // draw
       if(entry->type == FS_TYPE_DIR) {
@@ -116,36 +135,39 @@ void display_items() {
       } else {
          icon_data->data = file_icon;
 
-         uint32_t size = entry->file_size;
-         char type[4];
-         strcpy(type, "b");
-         if(size > 1000) {
-            strcpy(type, "kb");
-            size /= 1000;
+         if(!gridview) {
+            uint32_t size = entry->file_size;
+            char type[4];
+            strcpy(type, "b");
             if(size > 1000) {
-               strcpy(type, "mb");
+               strcpy(type, "kb");
                size /= 1000;
+               if(size > 1000) {
+                  strcpy(type, "mb");
+                  size /= 1000;
+               }
             }
+            char sizeStr[20];
+            sprintf(sizeStr, "%u %s", size, type);
+            label = create_label(115, 2, 85, 23, sizeStr);
+            label_data = label->data;
+            label_data->padding_left = 5;
+            label_data->halign = false;
+            label_data->colour_txt = rgb16(160, 160, 160);
+            label_data->colour_txt_hover = label_data->colour_txt;
+            label_data->bordered = false;
+            grid_add(grid, label, row, col);
          }
-         char sizeStr[20];
-         sprintf(sizeStr, "%u %s", size, type);
-         label = create_label(115, 2, 85, 23, sizeStr);
-         label_data = label->data;
-         label_data->padding_left = 5;
-         label_data->halign = false;
-         label_data->colour_txt = rgb16(160, 160, 160);
-         label_data->colour_txt_hover = label_data->colour_txt;
-         label_data->bordered = false;
-         grid_add(grid, label, row, 0);
       }
 
-      row++;
+      col++;
+      if(col == cols) {
+         row++;
+         col = 0;
+      }
    }
 
    ui_draw(ui);
-
-   scrollable_height = grid->height + 20;
-   set_content_height(scrollable_height, -1);
 
    input_t *path_data = (input_t *)wo_path->data;
    path_data->valign = true;
@@ -194,9 +216,10 @@ void click(int x, int y) {
    }
 
    // clicked outside menu while its visible
-   if(addnew_menu && addnew_menu->visible && !wo_newfile->hovering) {
+   if(visible_menu && !visible_menu->hovering) {
       ui_click(ui, x, y);
-      addnew_menu->visible = false;
+      visible_menu->visible = false;
+      visible_menu = NULL;
       clear();
       ui_draw(ui);
       redraw();
@@ -216,25 +239,28 @@ void click(int x, int y) {
 }
 
 int entry_clicked(wo_t *grid, int window, int row, int col) {
-   (void)grid;
-   (void)col;
    (void)window;
    int dir_index = -1;
    int i_pos = 0;
 
+   grid_t *grid_data = grid->data;
+   int search_index = row*grid_data->cols+col;
    // get index within dir
    for(int i = 0; i < dir_content->size; i++) {
       fs_dir_entry_t *entry = &dir_content->entries[i];
       bool dotentry = entry->filename[0] == '.';
       if(entry->hidden && !dotentry)
          continue;
-      if(i_pos == row) {
+      if(i_pos == search_index) {
          dir_index = i;
          break;
       }
       i_pos++;
    }
    
+   if(dir_index == -1 || dir_index >= dir_content->size) {
+      return 0;
+   }
 
    fs_dir_entry_t *clicked_entry = &dir_content->entries[dir_index];
 
@@ -345,12 +371,13 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
 
    wo_menu->width = w;
    wo_menu->y = height - 20;
-   int btn_width = wo_newfile->width + 2 + 5;
-   wo_path->width = w - btn_width;
-   wo_newfile->x = w - wo_newfile->width - 2;
-   if(addnew_menu) {
-      addnew_menu->x = wo_menu->width - 70;
-      addnew_menu->y = wo_menu->y - 40;
+   wo_path->width = w - 90 - 4 - 5;
+   wo_newfile->x = 4 + wo_path->width + 2;
+   wo_viewmenu->x = wo_newfile->x + wo_newfile->width + 2;
+
+   if(visible_menu) {
+      visible_menu->visible = false;
+      visible_menu = NULL;
    }
 
    display_items();
@@ -366,7 +393,8 @@ void scroll(int deltaY, int offsetY, int window) {
    wo_grid->y -= deltaY;
    wo_grid->draw_func(wo_grid, context);
    wo_menu->draw_func(wo_menu, ui_get_context(ui));
-   offset = offsetY/27;
+   offset = offsetY/(gridview ? 36 : 27);
+   ui->scrolled_y = offsetY;
    end_subroutine();
 }
 
@@ -392,10 +420,12 @@ void add_file_callback(char *filename) {
 }
 
 void add_file() {
-   if(addnew_menu && addnew_menu->visible) {
-      addnew_menu->visible = false;
+  if(visible_menu && visible_menu->visible) {
+      visible_menu->visible = false;
+      visible_menu = NULL;
       display_items();
       ui_draw(ui);
+      redraw();
    }
    dialog_input("Enter filename", (void*)&add_file_callback);
 }
@@ -420,8 +450,9 @@ void add_folder_callback(char *name) {
 }
 
 void add_folder() {
-   if(addnew_menu && addnew_menu->visible) {
-      addnew_menu->visible = false;
+  if(visible_menu && visible_menu->visible) {
+      visible_menu->visible = false;
+      visible_menu = NULL;
       display_items();
       ui_draw(ui);
       redraw();
@@ -475,7 +506,9 @@ void rightclick(int x, int y) {
 
    if(ui->default_menu) {
       // see where we clicked to determine if we can open/rename
-      int position = y/27+offset;
+      grid_t *grid_data = wo_grid->data;
+      ui_hover(ui, x, y);
+      int search_index = grid_data->hoveredrow*grid_data->cols+grid_data->hoveredcol;
 
       if(dir_content == NULL) end_subroutine();
 
@@ -486,7 +519,7 @@ void rightclick(int x, int y) {
          bool dotentry = entry->filename[0] == '.';
          if(entry->hidden && !dotentry)
             continue;
-         if(i_pos == position)
+         if(i_pos == search_index)
             index = i;
          i_pos++;
       }
@@ -547,6 +580,30 @@ void open_menuclick(wo_t *item, int index, int window) {
    click(item->x, item->y);
 }
 
+void view_grid(wo_t *item, int index, int window) {
+   (void)item;
+   (void)index;
+   (void)window;
+   gridview = true;
+   if(visible_menu && visible_menu->visible) {
+      visible_menu->visible = false;
+      visible_menu = NULL;
+   }
+   display_items();
+}
+
+void view_list(wo_t *item, int index, int window) {
+   (void)item;
+   (void)index;
+   (void)window;
+   gridview = false;
+   if(visible_menu && visible_menu->visible) {
+      visible_menu->visible = false;
+      visible_menu = NULL;
+   }
+   display_items();
+}
+
 void settings() {
    dialog_window_settings(-1, "File Manager");
 }
@@ -560,21 +617,59 @@ void quit() {
    dialog_yesno("Quit Files", "Are you sure you want to quit files", &quit_callback);
 }
 
-void show_add_menu() {
+void show_add_menu(wo_t *wo, int window) {
+   (void)window;
    if(!addnew_menu) {
       wo_t *menu = create_menu(wo_menu->width - 70, wo_menu->y - 40, 70, 40);
       add_menu_item(menu, "New file", (void*)&add_file);
       add_menu_item(menu, "New folder", (void*)&add_folder);
+      resize_menu(menu);
+      menu->y = wo_menu->y - menu->height;
+      if(wo->x < menu->x)
+         menu->x = wo->x;
       ui_add(ui, menu);
       ui_draw(ui);
       addnew_menu = menu;
+      visible_menu = addnew_menu;
    } else {
       addnew_menu->visible = !addnew_menu->visible;
       if(addnew_menu->visible) {
          addnew_menu->x = wo_menu->width - 70;
-         addnew_menu->y = wo_menu->y - 40;
+         addnew_menu->y = wo_menu->y - addnew_menu->height;
+         if(wo->x < addnew_menu->x)
+            addnew_menu->x = wo->x;
+         visible_menu = addnew_menu;
       }
       ((menu_t*)addnew_menu->data)->selected_index = -1;
+      display_items();
+      ui_draw(ui);
+   }
+}
+
+void show_view_menu(wo_t *wo, int window) {
+   (void)window;
+   if(!view_menu) {
+      wo_t *menu = create_menu(wo_menu->width - 70, wo_menu->y - 40, 70, 40);
+      add_menu_item(menu, "View list", (void*)&view_list);
+      add_menu_item(menu, "View grid", (void*)&view_grid);
+      resize_menu(menu);
+      menu->y = wo_menu->y - menu->height;
+      if(wo->x < menu->x)
+         menu->x = wo->x;
+      ui_add(ui, menu);
+      ui_draw(ui);
+      view_menu = menu;
+      visible_menu = view_menu;
+   } else {
+      view_menu->visible = !view_menu->visible;
+      if(view_menu->visible) {
+         view_menu->x = wo_menu->width - 70;
+         view_menu->y = wo_menu->y - view_menu->height;
+         if(wo->x < view_menu->x)
+            view_menu->x = wo->x;
+         visible_menu = view_menu;
+      }
+      ((menu_t*)view_menu->data)->selected_index = -1;
       display_items();
       ui_draw(ui);
    }
@@ -631,7 +726,7 @@ void _start(int argc, char **args) {
    int x = 4;
    int y = 2;
    
-   wo_path = create_input(x, y, displayedwidth - 45 - 4 - 5, 16);
+   wo_path = create_input(x, y, displayedwidth - 90 - 4 - 5, 16);
    set_input_text(wo_path, cur_path);
    input_t *path_data = (input_t *)wo_path->data;
    path_data->return_func = &path_callback;
@@ -639,9 +734,13 @@ void _start(int argc, char **args) {
    x += wo_path->width + 2;
 
    wo_newfile = create_button(x, y, 45, 16, "Add");
-   button_t *newfile_data = (button_t *)wo_newfile->data;
-   newfile_data->release_func = (void *)&show_add_menu;
+   set_button_release(wo_newfile, &show_add_menu);
    canvas_add(wo_menu, wo_newfile);
+   x += wo_newfile->width + 2;
+
+   wo_viewmenu = create_button(x, y, 45, 16, "View");
+   set_button_release(wo_viewmenu, &show_view_menu);
+   canvas_add(wo_menu, wo_viewmenu);
    x += wo_newfile->width + 2;
 
    display_items();

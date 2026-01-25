@@ -494,6 +494,9 @@ void clear_click(wo_t *wo, int window) {
 }
 
 void invert_colours(wo_t *wo, int index, int window) {
+   (void)wo;
+   (void)index;
+   (void)window;
    if(info->bpp != 16) return;
 
    for(int y = 0; y < info->height; y++) {
@@ -502,8 +505,7 @@ void invert_colours(wo_t *wo, int index, int window) {
 
       for(int x = 0; x < info->width; x++) {
          int index = x;
-         if(rowOffset + x * 2 >= info->dataSize) continue;
-         int tmp = row[index];
+         if(rowOffset + x * 2 >= (int)info->dataSize) continue;
          uint16_t r = 255 - get_r16(row[index]);
          uint16_t g = 255 - get_g16(row[index]);
          uint16_t b = 255 - get_b16(row[index]);

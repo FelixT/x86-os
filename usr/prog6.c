@@ -95,6 +95,7 @@ void rightclick(int x, int y, int window) {
 }
 
 void scroll(int deltaY, int offsetY, int window) {
+   (void)window;
    ui_scroll(ui, deltaY, offsetY);
    drawbg();
    ui_draw(ui);

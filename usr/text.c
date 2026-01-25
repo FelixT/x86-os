@@ -74,6 +74,7 @@ void load_file(char *filepath) {
    current_file = f;
 
    set_input_text(wo_path, filepath);
+   get_input(wo_path)->placeholder = false;
    char buffer[8];
    uinttostr(size, buffer);
    set_input_text(wo_status, buffer);
@@ -150,6 +151,7 @@ void new_func(wo_t *wo, int window) {
 }
 
 void scroll(int deltaY, int offsetY, int window) {
+   (void)window;
    ui_scroll(ui, deltaY, offsetY);
    ui_draw(ui);
    redraw();

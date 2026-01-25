@@ -22,7 +22,7 @@ void draw_grid_cell(wo_t *grid, draw_context_t context, grid_cell_t *cell, int r
    };
    context.clipRect = rect_intersect(context.clipRect, cellRect);
 
-   uint16_t bg = cell->hovering ? grid_data->colour_bg_hovered : grid_data->colour_bg;
+   uint16_t bg = cell->hovering && (grid_data->fill_hovered_empty_cells || cell->child_count > 0) ? grid_data->colour_bg_hovered : grid_data->colour_bg;
 
    if(grid_data->filled) {
       int bgx = context.offsetX;
@@ -264,8 +264,8 @@ void grid_hover(wo_t *grid, draw_context_t context, int x, int y) {
       // unhover old
       if(grid_data->hovered) {
          grid_data->hovered->hovering = false;
-         grid_data->hovered = NULL;
          draw_grid_cell(grid, context, grid_data->hovered, grid_data->hoveredrow, grid_data->hoveredcol);
+         grid_data->hovered = NULL;
       }
    }
 }
@@ -368,7 +368,7 @@ void destroy_grid(wo_t *grid) {
    }
    free(grid_data->cells, sizeof(grid_cell_t*) * grid_data->rows);
 
-   free(grid_data, sizeof(grid_data));
+   free(grid_data, sizeof(grid_t));
 }
 
 wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
@@ -386,6 +386,7 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid_data->cols = cols;
    grid_data->click_func = NULL;
    grid_data->hovered = NULL;
+   grid_data->fill_hovered_empty_cells = true;
 
    grid_data->cells = malloc(sizeof(grid_cell_t*) * rows);
    for(int i = 0; i < rows; i++) {
@@ -411,6 +412,10 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid->focusable = true;
 
    return grid;
+}
+
+grid_t *get_grid(wo_t *grid) {
+   return grid->data;
 }
 
 int get_grid_cell_width(wo_t *grid) {

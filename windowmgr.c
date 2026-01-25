@@ -1263,18 +1263,20 @@ void desktop_draw() {
    int textx = (textw - font_width(strlen("FileMgr"))) / 2;
    bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
    y += 6 + bmp_get_height(icon_files);
+   draw_string(&surface, "FileMgr", 0, textx, y+1);
    draw_string(&surface, "FileMgr", 0xFFFF, textx, y);
    y += 14 + getFont()->height;
    textx = (textw - font_width(strlen("UsrTerm"))) / 2;
    bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
    y += 6 + bmp_get_height(icon_window);
+   draw_string(&surface, "UsrTerm", 0, textx, y+1);
    draw_string(&surface, "UsrTerm", 0xFFFF, textx, y);
    y += 14 + getFont()->height;
    textx = (textw - font_width(strlen("KTerm"))) / 2;
    bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
    y += 6 + bmp_get_height(icon_window);
+   draw_string(&surface, "KTerm", 0, textx, y+1);
    draw_string(&surface, "KTerm", 0xFFFF, textx, y);
-
 }
 
 void desktop_click(registers_t *regs, int x, int y) {

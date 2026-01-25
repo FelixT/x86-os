@@ -202,6 +202,7 @@ void draw_textarea(wo_t *textarea, draw_context_t context) {
 }
 
 void keypress_textarea(wo_t *textarea, uint16_t c, int window) {
+   (void)window;
    if(textarea == NULL || textarea->data == NULL) return;
    textarea_t *textarea_data = textarea->data;
 

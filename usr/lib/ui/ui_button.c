@@ -136,3 +136,7 @@ void set_button_release(wo_t *button, void(*release_func)(wo_t *wo, int window))
    button_t *button_data = button->data;
    button_data->release_func = release_func;
 }
+
+button_t *get_button(wo_t *button) {
+   return button->data;
+}
