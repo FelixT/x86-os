@@ -246,7 +246,7 @@ void software_handler(registers_t *regs) {
          api_queue_event(regs);
          break;
       case 31:
-         api_register_windowobj(regs);
+         //api_register_windowobj(regs);
          break;
       case 32:
          api_launch_task(regs);
@@ -291,13 +291,13 @@ void software_handler(registers_t *regs) {
          api_override_mouseout(regs);
          break;
       case 46:
-         api_display_colourpicker(regs);
+         //api_display_colourpicker(regs);
          break;
       case 47:
          api_read(regs);
          break;
       case 48:
-         api_display_filepicker(regs);
+         //api_display_filepicker(regs);
          break;
       case 49:
          api_debug_write_str(regs);
@@ -324,7 +324,7 @@ void software_handler(registers_t *regs) {
          api_scroll_to(regs);
          break;
       case 57:
-         api_windowobj_add_child(regs);
+         //api_windowobj_add_child(regs);
          break;
       case 58:
          api_rename(regs);
@@ -456,16 +456,16 @@ void timer_handler(registers_t *regs) {
       //if(timer_i%1000)
       //   gui_showtimer(timer_i%10);
 
-      if(timer_i%11 == 0) { // ~60fps
+      if(timer_i%17 == 0) { // ~40fps
          gui_draw();
       }
 
       if(timer_i%3 == 0) {
-         if(switching_paused) {
+         /*if(switching_paused) {
             if(switching) window_writestr(" SP", 0, 0);
          } else {
-            switch_task(regs);
-         }
+            */switch_task(regs);
+         //}
       }
    }
 
@@ -694,7 +694,7 @@ void exception_handler(int int_no, registers_t *regs) {
 
 void err_exception_handler(int int_no, registers_t *regs) {
 
-   switching_paused = true;
+   //switching_paused = true;
 
    window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
    window_writeuint(int_no, 0, 0);
@@ -706,7 +706,7 @@ void err_exception_handler(int int_no, registers_t *regs) {
 
    exception_handler(int_no, regs);
 
-   switching_paused = false;
+   //switching_paused = false;
 
 }
 

@@ -7,7 +7,6 @@
 #include "api.h"
 #include "bmp.h"
 #include "events.h"
-#include "windowobj.h"
 #include "font.h"
 #include "windowmgr.h"
 #include "window_popup.h"
@@ -208,9 +207,12 @@ void api_override_mouseclick(registers_t *regs) {
 
 void api_override_draw(registers_t *regs) {
    // override draw function with ebx
+   // IN: ebx = func
+   // IN: ecx = window
    uint32_t addr = regs->ebx;
+   gui_window_t *window = api_get_cwindow(regs->ecx);
    if(addr != 0) return;
-   api_get_window()->draw_func = (void *)(addr);
+   window->draw_func = (void *)(addr);
 }
 
 void api_override_resize(registers_t *regs) {
@@ -347,56 +349,6 @@ void api_queue_event(registers_t *regs) {
    events_add(delta, (void *)callback, NULL, get_current_task());
 }
 
-void api_register_windowobj(registers_t *regs) {
-   // IN: ebx = index of child window or -1 for task's main window
-   // OUT: ebx = windowobj
-   int index = regs->ebx;
-
-   gui_window_t *window = api_get_window();
-   if(index >= 0) {
-      if(index < window->child_count) {
-         window = window->children[index];
-      } else {
-         regs->ebx = 0;
-         return;
-      }
-   }
-
-   if(!window || window->closed) {
-      regs->ebx = 0;
-      return;
-   }
-
-   windowobj_t *wo = malloc(sizeof(windowobj_t));
-   windowobj_init(wo, &window->surface);
-   window->window_objects[window->window_object_count++] = wo;
-   map(get_current_task_pagedir(), (uint32_t)wo, (uint32_t)wo, 1, 1);
-
-   regs->ebx = (uint32_t)wo;
-}
-
-void api_windowobj_add_child(registers_t *regs) {
-   // only works on task's main window
-
-   // IN: ebx = parent windowobj
-   // OUT: ebx = child windowobj
-   gui_window_t *window = api_get_window();
-   windowobj_t *parent = (windowobj_t*)regs->ebx;
-   windowobj_t *child = NULL;
-
-   for(int i = 0; i < window->window_object_count; i++) {
-      if(window->window_objects[i] == parent) { // only works for 1 level of inheritance
-         child = malloc(sizeof(windowobj_t));
-         windowobj_init(child, &window->surface);
-         parent->children[parent->child_count++] = child;
-         child->parent = parent;
-         map(get_current_task_pagedir(), (uint32_t)child, (uint32_t)child, 1, 1);
-      }
-   }
-
-   regs->ebx = (uint32_t)child;
-}
-
 void api_launch_task(registers_t *regs) {
    // IN: ebx = path
    // IN: ecx = argc
@@ -444,6 +396,7 @@ void api_launch_task(registers_t *regs) {
       task->process->fd_count = parenttask->process->fd_count;
       strcpy(task->process->working_dir, parenttask->process->working_dir); // inherit working dir
       window_close(NULL, getSelectedWindowIndex()); // may get issues from having task without window
+      task->process->window = -1;
       setSelectedWindowIndex(oldwindow);
       gui_redrawall();
    }
@@ -494,26 +447,6 @@ void api_set_working_dir(registers_t *regs) {
 void api_get_working_dir(registers_t *regs) {
    // IN: ebx = size 256 buf for working dif
    strcpy((char*)regs->ebx, gettasks()[get_current_task()].process->working_dir);
-}
-
-void api_display_colourpicker(registers_t *regs) {
-   // IN: ebx = colour
-   // IN: ecx = callback function (argument is uint16_t colour)
-
-   gui_window_t *parent = getWindow(get_current_task_window());
-   int popup = windowmgr_add();
-   debug_printf("Displaying colourpicker\n");
-   window_popup_colourpicker(getWindow(popup), parent, (void*)regs->ecx, (uint16_t)regs->ebx);
-   window_draw_outline(getWindow(popup), false);
-}
-
-void api_display_filepicker(registers_t *regs) {
-   // IN: ebx = callback function (argument is char *path)
-
-   gui_window_t *parent = getWindow(get_current_task_window());
-   int popup = windowmgr_add();
-   window_popup_filepicker(getWindow(popup), parent, (void*)regs->ebx);
-   window_draw_outline(getWindow(popup), false);
 }
 
 void api_debug_write_str(registers_t *regs) {

@@ -122,11 +122,12 @@ static inline void override_click(uint32_t addr, int window) {
    );
 }
 
-static inline void override_draw(uint32_t addr) {
+static inline void override_draw(uint32_t addr, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (29),
-      "b" (addr)
+      "b" (addr),
+      "c" (window)
       : "cc", "memory"
    );
 }
@@ -497,25 +498,6 @@ static inline void getwd(char *buf) {
       "int $0x30;"
       :: "a" (44),
       "b" ((uint32_t)buf)
-      : "cc", "memory"
-   );
-}
-
-static inline void display_colourpicker(uint16_t colour, void *callback) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (46),
-      "b" ((uint32_t)colour),
-      "c" ((uint32_t)callback)
-      : "cc", "memory"
-   );
-}
-
-static inline void display_filepicker(void *callback) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (48),
-      "b" ((uint32_t)callback)
       : "cc", "memory"
    );
 }

@@ -842,8 +842,6 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
    }
 
-   debug_printf("Loaded %u clusters into 0x%h\n", clusterCount, (uint32_t)fileContents);
-
    return fileContents;
 
 }

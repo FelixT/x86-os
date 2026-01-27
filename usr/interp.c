@@ -1,12 +1,16 @@
 #include "prog.h"
 
 #include "../lib/string.h"
+#include "lib/dialogs.h"
 #include "lib/stdio.h"
-#include "lib/wo_api.h"
+#include "lib/ui/ui_mgr.h"
+#include "lib/ui/ui_button.h"
+#include "lib/ui/ui_input.h"
+#include "lib/ui/ui_label.h"
 #include "lib/map.h"
 
 typedef struct var_wo_t {
-   windowobj_t *wo;
+   wo_t *wo;
    char function[16]; // only allows one function for now
 } var_wo_t;
 
@@ -38,6 +42,7 @@ typedef struct func_t {
 } func_t;
 
 interp_state_t state;
+dialog_t *dialog;
 
 // commands:
 // print string
@@ -102,22 +107,29 @@ int cmd_wo(char *arg) {
    }
 
    if(strequ(type, "btn")) {
-      windowobj_t *button = create_button(NULL, stoi(x), stoi(y), text);
+      wo_t *button = create_button(stoi(x), stoi(y), strlen(text)*(get_font_info().width+get_font_info().padding) + 10, 20, text);
       state.wos[index].wo = button;
       strcpy(state.wos[index].function, "");
 
       debug_println("wo: Created button %i", index);
       button->release_func = (void*)&generic_callback;
+      ui_add(dialog->ui, button);
+      ui_draw(dialog->ui);
    }
 
    if(strequ(type, "input")) {
-      windowobj_t *input = create_text(NULL, stoi(x), stoi(y), text);
+      wo_t *input = create_input(stoi(x), stoi(y), 100, 20);
+      set_input_text(input, text);
       state.wos[index].wo = input;
+      ui_add(dialog->ui, input);
+      ui_draw(dialog->ui);
    }
 
    if(strequ(type, "txt")) {
-      windowobj_t *txt = create_text_static(NULL, stoi(x), stoi(y), text);
+      wo_t *txt = create_label(stoi(x), stoi(y), strlen(text)*(get_font_info().width+get_font_info().padding) + 10, 20, text);
       state.wos[index].wo = txt;
+      ui_add(dialog->ui, txt);
+      ui_draw(dialog->ui);
    }
 
    return index;
@@ -288,6 +300,7 @@ void cmd_open(char *arg) {
       return;
    }
    fclose(f);
+   buffer[size] = '\0';
    var_set(varname, VAR_STR, buffer);
 }
 
@@ -306,16 +319,22 @@ void cmd_run(char *arg) {
    char *start = state.buffer + state.location;
    // split at newline
    char tmp[128];
+   int i = 0;
    while(true) {
       start = state.buffer + state.location;
       strsplit(tmp, NULL, start, '\n');
       if(strlen(tmp)==0) break;
       state.location += strlen(tmp) + 1;
+      //printf("%i: %s\n", i, tmp);
       parse_line(tmp);
+      i++;
    }
 }
 
 void parse_line(char *line) {
+   while(line[0] == ' ')
+      line++; // skip leading spaces
+
    char command[10];
    char arg[50];
    strsplit((char*)command, (char*)arg, line, ' ');
@@ -363,9 +382,15 @@ void line_callback(char *buffer) {
 }
 
 void _start() {
+
+   // interp window
    printf("f3BASIC interpreter\n");
-   //override_term_checkcmd((uint32_t)NULL);
    override_term_checkcmd((uint32_t)line_callback);
+
+   // output window
+   dialog = get_dialog(get_free_dialog());
+   dialog_init(dialog, create_window(340, 240));
+   dialog_set_title(dialog, "f3BASIC output");
    
    state.wo_count = 0;
    state.in_func = false;

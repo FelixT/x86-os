@@ -119,3 +119,8 @@ void set_checkbox_release(wo_t *checkbox, void(*release_func)(wo_t *wo, int wind
    checkbox_t *check_data = checkbox->data;
    check_data->release_func = release_func;
 }
+
+bool checkbox_checked(wo_t *checkbox) {
+   checkbox_t *check_data = checkbox->data;
+   return check_data->checked;
+}

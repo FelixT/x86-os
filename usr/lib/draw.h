@@ -24,6 +24,7 @@ void draw_unfilledrect(draw_context_t *ctx, uint16_t colour, int x, int y, int w
 void draw_rect(draw_context_t *ctx, uint16_t colour, int x, int y, int width, int height);
 void draw_pixel(draw_context_t *ctx, uint16_t colour, int x, int y);
 void draw_checkeredrect(surface_t *surface, uint16_t colour1, uint16_t colour2, int x, int y, int width, int height);
+void draw_string(draw_context_t *ctx, char *str, uint16_t colour, int x, int y);
 rect_t rect_intersect(rect_t a, rect_t b);
 
 // 5r 6g 5b

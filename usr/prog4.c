@@ -3,18 +3,21 @@
 
 #include "prog.h"
 #include "prog_bmp.h"
-#include "prog_wo.h"
 #include "lib/stdio.h"
 #include "../lib/string.h"
+#include "lib/dialogs.h"
 
 uint8_t *image;
 
 int x = 0;
 int y = 0;
 
+dialog_t *dialog;
+
 void timer_callback() {
     //clear();
     bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1, false);
+    ui_draw(dialog->ui);
     redraw();
 
     queue_event((uint32_t)(&timer_callback), 6);
@@ -25,15 +28,17 @@ void timer_callback() {
     end_subroutine();
 }
 
-void click_callback() {
+void click_callback(wo_t *wo, int window) {
+    (void)wo;
+    (void)window;
     clear();
-    x = 0;
-    timer_callback();
+    queue_event((uint32_t)(&timer_callback), 6);
 }
 
 void _start() {
-    set_window_title("Prog4");
-    override_draw((uint32_t)NULL);
+    dialog = get_dialog(get_free_dialog());
+    dialog_init(dialog, -1);
+    dialog_set_title(dialog, "Prog4");
 
     FILE *f = fopen("/bmp/file20.bmp", "r");
     if(!f) {
@@ -56,10 +61,11 @@ void _start() {
     clear();
 
     int width = get_width();
-    windowobj_t *wo = register_windowobj(-1, WO_BUTTON, width - 65, 10, 50, 14);
-    wo->text = (char*)malloc(1);
-    strcpy(wo->text, "RESET");
-    wo->click_func = &click_callback;
+    wo_t *wo = create_button(width - 65, 10, 50, 14, "Reset");
+    set_button_release(wo, &click_callback);
+    ui_add(dialog->ui, wo);
+
+    ui_draw(dialog->ui);
 
     // main program loop
    while(1 == 1) {

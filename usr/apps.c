@@ -89,9 +89,11 @@ void hover(int x, int y, int window) {
 
 void resize(uint32_t fb, int w, int h, int window) {
    (void)fb;
+   (void)w;
+   (void)h;
+   (void)window;
    if(!ui)
       end_subroutine();
-   debug_println("Resize w%i h%i window %", w, h, window);
 
    surface = get_surface();
    ui->surface = &surface;
@@ -123,7 +125,7 @@ void _start() {
    if(content->entries)
       sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_filename);
 
-   override_draw(0);
+   override_draw(0, -1);
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
    override_resize((uint32_t)&resize, -1);

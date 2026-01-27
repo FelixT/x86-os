@@ -1129,7 +1129,7 @@ void dialog_init_overrides(int window) {
    override_resize((uint32_t)&dialog_resize, window);
    override_rightclick((uint32_t)&dialog_rightclick, window);
    override_mouseout((uint32_t)&dialog_mouseout, window);
-   override_draw(0);
+   override_draw(0, window);
 }
 
 dialog_t *get_dialog(int index) {

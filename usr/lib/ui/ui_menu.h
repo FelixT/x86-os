@@ -29,5 +29,6 @@ menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item
 menu_item_t *get_menu_item(wo_t *menu, int index);
 void destroy_menu(wo_t *menu);
 void resize_menu(wo_t *menu); // resize to fit contents
+menu_t *get_menu(wo_t *menu);
 
 #endif

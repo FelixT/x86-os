@@ -110,7 +110,7 @@ void _start() {
    // init ui
    s = get_surface();
    ui = ui_init(&s, -1);
-   override_draw(0);
+   override_draw(0, -1);
    override_click((uint32_t)&click, -1);
    override_release((uint32_t)&release, -1);
    override_keypress((uint32_t)&keypress, -1);

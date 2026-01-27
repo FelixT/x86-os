@@ -706,7 +706,7 @@ void _start(int argc, char **args) {
    create_scrollbar(&scroll, -1);
    override_keypress((uint32_t)&keypress, -1);
    override_click((uint32_t)&click, -1);
-   override_draw((uint32_t)NULL);
+   override_draw(0, -1);
    override_resize((uint32_t)&resize, -1);
    override_release((uint32_t)&release, -1);
    override_hover((uint32_t)&hover, -1);

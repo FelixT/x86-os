@@ -34,12 +34,12 @@ void draw_menu_item(wo_t *menu, draw_context_t context, int index) {
    } else {
       draw_rect(&context, bg_item, x + 1, y, bgwidth, item_height);
    }
-   // draw text
-   uint16_t txtcolour = item->enabled ? 0 : rgb16(200, 200, 200);
-   write_strat_w(item->text, x + 5, y + 4, txtcolour, context.window);
    // border
    draw_line(&context, border_light, x + 1, y + item_height - 1, false, bgwidth);
-
+   // draw text
+   context.clipRect.width -= 5*2;
+   uint16_t txtcolour = item->enabled ? 0 : rgb16(200, 200, 200);
+   draw_string(&context, item->text, txtcolour, x + 5, y + 4);
 }
 
 void draw_menu_scrollbar(wo_t *menu, draw_context_t context) {
@@ -282,13 +282,13 @@ void menu_hover(wo_t *menu, draw_context_t context, int x, int y) {
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
 
-   if(menu_data->scrolling && menu->clicked) {
+   if(menu_data->scrolling) {
       menu_data->scrollerY = y;
       if(menu_data->scrollerY < 14)
          menu_data->scrollerY = 14;
       if(menu_data->scrollerY > menu->height - 14)
          menu_data->scrollerY = menu->height - 14;
-      menu_data->offset = ((menu_data->item_count - menu_data->shown_items) * (menu_data->scrollerY-14))/(menu->height - 14*2);
+      menu_data->offset = ((menu_data->item_count - menu_data->shown_items) * (menu_data->scrollerY - 14) + (menu->height - 28) / 2) / (menu->height - 28);
       draw_menu(menu, context);
       return;
    } else if(!menu->clicked) {
@@ -316,6 +316,11 @@ void menu_hover(wo_t *menu, draw_context_t context, int x, int y) {
    }
 }
 
+void menu_unhover(wo_t *menu, draw_context_t context) {
+   get_menu(menu)->scrolling = false;
+   draw_menu(menu, context);
+}
+
 void resize_menu(wo_t *menu) {
    menu_t *menu_data = (menu_t *)menu->data;
    int item_height = get_font_info().height + 7;
@@ -340,8 +345,13 @@ wo_t *create_menu(int x, int y, int width, int height) {
    menu->release_func = &menu_release;
    menu->keypress_func = &menu_keypress;
    menu->hover_func = &menu_hover;
+   menu->unhover_func = &menu_unhover;
    menu->type = WO_MENU;
    menu->focusable = true;
 
    return menu;
+}
+
+menu_t *get_menu(wo_t *menu) {
+   return menu->data;
 }

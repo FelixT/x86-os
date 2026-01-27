@@ -6,6 +6,7 @@
 #include "lib/dialogs.h"
 #include "prog_bmp.h"
 #include "lib/draw.h"
+#include "lib/ui/ui_checkbox.h"
 
 uint16_t *framebuffer;
 uint8_t *bmp;
@@ -36,6 +37,10 @@ int offsetX = 0;
 int offsetY = 0;
 FILE *current_file = NULL;
 dialog_t *dialog = NULL;
+
+int hover_x = -1;
+int hover_y = -1;
+uint16_t hover_colour;
 
 void drawbg() {
    draw_checkeredrect(&surface, 0xBDF7, 0xDEDB, 0, 0, width, height);
@@ -126,38 +131,57 @@ static const uint8_t brush_patterns[][8] = {
    },
 };
 
+bool tile_pattern = false;
+
 void set(int x, int y) {
    int brush_size = size * scale;
-   
    if(x < 0 || x >= info->width*scale || x >= bufferwidth || y < 0 || y >= height || y >= info->height*scale) return;
 
-   int start_x = max(0, x);
-   int end_x = min(bufferwidth, x + brush_size);
-   end_x = min(end_x, info->width*scale);
-   int start_y = max(0, y);
-   int end_y = min(height, y + brush_size);
-   end_y = min(end_y, info->height*scale);
+   int pixel_x = x / scale;
+   int pixel_y = (y + offsetY) / scale;
    
-   for(int py = start_y; py < end_y; py++) {
-      for(int px = start_x; px < end_x; px++) {
-         int pattern_y = ((py-y) * 8) / brush_size;
-         int pattern_x = ((px-x) * 8) / brush_size;
-         
+   int brush_start_x = max(0, pixel_x);
+   int brush_end_x = min(info->width, pixel_x + size);
+   int brush_start_y = max(0, pixel_y);
+   int brush_end_y = min(info->height, pixel_y + size);
+    
+   for(int py = brush_start_y; py < brush_end_y; py++) {
+      for(int px = brush_start_x; px < brush_end_x; px++) {
          // check pattern
-         if(size > 1 && !(brush_patterns[brush_type][pattern_y] & (1 << (7 - pattern_x)))) 
+         int pattern_x;
+         int pattern_y;
+         if(tile_pattern) {
+            pattern_x = px % 8;
+            pattern_y = py % 8;
+         } else {
+            pattern_x = ((px-pixel_x) * 8) / brush_size;
+            pattern_y = ((py-pixel_y) * 8) / brush_size;
+         }
+            
+         if(size > 1 && !(brush_patterns[brush_type][pattern_y] & (1 << (7 - pattern_x))))
             continue;
-
-         framebuffer[px + py * bufferwidth] = colour;
-
-         // set bmp
-         if(info->bpp != 16) return;
-         int rowOffset = (info->height - ((py + offsetY)/scale + 1)) * rowSize;
-         int index = rowOffset / 2 + px/scale;
-         if(index >= (int)info->dataSize) return;
-         bmpbuffer[index] = colour;
+            
+         // update framebuffer
+         int fb_x = px * scale;
+         int fb_y = py * scale - offsetY;
+         if(fb_x >= 0 && fb_x < bufferwidth && fb_y >= 0 && fb_y < height) {
+            for(int sy = 0; sy < scale; sy++) {
+               for(int sx = 0; sx < scale; sx++) {
+                  int fb_px = fb_x + sx;
+                  int fb_py = fb_y + sy;
+                  if(fb_px < bufferwidth && fb_py < height)
+                     framebuffer[fb_px + fb_py * bufferwidth] = colour;
+               }
+            }
+         }
+         
+         // update bmp
+         int rowOffset = (info->height - (py + 1)) * rowSize;
+         int index = rowOffset / 2 + px;
+         if(index >= 0 && index < (int)info->dataSize)
+            bmpbuffer[index] = colour;
       }
    }
-   
    //redraw_pixel(x, y);
 }
 
@@ -226,6 +250,18 @@ void click(int x, int y) {
       end_subroutine();
    }
 
+   if(hover_x != -1 && hover_y != -1) {
+      // restore old colour
+      int sz = size*scale;
+      for(int py = hover_y; py < hover_y+sz; py++) {
+         for(int px = hover_x; px < hover_x+sz; px++) {
+            framebuffer[px + py * bufferwidth] = hover_colour;
+         }
+      }
+      hover_x = -1;
+      hover_y = -1;
+   }
+
    set(x, y);
    if(prevX == -1) prevX = x;
    if(prevY == -1) prevY = y;
@@ -255,6 +291,35 @@ void release(int x, int y, int window) {
 
 void hover(int x, int y) {
    ui_hover(dialog->ui, x, y);
+
+   int sz = scale*size;
+   if(size == 1 && scale > 1 && y < height - wo_menu->height - sz - 2) {
+      int img_x = x/sz;
+      int img_y = y/sz;
+
+      int start_x = img_x*sz;
+      int start_y = img_y*sz;
+      if(hover_x != start_x || hover_y != start_y) {
+         int end_x = start_x + sz;
+         int end_y = start_y + sz;
+         if(hover_x != -1 && hover_y != -1) {
+            // restore old colour
+            for(int py = hover_y; py < hover_y+sz; py++) {
+               for(int px = hover_x; px < hover_x+sz; px++) {
+                  framebuffer[px + py * bufferwidth] = hover_colour;
+               }
+            }
+         }
+         hover_x = start_x;
+         hover_y = start_y;
+         hover_colour = framebuffer[start_x + start_y * bufferwidth];
+         for(int py = start_y; py < end_y; py++) {
+            for(int px = start_x; px < end_x; px++) {
+               framebuffer[px + py * bufferwidth] = colour;
+            }
+         }
+      }
+   }
 
    end_subroutine();
 }
@@ -453,6 +518,11 @@ void brush_close(wo_t *wo, int window) {
    ui_draw(dialog->ui);
 }
 
+void brush_toggle_tile(wo_t *wo, int window) {
+   (void)window;
+   tile_pattern = checkbox_checked(wo);
+}
+
 void brush_click(wo_t *wo, int window) {
    (void)wo;
    (void)window;
@@ -464,7 +534,7 @@ void brush_click(wo_t *wo, int window) {
    }
 
    // create canvas
-   options = create_canvas(20, 20, 100, 120);
+   options = create_canvas(20, 20, 130, 140);
    wo_t *label = create_label(5, 8, 90, 14, "Brush type:");
    canvas_add(options, label);
    wo_t *menu = create_menu(5, 20, 90, 75);
@@ -474,7 +544,12 @@ void brush_click(wo_t *wo, int window) {
    add_menu_item(menu, "Cross", &brush_callback);
    add_menu_item(menu, "Spray", &brush_callback);
    canvas_add(options, menu);
-   wo_t *close = create_button(5, 100, 40, 14, "Close");
+   label = create_label(5, 98, 100, 20, "Tile pattern:");
+   canvas_add(options, label);
+   wo_t *checkbox = create_checkbox(105, 98, tile_pattern);
+   set_checkbox_release(checkbox, brush_toggle_tile);
+   canvas_add(options, checkbox);
+   wo_t *close = create_button(5, 120, 40, 14, "Close");
    set_button_release(close, &brush_close);
    canvas_add(options, close);
    ui_add(dialog->ui, options);
@@ -515,7 +590,7 @@ void invert_colours(wo_t *wo, int index, int window) {
 }
 
 void _start(int argc, char **args) {
-   override_draw((uint32_t)NULL);
+   override_draw(0, -1);
    surface = get_surface();
    width = get_width();
    height = get_height();

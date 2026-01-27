@@ -95,6 +95,17 @@ void draw_checkeredrect(surface_t *surface, uint16_t colour1, uint16_t colour2, 
    }
 }
 
+void draw_string(draw_context_t *ctx, char *str, uint16_t colour, int x, int y) {
+   int maxchars = ctx->clipRect.width / (get_font_info().width + get_font_info().padding) - 1;
+   if(strlen(str) > maxchars) {
+      char *buf = malloc(maxchars+1);
+      strncpy(buf, str, maxchars);
+      write_strat_w(buf, x, y, colour, ctx->window);
+   } else {
+      write_strat_w(str, x, y, colour, ctx->window);
+   }
+}
+
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 

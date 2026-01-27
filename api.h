@@ -36,8 +36,6 @@ void api_read_dir(registers_t *regs);
 void api_draw_bmp(registers_t *regs);
 void api_clear_window(registers_t *regs);
 void api_queue_event(registers_t *regs);
-void api_register_windowobj(registers_t *regs);
-void api_windowobj_add_child(registers_t *regs);
 void api_launch_task(registers_t *regs);
 void api_set_window_title(registers_t *regs);
 void api_set_working_dir(registers_t *regs);

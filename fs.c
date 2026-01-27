@@ -190,8 +190,6 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
       size = file->data->file_size - file->current_pos;
    if(size == 0) return 0;
 
-   debug_printf("Reading %u bytes to buffer at 0x%h\n", size, buffer);
-
    fat_read_file_chunked(file->data->first_cluster, buffer, size, callback, task);
    file->current_pos += size;
    return size;

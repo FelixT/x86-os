@@ -304,7 +304,7 @@ void resize() {
 void _start() {
    set_window_size(360, 280);
    
-   override_draw(0);
+   override_draw(0, -1);
 
    char buffer[256];
 
