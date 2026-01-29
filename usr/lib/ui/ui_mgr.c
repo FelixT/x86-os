@@ -82,13 +82,9 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
       return true;
    }
 
-   // check if any ui elements are clicked
+   wo_t *focused = ui->focused;
    if(ui->focused) {
       ui->focused->selected = false;
-      if(ui->focused->unfocus_func)
-         ui->focused->unfocus_func(ui->focused, context);
-      else if(ui->focused->draw_func)
-         ui->focused->draw_func(ui->focused, context);
       ui->focused = NULL;
    }
 
@@ -109,6 +105,14 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          break;
       }
    }
+
+   if(focused && focused != ui->clicked) {
+      if(focused->unfocus_func)
+         focused->unfocus_func(focused, context);
+      else if(focused->draw_func)
+         focused->draw_func(focused, context);
+   }
+
    return clicked;
 }
 
@@ -121,15 +125,15 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
       wo->clicked = false;
       if(x >= wo->x && x < wo->x + wo->width
       && y >= wo->y && y < wo->y + wo->height) {
-         // call release func
-         if(wo->release_func)
-            wo->release_func(wo, context, x - wo->x, y - wo->y);
          if(wo->focusable) {
             ui->focused = wo;
             wo->selected = true;
-            if(!wo->release_func && wo->draw_func)
-               wo->draw_func(wo, context);
          }
+         // call release func
+         if(wo->release_func)
+            wo->release_func(wo, context, x - wo->x, y - wo->y);
+         if(wo->focusable && !wo->release_func && wo->draw_func)
+            wo->draw_func(wo, context);
          break;
       }
    }

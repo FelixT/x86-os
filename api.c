@@ -50,13 +50,18 @@ gui_window_t *api_get_cwindow(int cindex) {
 void api_write_string(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    // write ebx
+   // IN ebx str
+   // IN ecx window/-1
    char *out;
    if(task->process->vmem_start == 0) // not elf
       out = (char*)(task->process->prog_entry + regs->ebx);
    else // elf
       out = (char*)regs->ebx;
 
-   api_write_to_task(out);
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   int windowindex = get_window_index_from_pointer(window);
+   window_writestr(out, window->txtcolour, windowindex);
 }
 
 void api_write_number(registers_t *regs) {
@@ -343,10 +348,11 @@ void api_clear_window(registers_t *regs) {
 void api_queue_event(registers_t *regs) {
    // IN: ebx = callback function
    // IN: ecx = how long to wait
+   // IN: edx = msg
    uint32_t callback = regs->ebx;
    uint32_t delta = regs->ecx;
 
-   events_add(delta, (void *)callback, NULL, get_current_task());
+   events_add(delta, (void *)callback, (void*)regs->edx, get_current_task());
 }
 
 void api_launch_task(registers_t *regs) {

@@ -92,7 +92,7 @@ void draw_input(wo_t *input, draw_context_t context) {
    write_strat_w(display_text, text_x, text_y, txt, context.window);
 
    // draw cursor
-   int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+input_data->padding_left-1) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width) + 1;
+   int cursor_x = x + (input_data->halign ? (width - text_width) / 2 : get_font_info().padding+input_data->padding_left-1) + (input_data->cursor_pos-txt_offset) * (get_font_info().padding+get_font_info().width);
    if(input->selected && cursor_x <= x + width) {
       draw_line(&context, light, cursor_x, text_y-1, true, get_font_info().height+2);
    }

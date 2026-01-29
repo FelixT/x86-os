@@ -20,7 +20,7 @@ void timer_callback() {
     ui_draw(dialog->ui);
     redraw();
 
-    queue_event((uint32_t)(&timer_callback), 6);
+    queue_event((uint32_t)(&timer_callback), 6, NULL);
 
     x+=5;
     y+=5;
@@ -32,7 +32,7 @@ void click_callback(wo_t *wo, int window) {
     (void)wo;
     (void)window;
     clear();
-    queue_event((uint32_t)(&timer_callback), 6);
+    queue_event((uint32_t)(&timer_callback), 6, NULL);
 }
 
 void _start() {

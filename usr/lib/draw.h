@@ -26,6 +26,8 @@ void draw_pixel(draw_context_t *ctx, uint16_t colour, int x, int y);
 void draw_checkeredrect(surface_t *surface, uint16_t colour1, uint16_t colour2, int x, int y, int width, int height);
 void draw_string(draw_context_t *ctx, char *str, uint16_t colour, int x, int y);
 rect_t rect_intersect(rect_t a, rect_t b);
+uint16_t rgb16_lighten(uint16_t color, uint8_t amount);
+uint16_t rgb16_darken(uint16_t color, uint8_t amount);
 
 // 5r 6g 5b
 static inline int get_r16(uint16_t c) {

@@ -149,7 +149,7 @@ void display_items() {
             }
             char sizeStr[20];
             sprintf(sizeStr, "%u %s", size, type);
-            label = create_label(115, 2, 85, 23, sizeStr);
+            label = create_label(125, 2, 85, 23, sizeStr);
             label_data = label->data;
             label_data->padding_left = 5;
             label_data->halign = false;

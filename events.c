@@ -18,7 +18,7 @@ void events_add(int delta, void *callback, void *msg, int taskid) {
     if(!events_active) {
         events_active = true;
     }
-
+    
     event_t *event = malloc(sizeof(event_t));
     event->time = (timer_i + delta)%10000000;
     event->callback = callback;
@@ -44,9 +44,8 @@ void events_add(int delta, void *callback, void *msg, int taskid) {
     // If sooner than next, put this as next 
     event_t *e = first_event;
     while(e->next != NULL) {
-
-        if(delta < event_time_until(e)) {
-            event->next = e->next->next;
+        if(event_time_until(event) < event_time_until(e->next)) {
+            event->next = e->next;
             e->next = event;
             return;
         }
@@ -59,22 +58,20 @@ void events_add(int delta, void *callback, void *msg, int taskid) {
 
 void event_fire(registers_t *regs, event_t *event) {
     if(event->callback == NULL) return;
-    uint32_t *args = malloc(sizeof(uint32_t) * 1);
-    args[1] = (uint32_t)event->msg;
 
     if(event->task >= 0) {
         if(gettasks()[event->task].paused) {
             debug_printf("Task %i is paused, skipping event\n", event->task);
-            free((uint32_t)args, sizeof(uint32_t) * 1);
             return;
         }
         if(switch_to_task(event->task, regs)) {
+            uint32_t *args = malloc(sizeof(uint32_t) * 1);
+            args[0] = (uint32_t)event->msg;
             task_call_subroutine(regs, "event", (uint32_t)(event->callback), args, 1);
         }
     } else {
         // call function as kernel if task is -1
         (*(void(*)(void*,void*))event->callback)((void*)regs, event->msg);
-        free((uint32_t)args, sizeof(uint32_t) * 1);
     }
 
 }

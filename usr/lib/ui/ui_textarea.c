@@ -195,8 +195,10 @@ void draw_textarea(wo_t *textarea, draw_context_t context) {
    }
 
    write_strat_w(display_text, text_x, text_y, txt, context.window); // write remaining text
-   if(textarea->selected || textarea->clicked)
-      draw_line(&context, dark, cursor_x, cursor_y, true, get_font_info().height+2);// cursor
+
+   // draw cursor
+   if(textarea->selected || textarea->clicked || textarea->hovering)
+      draw_line(&context, !textarea->selected && textarea->hovering ? rgb16(200, 200, 200) : dark, cursor_x, cursor_y, true, get_font_info().height+2);
 
    free(display_text, textarea_data->textbuf_size);
 }
@@ -276,8 +278,38 @@ void keypress_textarea(wo_t *textarea, uint16_t c, int window) {
 
 }
 
+typedef struct cursor_event_t {
+   wo_t *wo; // textarea
+   bool blinking;
+   draw_context_t draw_context;
+} cursor_event_t;
+
+void blink_cursor(cursor_event_t *event) {
+   if(!event) return;
+   wo_t *wo = event->wo;
+   if(!wo || !wo->enabled || !wo->data) return;
+
+   if(wo->selected) {
+      uint16_t colour = get_textarea(wo)->colour_border_dark;
+      colour = event->blinking ? rgb16_lighten(colour, 100) : colour;
+      int row, col;
+      textarea_get_pos_from_index(wo, get_textarea(wo)->cursor_pos, &row, &col);
+      int cursor_x = get_textarea(wo)->padding + col*(get_font_info().width+get_font_info().padding) + wo->x + event->draw_context.offsetX + get_font_info().padding;
+      int cursor_y = get_textarea(wo)->padding + row*(get_font_info().height+get_font_info().padding) + wo->y + event->draw_context.offsetY + get_font_info().padding - 1;
+      draw_line(&event->draw_context, colour, cursor_x, cursor_y, true, get_font_info().height+2);
+
+      event->blinking = !event->blinking;
+      queue_event((uint32_t)&blink_cursor, 200, event);
+   }
+   end_subroutine();
+}
+
 void click_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
    textarea_t *textarea_data = wo->data;
+   if(!textarea_data->focused) {
+      draw_textarea(wo, draw_context);
+      return;
+   }
    x -= textarea_data->padding;
    y -= textarea_data->padding;
    int row = y / (get_font_info().height + get_font_info().padding);
@@ -291,6 +323,22 @@ void click_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
          index--;
    }
    textarea_data->cursor_pos = index;
+   draw_textarea(wo, draw_context);
+}
+
+void release_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   get_textarea(wo)->focused = true;
+   draw_textarea(wo, draw_context);
+   // set up blinking cursor
+   cursor_event_t *event = malloc(sizeof(cursor_event_t));
+   event->wo = wo;
+   event->blinking = true;
+   event->draw_context = draw_context;
+   queue_event((uint32_t)&blink_cursor, 200, event);
+}
+
+void unfocus_textarea(wo_t *wo, draw_context_t draw_context) {
+   get_textarea(wo)->focused = false;
    draw_textarea(wo, draw_context);
 }
 
@@ -318,6 +366,8 @@ wo_t *create_textarea(int x, int y, int width, int height) {
    textarea->draw_func = &draw_textarea;
    textarea->keypress_func = &keypress_textarea;
    textarea->click_func = &click_textarea;
+   textarea->release_func = &release_textarea;
+   textarea->unfocus_func = &unfocus_textarea;
    textarea->focusable = true;
    return textarea;
 }

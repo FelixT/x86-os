@@ -29,6 +29,7 @@ int fclose(FILE *stream);
 int fflush(FILE *stream);
 void debug_println(const char *format, ...);
 void printf(const char *format, ...);
+void printf_w(const char *format, int window, ...);
 int fileno(FILE *stream);
 void fseek(FILE *stream, int pos, int type);
 

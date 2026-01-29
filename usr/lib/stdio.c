@@ -202,3 +202,12 @@ void printf(const char *format, ...) {
    va_end(args);
    write_str(buffer);
 }
+
+void printf_w(const char *format, int window, ...) {
+   char buffer[1024];
+   va_list args;
+   va_start(args, window);
+   vsnprintf(buffer, 1023, (char*)format, args);
+   va_end(args);
+   write_str_w(buffer, window);
+}

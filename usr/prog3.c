@@ -5,7 +5,7 @@ int delta = 10;
 void timer_callback() {
     write_str("Subroutine hit\n");
 
-    queue_event((uint32_t)(&timer_callback), delta);
+    queue_event((uint32_t)(&timer_callback), delta, NULL);
 
     delta += 10;
 
@@ -15,8 +15,8 @@ void timer_callback() {
 void _start() {
     set_window_title("Prog3");
 
-    queue_event((uint32_t)(&timer_callback), 50);
-    queue_event((uint32_t)(&timer_callback), 100);
+    queue_event((uint32_t)(&timer_callback), 50, NULL);
+    queue_event((uint32_t)(&timer_callback), 100, NULL);
 
     write_str("Test123\n");
 

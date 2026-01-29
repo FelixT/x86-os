@@ -16,6 +16,7 @@ typedef struct textarea_t {
    uint16_t colour_border_light;
    uint16_t colour_border_dark;
    bool bordered;
+   bool focused;
    int padding;
 
    int cursor_pos;

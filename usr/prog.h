@@ -13,13 +13,18 @@ static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
 
-static inline void write_str(char *str) {
+static inline void write_str_w(char *str, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (1),
-      "b" ((uint32_t)str)
+      "b" ((uint32_t)str),
+      "c" (window)
       : "cc", "memory"
    );
+}
+
+static inline void write_str(char *str) {
+   write_str_w(str, -1);
 }
 
 static inline void write_num(int num) {
@@ -381,12 +386,13 @@ static inline void write_numat(int num, int x, int y) {
    );
 }
 
-static inline void queue_event(uint32_t callback, int delta) {
+static inline void queue_event(uint32_t callback, int delta, void *msg) {
    asm volatile(
       "int $0x30"
       :: "a" (30),
       "b" ((uint32_t)callback),
-      "c" ((uint32_t)delta)
+      "c" ((uint32_t)delta),
+      "d" ((uint32_t)msg)
       : "cc", "memory"
    );
 }

@@ -535,9 +535,9 @@ void brush_click(wo_t *wo, int window) {
 
    // create canvas
    options = create_canvas(20, 20, 130, 140);
-   wo_t *label = create_label(5, 8, 90, 14, "Brush type:");
+   wo_t *label = create_label(5, 8, 120, 14, "Brush type:");
    canvas_add(options, label);
-   wo_t *menu = create_menu(5, 20, 90, 75);
+   wo_t *menu = create_menu(5, 20, 120, 75);
    add_menu_item(menu, "Default", &brush_callback);
    add_menu_item(menu, "Circle", &brush_callback);
    add_menu_item(menu, "Square", &brush_callback);
@@ -545,6 +545,7 @@ void brush_click(wo_t *wo, int window) {
    add_menu_item(menu, "Spray", &brush_callback);
    canvas_add(options, menu);
    label = create_label(5, 98, 100, 20, "Tile pattern:");
+   get_label(label)->bordered = false;
    canvas_add(options, label);
    wo_t *checkbox = create_checkbox(105, 98, tile_pattern);
    set_checkbox_release(checkbox, brush_toggle_tile);
