@@ -83,6 +83,14 @@ void canvas_click(wo_t *canvas, draw_context_t context, int x, int y) {
          else if(child->draw_func)
             child->draw_func(child, context);
          child->clicked = false;
+      } else {
+         if(child->selected) {
+            child->selected = false;
+            if(child->unfocus_func)
+               child->unfocus_func(child, context);
+            else
+               child->draw_func(child, context);
+         }
       }
    }
 }

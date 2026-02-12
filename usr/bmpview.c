@@ -231,6 +231,9 @@ int prevY = -1;
 
 void click(int x, int y) {
 
+   if(info->bpp != 16)
+      end_subroutine();
+
    if(x > width) // clicked scrollarea
       end_subroutine();
 
@@ -293,6 +296,22 @@ void hover(int x, int y) {
    ui_hover(dialog->ui, x, y);
 
    int sz = scale*size;
+   if(y >= height - wo_menu->height - sz - 2) {
+      end_subroutine();
+   }
+   if(x >= info->width*scale || y >= info->height*scale) {
+      if(hover_x != -1 && hover_y != -1) {
+         // restore old colour
+         for(int py = hover_y; py < hover_y+sz; py++) {
+            for(int px = hover_x; px < hover_x+sz; px++) {
+               framebuffer[px + py * bufferwidth] = hover_colour;
+            }
+         }
+         hover_x = -1;
+         hover_y = -1;
+      }
+      end_subroutine();
+   }
    if(size == 1 && scale > 1 && y < height - wo_menu->height - sz - 2) {
       int img_x = x/sz;
       int img_y = y/sz;
@@ -590,6 +609,104 @@ void invert_colours(wo_t *wo, int index, int window) {
    }
 }
 
+void resize_complete(wo_t *wo, int window) {
+   dialog_t *popup_dialog = dialog_from_window(window);
+   wo_t *widthinput = dialog_get(popup_dialog, "widthinput");
+   wo_t *heightinput = dialog_get(popup_dialog, "heightinput");
+   int newwidth = strtoint(get_input(widthinput)->text);
+   int newheight = strtoint(get_input(heightinput)->text);
+   uint32_t newsize = newwidth*newheight;
+   uint32_t oldsize = info->width*info->height*info->bpp;
+   debug_println("Resizing from %i to %i", oldsize, newsize);
+   bmp_header_t *header = (bmp_header_t*)bmp;
+   uint16_t colour = 0xFFFF;
+   int newRowSize = ((newwidth * 2 + 3) / 4) * 4;
+   uint32_t oldFileSize = header->dataOffset + rowSize * info->height;
+   int newFileSize = sizeof(bmp_header_t) + sizeof(bmp_info_t) + sizeof(bmp_bitmasks_t) + newRowSize*newheight;
+   debug_println("File size from %i to %i", oldFileSize, newFileSize);
+   bmp_header_t *newheader = malloc(newFileSize);
+   // copy headers+info
+   int size = min(oldFileSize, newFileSize);
+   memcpy(newheader, header, size);
+   uint16_t *newbmpbuffer = (uint16_t*)((uint8_t*)newheader + newheader->dataOffset);
+   for(int yi = 0; yi < newheight; yi++) {
+      uint16_t *row = newbmpbuffer + yi * (newRowSize / 2);
+      memset16(row, colour, newwidth);
+   }
+   // copy existing image
+   int copywidth = min(info->width, newwidth);
+   int copyheight = min(info->height, newheight);
+   for(int yi = 0; yi < copyheight; yi++) {
+      uint16_t *row = newbmpbuffer + yi * (newRowSize / 2);
+      memcpy(row, bmpbuffer + yi * (rowSize / 2), copywidth*sizeof(uint16_t));
+   }
+
+   free(header, oldFileSize);
+   bmp = (uint8_t*)newheader;
+   bmpbuffer = (uint16_t*)(bmp + newheader->dataOffset);
+   rowSize = newRowSize;
+   info = (bmp_info_t*)((uint8_t*)newheader + sizeof(bmp_header_t));
+   info->width = newwidth;
+   info->height = newheight;
+   dialog_close(wo, window);
+   drawbg();
+   bmp_draw(bmp, -offsetX, -offsetY, scale, false);
+   ui_draw(dialog->ui);
+   redraw();
+   dialog->content_height = info->height*scale + 20;
+   set_content_height(dialog->content_height, -1);
+}
+
+void resize_image(wo_t *wo, int index, int window) {
+   (void)wo;
+   (void)index;
+   (void)window;
+   dialog_t *popup_dialog = get_dialog(get_free_dialog());
+   dialog_init(popup_dialog, create_window(220, 120));
+   dialog_set_title(popup_dialog, "Info");
+
+   bool editable = info->bpp == 16;
+
+   wo_t *label = create_label(5, 5, 100, 20, "BPP: ");
+   ui_add(popup_dialog->ui, label);
+   char buffer[8];
+   inttostr(info->bpp, buffer);
+   label = create_label(110, 5, 100, 20, buffer);
+   ui_add(popup_dialog->ui, label);
+
+   label = create_label(5, 30, 100, 20, "Width: ");
+   ui_add(popup_dialog->ui, label);
+   wo_t *input = create_input(110, 30, 100, 20);
+   get_input(input)->valign = true;
+   get_input(input)->halign = true;
+   input->focusable = editable;
+   inttostr(info->width, buffer);
+   set_input_text(input, buffer);
+   ui_add(popup_dialog->ui, input);
+   dialog_add(popup_dialog, "widthinput", input);
+
+   label = create_label(5, 55, 100, 20, "Height: ");
+   ui_add(popup_dialog->ui, label);
+   input = create_input(110, 55, 100, 20);
+   get_input(input)->valign = true;
+   get_input(input)->halign = true;
+   input->focusable = editable;
+   inttostr(info->height, buffer);
+   set_input_text(input, buffer);
+   ui_add(popup_dialog->ui, input);
+   dialog_add(popup_dialog, "heightinput", input);
+
+   wo_t *button = create_button(5, 80, 100, 20, "Close");
+   set_button_release(button, &dialog_close);
+   ui_add(popup_dialog->ui, button);
+   button = create_button(110, 80, 100, 20, "Update");
+   set_button_release(button, &resize_complete);
+   ui_add(popup_dialog->ui, button);
+
+   ui_draw(popup_dialog->ui);
+   redraw_w(popup_dialog->window);
+}
+
 void _start(int argc, char **args) {
    override_draw(0, -1);
    surface = get_surface();
@@ -742,6 +859,7 @@ void _start(int argc, char **args) {
    // right click menu
    strcpy(get_menu_item(dialog->ui->default_menu, 0)->text, "Quit");
    add_menu_item(dialog->ui->default_menu, "Invert colours", &invert_colours);
+   add_menu_item(dialog->ui->default_menu, "Resize/Info", &resize_image);
    resize_menu(dialog->ui->default_menu);
 
    while(1==1) {

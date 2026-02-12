@@ -22,7 +22,7 @@ gui_window_t *gui_windows;
 extern surface_t surface; // screen
 
 windowmgr_settings_t wm_settings = {
-   .default_window_bgcolour = 0xFFFF,
+   .default_window_bgcolour = 0xF7BE, // 0xFFFF
    .default_window_txtcolour = 0x0000,
    .desktop_enabled = false,
    .desktop_bgimg_enabled = true,
