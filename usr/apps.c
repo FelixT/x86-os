@@ -196,7 +196,7 @@ void _start() {
 
    ui_draw(ui);
 
-   free(content, sizeof(fs_dir_content_t) * content->size);
+   kfree(content, sizeof(fs_dir_content_t));
 
    redraw();
    set_window_minimised(false, -1);

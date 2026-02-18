@@ -125,7 +125,7 @@ void release_label(wo_t *label, draw_context_t context, int x, int y) {
 
 void destroy_label(wo_t *label) {
    label_t *label_data = label->data;
-   free(label_data, sizeof(label_t));
+   free(label_data);
 }
 
 wo_t *create_label(int x, int y, int width, int height, char *text) {

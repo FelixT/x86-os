@@ -3,6 +3,7 @@
 #include "../lib/string.h"
 #include "lib/dialogs.h"
 #include "lib/stdio.h"
+#include "lib/stdlib.h"
 #include "lib/ui/ui_mgr.h"
 #include "lib/ui/ui_button.h"
 #include "lib/ui/ui_input.h"
@@ -262,7 +263,7 @@ void cmd_free(char *arg) {
       case VAR_STR:
          printf("freeing str %s\n", arg);
          char *str = var->value;
-         free(str, 128);
+         free(str);
          break;
       case VAR_WO:
          printf("freeing wo %s\n", arg);
@@ -275,14 +276,14 @@ void cmd_free(char *arg) {
          break;
       case VAR_FUNC:
          func_t *func = (func_t*)var->value;
-         free(func, sizeof(func_t));
+         free(func);
          break;
       default:
          printf("Invalid type %i\n", var->type);
          return;
    }
 
-   free(var, sizeof(var_t));
+   free(var);
    map_remove(&(state.variables), arg);
 }
 
@@ -294,7 +295,7 @@ void cmd_reset() {
       }
    }
    for(int i = 0; i < state.wo_count; i++) {
-      free(state.wos[i].wo, sizeof(wo_t));
+      free(state.wos[i].wo);
    }
    state.wo_count = 0;
    clear_w(dialog->window);
@@ -451,7 +452,7 @@ void cmd_open(char *arg) {
    int size = fsize(fileno(f));
    char *buffer = malloc(size+1);
    if(!fread(buffer, size, 1, f)) {
-      free(buffer, size+1);
+      free(buffer);
       printf("open: Couldn't read file '%s'\n", path);
       fclose(f);
       return;
@@ -482,7 +483,7 @@ void cmd_run(char *arg) {
       start = state.buffer + state.location;
       strsplit(tmp, NULL, start, '\n');
       int len = strlen(tmp);
-      if(strlen(tmp)==0) {
+      if(len==0) {
          // handle blank line
          if(state.location + 1 < state.buffer_size) {
             state.location++;
@@ -492,7 +493,7 @@ void cmd_run(char *arg) {
             break;
          }
       }
-      state.location += strlen(tmp) + 1;
+      state.location += len + 1;
       parse_line(tmp);
       i++;
    }

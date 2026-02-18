@@ -102,7 +102,6 @@ void api_write_number_at(registers_t *regs) {
 
 void api_yield(registers_t *regs) {
    switch_task(regs);
-   //debug_printf("Switched to task %u\n", get_current_task());
 }
 
 // potentially broken
@@ -466,60 +465,53 @@ void api_sbrk(registers_t *regs) {
    int delta = (int)regs->ebx;
    task_state_t *task = &gettasks()[get_current_task()];
 
+   uint32_t old_heap_end = (uint32_t)task->process->heap_end; // saved for return
    int old_heapsize = (int)(task->process->heap_end - task->process->heap_start);
    int new_heapsize = old_heapsize + delta;
-   debug_printf("Resizing task %u heap from %u to %u\n", get_current_task(), old_heapsize, new_heapsize);
 
-   // check if we're moving into a new page directory that needs to be mapped or freed
+   if(new_heapsize < 0) {
+      regs->ebx = (uint32_t)-1;  // error
+      return;
+   }
+
    uint32_t old_end = page_align_up(task->process->heap_start + old_heapsize);
    uint32_t new_end = page_align_up(task->process->heap_start + new_heapsize);
-   if(new_end > old_end) {
-      // expand
-      int delta_pages = (new_end - old_end)/0x1000;
-      debug_printf("Expand by %u pages\n", delta_pages);
-      uint32_t physical = (uint32_t)malloc(delta_pages*0x1000); // hmm
-      if(!physical) {
-         debug_printf("Out of memory\n");
-      }
-      for(uint32_t i = 0; i < (uint32_t)delta_pages*0x1000; i+=0x1000)
-         map(task->process->page_dir, physical+i, old_end+i, 1, 1);
 
-   } else if(new_end < old_end) {
+   if(new_end < old_end) {
       // shrink
-      int delta_pages = (old_end - new_end)/0x1000;
-
+      int delta_pages = (old_end - new_end) / 0x1000;
       debug_printf("Shrink by %u pages\n", delta_pages);
-
+      
       uint32_t *physical_addrs = NULL;
-      if (delta_pages > 0) {
+      if(delta_pages > 0) {
          physical_addrs = malloc(delta_pages * sizeof(uint32_t));
          if(physical_addrs) {
-            for (int i = 0; i < delta_pages; i++) {
-               uint32_t virt = (uint32_t)task->process->heap_end - (i + 1) * 0x1000;
-               physical_addrs[i] = page_getphysical(task->process->page_dir, virt);
-            }
+               for(int i = 0; i < delta_pages; i++) {
+                  uint32_t virt = old_end - (i + 1) * 0x1000;
+                  physical_addrs[i] = page_getphysical(task->process->page_dir, virt);
+               }
          }
       }
-
-      for (uint32_t i = 0; i < (uint32_t)delta_pages * 0x1000; i += 0x1000) {
-         uint32_t virt_addr = task->process->heap_end - 0x1000;
+      
+      // unmap pages from old_end downward
+      for(int i = 0; i < delta_pages; i++) {
+         uint32_t virt_addr = old_end - (i + 1) * 0x1000;
          unmap(task->process->page_dir, virt_addr);
-         task->process->heap_end = virt_addr;
       }
-        
-        // Free physical memory
+      
+      // free physical memory
       if(physical_addrs) {
          for(int i = 0; i < delta_pages; i++) {
-            if(physical_addrs[i]) {
-               free((uint32_t)physical_addrs[i], 0x1000);
-            }
+               if(physical_addrs[i]) {
+                  free(physical_addrs[i], 0x1000);
+               }
          }
-         free((uint32_t)physical_addrs, sizeof(uint32_t*));
+         free((uint32_t)physical_addrs, 0x1000);
       }
    }
 
    task->process->heap_end = task->process->heap_start + new_heapsize;
-   regs->ebx = old_end;
+   regs->ebx = old_heap_end;
 
 }
 
@@ -576,7 +568,7 @@ void api_read(registers_t *regs) {
    char *buf = (char*)regs->ecx;
    size_t count = regs->edx;
 
-   debug_printf("api_read: fd %i, buf 0x%h, count %u\n", fd, buf, count);
+   debug_printf("api_read: fd %i, buf 0x%h-0x%h (size %u)\n", fd, buf, buf+count, count);
    
    if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("read: fd not found\n");

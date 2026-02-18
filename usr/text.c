@@ -4,6 +4,7 @@
 #include "prog.h"
 #include "../lib/string.h"
 #include "lib/stdio.h"
+#include "lib/stdlib.h"
 #include "lib/dialogs.h"
 #include "lib/ui/ui_textarea.h"
 

@@ -47,6 +47,7 @@ page_dir_entry_t *page_get_kernel_pagedir();
 void swap_pagedir(page_dir_entry_t *dir);
 page_dir_entry_t *new_page();
 page_dir_entry_t *page_get_current();
+void invlpg(uint32_t addr);
 
 #define PAGE_SIZE 0x1000
 #define PAGE_MASK (PAGE_SIZE - 1)

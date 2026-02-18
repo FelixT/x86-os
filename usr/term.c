@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "../lib/string.h"
 #include "lib/stdio.h"
+#include "lib/stdlib.h"
 #include "lib/sort.h"
 
 char path[256] = "/";
@@ -141,7 +142,7 @@ void term_cmd_dmpmem(char *arg) {
          printf("\n");
       }
    }
-   free(buf, rowlen);
+   free(buf);
 }
 
 void term_cmd_launch(char *arg, bool copy) {
@@ -295,7 +296,7 @@ void term_cmd_pwd() {
    char *wd = (char*)malloc(256);
    getwd(wd);
    printf("%s\n", wd);
-   free(wd, 256);
+   free(wd);
    return;
 }
 
@@ -316,9 +317,9 @@ void term_cmd_cat(char *arg) {
    }
    buf[f->content_size] = '\0';
    printf("%s\n", buf);
-   free(buf, size);
+   free(buf);
    fclose(f);
-   free(f, sizeof(FILE));
+   free(f);
    printf("Closed file\n");
 }
 
@@ -334,7 +335,7 @@ void term_cmd_fappend(char *arg) {
    printf("Opened file '%s' with size %u\n", path, size);
    fwrite(buffer, strlen(buffer), 1, f);
    fclose(f);
-   free(f, sizeof(FILE));
+   free(f);
    printf("Closed file\n");
 }
 
@@ -351,7 +352,7 @@ void term_cmd_fwrite(char *arg) {
    int c = fwrite(buffer, strlen(buffer), 1, f);
    printf("Wrote %u bytes\n", c);
    fclose(f);
-   free(f, sizeof(FILE));
+   free(f);
    printf("Closed file\n");
 }
 
@@ -449,7 +450,7 @@ void checkcmd(char *buffer) {
    else
       term_cmd_default(command);
 
-   free(buffer, 1); // should be programs responsibility to free
+   kfree(buffer, 1); // should be programs responsibility to free
 
    end_subroutine();
 }
@@ -460,7 +461,7 @@ void _start() {
    char *wd = (char*)malloc(256);
    getwd(wd);
    strcpy(path, wd);
-   free(wd, 256);
+   free(wd);
 
    printf("User Terminal at %s\n", path);
 

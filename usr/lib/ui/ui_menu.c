@@ -133,11 +133,11 @@ void destroy_menu(wo_t *menu) {
    if(menu->data != NULL) {
       menu_t *menu_data = (menu_t *)menu->data;
       if(menu_data->items != NULL) {
-         free(menu_data->items, sizeof(menu_item_t) * menu_data->item_count);
+         free(menu_data->items);
       }
-      free(menu_data, sizeof(menu_t));
+      free(menu_data);
    }
-   free(menu, sizeof(wo_t));
+   free(menu);
 }
 
 menu_item_t *get_menu_item(wo_t *menu, int index) {
@@ -165,7 +165,7 @@ menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item
 
    // free old items
    if(menu_data->items != NULL) {
-      free(menu_data->items, sizeof(menu_item_t) * menu_data->item_count);
+      free(menu_data->items);
    }
 
    // update menu data
@@ -306,7 +306,7 @@ void menu_hover(wo_t *menu, draw_context_t context, int x, int y) {
    int index = y / item_height + menu_data->offset;
 
    menu_data->hover_index = index;
-   if(index < menu_data->offset || index >= menu_data->offset + menu_data->shown_items) {
+   if(index < menu_data->offset || index >= menu_data->offset + menu_data->shown_items || index >= menu_data->item_count) {
       menu_data->hover_index = -1;
    }
 

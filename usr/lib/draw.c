@@ -1,4 +1,5 @@
 #include "draw.h"
+#include "stdlib.h"
 #include "../../lib/string.h"
 
 static inline void setpixel_safe(surface_t *surface, int index, int colour) {
@@ -124,27 +125,27 @@ rect_t rect_intersect(rect_t a, rect_t b) {
 }
 
 uint16_t rgb16_lighten(uint16_t color, uint8_t amount) {
-    // amount: 0-255 (0 = no change, 255 = full white)
-    uint8_t r = (color >> 11) & 0x1F;
-    uint8_t g = (color >> 5) & 0x3F;
-    uint8_t b = color & 0x1F;
-    
-    r = r + (((31 - r) * amount) >> 8);
-    g = g + (((63 - g) * amount) >> 8);
-    b = b + (((31 - b) * amount) >> 8);
-    
-    return (r << 11) | (g << 5) | b;
+   // amount: 0-255 (0 = no change, 255 = full white)
+   uint8_t r = (color >> 11) & 0x1F;
+   uint8_t g = (color >> 5) & 0x3F;
+   uint8_t b = color & 0x1F;
+   
+   r = r + (((31 - r) * amount) >> 8);
+   g = g + (((63 - g) * amount) >> 8);
+   b = b + (((31 - b) * amount) >> 8);
+   
+   return (r << 11) | (g << 5) | b;
 }
 
 uint16_t rgb16_darken(uint16_t color, uint8_t amount) {
-    // amount: 0-255 (0 = no change, 255 = full black)
-    uint8_t r = (color >> 11) & 0x1F;
-    uint8_t g = (color >> 5) & 0x3F;
-    uint8_t b = color & 0x1F;
-    
-    r = (r * (255 - amount)) >> 8;
-    g = (g * (255 - amount)) >> 8;
-    b = (b * (255 - amount)) >> 8;
-    
-    return (r << 11) | (g << 5) | b;
+   // amount: 0-255 (0 = no change, 255 = full black)
+   uint8_t r = (color >> 11) & 0x1F;
+   uint8_t g = (color >> 5) & 0x3F;
+   uint8_t b = color & 0x1F;
+   
+   r = (r * (255 - amount)) >> 8;
+   g = (g * (255 - amount)) >> 8;
+   b = (b * (255 - amount)) >> 8;
+   
+   return (r << 11) | (g << 5) | b;
 }

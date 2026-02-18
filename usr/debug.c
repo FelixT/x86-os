@@ -140,6 +140,7 @@ void show_symbols(elf_header_t *elf) {
 }
 
 void validate_elf(elf_header_t *elf) {
+   debug_println("Validating ELF file");
    if(memcmp(elf->magic, "\x7F""ELF", 4) != 0) {
       dialog_msg("Error", "Invalid ELF signature");
       return;
@@ -169,14 +170,14 @@ void load_elf(char *path) {
    fread(elf, size, 1, f);
    fclose(f);
    validate_elf(elf);
-   //free(elf, size);
+   //free(elf);
 }
 
 void browse_callback(char *path, int window, wo_t *wo) {
    (void)window;
    (void)wo;
    menu_t *menu_data = menu->data;
-   free(menu_data->items, sizeof(menu_item_t)*menu_data->item_count);
+   free(menu_data->items);
    menu_data->items = NULL;
    menu_data->item_count = 0;
    menu_data->selected_index = -1;
@@ -247,8 +248,6 @@ void _start(int argc, char **args) {
       file = args[1];
    debug_println("Loading file %s", file);
    load_elf(file);
-
-   ui_draw(dialog->ui);
 
    if(argc > 2) {
       char *addrhex = args[2];

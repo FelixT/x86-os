@@ -173,7 +173,7 @@ static inline int get_height() {
    return get_height_w(-1);
 }
 
-static inline void *malloc(uint32_t size) {
+static inline void *kmalloc(uint32_t size) {
    uint32_t addr;
 
    asm volatile (
@@ -187,7 +187,7 @@ static inline void *malloc(uint32_t size) {
    return (void*)addr;
 }
 
-static inline void free(void *addr, uint32_t size) {
+static inline void kfree(void *addr, uint32_t size) {
    asm volatile (
       "int $0x30;"
       :: "a" (40),
@@ -592,7 +592,7 @@ static inline bool rename(char *path, char *newname) {
    return (bool)success;
 }
 
-static inline uint32_t *sbrk(uint32_t increment) {
+static inline void *sbrk(uint32_t increment) {
    uint32_t addr;
 
    asm volatile (

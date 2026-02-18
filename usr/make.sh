@@ -14,6 +14,7 @@ nasm usr/progidle.asm -f bin -o o/progidle.bin
 
 # c libs
 $GCC -c usr/lib/stdio.c -O2 $FLAGS -o o/lib/stdio.o
+$GCC -c usr/lib/stdlib.c -O2 $FLAGS -o o/lib/stdlib.o
 $GCC -c usr/lib/map.c $FLAGS -o o/lib/map.o
 $GCC -c usr/lib/sort.c -O2 $FLAGS -o o/lib/sort.o
 $GCC -c usr/lib/dialogs.c -O2 $FLAGS -o o/lib/dialogs.o
@@ -21,7 +22,7 @@ $GCC -c usr/lib/draw.c -O2 $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
 
-export UI_LIB="o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o o/lib/ui_textarea.o"
+export UI_LIB="o/lib/stdlib.o o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o o/lib/ui_textarea.o"
 export DIALOGS_LIB="$UI_LIB o/lib/stdio.o o/lib/dialogs.o o/lib/sort.o o/lib/map.o"
 
 # c progs
@@ -30,13 +31,13 @@ $GCC $FLAGS usr/prog4.c -o o/prog4.elf $DIALOGS_LIB
 $GCC $FLAGS usr/files.c -o o/files.elf $DIALOGS_LIB
 $GCC $FLAGS usr/bmpview.c -o o/bmpview.elf $DIALOGS_LIB
 $GCC $FLAGS usr/text.c -o o/text.elf $DIALOGS_LIB
-$GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o
-$GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o
+$GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o o/lib/stdlib.o 
+$GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o o/lib/stdlib.o 
 $GCC $FLAGS usr/interp.c -o o/interp.elf $DIALOGS_LIB
 $GCC $FLAGS usr/prog5.c -o o/prog5.elf $DIALOGS_LIB
 $GCC $FLAGS usr/prog6.c -o o/prog6.elf o/lib/stdio.o $UI_LIB
-$GCC $FLAGS usr/prog7.c -o o/prog7.elf
-$GCC -O2 $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
+$GCC $FLAGS usr/prog7.c -o o/prog7.elf o/lib/stdlib.o 
+$GCC -g -O2 $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
 $GCC -O2 $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
 $GCC -O2 $FLAGS usr/apps.c -o o/apps.elf o/lib/stdio.o o/lib/sort.o $UI_LIB
 $GCC $FLAGS usr/debug.c -o o/debug.elf $DIALOGS_LIB

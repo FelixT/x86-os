@@ -4,6 +4,7 @@
 #define WO_H
 
 #include <stdbool.h>
+#include "../stdlib.h"
 #include "../../prog.h"
 #include "../draw.h"
 

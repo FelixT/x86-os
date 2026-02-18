@@ -30,7 +30,7 @@ int ui_add(ui_mgr_t *ui, wo_t *wo) {
                ui->focused = NULL;
             if(ui->clicked == ui->wos[i])
                ui->clicked = NULL;
-            free(ui->wos[i], sizeof(wo_t));
+            free(ui->wos[i]);
          }
          ui->wos[i] = wo;
          return i;

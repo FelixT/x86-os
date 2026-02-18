@@ -28,7 +28,6 @@ isr_stub_%+%1:
 
    popa
    add esp, 4 ; extra pop for err code
-   sti ; restore interrupts
    iret
 %endmacro
 
@@ -58,7 +57,6 @@ isr_stub_%+%1:
 
    popa
    add esp, 4 ; extra pop for err code
-   sti ; restore interrupts
    iret
 %endmacro
 
@@ -88,7 +86,6 @@ irq_stub_%+%1:
 
    popa
    add esp, 4 ; extra pop for err code
-   sti ; restore interrupts
    iret
 %endmacro
 

@@ -9,6 +9,7 @@
 #include "windowmgr.h"
 #include "memory.h"
 #include "window_popup.h"
+#include "tasks.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -514,141 +515,99 @@ void endtask_debug(void *window, void *regs) {
       map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1);
 }
 
-void show_endtask_dialog(int int_no, registers_t *regs) {
+void show_endtask_dialog(int int_no, registers_t *regs, int task) {
    int popup = windowmgr_add();
    char buffer[50];
-   sprintf(buffer, "Task %i paused due to exception %i", get_current_task(), int_no);
+   sprintf(buffer, "Task %i paused due to exception %i", task, int_no);
    window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
    dialog->callback_func = &endtask_callback;
    dialog->wo_okbtn->x = 75;
    window_create_button(getWindow(popup), 135, 45, "Debug", &endtask_debug);
-   window_disable(getWindow(get_current_task_window()));
+   window_disable(getWindow(get_task_window(task)));
    strcpy(getWindow(popup)->title, "Error");
    strcpy(dialog->wo_okbtn->text, "Exit");
-   pause_task(get_current_task(), regs);
+   pause_task(task, regs);
    toolbar_draw();
    window_draw_outline(getWindow(popup), false);
 }
 
-void exception_handler(int int_no, registers_t *regs) {
+bool page_fault_handler(registers_t *regs) {
+   uint32_t addr;
+   asm volatile("mov %%cr2, %0" : "=r" (addr));
 
+   extern int current_servicing_task;
+
+   // page error
+   task_state_t *task = get_current_task_state();
+   if(current_servicing_task != -1) {
+      task = &gettasks()[current_servicing_task];
+   }
+   process_t *process = task->process;
+   page_dir_entry_t *dir = task->process->page_dir;
+
+   // demand paging/lazy allocation: check if within heap
+   if(dir != page_get_current()) {
+      debug_printf("int 14 - task page directory isn't current...\n");
+   }
+
+   if(addr >= process->heap_start && addr < process->heap_end) {
+      uint8_t *page = malloc(0x1000); // returns physical addr
+      addr = addr & ~0xFFF;  // page align
+      map(dir, (uint32_t)page, addr, 1, 1);
+      invlpg(addr);
+      return true;
+   }
+
+   // not within heap, show error and pause task
+
+   window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
+   debug_printf("0x%h", addr);
+   if(page_getphysical(dir, addr) != (uint32_t)-1) {
+      window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+      debug_writehex(page_getphysical(dir, addr));
+      window_writestr(">", gui_rgb16(255, 100, 100), 0);
+   }
+   window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
+   debug_writehex(regs->eip);
+   if(page_getphysical(dir, regs->eip) != (uint32_t)-1) {
+      window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+      debug_writehex(page_getphysical(dir, regs->eip));
+      window_writestr(">", gui_rgb16(255, 100, 100), 0);
+   }
+
+   window_writestr(" ebp ", gui_rgb16(255, 100, 100), 0);
+   debug_writehex(regs->ebp);
+   if(page_getphysical(dir, regs->ebp) != (uint32_t)-1) {
+      window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+      debug_writehex(page_getphysical(dir, regs->ebp));
+      window_writestr(">", gui_rgb16(255, 100, 100), 0);
+   }
+
+   window_writestr(" useresp ", gui_rgb16(255, 100, 100), 0);
+   debug_writehex(regs->useresp);
+   if(page_getphysical(dir, regs->useresp) != (uint32_t)-1) {
+      window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+      debug_writehex(page_getphysical(dir, regs->useresp));
+      window_writestr(">", gui_rgb16(255, 100, 100), 0);
+   }
+
+   window_writestr(" and esp ", gui_rgb16(255, 100, 100), 0);
+   debug_writehex(regs->esp);
+   if(page_getphysical(dir, regs->esp) != (uint32_t)-1) {
+      window_writestr(" <", gui_rgb16(255, 100, 100), 0);
+      debug_writehex(page_getphysical(dir, regs->esp));
+      window_writestr(">", gui_rgb16(255, 100, 100), 0);
+   }
+
+   debug_printf("\nHeap 0x%h - 0x%h\n", process->heap_start, process->heap_end);
+
+   return false;
+}
+
+void exception_handler(int int_no, registers_t *regs) {
    cur_regs = regs;
 
-   if(int_no < 32) {
-
-      uint32_t cpl = regs->cs & 0x3;
-      bool kernel = cpl == 0;
-
-      if(kernel) {
-         debug_printf("Exception %i in kernel mode with eip 0x%h\n", int_no, regs->eip);
-
-         task_state_t *task = get_current_task_state();
-         page_dir_entry_t *dir = task->process->page_dir;
-
-         if(page_getphysical(dir, regs->eip) != (uint32_t)-1) {
-            window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-            debug_writehex(page_getphysical(dir, regs->eip));
-            window_writestr("> ", gui_rgb16(255, 100, 100), 0);
-
-            debug_printf("offset 0x%h\n", regs->eip - KERNEL_START);
-
-         }
-      }
-
-      if(get_current_task() < 0) {
-         debug_printf("Exception %i with task %i\n", int_no, get_current_task());
-         return;
-      }
-
-      // https://wiki.osdev.org/Exceptions
-      if(videomode == 1) {
-
-         if(int_no == 14) {
-            // page error
-            task_state_t *task = get_current_task_state();
-            page_dir_entry_t *dir = task->process->page_dir;
-
-            uint32_t addr;
-	         asm volatile("mov %%cr2, %0" : "=r" (addr));
-            window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
-            debug_writehex(addr);
-            if(page_getphysical(dir, addr) != (uint32_t)-1) {
-               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(dir, addr));
-               window_writestr(">", gui_rgb16(255, 100, 100), 0);
-            }
-            window_writestr(" with eip ", gui_rgb16(255, 100, 100), 0);
-            debug_writehex(regs->eip);
-            if(page_getphysical(dir, regs->eip) != (uint32_t)-1) {
-               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(dir, regs->eip));
-               window_writestr(">", gui_rgb16(255, 100, 100), 0);
-
-               uint32_t offset = page_getphysical(dir, regs->eip) - task->process->prog_start;
-               debug_printf(" offset 0x%h, ", offset);
-            }
-
-            window_writestr(" ebp ", gui_rgb16(255, 100, 100), 0);
-            debug_writehex(regs->ebp);
-            if(page_getphysical(dir, regs->ebp) != (uint32_t)-1) {
-               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(dir, regs->ebp));
-               window_writestr(">", gui_rgb16(255, 100, 100), 0);
-            }
-
-            window_writestr(" useresp ", gui_rgb16(255, 100, 100), 0);
-            debug_writehex(regs->useresp);
-            if(page_getphysical(dir, regs->useresp) != (uint32_t)-1) {
-               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(dir, regs->useresp));
-               window_writestr(">", gui_rgb16(255, 100, 100), 0);
-            }
-
-            window_writestr(" and esp ", gui_rgb16(255, 100, 100), 0);
-            debug_writehex(regs->esp);
-            if(page_getphysical(dir, regs->esp) != (uint32_t)-1) {
-               window_writestr(" <", gui_rgb16(255, 100, 100), 0);
-               debug_writehex(page_getphysical(dir, regs->esp));
-               window_writestr(">", gui_rgb16(255, 100, 100), 0);
-            }
-
-            window_writestr("\n", 0, 0);
-
-         }
-
-         char buffer[200];
-         gui_drawrect(gui_rgb16(180, 0, 0), 60, 0, 8*2, 11);
-         gui_writenumat(int_no, gui_rgb16(255, 200, 200), 62, 2);
-
-         sprintf(buffer, "0x%h", regs->eip);
-         gui_drawrect(gui_rgb16(180, 0, 0), 120, 0, 8*8, 11);
-         gui_writestrat(buffer, gui_rgb16(255, 200, 200), 122, 2);
-
-         if(kernel) {
-            // show debug window and panic
-            setSelectedWindowIndex(0);
-            gui_window_t *window = getSelectedWindow();
-            window->minimised = false;
-            window->needs_redraw = true;
-            window_draw(window);
-            while(true) {};
-         } else {
-            window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
-            window_writenum(get_current_task(), 0, 0);
-            window_writestr(" paused due to exception ", gui_rgb16(255, 100, 100), 0);
-            window_writenum(int_no, 0, 0);
-            window_writestr("\n", 0, 0);
-            
-            if(get_current_task_state()->in_routine)
-               debug_printf("Task was in routine %s\n", get_current_task_state()->routine_name);
-            if(get_current_task_state()->in_syscall)
-               debug_printf("Task was in syscall %i\n", get_current_task_state()->syscall_no);
-
-            show_endtask_dialog(int_no, regs); // + pauses task
-         }
-      }
-         
-   } else {
+   if(int_no >= 32) {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
 
       int irq_no = int_no - 32;
@@ -685,16 +644,37 @@ void exception_handler(int int_no, registers_t *regs) {
    }
 
    // send end of command code 0x20 to pic
-   if(int_no >= 8)
+   if(int_no >= 8) {
       outb(0xA0, 0x20); // slave command
-
-   outb(0x20, 0x20); // master command
+      outb(0x20, 0x20); // master command
+   }
 
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
 
+   cur_regs = regs;
    //switching_paused = true;
+
+   uint32_t cpl = regs->cs & 0x3;
+   bool kernel = cpl == 0;
+
+   extern int current_servicing_task;
+
+   if(get_current_task() < 0) {
+      debug_printf("Exception %i with task %i\n", int_no, get_current_task());
+      return;
+   }
+   if(videomode == 0) return; // cli
+
+   // https://wiki.osdev.org/Exceptions
+
+   if(int_no == 14) {
+      if(page_fault_handler(regs)) {
+         switching_paused = false;
+         return; // demand paging
+      }
+   }
 
    window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
    window_writeuint(int_no, 0, 0);
@@ -704,7 +684,48 @@ void err_exception_handler(int int_no, registers_t *regs) {
    debug_writehex(regs->eip);  
    window_writestr("\n", gui_rgb16(255, 100, 100), 0);
 
-   exception_handler(int_no, regs);
+   char buffer[200];
+   gui_drawrect(gui_rgb16(180, 0, 0), 60, 0, 8*2, 11);
+   gui_writenumat(int_no, gui_rgb16(255, 200, 200), 62, 2);
+
+   sprintf(buffer, "0x%h", regs->eip);
+   gui_drawrect(gui_rgb16(180, 0, 0), 120, 0, 8*8, 11);
+   gui_writestrat(buffer, gui_rgb16(255, 200, 200), 122, 2);
+
+   uint32_t addr;
+   asm volatile("mov %%cr2, %0" : "=r" (addr));
+   if(kernel && (int_no != 14 || (addr >= KERNEL_START && addr < KERNEL_END))) {
+      // show debug window and panic
+      setSelectedWindowIndex(0);
+      gui_window_t *window = getSelectedWindow();
+      window->minimised = false;
+      window->needs_redraw = true;
+      window_draw(window);
+      while(true) {};
+   } else {
+      int task = get_current_task();
+      task_state_t *task_state = get_current_task_state();
+      if(current_servicing_task != -1) {
+         debug_printf("Exception occurred while servicing task %i\n", current_servicing_task);
+         task = current_servicing_task;
+         task_state = &gettasks()[task];
+      }
+
+      window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
+      window_writenum(task, 0, 0);
+      window_writestr(" paused due to exception ", gui_rgb16(255, 100, 100), 0);
+      window_writenum(int_no, 0, 0);
+      window_writestr("\n", 0, 0);
+      
+      if(kernel)
+         debug_printf("System was kernel mode\n");
+      if(task_state->in_routine)
+         debug_printf("Task was in routine %s\n", task_state->routine_name);
+      if(task_state->in_syscall)
+         debug_printf("Task was in syscall %i\n", task_state->syscall_no);
+
+      show_endtask_dialog(int_no, regs, task); // + pauses task
+   }
 
    //switching_paused = false;
 

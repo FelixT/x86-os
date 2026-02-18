@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include "../lib/string.h"
 #include "lib/stdio.h"
+#include "lib/stdlib.h"
 #include "lib/sort.h"
 #include "lib/dialogs.h"
 #include "lib/ui/ui_mgr.h"
@@ -199,7 +200,7 @@ void path_callback() {
       sort_dir();
       offset = 0;
       display_items();
-      free(content, sizeof(fs_dir_content_t) * content->size);
+      kfree(content, sizeof(fs_dir_content_t) * content->size);
    }
 
    end_subroutine();

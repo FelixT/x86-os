@@ -34,6 +34,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].enabled = false;
    tasks[index].paused = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
+   //tasks[index].kernel_stack_top = (uint32_t)(TOS_KERNEL - (TASK_STACK_SIZE * index));
    tasks[index].in_routine = false;
    tasks[index].in_syscall = false;
    
@@ -97,6 +98,9 @@ void launch_task(int index, registers_t *regs, bool focus) {
    swap_pagedir(get_current_task_pagedir());
    
    *regs = tasks[current_task].registers;
+
+   //extern tss_t tss_start;
+   //tss_start.esp0 = tasks[current_task].kernel_stack_top;
 }
 
 bool task_exists() {
@@ -288,6 +292,9 @@ void switch_task(registers_t *regs) {
 
       // restore registers
       *regs = tasks[current_task].registers;
+
+      //extern tss_t tss_start;
+      //tss_start.esp0 = tasks[current_task].kernel_stack_top;
    }
 }
 
@@ -321,6 +328,9 @@ bool switch_to_task(int index, registers_t *regs) {
 
       // restore registers
       *regs = tasks[current_task].registers;
+
+      //extern tss_t tss_start;
+      //tss_start.esp0 = tasks[current_task].kernel_stack_top;
    }
 
    return true;
@@ -518,7 +528,7 @@ void task_write_to_window(int task, char *out, bool children) {
 void tss_init() {
    // setup tss entry in gdt
    extern gdt_entry_t gdt_tss;
-   extern uint32_t tss_start;
+   extern tss_t tss_start;
    extern uint32_t tss_end;
    //extern tss_t tss_start;
 
@@ -537,4 +547,23 @@ void tss_init() {
 	gdt_tss.granularity = ((limit >> 16) & 0x0F);
    gdt_tss.granularity |= (gran & 0xF0);
 
+}
+
+int current_servicing_task = -1;
+
+bool copy_to_task(int task, void *dest, void *src, size_t size) {
+   task_state_t *task_state = &gettasks()[task];
+   process_t *process = task_state->process;
+   if((uint32_t)dest < process->heap_start || ((uint32_t)dest + size) > process->heap_end) {
+      return false;
+   }
+   current_servicing_task = task;
+   page_dir_entry_t *old_dir = page_get_current();
+   page_dir_entry_t *task_dir = task_state->process->page_dir;
+   bool swapped = task_dir != old_dir;
+   if(swapped) swap_pagedir(task_dir);
+   memcpy(dest, src, size);
+   if(swapped) swap_pagedir(old_dir);
+   current_servicing_task = -1;
+   return true;
 }

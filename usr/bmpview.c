@@ -3,6 +3,7 @@
 #include "prog.h"
 #include "../lib/string.h"
 #include "lib/stdio.h"
+#include "lib/stdlib.h"
 #include "lib/dialogs.h"
 #include "prog_bmp.h"
 #include "lib/draw.h"
@@ -641,7 +642,7 @@ void resize_complete(wo_t *wo, int window) {
       memcpy(row, bmpbuffer + yi * (rowSize / 2), copywidth*sizeof(uint16_t));
    }
 
-   free(header, oldFileSize);
+   free(header);
    bmp = (uint8_t*)newheader;
    bmpbuffer = (uint16_t*)(bmp + newheader->dataOffset);
    rowSize = newRowSize;

@@ -55,10 +55,10 @@ wo_t *create_button(int x, int y, int width, int height, char *text) {
 void destroy_button(wo_t *button) {
    if(button == NULL) return;
    if(button->data != NULL) {
-      free(button->data, sizeof(button_t));
+      free(button->data);
       button->data = NULL;
    }
-   free(button, sizeof(wo_t));
+   free(button);
 }
 
 void draw_button(wo_t *button, draw_context_t context) {

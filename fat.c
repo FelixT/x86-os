@@ -674,11 +674,6 @@ typedef struct {
 
 void fat_read_file_callback(registers_t *regs, void *msg) {
    fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
-   task_state_t *task = &gettasks()[state->task];
-
-   // swap page dir
-   if(page_get_current() != task->process->page_dir)
-      swap_pagedir(task->process->page_dir);
 
    // read all sectors of cluster
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
@@ -695,13 +690,18 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
          state->readBytes += readSize;
 
          // copy to master buffer
-         memcpy(state->buffer + memOffset, buf, readSize);
+         if(!copy_to_task(state->task, state->buffer + memOffset, buf, readSize)) {
+            debug_printf("Error writing to task %i memory at 0x%h-0x%h size %i\n", state->task, state->buffer + memOffset, state->buffer + memOffset + readSize);
+            free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
+            free((uint32_t)state, sizeof(fat_read_file_state_t));
+            return;
+         }
 
          if(state->readBytes >= state->size) {
             free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
             (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
             free((uint32_t)state, sizeof(fat_read_file_state_t));
-            switch_task(regs); // yield, tasks still paused
+            //switch_task(regs); // yield, tasks still paused
             return;
          }
       }
@@ -720,7 +720,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
          // bad cluster
          debug_printf("FAT error: Hit bad cluster\n");
          free((uint32_t)state, sizeof(fat_read_file_state_t));
-         switch_task(regs); // yield
+         //switch_task(regs); // yield
          return;
       } else { 
          state->currentCluster = tableVal; // table value is the next cluster
@@ -729,7 +729,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
    
    }
 
-   switch_task(regs); // yield
+   //switch_task(regs); // yield
    events_add(1, &fat_read_file_callback, (void*)state, -1);
    
 }
@@ -767,7 +767,7 @@ void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t size, v
    state->readCount = 0;
    state->readBytes = 0;
 
-   debug_printf("Buffer size %u task %u\n", state->size, state->task);
+   debug_printf("fat_read: Buffer size %u task %u\n", state->size, state->task);
 
    // kick off read event chain
    events_add(1, &fat_read_file_callback, (void*)state, -1);

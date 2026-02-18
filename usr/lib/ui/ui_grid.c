@@ -364,11 +364,11 @@ void destroy_grid(wo_t *grid) {
          }
       }
 
-      free(grid_data->cells[i], sizeof(grid_cell_t) * grid_data->cols);
+      free(grid_data->cells[i]);
    }
-   free(grid_data->cells, sizeof(grid_cell_t*) * grid_data->rows);
+   free(grid_data->cells);
 
-   free(grid_data, sizeof(grid_t));
+   free(grid_data);
 }
 
 wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {

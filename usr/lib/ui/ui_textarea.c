@@ -2,6 +2,7 @@
 
 #include "../../../lib/string.h"
 #include "../stdio.h"
+#include "../stdlib.h"
 #include "../draw.h"
 
 // 'one-line' text input
@@ -200,7 +201,7 @@ void draw_textarea(wo_t *textarea, draw_context_t context) {
    if(textarea->selected || textarea->clicked || textarea->hovering)
       draw_line(&context, !textarea->selected && textarea->hovering ? rgb16(200, 200, 200) : dark, cursor_x, cursor_y, true, get_font_info().height+2);
 
-   free(display_text, textarea_data->textbuf_size);
+   free(display_text);
 }
 
 void keypress_textarea(wo_t *textarea, uint16_t c, int window) {
@@ -327,6 +328,8 @@ void click_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
 }
 
 void release_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   (void)x;
+   (void)y;
    get_textarea(wo)->focused = true;
    draw_textarea(wo, draw_context);
    // set up blinking cursor

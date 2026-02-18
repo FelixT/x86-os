@@ -250,8 +250,8 @@ void term_cmd_tasks() {
    }
 
    for(int i = 0; i < TOTAL_TASKS; i++) {
-      window_term_printf("\n%i: ", i);
       if(tasks[i].enabled) {
+         window_term_printf("\n%i: ", i);
          window_term_printf("<w%i: %s>", tasks[i].process->window, gui_get_windows()[tasks[i].process->window].title);
          if(tasks[i].in_routine)
             window_term_printf(" <routine %s>", tasks[i].routine_name);
@@ -278,10 +278,12 @@ void term_cmd_tasks() {
          }
          int tmp = getSelectedWindow()->txtcolour;
          getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
-         window_term_printf("\n   (eip 0x%h, allocated %i / %ikb, heap size %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_end - tasks[i].process->heap_start);
+         window_term_printf("\n   (eip 0x%h, allc %i/%ikb, heap 0x%h %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_start, tasks[i].process->heap_end - tasks[i].process->heap_start);
+         window_term_printf("\n   (esp 0x%h, stack 0x%h-0x%h)", tasks[i].registers.useresp, tasks[i].stack_top - TASK_STACK_SIZE, tasks[i].stack_top);
          getSelectedWindow()->txtcolour = tmp;
       } else {
-         window_term_printf("Disabled");
+         if(i == 0 || tasks[i-1].enabled) // skip consecutive disabled tasks
+            window_term_printf("\n%i: Disabled", i);
       }
    }
 }
@@ -298,8 +300,8 @@ void term_cmd_test() {
    uint32_t framebuffer = (uint32_t)gui_get_framebuffer();
    
    window_term_printf("\nKernel: 0x%h - 0x%h <size 0x%h>", KERNEL_START, KERNEL_END, KERNEL_END - KERNEL_START);
-   window_term_printf("\nKernel stack 0x%h - 0x%h <size 0x%h>", STACKS_START, TOS_KERNEL, TOS_KERNEL - STACKS_START);
-   window_term_printf("\nProgram stack 0x%h - 0x%h <size 0x%h>", TOS_KERNEL, TOS_PROGRAM, TOS_PROGRAM - TOS_KERNEL);
+   window_term_printf("\nKernel stack 0x%h - 0x%h <size 0x%h>", KSTACK_START, TOS_KERNEL, TOS_KERNEL - KSTACK_START);
+   window_term_printf("\nProgram stack 0x%h - 0x%h <size 0x%h>", STACKS_START, TOS_PROGRAM, TOS_PROGRAM - STACKS_START);
    window_term_printf("\nHeap 0x%h - 0x%h <size 0x%h>", HEAP_KERNEL, HEAP_KERNEL_END, HEAP_KERNEL_END - HEAP_KERNEL);
    window_term_printf("\nFramebuffer 0x%h - 0x%h <size 0x%h>", framebuffer, framebuffer + gui_get_framebuffer_size(), gui_get_framebuffer_size());
 }
@@ -358,7 +360,7 @@ void term_cmd_mem(char *arg) {
       for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
          if(status[i].allocated) used++;
       }
-      window_term_printf("%i/%i (%i kb / %i kb) allocated\n", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, used*MEM_BLOCK_SIZE/1000, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE*MEM_BLOCK_SIZE/1000);
+      window_term_printf("%i/%i pages (%i kb / %i kb) allocated\n", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, used*MEM_BLOCK_SIZE/1000, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE*MEM_BLOCK_SIZE/1000);
    }
 }
 

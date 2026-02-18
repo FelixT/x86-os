@@ -32,10 +32,10 @@ wo_t *create_checkbox(int x, int y, bool checked) {
 void destroy_checkbox(wo_t *checkbox) {
    if(checkbox == NULL) return;
    if(checkbox->data != NULL) {
-      free(checkbox->data, sizeof(checkbox_t));
+      free(checkbox->data);
       checkbox->data = NULL;
    }
-   free(checkbox, sizeof(wo_t));
+   free(checkbox);
 }
 
 void draw_check(draw_context_t *ctx, int x, int y, uint16_t colour, bool checked) {

@@ -1,6 +1,7 @@
 // basic hashmap
 
 #include "map.h"
+#include "stdlib.h"
 #include "../prog.h"
 #include "../../lib/string.h"
 

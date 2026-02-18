@@ -38,6 +38,6 @@ wo_t *create_image(int x, int y, int width, int height, uint16_t *data) {
 
 void destroy_image(wo_t *image) {
    if(image == NULL) return;
-   free(image->data, sizeof(image_t));
+   free(image->data);
    image->data = NULL;
 }

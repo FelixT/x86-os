@@ -1,6 +1,7 @@
 // libc style file io functions
 
 #include "stdio.h"
+#include "stdlib.h"
 #include "../prog.h"
 #include "../../lib/string.h"
 #include <stddef.h>
@@ -72,7 +73,7 @@ FILE *fopen(const char *filename, const char *mode) {
          // for write mode allocate 4096 bytes to start with
         file->buffer = (uint8_t*)malloc(0x1000);
         if(!file->buffer) {
-            free(file->path, 512);
+            free(file->path);
             return NULL;
         }
         file->size = 0x1000;
@@ -80,7 +81,7 @@ FILE *fopen(const char *filename, const char *mode) {
         file->content_size = 0;
     } else {
         debug_write_str("fopen: unsupported write mode\n");
-        free(file->path, 512);
+        free(file->path);
         return NULL;
     }
     
@@ -104,7 +105,7 @@ size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
         if(!new_buffer) return 0; // resize failed
         memset(new_buffer, 0, new_size);
         memcpy(new_buffer, stream->buffer, stream->content_size);
-        free(stream->buffer, stream->size);
+        free(stream->buffer);
         stream->buffer = new_buffer;
         stream->size = new_size;
     }
@@ -130,7 +131,6 @@ size_t fread(void *ptr, size_t size, size_t count, FILE *stream) {
         total_bytes = available;
         count = total_bytes / size;
     }
-    
     memcpy(ptr, stream->buffer + stream->position, total_bytes);
     stream->position += total_bytes;
     
@@ -148,9 +148,9 @@ int fclose(FILE *stream) {
     
     // Clean up
     if(stream->path)
-        free(stream->path, 512);
+        free(stream->path);
     if(stream->buffer)
-        free(stream->buffer, stream->size);
+        free(stream->buffer);
     
     memset(stream, 0, sizeof(FILE));
     

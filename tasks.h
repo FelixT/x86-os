@@ -15,7 +15,7 @@
 #include "paging.h"
 #include "fs.h"
 
-#define TOTAL_STACK_SIZE 0x0010000
+#define TOTAL_STACK_SIZE 0x0020000
 #define TASK_STACK_SIZE 0x0001000
 
 #define TOTAL_TASKS 16
@@ -52,7 +52,7 @@ typedef struct process_t {
    char working_dir[256]; // current working directory
    char exe_path[256]; // location of executable
    uint32_t heap_start; // heap/end of ds (vmem location)
-   uint32_t heap_end;
+   uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[64];
    int fd_count;
    task_event_t *event_queue[EVENT_QUEUE_SIZE];
@@ -67,6 +67,7 @@ typedef struct task_state_t {
    bool paused; // thread won't be scheduled
    int task_id;
    uint32_t stack_top; // address
+   //uint32_t kernel_stack_top; // address
    registers_t registers;
    registers_t routine_return_regs;
    int routine_return_window; // switch to this window after routine, potentially unneeded
@@ -108,5 +109,7 @@ void tss_init();
 
 void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);
+
+bool copy_to_task(int task, void *dest, void *src, size_t size);
 
 #endif

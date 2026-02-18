@@ -141,32 +141,3 @@ void memcpy_fast(void *dest, const void *src, size_t bytes) {
    );
 
 }
-
-/*void memcpy_fast_old(void *dest, const void *src, size_t bytes) {
-   uint8_t *d = (uint8_t*)dest;
-   const uint8_t *s = (const uint8_t*)src;
-
-   // align dest to 4 bytes if necessary
-   while(((uintptr_t)d & 3) && bytes > 0) {
-      *d++ = *s++;
-      bytes--;
-   }
-
-   // if src is also 4 byte aligned copy 4 bytes at a time
-   if(((uintptr_t)s & 3) == 0) {
-      uint32_t *d32 = (uint32_t*)d;
-      const uint32_t *s32 = (const uint32_t*)s;
-
-      while(bytes >= 4) {
-         *d32++ = *s32++;
-         bytes -= 4;
-      }
-
-      d = (uint8_t*)d32;
-      s = (const uint8_t*)s32;
-   }
-
-   // copy remaining bytes
-   while(bytes--)
-      *d++ = *s++;
-}*/

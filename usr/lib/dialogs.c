@@ -677,8 +677,8 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
    }
 
    if(dialog->dir) {
-      free(dialog->dir->entries, dialog->dir->size * sizeof(fs_dir_entry_t));
-      free(dialog->dir, sizeof(dialog->dir));
+      kfree(dialog->dir->entries, dialog->dir->size * sizeof(fs_dir_entry_t));
+      kfree(dialog->dir, sizeof(dialog->dir));
       dialog->dir = NULL;
    }
    
@@ -952,10 +952,12 @@ void dialog_colourbox_release(wo_t *wo, int window) {
 }
 
 wo_t *dialog_create_colourbox(int x, int y, int width, int height, uint16_t colour, int window, void (*callback)(char *out, int window, wo_t *colourbox)) {
-   dialog_wo_t *colourbox = (dialog_wo_t*)create_label(x, y, width, height, "");
+   dialog_wo_t *colourbox = (dialog_wo_t*)malloc(sizeof(dialog_wo_t));
+   wo_t *tmplabel = create_label(x, y, width, height, "");
+   colourbox->wo = *tmplabel;
+   free(tmplabel);
    colourbox->callback = callback;
    colourbox->window = window;
-   // ideally should resize, for now malloc gives enough space
    wo_t *label = &colourbox->wo;
    label_t *label_data = label->data;
    label_data->colour_bg = colour;
@@ -994,7 +996,10 @@ void dialog_browsebtn_release(wo_t *wo, int window) {
 }
 
 wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, char *text, char *startpath, void (*callback)(char *out, int window, wo_t *browsebtn)) {
-   dialog_wo_t *browsebtn = (dialog_wo_t*)create_button(x, y, width, height, text);
+   dialog_wo_t *browsebtn = (dialog_wo_t*)malloc(sizeof(dialog_wo_t));
+   wo_t *tmpbutton = create_button(x, y, width, height, text);
+   browsebtn->wo = *tmpbutton;
+   free(tmpbutton);
    browsebtn->window = window;
    wo_t *btn = &browsebtn->wo;
    set_button_release(btn, &dialog_browsebtn_release);

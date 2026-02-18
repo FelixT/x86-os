@@ -4,6 +4,7 @@
 #include "prog.h"
 #include "prog_bmp.h"
 #include "lib/stdio.h"
+#include "lib/stdlib.h"
 #include "../lib/string.h"
 #include "lib/dialogs.h"
 

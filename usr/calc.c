@@ -1,6 +1,7 @@
 #include "prog.h"
 
 #include "../lib/string.h"
+#include "lib/stdlib.h"
 
 void printf(char *format, ...) {
    char *buffer = (char*)malloc(512);
@@ -9,7 +10,7 @@ void printf(char *format, ...) {
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    write(0, buffer, 512);
-   free(buffer, 512);
+   free(buffer);
 }
 
 void _start() {
