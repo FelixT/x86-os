@@ -553,7 +553,7 @@ void api_read_stdin_callback(void *regs, char *buffer) {
 }
 
 void api_read_fd_callback(registers_t *regs, int task) {
-   debug_printf("Read callback task %i\n", task);
+   debug_printf("api_read: callback task %i\n", task);
    gettasks()[task].paused = false;
    switch_to_task(task, regs); // wake
 }

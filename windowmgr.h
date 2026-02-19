@@ -48,6 +48,7 @@ void desktop_click(registers_t *regs, int x, int y);
 void desktop_init();
 void desktop_setbgimg(uint8_t *img, int size);
 void windowmgr_mousemove(int x, int y);
+void windowmgr_scroll(bool up);
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height);
 void window_close(void *regs, int windowIndex);
 void window_release(registers_t *regs, gui_window_t *window);

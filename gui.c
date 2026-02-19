@@ -13,6 +13,7 @@ int gui_mouse_y = 0;
 uint16_t gui_bg;
 
 bool mouse_enabled = false;
+bool mouse_scrolling_enabled = false;
 bool mouse_held = false;
 bool mouse_heldright = false;
 bool cursor_resize = false;
@@ -125,25 +126,24 @@ void gui_init_meat(registers_t *regs, void *msg) {
    (void)msg;
    gui_writestr("Enabling ATA HD\n", COLOUR_ORANGE);
    ata_identify(true, true);
-   gui_writestr("\nEnabling FAT\n", COLOUR_ORANGE);
+   gui_writestr("Enabling FAT\n", COLOUR_ORANGE);
    fat_setup();
-   gui_printf("\nFramebuffer at 0x%h", 0, surface.buffer);
-   gui_writestr("\nEnabling paging\n", COLOUR_ORANGE);
+   gui_writestr("Enabling paging\n", COLOUR_ORANGE);
    page_init();
-   gui_writestr("\nEnabling desktop\n", COLOUR_ORANGE);
+   gui_writestr("Enabling desktop\n", COLOUR_ORANGE);
    desktop_init();
-   gui_writestr("\nEnabling tasks\n", COLOUR_ORANGE);
+   gui_writestr("Enabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
-   gui_writestr("\nSet up timer\n", COLOUR_ORANGE);
+   gui_writestr("Set up timer\n", COLOUR_ORANGE);
    timer_set_hz(600);
+   gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
+   mouse_enable();
+   gui_writestr("\nInit complete\n\n", COLOUR_CYAN);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
    setSelectedWindowIndex(-1);
    gui_redrawall();
-
-   gui_writestr("\nEnabling mouse\n", COLOUR_ORANGE);
-   mouse_enable();
 }
 
 void gui_init(void) {
@@ -165,6 +165,8 @@ void gui_init(void) {
    //gui_clear(gui_bg);
    font_init();
    windowmgr_init();
+
+   debug_printf("Launched GUI with framebuffer at 0x%h\n", surface.buffer);
 
    events_add(1, &gui_init_meat, NULL, -1);
 }
@@ -214,6 +216,15 @@ void gui_draw_window(int windowIndex) {
    window_draw(getWindow(windowIndex));
 }
 
+void mouse_set_sample_rate(uint8_t rate) {
+   outb(0x64, 0xD4);
+   outb(0x60, 0xF3); // set sample rate command
+   inb(0x60);
+   outb(0x64, 0xD4);
+   outb(0x60, rate);
+   inb(0x60);
+}
+
 void mouse_enable() {
    // https://wiki.osdev.org/Mouse_Input
    // https://wiki.osdev.org/PS/2_Mouse
@@ -238,6 +249,22 @@ void mouse_enable() {
    outb(0x64, 0xD4);
    outb(0x60, 0xF4);
    inb(0x60);
+
+   // enable scrolling if supported
+   mouse_set_sample_rate(200);
+   mouse_set_sample_rate(100);
+   mouse_set_sample_rate(80);
+
+   outb(0x64, 0xD4);
+   outb(0x60, 0xF2); // get id
+   inb(0x60);
+   uint8_t id = inb(0x60);
+   if(id == 3) {
+      mouse_scrolling_enabled = true;
+      debug_printf("Mouse with scroll support detected\n");
+   } else {
+      debug_printf("Mouse without scroll support detected\n");
+   }
 
    //gui_cursor_save_bg();
    mouse_enabled = true;

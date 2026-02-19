@@ -249,7 +249,6 @@ void tasks_init(registers_t *regs) {
    }
 
    // launch idle process
-   window_writestr("Launching idle process\n", 0, 0);
    tasks_launch_binary(regs, "/sys/progidle.bin");
    
    gui_get_windows()[tasks[0].process->window].minimised = true;

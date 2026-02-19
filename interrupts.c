@@ -384,9 +384,10 @@ void keyboard_handler(registers_t *regs) {
 }
 
 int mouse_cycle = 0;
-uint8_t mouse_data[3];
+uint8_t mouse_data[4];
 
 extern bool mouse_enabled;
+extern bool mouse_scrolling_enabled;
 void mouse_handler(registers_t *regs) {
    if(!mouse_enabled) return;
 
@@ -398,10 +399,12 @@ void mouse_handler(registers_t *regs) {
    if(mouse_cycle == 0 && !(data & 0x08))
       return; // wait for sync
 
+   int bytes = mouse_scrolling_enabled ? 4 : 3;
+
    mouse_data[mouse_cycle] = data;
    mouse_cycle++;
 
-   if(mouse_cycle == 3) {
+   if(mouse_cycle == bytes) {
       int relX = mouse_data[1];
       int relY = mouse_data[2];
 
@@ -410,6 +413,17 @@ void mouse_handler(registers_t *regs) {
       if(mouse_data[0] & 0x20) relY -= 256;
 
       mouse_update(relX, relY);
+
+      if(mouse_scrolling_enabled) {
+         int scroll = mouse_data[3] & 0x0F; // only lower 4 bits are scroll data
+         if(scroll == 1) {
+            // scroll up
+            windowmgr_scroll(true);
+         } else if(scroll == 0xF) {
+            // scroll down
+            windowmgr_scroll(false);
+         }
+      }
 
       if(regs) {
          if(mouse_data[0] & 0x2)

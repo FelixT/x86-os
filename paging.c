@@ -131,7 +131,7 @@ void page_init() {
 
    page_enable();
 
-   window_writestr("\nPaging enabled\n", 0, 0);
+   window_writestr("Paging enabled\n", 0, 0);
 
 }
 

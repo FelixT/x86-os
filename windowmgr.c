@@ -1424,6 +1424,13 @@ void windowmgr_mousemove(int x, int y) {
    }
 }
 
+void windowmgr_scroll(bool up) {
+   int deltaY = up ? -20 : 20;
+   if(!getSelectedWindow() || getSelectedWindow()->closed) return;
+   int offsetY = getSelectedWindow()->scrolledY + deltaY;
+   window_scroll_to(get_regs(), offsetY);
+}
+
 int get_window_index_from_pointer(gui_window_t *window) {
    for(int i = 0; i < windowCount; i++) {
       if(window == &gui_windows[i]) return i;
