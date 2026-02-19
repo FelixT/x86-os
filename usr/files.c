@@ -34,8 +34,6 @@ wo_t *wo_grid = NULL;
 wo_t *addnew_menu = NULL;
 wo_t *view_menu = NULL;
 
-wo_t *visible_menu = NULL;
-
 bool gridview = true;
 
 char tolower_c(char c) {
@@ -127,6 +125,7 @@ void display_items() {
       int icon_x = gridview ? (cell_width-20)/2 : 4;
       wo_t *icon = create_image(icon_x, 6, 20, 20, NULL);
       image_t *icon_data = icon->data;
+      icon_data->white_is_transparent = true;
       grid_add(grid, icon, row, col);
       
       // draw
@@ -207,26 +206,6 @@ void path_callback() {
 }
 
 void click(int x, int y) {
-
-   if(ui->default_menu && ui->default_menu->visible) {
-      ui_click(ui, x, y);
-      ui_draw(ui);
-      redraw();
-      end_subroutine();
-      return;
-   }
-
-   // clicked outside menu while its visible
-   if(visible_menu && !visible_menu->hovering) {
-      ui_click(ui, x, y);
-      visible_menu->visible = false;
-      visible_menu = NULL;
-      clear();
-      ui_draw(ui);
-      redraw();
-      end_subroutine();
-      return;
-   }
 
    // clicked scrollbar
    if(x > get_width()) {
@@ -310,6 +289,7 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
       int pi = strlen(cur_path);
       for(int x = 0; x < pi; x++)
          fullpath[x] = cur_path[x];
+      if(pi == 1) pi = 0;
       fullpath[pi] = '/';
       fullpath[pi+1] = '\0';
       strcat(fullpath, clicked_entry->filename);
@@ -376,9 +356,9 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_newfile->x = 4 + wo_path->width + 2;
    wo_viewmenu->x = wo_newfile->x + wo_newfile->width + 2;
 
-   if(visible_menu) {
-      visible_menu->visible = false;
-      visible_menu = NULL;
+   if(ui->shown_menu) {
+      ui->shown_menu->visible = false;
+      ui->shown_menu = NULL;
    }
 
    display_items();
@@ -421,13 +401,6 @@ void add_file_callback(char *filename) {
 }
 
 void add_file() {
-  if(visible_menu && visible_menu->visible) {
-      visible_menu->visible = false;
-      visible_menu = NULL;
-      display_items();
-      ui_draw(ui);
-      redraw();
-   }
    dialog_input("Enter filename", (void*)&add_file_callback);
 }
 
@@ -451,13 +424,6 @@ void add_folder_callback(char *name) {
 }
 
 void add_folder() {
-  if(visible_menu && visible_menu->visible) {
-      visible_menu->visible = false;
-      visible_menu = NULL;
-      display_items();
-      ui_draw(ui);
-      redraw();
-   }
    dialog_input("Enter folder name", &add_folder_callback);
 }
 
@@ -586,10 +552,6 @@ void view_grid(wo_t *item, int index, int window) {
    (void)index;
    (void)window;
    gridview = true;
-   if(visible_menu && visible_menu->visible) {
-      visible_menu->visible = false;
-      visible_menu = NULL;
-   }
    display_items();
 }
 
@@ -598,10 +560,6 @@ void view_list(wo_t *item, int index, int window) {
    (void)index;
    (void)window;
    gridview = false;
-   if(visible_menu && visible_menu->visible) {
-      visible_menu->visible = false;
-      visible_menu = NULL;
-   }
    display_items();
 }
 
@@ -631,7 +589,7 @@ void show_add_menu(wo_t *wo, int window) {
       ui_add(ui, menu);
       ui_draw(ui);
       addnew_menu = menu;
-      visible_menu = addnew_menu;
+      ui->shown_menu = addnew_menu;
    } else {
       addnew_menu->visible = !addnew_menu->visible;
       if(addnew_menu->visible) {
@@ -639,7 +597,7 @@ void show_add_menu(wo_t *wo, int window) {
          addnew_menu->y = wo_menu->y - addnew_menu->height;
          if(wo->x < addnew_menu->x)
             addnew_menu->x = wo->x;
-         visible_menu = addnew_menu;
+         ui->shown_menu = addnew_menu;
       }
       ((menu_t*)addnew_menu->data)->selected_index = -1;
       display_items();
@@ -660,7 +618,7 @@ void show_view_menu(wo_t *wo, int window) {
       ui_add(ui, menu);
       ui_draw(ui);
       view_menu = menu;
-      visible_menu = view_menu;
+      ui->shown_menu = view_menu;
    } else {
       view_menu->visible = !view_menu->visible;
       if(view_menu->visible) {
@@ -668,7 +626,7 @@ void show_view_menu(wo_t *wo, int window) {
          view_menu->y = wo_menu->y - view_menu->height;
          if(wo->x < view_menu->x)
             view_menu->x = wo->x;
-         visible_menu = view_menu;
+         ui->shown_menu = view_menu;
       }
       ((menu_t*)view_menu->data)->selected_index = -1;
       display_items();

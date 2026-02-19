@@ -378,8 +378,8 @@ wo_t *create_grid(int x, int y, int width, int height, int rows, int cols) {
    grid_t *grid_data = malloc(sizeof(grid_t));
    grid_data->colour_border_light = rgb16(200, 200, 200);
    grid_data->colour_border_dark = rgb16(100, 100, 100);
-   grid_data->colour_bg = rgb16(252, 252, 252);
-   grid_data->colour_bg_hovered = rgb16(244, 244, 244);
+   grid_data->colour_bg = get_setting(SETTING_WIN_BGCOLOUR);
+   grid_data->colour_bg_hovered = rgb16_darken(grid_data->colour_bg, 8);
    grid_data->bordered = true;
    grid_data->filled = true;
    grid_data->rows = rows;

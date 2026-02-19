@@ -201,11 +201,10 @@ void _start(int argc, char **args) {
    canvas_add(wo_menu, wo_new);
 
    wo_path = create_input(x, 2, ((width - 10 - x) * 2) / 3, 16);
-   set_input_text(wo_path, "<new>");
+   set_input_placeholder(wo_path, "<new>");
    set_input_return(wo_path, &path_return);
    get_input(wo_path)->valign = true;
    get_input(wo_path)->halign = true;
-   get_input(wo_path)->placeholder = true;
    x += wo_path->width + padding;
    canvas_add(wo_menu, wo_path);
 

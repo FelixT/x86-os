@@ -88,6 +88,10 @@ void dialog_resize(uint16_t fb, int width, int height, int window) {
    }
    dialog->surface = get_surface_w(window);
    dialog->ui->surface = &dialog->surface;
+   if(dialog->ui->shown_menu) {
+      dialog->ui->shown_menu->visible = false;
+      dialog->ui->shown_menu = NULL;
+   }
    ui_draw(dialog->ui);
    end_subroutine();
 }

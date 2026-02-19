@@ -14,6 +14,6 @@ void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y);
 void draw_string(surface_t *surface, char *c, uint16_t colour, int x, int y);
 uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b);
 
-void setpixel_safe(surface_t *surface, int index, int colour);
+void setpixel_safe(surface_t *surface, int index, uint16_t colour);
 
 #endif

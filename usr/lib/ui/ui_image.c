@@ -14,9 +14,9 @@ void draw_image(wo_t *image, draw_context_t context) {
    for(int y = 0; y < image->height; y++) {
       for(int x = 0; x < image->width; x++) {
          uint16_t colour = img_data->data[y * image->width + x];
-         //if(colour != 0xFFFF) { // transparent
+         if(!img_data->white_is_transparent || colour != 0xFFFF) { // transparent
             draw_pixel(&context, colour, image->x + x + context.offsetX, image->y + y + context.offsetY);
-         //}
+         }
       }
    }
 }
@@ -25,6 +25,7 @@ wo_t *create_image(int x, int y, int width, int height, uint16_t *data) {
    wo_t *image = create_wo(x, y, width, height);
    image_t *img_data = malloc(sizeof(image_t));
    img_data->data = data;
+   img_data->white_is_transparent = false;
 
    image->data = img_data;
    image->draw_func = &draw_image;

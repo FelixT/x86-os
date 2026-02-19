@@ -14,11 +14,11 @@
 
 // helper funcs
 
-inline gui_window_t *api_get_window() {
+static inline gui_window_t *api_get_window() {
    return &gui_get_windows()[get_current_task_window()];
 }
 
-inline void api_write_to_task(char *out) {
+static inline void api_write_to_task(char *out) {
    task_write_to_window(get_current_task(), out, false);
 }
 
@@ -600,8 +600,10 @@ void api_read(registers_t *regs) {
          return;
       }
       regs->ebx = fs_read(task->process->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task());
-      task->paused = true;
-      switch_task(regs); // yield
+      if(count > 0) {
+         task->paused = true;
+         switch_task(regs); // yield
+      }
    }
 
 }
@@ -1019,7 +1021,7 @@ void api_get_window_position(registers_t *regs) {
    // IN: ebx window
    // OUT: ebx x
    // OUT: ecx y
-   gui_window_t *window = api_get_cwindow(regs->edx);
+   gui_window_t *window = api_get_cwindow(regs->ebx);
    if(!window) return;
    regs->ebx = window->x;
    regs->ecx = window->y;

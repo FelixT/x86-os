@@ -187,6 +187,16 @@ void set_input_text(wo_t *input, char *text) {
    strncpy(input_data->text, text, sizeof(input_data->text) - 1);
    input_data->text[sizeof(input_data->text) - 1] = '\0';
    input_data->cursor_pos = strlen(input_data->text);
+   input_data->placeholder = false;
+}
+
+void set_input_placeholder(wo_t *input, char *text) {
+   if(input == NULL || input->data == NULL) return;
+   input_t *input_data = (input_t *)input->data;
+   strncpy(input_data->text, text, sizeof(input_data->text) - 1);
+   input_data->text[sizeof(input_data->text) - 1] = '\0';
+   input_data->cursor_pos = 0;
+   input_data->placeholder = true;
 }
 
 void set_input_return(wo_t *input, void(*return_func)(wo_t *wo, int window)) {

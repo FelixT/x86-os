@@ -8,6 +8,7 @@ typedef struct image_t {
    uint16_t *data;
    uint16_t colour_bg;
    uint16_t colour_border;
+   bool white_is_transparent;
    //void (*click_func)(wo_t *wo, int window);
    //void (*release_func)(wo_t *wo, int window);
 } image_t;

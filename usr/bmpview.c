@@ -708,6 +708,44 @@ void resize_image(wo_t *wo, int index, int window) {
    redraw_w(popup_dialog->window);
 }
 
+void new_image(wo_t *wo, int index, int window) {
+   (void)wo;
+   (void)index;
+   (void)window;
+   // create 100x100 bmp
+   int width = 100;
+   int height = 100;
+   uint16_t colour = 0xFFFF;
+   rowSize = ((width * 2 + 3) / 4) * 4;
+   int fileSize = sizeof(bmp_header_t) + sizeof(bmp_info_t) + sizeof(bmp_bitmasks_t) + rowSize*height;
+   bmp_header_t *header = malloc(fileSize);
+   header->identifier = 0x4D42; // BM
+   header->size = fileSize;
+   header->dataOffset = sizeof(bmp_header_t) + sizeof(bmp_info_t) + sizeof(bmp_bitmasks_t);
+   info = (bmp_info_t*)((uint8_t*)header + sizeof(bmp_header_t));
+   info->headerSize = sizeof(bmp_info_t);
+   info->width = width;
+   info->height = height;
+   info->colourPlanes = 1;
+   info->bpp = 16;
+   info->compressionMethod = 3;
+   info->dataSize = rowSize*height;
+   info->horizontalRes = 2835;
+   info->verticalRes = 2835;
+   bmp_bitmasks_t *masks = (bmp_bitmasks_t*)((uint8_t*)info + sizeof(bmp_info_t));
+   masks->redMask   = 0xF800;
+   masks->greenMask = 0x07E0;
+   masks->blueMask  = 0x001F;
+   bmp = (uint8_t*)header;
+   bmpbuffer = (uint16_t*)(bmp + header->dataOffset);
+   for(int yi = 0; yi < height; yi++) {
+      uint16_t *row = bmpbuffer + yi * (rowSize / 2);
+      memset16(row, colour, width);
+   }
+   if(bmp_check())
+      bmp_draw(bmp, 0, 0, scale, false);
+}
+
 void _start(int argc, char **args) {
    override_draw(0, -1);
    surface = get_surface();
@@ -732,38 +770,7 @@ void _start(int argc, char **args) {
       load_img();
    } else {
       // no file provided
-      // create 100x100 bmp
-      int width = 100;
-      int height = 100;
-      uint16_t colour = 0xFFFF;
-      rowSize = ((width * 2 + 3) / 4) * 4;
-      int fileSize = sizeof(bmp_header_t) + sizeof(bmp_info_t) + sizeof(bmp_bitmasks_t) + rowSize*height;
-      bmp_header_t *header = malloc(fileSize);
-      header->identifier = 0x4D42; // BM
-      header->size = fileSize;
-      header->dataOffset = sizeof(bmp_header_t) + sizeof(bmp_info_t) + sizeof(bmp_bitmasks_t);
-      info = (bmp_info_t*)((uint8_t*)header + sizeof(bmp_header_t));
-      info->headerSize = sizeof(bmp_info_t);
-      info->width = width;
-      info->height = height;
-      info->colourPlanes = 1;
-      info->bpp = 16;
-      info->compressionMethod = 3;
-      info->dataSize = rowSize*height;
-      info->horizontalRes = 2835;
-      info->verticalRes = 2835;
-      bmp_bitmasks_t *masks = (bmp_bitmasks_t*)((uint8_t*)info + sizeof(bmp_info_t));
-      masks->redMask   = 0xF800;
-      masks->greenMask = 0x07E0;
-      masks->blueMask  = 0x001F;
-      bmp = (uint8_t*)header;
-      bmpbuffer = (uint16_t*)(bmp + header->dataOffset);
-      for(int yi = 0; yi < height; yi++) {
-         uint16_t *row = bmpbuffer + yi * (rowSize / 2);
-         memset16(row, colour, width);
-      }
-      if(bmp_check())
-         bmp_draw(bmp, 0, 0, scale, false);
+      new_image(NULL, 0, 0);
    }
 
    int index = get_free_dialog();
@@ -861,6 +868,7 @@ void _start(int argc, char **args) {
    strcpy(get_menu_item(dialog->ui->default_menu, 0)->text, "Quit");
    add_menu_item(dialog->ui->default_menu, "Invert colours", &invert_colours);
    add_menu_item(dialog->ui->default_menu, "Resize/Info", &resize_image);
+   add_menu_item(dialog->ui->default_menu, "New image", &new_image);
    resize_menu(dialog->ui->default_menu);
 
    while(1==1) {

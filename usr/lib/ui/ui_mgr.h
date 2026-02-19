@@ -17,7 +17,8 @@ typedef struct ui_mgr_t {
    wo_t *focused;
    wo_t *hovered;
    wo_t *clicked;
-   wo_t *default_menu;
+   wo_t *default_menu; // right click menu
+   wo_t *shown_menu; // currently shown menu
    int scrolled_y;
 } ui_mgr_t;
 

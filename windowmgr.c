@@ -645,8 +645,9 @@ void windowmgr_init() {
    app_button = (windowobj_t*)malloc(sizeof(windowobj_t));
    windowobj_init(app_button, &surface);
    app_button->type = WO_BUTTON;
-   app_button->x = surface.width - 55;
+   app_button->x = surface.width - 42;
    app_button->y = surface.height - 20;
+   app_button->width = 40;
    app_button->height = 20;
    app_button->text = "Apps";
 }
