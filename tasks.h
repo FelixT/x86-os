@@ -47,7 +47,6 @@ typedef struct process_t {
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;
    page_dir_entry_t *page_dir;
-   uint32_t *allocated_pages[128]; // pointers as returned by malloc
    int no_allocated;
    char working_dir[256]; // current working directory
    char exe_path[256]; // location of executable
@@ -103,8 +102,10 @@ page_dir_entry_t *get_current_task_pagedir();
 int get_task_from_window(int windowIndex);
 int get_free_task_index();
 
-void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc);
+void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 void task_subroutine_end(registers_t *regs);
+void task_execute_queued_subroutine(void *regs, void *msg);
 void tss_init();
 
 void task_write_to_window(int task, char *out, bool children);

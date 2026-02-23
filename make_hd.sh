@@ -22,17 +22,3 @@ mcopy -s -i fs.img fs_root/* ::
 # add fs at 512000
 cat o/hd3.bin fs.img > hd.bin
 chmod 644 hd.bin
-
-if [[ $# -eq 0 ]]; then
-   qemu-system-i386 -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio
-else
-
-   # Debug with LLDB
-
-   #gdb-remote localhost:1234
-   #w s e -- 0x123456
-   osascript -e 'tell app "Terminal" to do script "echo gdb-remote localhost:1234;echo br s -a addr;lldb;"'
-
-   qemu-system-i386 -s -S -drive file=hd.bin,format=raw,index=0,media=disk -monitor stdio
-
-fi

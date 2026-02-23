@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "window_t.h"
 #include "registers_t.h"
+#include "tasks.h"
 
 typedef struct windowmgr_settings_t {
    uint16_t default_window_bgcolour;
@@ -59,7 +60,7 @@ void window_disable(gui_window_t *window);
 void window_draw_outline(gui_window_t *window, bool occlude);
 windowmgr_settings_t *windowmgr_get_settings();
 void windowmgr_launch_apps();
-int get_cindex();
-int get_cindex_from_window(gui_window_t *window);
+int get_cindex(task_state_t *task);
+int get_cindex_from_window(task_state_t *task, gui_window_t *window);
 
 #endif

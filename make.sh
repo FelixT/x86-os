@@ -46,7 +46,7 @@ cp o/font11.bin fs_root/font/11.fon
 cp o/font7.bin fs_root/font/7.fon
 cp o/font8.bin fs_root/font/8.fon
 
-bash make_hd_and_run.sh
+bash make_hd.sh && bash make_run.sh
 
 # gdb:
 # set disassembly-flavor intel

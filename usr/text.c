@@ -167,7 +167,7 @@ void _start(int argc, char **args) {
    dialog_set_title(dialog, "Text Edit");
    ui = dialog->ui;
    
-   override_resize((uint32_t)resize, -1);
+   override_resize(resize, -1);
    clear();
 
    create_scrollbar(&scroll, -1);

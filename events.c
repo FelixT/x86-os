@@ -60,15 +60,10 @@ void event_fire(registers_t *regs, event_t *event) {
     if(event->callback == NULL) return;
 
     if(event->task >= 0) {
-        if(gettasks()[event->task].paused) {
-            debug_printf("Task %i is paused, skipping event\n", event->task);
-            return;
-        }
-        if(switch_to_task(event->task, regs)) {
-            uint32_t *args = malloc(sizeof(uint32_t) * 1);
-            args[0] = (uint32_t)event->msg;
-            task_call_subroutine(regs, "event", (uint32_t)(event->callback), args, 1);
-        }
+        uint32_t *args = malloc(sizeof(uint32_t) * 1);
+        args[0] = (uint32_t)event->msg;
+        task_state_t *task = &gettasks()[event->task];
+        task_call_subroutine(regs, task, "event", (uint32_t)(event->callback), args, 1);
     } else {
         // call function as kernel if task is -1
         (*(void(*)(void*,void*))event->callback)((void*)regs, event->msg);

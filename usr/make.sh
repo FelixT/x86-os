@@ -22,8 +22,8 @@ $GCC -c usr/lib/draw.c -O2 $FLAGS -o o/lib/drawusr.o
 
 bash usr/lib/ui/make.sh
 
-export UI_LIB="o/lib/stdlib.o o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o o/lib/ui_textarea.o"
-export DIALOGS_LIB="$UI_LIB o/lib/stdio.o o/lib/dialogs.o o/lib/sort.o o/lib/map.o"
+export UI_LIB="o/lib/stdio.o o/lib/stdlib.o o/lib/drawusr.o o/lib/string.o o/lib/wo.o o/lib/ui_mgr.o o/lib/ui_input.o o/lib/ui_label.o o/lib/ui_button.o o/lib/ui_canvas.o o/lib/ui_grid.o o/lib/ui_groupbox.o o/lib/ui_menu.o o/lib/ui_image.o o/lib/ui_checkbox.o o/lib/ui_textarea.o"
+export DIALOGS_LIB="$UI_LIB o/lib/dialogs.o o/lib/sort.o o/lib/map.o"
 
 # c progs
 $GCC $FLAGS usr/prog3.c -o o/prog3.elf 
@@ -35,12 +35,13 @@ $GCC $FLAGS usr/term.c -o o/term.elf o/lib/string.o o/lib/stdio.o o/lib/sort.o o
 $GCC $FLAGS usr/calc.c -o o/calc.elf o/lib/string.o o/lib/stdlib.o 
 $GCC $FLAGS usr/interp.c -o o/interp.elf $DIALOGS_LIB
 $GCC $FLAGS usr/prog5.c -o o/prog5.elf $DIALOGS_LIB
-$GCC $FLAGS usr/prog6.c -o o/prog6.elf o/lib/stdio.o $UI_LIB
+$GCC $FLAGS usr/prog6.c -o o/prog6.elf $UI_LIB
 $GCC $FLAGS usr/prog7.c -o o/prog7.elf o/lib/stdlib.o 
 $GCC -g -O2 $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
 $GCC -O2 $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
-$GCC -O2 $FLAGS usr/apps.c -o o/apps.elf o/lib/stdio.o o/lib/sort.o $UI_LIB
+$GCC -O2 $FLAGS usr/apps.c -o o/apps.elf o/lib/sort.o $UI_LIB
 $GCC $FLAGS usr/debug.c -o o/debug.elf $DIALOGS_LIB
+$GCC $FLAGS usr/about.c -o o/about.elf $UI_LIB
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -61,4 +62,5 @@ cp o/prog7.elf fs_root/sys/prog7.elf
 cp o/settings.elf fs_root/sys/settings.elf
 cp o/taskmgr.elf fs_root/sys/taskmgr.elf
 cp o/debug.elf fs_root/sys/debug.elf
+cp o/about.elf fs_root/sys/about.elf
 

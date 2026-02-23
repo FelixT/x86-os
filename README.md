@@ -19,3 +19,8 @@ Required packages:
 Use WSL to build, then run with a windows QEMU binary
 
 Graphics performance seems best using `-display gtk`
+
+### hot reload usrmode/hd
+
+`bash usr/make.sh && bash make_hd.sh`
+

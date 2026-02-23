@@ -521,7 +521,7 @@ void parse_line(char *line) {
    char command[10];
    char arg[50];
    strsplit((char*)command, (char*)arg, line, ' ');
-   tolower(command);
+   strtolower(command);
 
    if(state.no_exe && !strequ(command, "endfunc")) {
       printf("no_exe flag set, skipping line\n");
@@ -591,7 +591,7 @@ void _start() {
 
    // interp window
    printf("f3BASIC interpreter\n");
-   override_term_checkcmd((uint32_t)line_callback);
+   override_term_checkcmd(&line_callback);
    set_window_title("f3BASIC");
 
    // output window

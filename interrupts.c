@@ -247,7 +247,7 @@ void software_handler(registers_t *regs) {
          api_queue_event(regs);
          break;
       case 31:
-         //api_register_windowobj(regs);
+         api_sleep(regs);
          break;
       case 32:
          api_launch_task(regs);
@@ -292,13 +292,13 @@ void software_handler(registers_t *regs) {
          api_override_mouseout(regs);
          break;
       case 46:
-         //api_display_colourpicker(regs);
+         api_override_keyrelease(regs);
          break;
       case 47:
          api_read(regs);
          break;
       case 48:
-         //api_display_filepicker(regs);
+         api_seek(regs);
          break;
       case 49:
          api_debug_write_str(regs);
@@ -444,8 +444,11 @@ void mouse_handler(registers_t *regs) {
 }
 
 int timer_i = 0;
+int timer_hz;
 
 void timer_set_hz(int hz) {
+   timer_hz = hz;
+
    // set pit to ~new hz
    int divisor = 1193180 / hz;
     

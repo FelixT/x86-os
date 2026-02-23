@@ -600,9 +600,9 @@ int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int wind
 
    dialog_colourpicker_draw(dialog);
 
-   override_click((uint32_t)&dialog_colourpicker_click, dialog->window);
-   override_drag((uint32_t)&dialog_colourpicker_drag, dialog->window);
-   override_resize((uint32_t)&dialog_colourpicker_resize, dialog->window);
+   override_click(&dialog_colourpicker_click, dialog->window);
+   override_drag(&dialog_colourpicker_drag, dialog->window);
+   override_resize(&dialog_colourpicker_resize, dialog->window);
 
    return index;
 }
@@ -914,7 +914,7 @@ int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window
    dialog->folder_icon_data = dialog_load_icon("/bmp/folder20.bmp", NULL, NULL);
 
    create_scrollbar(&dialog_filepicker_scroll, dialog->window);
-   override_resize((uint32_t)&dialog_filepicker_resize, dialog->window);
+   override_resize(&dialog_filepicker_resize, dialog->window);
 
    dialog_filepicker_show_dir(dialog);
    ui_draw(dialog->ui);
@@ -1130,14 +1130,14 @@ int dialog_window_settings(int window, char *title) {
 }
 
 void dialog_init_overrides(int window) {
-   override_click((uint32_t)&dialog_click, window);
-   override_hover((uint32_t)&dialog_hover, window);
-   override_release((uint32_t)&dialog_release, window);
-   override_keypress((uint32_t)&dialog_keypress, window);
-   override_close((uint32_t)&dialog_window_close, window);
-   override_resize((uint32_t)&dialog_resize, window);
-   override_rightclick((uint32_t)&dialog_rightclick, window);
-   override_mouseout((uint32_t)&dialog_mouseout, window);
+   override_click(&dialog_click, window);
+   override_hover(&dialog_hover, window);
+   override_release(&dialog_release, window);
+   override_keypress(&dialog_keypress, window);
+   override_close(&dialog_window_close, window);
+   override_resize(&dialog_resize, window);
+   override_rightclick(&dialog_rightclick, window);
+   override_mouseout(&dialog_mouseout, window);
    override_draw(0, window);
 }
 

@@ -39,7 +39,12 @@ typedef struct {
 #define FS_TYPE_DIR 1
 #define FS_TYPE_TERM 2
 
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
 fs_file_t *fs_open(char *path);
+void fs_close(fs_file_t *file);
 bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size);
 int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task);
 bool fs_mkdir(char *path);
@@ -48,5 +53,6 @@ bool fs_rename(char *oldpath, char *newname);
 fs_dir_content_t *fs_read_dir(char *path);
 void fs_dir_content_free(fs_dir_content_t *content);
 int fs_filesize(fs_file_t *file);
+int fs_seek(fs_file_t *file, int offset, int type);
 
 #endif

@@ -117,21 +117,21 @@ static inline void end_subroutine() {
    );
 }
 
-static inline void override_click(uint32_t addr, int window) {
+static inline void override_click(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (13),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_draw(uint32_t addr, int window) {
+static inline void override_draw(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (29),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
@@ -207,6 +207,20 @@ static inline bool mkdir(char *path) {
       : "cc", "memory"
    );
    return (bool)success;
+}
+
+static inline int seek(int fd, int offset, int type) {
+   int pos;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (pos)
+      : "a" (48),
+      "b" (fd),
+      "c" (offset),
+      "d" (type)
+      : "cc", "memory"
+   );
+   return pos;
 }
 
 static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is_transparent) {
@@ -295,81 +309,91 @@ static inline void debug_write_str(char *str) {
    );
 }
 
-static inline void override_resize(uint32_t addr, int window) {
+static inline void override_resize(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (34),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_drag(uint32_t addr, int window) {
+static inline void override_drag(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (36),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_release(uint32_t addr, int window) {
+static inline void override_release(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (38),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_keypress(uint32_t addr, int window) {
+static inline void override_keypress(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (64),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_close(uint32_t addr, int window) {
+static inline void override_keyrelease(void *callback, int window) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (46),
+      "b" ((uint32_t)callback),
+      "c" (window)
+      : "cc", "memory"
+   );
+}
+
+static inline void override_close(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (27),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_rightclick(uint32_t addr, int window) {
+static inline void override_rightclick(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (17),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_hover(uint32_t addr, int window) {
+static inline void override_hover(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (11),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
 }
 
-static inline void override_mouseout(uint32_t addr, int window) {
+static inline void override_mouseout(void *callback, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (45),
-      "b" (addr),
+      "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
@@ -386,7 +410,7 @@ static inline void write_numat(int num, int x, int y) {
    );
 }
 
-static inline void queue_event(uint32_t callback, int delta, void *msg) {
+static inline void queue_event(void *callback, int delta, void *msg) {
    asm volatile(
       "int $0x30"
       :: "a" (30),
@@ -759,13 +783,22 @@ static inline tasks_t get_tasks() {
    return t;
 }
 
+static inline void sleep(uint32_t ms) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (31),
+      "b" (ms)
+      : "cc", "memory"
+   );
+}
+
 // terminal override
 
-static inline void override_term_checkcmd(uint32_t addr) {
+static inline void override_term_checkcmd(void *callback) {
    asm volatile (
       "int $0x30;"
       :: "a" (39),
-      "b" ((uint32_t)addr)
+      "b" ((uint32_t)callback)
       : "cc", "memory"
    );
 }

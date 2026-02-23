@@ -2,19 +2,6 @@
 #include <stdarg.h>
 #include "string.h"
 
-void strtoupper(char* dest, char* src) {
-   int i = 0;
-
-   while(src[i] != '\0') {
-      if(src[i] >= 'a' && src[i] <= 'z')
-         dest[i] = src[i] + ('A' - 'a');
-      else
-         dest[i] = src[i];
-      i++;
-   }
-   dest[i] = '\0';
-}
-
 void strcpy(char* dest, char* src) {
    int i = 0;
 
@@ -280,7 +267,7 @@ char *strncat(char *dest, const char *src, size_t size) {
    return dest;
 }
 
-void vsnprintf(char *buffer, size_t size, char *format, va_list args) {
+int vsnprintf(char *buffer, size_t size, char *format, va_list args) {
    char *pfmt = format;
    buffer[0] = '\0';
    size_t remaining = size - 1;
@@ -343,6 +330,7 @@ void vsnprintf(char *buffer, size_t size, char *format, va_list args) {
       pfmt++;
    }
 
+   return size - remaining - 1;
 }
 
 void sprintf(char *buffer, char *format, ...) {
@@ -366,6 +354,16 @@ char *strchr(const char *str, int c) {
       str++;
    }
    return NULL;
+}
+
+char *strrchr(const char *str, int c) {
+   const char *last = NULL;
+   while(*str) {
+      if(*str == (char)c)
+         last = str;
+      str++;
+   }
+   return (char*)last;
 }
 
 uint32_t hextouint(char *str) {
@@ -494,9 +492,54 @@ void memset16(uint16_t *dest, uint16_t value, size_t count) {
    }
 }
 
-void tolower(char *c) {
+int tolower(int c) {
+   if(c >= 'A' && c <= 'Z')
+      return c + ('a' - 'A');
+   return c;
+}
+
+int toupper(int c) {
+   if(c >= 'a' && c <= 'z')
+      return c + ('A' - 'a');
+   return c;
+}
+
+void strtolower(char *c) {
    for(int i = 0; i < strlen(c); i++) {
-      if(c[i] >= 'A' && c[i] <= 'Z')
-         c[i] += ('a'-'A');
+      c[i] = tolower(c[i]);
    }
+}
+
+void strtoupper(char *c) {
+   for(int i = 0; i < strlen(c); i++) {
+      c[i] = toupper(c[i]);
+   }
+}
+
+int strcmp(const char* s1, const char* s2) {
+   while(*s1 && (*s1 == *s2)) {
+      s1++;
+      s2++;
+   }
+   return *(unsigned char*)s1 - *(unsigned char*)s2;
+}
+
+int strncmp(const char* s1, const char* s2, size_t n) {
+   for(size_t i = 0; i < n; i++) {
+      if(s1[i] != s2[i] || s1[i] == '\0' || s2[i] == '\0')
+         return (unsigned char)s1[i] - (unsigned char)s2[i];
+   }
+   return 0;
+}
+
+char *strstr(const char *haystack, const char *needle) {
+   if(!*needle) return (char*)haystack;
+   for(; *haystack; haystack++) {
+      if(*haystack == *needle) {
+         const char *h, *n;
+         for(h = haystack, n = needle; *h && *n && *h == *n; h++, n++);
+         if(!*n) return (char*)haystack;
+      }
+   }
+   return NULL;
 }

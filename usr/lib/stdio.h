@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 typedef struct {
    char *path;
@@ -32,5 +33,8 @@ void printf(const char *format, ...);
 void printf_w(const char *format, int window, ...);
 int fileno(FILE *stream);
 void fseek(FILE *stream, int pos, int type);
+void vfprintf(FILE *stream, const char *format, va_list args);
+void fprintf(FILE *stream, const char *format, ...);
+int ftell(FILE *stream);
 
 #endif

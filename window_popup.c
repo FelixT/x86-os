@@ -140,15 +140,16 @@ void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y)
    // call callback function
    if(callback != NULL) {
 
-      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+      int taskIndex = get_task_from_window(getSelectedWindowIndex());
+      if(taskIndex == -1) {
          // call as kernel
          callback(colour);
       } else {
-         if(!gui_interrupt_switchtask(regs)) return;
          // calling function as task
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)colour;
-         task_call_subroutine(regs, "colourpickerreturn", (uint32_t)callback, args, 1);
+         task_state_t *task = &gettasks()[taskIndex];
+         task_call_subroutine(regs, task, "colourpickerreturn", (uint32_t)callback, args, 1);
       }
 
       getSelectedWindow()->needs_redraw = true;

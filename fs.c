@@ -43,16 +43,23 @@ fs_file_t *fs_open(char *path) {
    return file;
 }
 
+void fs_close(fs_file_t *file) {
+   if(!file) return;
+   if(file->data)
+      free((uint32_t)file->data, sizeof(fs_file_data_t));
+   free((uint32_t)file, sizeof(fs_file_t));
+}
+
 fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
    fs_dir_entry_t entry;
    char fileName[9];
    char extension[4];
    strcpy_fixed((char*)fileName, (char*)item->filename, 8);
-   strcpy_fixed((char*)extension, (char*)item->filename+8, 3);
-   strsplit((char*)fileName, NULL, (char*)fileName, ' '); // null terminate at first space
-   strsplit((char*)extension, NULL, (char*)extension, ' '); // null terminate at first space
-   tolower((char*)fileName);
-   tolower((char*)extension);
+   strcpy_fixed(extension, (char*)item->filename+8, 3);
+   strsplit(fileName, NULL, (char*)fileName, ' '); // null terminate at first space
+   strsplit(extension, NULL, (char*)extension, ' '); // null terminate at first space
+   strtolower(fileName);
+   strtolower(extension);
    if(extension[0] != '\0') {
       sprintf(entry.filename, "%s.%s", fileName, extension);
    } else {
@@ -190,7 +197,7 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
       size = file->data->file_size - file->current_pos;
    if(size == 0) return 0;
 
-   fat_read_file_chunked(file->data->first_cluster, buffer, size, callback, task);
+   fat_read_file_chunked(file->data->first_cluster, buffer, file->current_pos, size, callback, task);
    file->current_pos += size;
    return size;
 }
@@ -209,4 +216,19 @@ bool fs_rename(char *oldpath, char *newname) {
 
 int fs_filesize(fs_file_t *file) {
    return file->data->file_size;
+}
+
+int fs_seek(fs_file_t *file, int offset, int type) {
+   if(type == SEEK_SET)
+      file->current_pos = offset;
+   else if(type == SEEK_CUR)
+      file->current_pos += offset;
+   else if(type == SEEK_END)
+      file->current_pos = file->data->file_size;
+   else
+      return -1;
+   
+   if(file->current_pos > file->data->file_size)
+      file->current_pos = file->data->file_size;
+   return file->current_pos;
 }

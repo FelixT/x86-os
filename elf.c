@@ -85,6 +85,8 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
       map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1);
 
    uint32_t heap_start = page_align_up(vmem_end);
+   if(heap_start < KERNEL_END)
+      heap_start = KERNEL_END;
    debug_printf("Heap start 0x%h\n", heap_start);
 
    // copy program to new location and assign virtual memory for each segment

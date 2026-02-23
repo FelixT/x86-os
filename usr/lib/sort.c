@@ -74,11 +74,3 @@ void sorti(int *arr, int n) {
 void sortstr(char **arr, int n) {
    sort(arr, n, sizeof(char*), &cmp_str);
 }
-
-int strcmp(const char* s1, const char* s2) {
-   while (*s1 && (*s1 == *s2)) {
-      s1++;
-      s2++;
-   }
-   return *(unsigned char*)s1 - *(unsigned char*)s2;
-}

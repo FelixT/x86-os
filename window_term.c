@@ -120,17 +120,20 @@ void window_term_return(void *regs, void *window) {
    } else if(selected->checkcmd_func != &window_term_checkcmd) {
       // "checkcmd" override
       if(selected->checkcmd_func != NULL) {
-         gui_interrupt_switchtask(regs);
+         int taskIndex = get_task_from_window(getSelectedWindowIndex());
+         if(taskIndex < 0) return;
+         task_state_t *task = &gettasks()[taskIndex];
+
          char *buffer = (char*)malloc(selected->text_index+1);
          strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
          buffer[selected->text_index] = '\0';
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)buffer;
          // map both to prog
-         map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
-         map(get_current_task_pagedir(), (uint32_t)buffer, (uint32_t)buffer, 1, 1);
+         map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+         map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1);
 
-         task_call_subroutine(regs, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
+         task_call_subroutine(regs, task, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
       }
    } else {
       window_term_checkcmd(regs, selected); // default term behaviour
@@ -433,7 +436,7 @@ void window_term_checkcmd(void *regs, void *window) {
    char arg[40];
    strsplit((char*)command, (char*)arg, selected->text_buffer, ' '); // super unsafe
 
-   strtoupper(command, command);
+   strtoupper(command);
 
    if(strequ(command, "HELP"))
       term_cmd_help();

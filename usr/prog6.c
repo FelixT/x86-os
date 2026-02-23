@@ -111,12 +111,12 @@ void _start() {
    s = get_surface();
    ui = ui_init(&s, -1);
    override_draw(0, -1);
-   override_click((uint32_t)&click, -1);
-   override_release((uint32_t)&release, -1);
-   override_keypress((uint32_t)&keypress, -1);
-   override_resize((uint32_t)&resize, -1);
-   override_hover((uint32_t)&hover, -1);
-   override_rightclick((uint32_t)&rightclick, -1);
+   override_click(&click, -1);
+   override_release(&release, -1);
+   override_keypress(&keypress, -1);
+   override_resize(&resize, -1);
+   override_hover(&hover, -1);
+   override_rightclick(&rightclick, -1);
 
    create_scrollbar(&scroll, -1);
    set_content_height(420, -1);

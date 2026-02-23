@@ -254,6 +254,14 @@ void api_override_keypress(registers_t *regs) {
    window->keypress_func = (void *)(regs->ebx);
 }
 
+void api_override_keyrelease(registers_t *regs) {
+   // IN: ebx = function address
+   // IN: ecx = window cindex
+   gui_window_t *window = api_get_cwindow(regs->ecx);
+   if(!window) return;
+   window->keyrelease_func = (void *)(regs->ebx);
+}
+
 void api_override_hover(registers_t *regs) {
    // IN: ebx = function address
    // IN: ecx = window cindex
@@ -295,21 +303,18 @@ void api_end_subroutine(registers_t *regs) {
 }
 
 void api_malloc(registers_t *regs) {
+   // kmalloc
    // IN: ebx = size
    // OUT: ebx = addr
    int size = regs->ebx;
    uint32_t *mem = malloc(size);
 
    task_state_t *task = get_current_task_state();
-   //task->allocated_pages[task->no_allocated] = mem;
 
    // identity map
    task->process->no_allocated += map_size(task->process->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1);
 
    regs->ebx = (uint32_t)mem;
-
-   // TODO: use special usermode malloc rather than the kernel malloc
-   // keep track of which task each malloc is from
 }
 
 void api_free(registers_t *regs) {
@@ -546,6 +551,8 @@ void api_read_stdin_callback(void *regs, char *buffer) {
       strcpy(window->read_buffer, buffer);
       task->paused = false;
       r->ebx = strlen(buffer+1);
+      switch_to_task(task->task_id, regs); // wake
+      task_execute_queued_subroutine(regs, (void*)task->task_id); // check for queued events while task was paused
    } else {
       debug_printf("Couldn't find window\n");
       r->ebx = -1;
@@ -556,6 +563,7 @@ void api_read_fd_callback(registers_t *regs, int task) {
    debug_printf("api_read: callback task %i\n", task);
    gettasks()[task].paused = false;
    switch_to_task(task, regs); // wake
+   task_execute_queued_subroutine(regs, (void*)task); // check for queued events while task was paused
 }
 
 void api_read(registers_t *regs) {
@@ -678,6 +686,22 @@ void api_new_file(registers_t *regs) {
    int fd = task->process->fd_count;
    task->process->file_descriptors[task->process->fd_count++] = file;
    regs->ebx = fd;
+}
+
+void api_seek(registers_t *regs) {
+   // IN: ebx - int fd
+   // IN: ecx - int offset
+   // IN: edx - int type
+   // OUT: pos
+   task_state_t *task = get_current_task_state();
+   int fd = regs->ebx;
+   int offset = regs->ecx;
+   int type = regs->edx;
+   if(fd < 0 || fd > task->process->fd_count) {
+      regs->ebx = -1;
+   } else {
+      regs->ebx = fs_seek(task->process->file_descriptors[fd], offset, type);
+   }
 }
 
 void api_create_scrollbar(registers_t *regs) {
@@ -1079,4 +1103,23 @@ void api_get_tasks(registers_t *regs) {
    map_size(get_current_task_pagedir(), (uint32_t)tasks, (uint32_t)tasks, sizeof(api_task_t)*TOTAL_TASKS, 1, 1);
    regs->ebx = (uint32_t)tasks;
    regs->ecx = TOTAL_TASKS;
+}
+
+void api_sleep_callback(registers_t *regs, task_state_t *task) {
+   if(!task->enabled) return;
+   task->paused = false;
+   switch_to_task(task->task_id, regs); // wake
+   task_execute_queued_subroutine(regs, (void*)task->task_id); // check for queued events while task was paused
+}
+
+void api_sleep(registers_t *regs) {
+   // IN: ebx - ms
+   extern int timer_hz;
+   uint32_t ms = regs->ebx;
+   int ticks = (timer_hz * ms) / 1000;
+   task_state_t *task = get_current_task_state();
+   if(ticks <= 0) return;
+   task->paused = true;
+   events_add(ticks, &api_sleep_callback, task, -1);
+   switch_task(regs); // yield
 }

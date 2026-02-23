@@ -300,7 +300,7 @@ void blink_cursor(cursor_event_t *event) {
       draw_line(&event->draw_context, colour, cursor_x, cursor_y, true, get_font_info().height+2);
 
       event->blinking = !event->blinking;
-      queue_event((uint32_t)&blink_cursor, 200, event);
+      queue_event(&blink_cursor, 200, event);
    }
    end_subroutine();
 }
@@ -337,7 +337,7 @@ void release_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
    event->wo = wo;
    event->blinking = true;
    event->draw_context = draw_context;
-   queue_event((uint32_t)&blink_cursor, 200, event);
+   queue_event(&blink_cursor, 200, event);
 }
 
 void unfocus_textarea(wo_t *wo, draw_context_t draw_context) {

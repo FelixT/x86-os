@@ -135,7 +135,7 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("Enabling tasks\n", COLOUR_ORANGE);
    tasks_init(regs);
    gui_writestr("Set up timer\n", COLOUR_ORANGE);
-   timer_set_hz(600);
+   timer_set_hz(1000);
    gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
    mouse_enable();
    gui_writestr("\nInit complete\n\n", COLOUR_CYAN);

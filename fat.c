@@ -73,10 +73,10 @@ bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension)
    strcpy_fixed((char*)entryExtension, (char*)fat_dir->filename+8, 3);
    strsplit((char*)entryName, NULL, (char*)entryName, ' '); // null terminate at first space
    strsplit((char*)entryExtension, NULL, (char*)entryExtension, ' '); // null terminate at first space
-   strtoupper((char*)name, (char*)name); // fat ignores file case
-   strtoupper((char*)extension, (char*)extension);
-   strtoupper((char*)entryName, (char*)entryName); // fat ignores file case
-   strtoupper((char*)entryExtension, (char*)entryExtension);
+   strtoupper((char*)name); // fat ignores file case
+   strtoupper((char*)extension);
+   strtoupper((char*)entryName); // fat ignores file case
+   strtoupper((char*)entryExtension);
 
    if(!strequ(entryName, name)) return false;
    if(!strequ(entryExtension, extension)) return false;
@@ -337,7 +337,7 @@ bool fat_new_file(char *path) {
       debug_printf("Filename '%s' too long\n", filenamefull);
       return false;
    }
-   strtoupper(filenamefull, filenamefull);
+   strtoupper(filenamefull);
 
    fat_dir_t *parent = fat_parse_path(parentpath, true);
    bool inroot = strequ(parentpath, "/");
@@ -353,8 +353,8 @@ bool fat_new_file(char *path) {
    char filename[9];
    char extension[4];
    strsplit(filename, extension, filenamefull, '.'); // split at first dot
-   strtoupper(filename, filename);
-   strtoupper(extension, extension);
+   strtoupper(filename);
+   strtoupper(extension);
    memset(filedir->filename, ' ', 11);
    strcpy_fixed((char*)filedir->filename, filename, strlen(filename));
    filedir->filename[strlen(filename)] = ' ';
@@ -535,7 +535,7 @@ bool fat_new_dir(char *path) {
       debug_printf("Dir name too long\n");
       return false;
    }
-   strtoupper(dirname, dirname);
+   strtoupper(dirname);
    debug_printf("Creating dir %s in parent %s\n", dirname, parentpath);
    bool inroot = strequ(parentpath, "/");
    fat_dir_t *parent = NULL;
@@ -661,6 +661,7 @@ bool fat_new_dir(char *path) {
 
 typedef struct {
    uint16_t clusterNo;
+   uint32_t offset;
    uint32_t size; // read/buffer size
    uint32_t sizeDisk;
    uint8_t *buffer;
@@ -675,44 +676,55 @@ typedef struct {
 void fat_read_file_callback(registers_t *regs, void *msg) {
    fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
 
-   // read all sectors of cluster
+   // skip clusters up to offset
+   uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+   while(state->offset >= clusterSize) {
+      uint16_t tableVal = ((uint16_t*)state->fatTable)[state->currentCluster];
+      if(tableVal >= 0xFFF8) {
+         // no more clusters in chain
+         (*(void(*)(void*,int))state->callback)((void*)regs, state->task); // callback
+         return;
+      } else if(tableVal == 0xFFF7) {
+         debug_printf("FAT error: Hit bad cluster\n");
+         free((uint32_t)state, sizeof(fat_read_file_state_t));
+         return;
+      } else {
+         state->offset -= clusterSize;
+         state->currentCluster = tableVal; // table value is the next cluster
+         state->readCount++;
+      }
+   }
+
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
       uint32_t currentClusterSector = ((state->currentCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
-      uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector;
-      uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-      for(int i = 0; i < fat_bpb->sectorsPerCluster; i++) {
-         uint8_t *buf = (uint8_t*)(clusterBuf + i * fat_bpb->bytesPerSector); // sector buf
-         uint32_t memOffset = fat_bpb->bytesPerSector * (state->readCount*fat_bpb->sectorsPerCluster + i);
+      uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector + state->offset;
+      uint32_t clusterReadSize = clusterSize - state->offset;
+      if(state->readBytes + clusterReadSize > state->size)
+         clusterReadSize = state->size - state->readBytes;
+      
+      uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, clusterReadSize); // read cluster from disk
+      if(!copy_to_task(state->task, state->buffer + state->readBytes, clusterBuf, clusterReadSize)) {
+        debug_printf("Error writing to task memory\n");
+        free((uint32_t)clusterBuf, clusterReadSize);
+        free((uint32_t)state, sizeof(fat_read_file_state_t));
+        return;
+    }
+      state->readBytes += clusterReadSize;
+      state->offset = 0;
 
-         int readSize = fat_bpb->bytesPerSector;
-         if(state->readBytes + readSize > state->size)
-            readSize = state->size - state->readBytes;
-         state->readBytes += readSize;
+      free((uint32_t)clusterBuf, clusterReadSize);
 
-         // copy to master buffer
-         if(!copy_to_task(state->task, state->buffer + memOffset, buf, readSize)) {
-            debug_printf("Error writing to task %i memory at 0x%h-0x%h size %i\n", state->task, state->buffer + memOffset, state->buffer + memOffset + readSize);
-            free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-            free((uint32_t)state, sizeof(fat_read_file_state_t));
-            return;
-         }
-
-         if(state->readBytes >= state->size) {
-            free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-            (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
-            free((uint32_t)state, sizeof(fat_read_file_state_t));
-            //switch_task(regs); // yield, tasks still paused
-            return;
-         }
+      if(state->readBytes >= state->size) {
+         // callback
+         (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
+         free((uint32_t)state, sizeof(fat_read_file_state_t));
+         return;
       }
-
-      free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
 
       // check if theres more clusters to read
       uint16_t tableVal = ((uint16_t*)state->fatTable)[state->currentCluster];
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
-         
          // call callback
          (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
          return;
@@ -720,13 +732,11 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
          // bad cluster
          debug_printf("FAT error: Hit bad cluster\n");
          free((uint32_t)state, sizeof(fat_read_file_state_t));
-         //switch_task(regs); // yield
          return;
       } else { 
          state->currentCluster = tableVal; // table value is the next cluster
          state->readCount++;
       }
-   
    }
 
    //switch_task(regs); // yield
@@ -734,10 +744,11 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
    
 }
 
-void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t size, void *callback, int task) {
+void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uint32_t size, void *callback, int task) {
    
    fat_read_file_state_t *state = (fat_read_file_state_t*)malloc(sizeof(fat_read_file_state_t));
    state->clusterNo = clusterNo;
+   state->offset = offset;
    state->size = size;
    state->callback = callback;
    state->task = task;
@@ -860,19 +871,26 @@ bool fat_rename(char *path, char *filename) {
       strcat(parentpath, "/");
    }
 
-   fat_dir_t *dir = fat_parse_path(parentpath, false);
-   if(!dir) {
-      debug_printf("File '%s' not found\n", parentpath);
-      return false;
+   uint32_t dirAddr;
+   uint32_t dirSize;
+
+   if(strequ(parentpath, "/")) {
+      // rename in root
+      dirAddr = rootSector*fat_bpb->bytesPerSector + baseAddr;
+      dirSize = sizeof(fat_dir_t)*fat_bpb->noRootEntries;
+   } else {
+      fat_dir_t *dir = fat_parse_path(parentpath, false);
+      if(!dir) {
+         debug_printf("fat_rename: Parent '%s' not found\n", parentpath);
+         return false;
+      }
+      uint32_t clusterNo = dir->firstClusterNo;
+      uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+      dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
+      dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+      free((uint32_t)dir, sizeof(fat_dir_t));
    }
 
-   uint32_t clusterNo = dir->firstClusterNo;
-   uint32_t dirFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
-
-   uint32_t dirAddr = baseAddr + dirFirstSector * fat_bpb->bytesPerSector;
-
-   // read a whole cluster (directory) at once
-   uint32_t dirSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
 
    int entries = dirSize / sizeof(fat_dir_t);
@@ -892,14 +910,16 @@ bool fat_rename(char *path, char *filename) {
          strncpy(newfilename+8, newext, strlen(newext));
          newfilename[8+strlen(newext)] = ' ';
          strncpy((char*)fat_dir->filename, newfilename, 11);
-         debug_printf("Found match, renaming to '%s'\n", newfilename);
+         debug_printf("fat_rename: Renaming to '%s'\n", newfilename);
       }
    }
    if(match) {
       ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
+      free((uint32_t)dirBuf, dirSize);
       return true;
    } else {
-      debug_printf("File not found\n");
+      debug_printf("fat_rename: File not found\n");
+      free((uint32_t)dirBuf, dirSize);
       return false;
    }
 }

@@ -211,3 +211,23 @@ void printf_w(const char *format, int window, ...) {
    va_end(args);
    write_str_w(buffer, window);
 }
+
+void vfprintf(FILE *stream, const char *format, va_list args) {
+   if(!stream) return;
+   char buffer[1024];
+   vsnprintf(buffer, 1023, (char*)format, args);
+   fwrite(buffer, 1, strlen(buffer), stream);
+}
+
+void fprintf(FILE *stream, const char *format, ...) {
+   if(!stream) return;
+   va_list args;
+   va_start(args, format);
+   vfprintf(stream, format, args);
+   va_end(args);
+}
+
+int ftell(FILE *stream) {
+    if(!stream) return -1;
+    return stream->position;
+}

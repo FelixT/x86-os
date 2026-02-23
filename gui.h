@@ -63,10 +63,6 @@ typedef struct vbe_mode_info_t {
 	uint8_t reserved1[206];
 } __attribute__ ((packed)) vbe_mode_info_t;
 
-void strcpy(char* dest, char* src);
-void strcpy_fixed(char* dest, char* src, int length);
-void strtoupper(char* dest, char* src);
-
 uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b);
 
 #define COLOUR_WINDOW_OUTLINE gui_rgb16(230, 230, 230)

@@ -39,6 +39,7 @@ void unmap(page_dir_entry_t *dir, uint32_t vaddr) {
 void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw) {
 
    // map 4 KiB aligned vadddr to 4 KiB aligned physical addr
+   if(!dir) return;
 
    // get page
    uint32_t index = vaddr / 0x1000; // 4096 bytes per page
@@ -165,4 +166,15 @@ page_dir_entry_t *page_get_current() {
 
 void invlpg(uint32_t addr) {
    asm volatile("invlpg (%0)" : : "r"(addr) : "memory");
+}
+
+void free_page_dir(page_dir_entry_t *dir) {
+   // free page tables
+   for(int i = 0; i < 1024; i++) {
+      if(dir[i].present && dir[i].address) {
+         free((uint32_t)(dir[i].address << 12), sizeof(page_table_entry_t)*1024);
+      }
+   }
+   // free page dir
+   free((uint32_t)dir, sizeof(page_dir_entry_t)*1024);
 }

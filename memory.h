@@ -26,7 +26,8 @@
 #define MEM_BLOCK_SIZE 0x1000 // 4096 bytes (page size) for now (previously 0x200/512 bytes)
 
 // virtual memory layout
-// kernel mapped to highest half of memory (0xC0000000-0xFFFFFFFF)
+// todo: kernel mapped to highest half of memory (0xC0000000-0xFFFFFFFF)
+// currently, loaded & identity mapped to known location
 
 // physical -> virtual offset is 0xbffe8000 (V_KERNEL_START-KERNEL_START)
 #define V_KERNEL_START 0x06380000

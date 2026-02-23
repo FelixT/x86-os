@@ -403,7 +403,7 @@ void checkcmd(char *buffer) {
    char command[10];
    char arg[50];
    strsplit((char*)command, (char*)arg, buffer, ' '); // super unsafe
-   strtoupper(command, command);
+   strtoupper(command);
 
    if(strequ(command, "HELP"))
       term_cmd_help();
@@ -465,7 +465,7 @@ void _start() {
 
    printf("User Terminal at %s\n", path);
 
-   override_term_checkcmd((uint32_t)(&checkcmd));
+   override_term_checkcmd(&checkcmd);
 
    while(true) {
       yield();

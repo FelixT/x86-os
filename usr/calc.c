@@ -15,7 +15,7 @@ void printf(char *format, ...) {
 
 void _start() {
    printf("Calc\n");
-   override_term_checkcmd((uint32_t)NULL);
+   override_term_checkcmd(NULL);
    uint32_t start = (uint32_t)sbrk(0);
    char *buf = (char*)sbrk(0x4000);
    //sbrk(-0x3000);

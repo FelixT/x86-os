@@ -778,11 +778,11 @@ void _start(int argc, char **args) {
    dialog_init(dialog, -1);
    dialog_set_title(dialog, "BMP Viewer");
 
-   override_click((uint32_t)&click, -1);
-   override_drag((uint32_t)&click, -1);
-   override_release((uint32_t)&release, -1);
-   override_resize((uint32_t)&resize, -1);
-   override_hover((uint32_t)&hover, -1);
+   override_click(&click, -1);
+   override_drag(&click, -1);
+   override_release(&release, -1);
+   override_resize(&resize, -1);
+   override_hover(&hover, -1);
 
    framebuffer = (uint16_t*)(surface.buffer);
    bufferwidth = surface.width;

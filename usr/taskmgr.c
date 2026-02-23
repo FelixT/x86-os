@@ -61,6 +61,8 @@ void show_tasks() {
          sprintf(buf2, "(parent %i)", task->parentid);
          strcat(buffer, buf2);
       }
+      if(task->paused)
+         strcat(buffer, " <paused>");
       add_menu_item(menu_wo, buffer, &task_click);
    }
    clear();

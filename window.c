@@ -180,6 +180,7 @@ windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text) 
    textobj->y = y;
    textobj->width = 100;
    textobj->height = 14;
+   textobj->colour_bg = window->bgcolour;
    if(text) {
       int len = strlen(text);
       char *newtext = (char*)malloc(len + 1);
@@ -224,17 +225,17 @@ void window_default_scroll(int deltaY) {
 
 void window_scroll_do_callback(void *regs, void *callback, int deltaY, int offsetY) {
    if(callback) {
-      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+      int taskIndex = get_task_from_window(getSelectedWindowIndex());
+      if(taskIndex == -1) {
          // kernel
          (*(void(*)(int, int))callback)(deltaY, offsetY);
       } else {
-         gui_interrupt_switchtask(regs);
+         task_state_t *task = &gettasks()[taskIndex];
          uint32_t *args = malloc(sizeof(int) * 3);
          args[2] = deltaY;
          args[1] = offsetY;
-         args[0] = get_cindex();
-
-         task_call_subroutine(regs, "scroll", (uint32_t)(callback), args, 3);
+         args[0] = get_cindex(task);
+         task_call_subroutine(regs, task, "scroll", (uint32_t)(callback), args, 3);
       }
    } else {
       window_default_scroll(deltaY);
@@ -483,16 +484,16 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
          int index = get_window_index_from_pointer(window);
          int task = get_task_from_window(index);
          if(regs && task > -1 && window->resize_func) {
-            if(!switch_to_task(task, regs)) return;
+            task_state_t *task_state = &gettasks()[task];
             uint32_t *args = malloc(sizeof(uint32_t) * 4);
             args[3] = (uint32_t)window->framebuffer;
             args[2] = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
             args[1] = window->height - TITLEBAR_HEIGHT;
-            args[0] = get_cindex_from_window(window);
-            map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
-            map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
+            args[0] = get_cindex_from_window(task_state, window);
+            map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
+            map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
             window_clearbuffer(window, window->bgcolour);
-            task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 4);
+            task_call_subroutine(regs, task_state, "resize", (uint32_t)(window->resize_func), args, 4);
          }
       }
    }

@@ -163,11 +163,10 @@ void window_close(void *regs, int windowIndex) {
          // call close func if set
          debug_printf("Calling close func for window %i\n", windowIndex);
          if(task > -1 && window->close_func != NULL) {
-            if(gui_interrupt_switchtask(regs)) {
-               uint32_t *args = malloc(sizeof(uint32_t) * 1);
-               args[0] = get_cindex();
-               task_call_subroutine(regs, "close", (uint32_t)(window->close_func), args, 1);
-            }
+            task_state_t *task_state = &gettasks()[task];
+            uint32_t *args = malloc(sizeof(uint32_t) * 1);
+            args[0] = get_cindex(task_state);
+            task_call_subroutine(regs, task_state, "close", (uint32_t)(window->close_func), args, 1);
          }
       }
    }
@@ -289,6 +288,7 @@ void window_resetfuncs(gui_window_t *window) {
    window->checkcmd_func = &window_term_checkcmd;
 
    // other functions without default behaviour
+   window->keyrelease_func = NULL;
    window->click_func = NULL;
    window->drag_func = NULL;
    window->resize_func = NULL;
@@ -303,6 +303,7 @@ void window_resetfuncs(gui_window_t *window) {
 void window_removefuncs(gui_window_t *window) {
    // reset all functions
    window->keypress_func = NULL;
+   window->keyrelease_func = NULL;
    window->draw_func = NULL;
    window->checkcmd_func = NULL;
 
@@ -807,8 +808,40 @@ void windowmgr_keypress(void *regs, int scan_code) {
 
    if(scan_code == 0x2A || scan_code == 0x36)
       keyboard_shift = !released;
+
+   // convert to char
+   uint16_t c = (uint16_t)scan_to_char(scan_code, keyboard_shift, keyboard_caps);
+   if(c == 0) { // special chars
+      if(scan_code == 14) // backspace
+         c = 0x08;
+      if(scan_code == 1) // escape
+         c = 0x1B;
+      if(scan_code == 28) // return
+         c = 0x0D;
+      if(scan_code == 72) // uparrow
+         c = 0x100;
+      if(scan_code == 80) // downarrow
+         c = 0x101;
+      if(scan_code == 75) // leftarrow
+         c = 0x102;
+      if(scan_code == 77) // rightarrow
+         c = 0x103;
+   }
    
-   if(released) return; // don't handle these currently
+   if(released) {
+      // keyrelease func
+      if(!selectedWindow->keyrelease_func) return;
+      int taskIndex = get_task_from_window(getSelectedWindowIndex());
+      if(taskIndex < 0) return;
+      task_state_t *task = &gettasks()[taskIndex];
+
+      uint32_t *args = malloc(sizeof(uint32_t) * 2);
+      args[1] = c;
+      args[0] = get_cindex(task);
+
+      task_call_subroutine(regs, task, "keyrelease", (uint32_t)(selectedWindow->keyrelease_func), args, 2);
+      return;
+   }
    
    if(scan_code == 0x3A)
       keyboard_caps = true;
@@ -830,39 +863,21 @@ void windowmgr_keypress(void *regs, int scan_code) {
          break;
       default:
          // call window keypress func with char
-         uint16_t c = (uint16_t)scan_to_char(scan_code, keyboard_shift, keyboard_caps);
-         if(c == 0) { // special chars
-            if(scan_code == 14) // backspace
-               c = 0x08;
-            if(scan_code == 1) // escape
-               c = 0x1B;
-            if(scan_code == 28) // return
-               c = 0x0D;
-            if(scan_code == 72) // uparrow
-               c = 0x100;
-            if(scan_code == 80) // downarrow
-               c = 0x101;
-            if(scan_code == 75) // leftarrow
-               c = 0x102;
-            if(scan_code == 77) // rightarrow
-               c = 0x103;
-         }
-         // keypress func
          if(!selectedWindow->keypress_func) break;
 
-         gui_interrupt_switchtask(regs);
-         int taskIndex = get_current_task();
+         int taskIndex = get_task_from_window(gui_selected_window);
 
          if(taskIndex == -1 || selectedWindow->keypress_func == &window_term_keypress) {
             // launch into function directly as kernel
             (*(selectedWindow->keypress_func))(c, selectedWindow);
          } else {
             // run as task
+            task_state_t *task = &gettasks()[taskIndex];
             uint32_t *args = malloc(sizeof(uint32_t) * 2);
             args[1] = c;
-            args[0] = get_cindex();
+            args[0] = get_cindex(task);
 
-            task_call_subroutine(regs, "keypress", (uint32_t)(selectedWindow->keypress_func), args, 2);
+            task_call_subroutine(regs, task, "keypress", (uint32_t)(selectedWindow->keypress_func), args, 2);
          }
 
          break;
@@ -998,19 +1013,19 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
 
       // call drag func
       if(selectedWindow->drag_func == NULL) return;
-      if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+      int taskIndex = get_task_from_window(getSelectedWindowIndex());
+      if(taskIndex == -1) {
          // call as kernel
          getSelectedWindow()->drag_func(windowX, windowY);
       } else {
          // calling function as task
-         if(!gui_interrupt_switchtask(regs)) return;
-
+         task_state_t *task = &gettasks()[taskIndex];
          uint32_t *args = malloc(sizeof(uint32_t) * 3);
          args[2] = windowX;
          args[1] = windowY;
-         args[0] = get_cindex();
+         args[0] = get_cindex(task);
       
-         task_call_subroutine(regs, "dragged", (uint32_t)(selectedWindow->drag_func), args, 3);
+         task_call_subroutine(regs, task, "dragged", (uint32_t)(selectedWindow->drag_func), args, 3);
       
          return;
       }
@@ -1133,19 +1148,19 @@ bool windowmgr_click(void *regs, int x, int y) {
    }
 
    // switch to task
-   gui_interrupt_switchtask(regs);
-   if(get_task_from_window(getSelectedWindowIndex()) == -1) {
+   int taskIndex = get_task_from_window(getSelectedWindowIndex());
+   if(taskIndex == -1) {
       // call as kernel
       getSelectedWindow()->click_func(x - selectedWindow->x, y - (selectedWindow->y + TITLEBAR_HEIGHT));
    } else {
       // calling as task
+      task_state_t *task = &gettasks()[taskIndex];
       uint32_t *args = malloc(sizeof(uint32_t) * 3);
       args[2] = x - selectedWindow->x;
       args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
-      args[0] = get_cindex();
-      map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
-
-      task_call_subroutine(regs, "click", (uint32_t)(selectedWindow->click_func), args, 3);
+      args[0] = get_cindex(task);
+      map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+      task_call_subroutine(regs, task, "click", (uint32_t)(selectedWindow->click_func), args, 3);
    }
 
    return true;
@@ -1161,14 +1176,15 @@ void windowmgr_rightclick(void *regs, int x, int y) {
       // right click within selected window
       if(selectedWindow->rightclick_func != NULL) {
          // switch to task
-         gui_interrupt_switchtask(regs);
-         if(get_task_from_window(getSelectedWindowIndex()) > -1) {
+         int taskIndex = get_task_from_window(getSelectedWindowIndex());
+         if(taskIndex > -1) {
+            task_state_t *task = &gettasks()[taskIndex];
             uint32_t *args = malloc(sizeof(uint32_t) * 3);
             args[2] = x - selectedWindow->x;
             args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
-            args[0] = get_cindex();
-            map(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, 1, 1);
-            task_call_subroutine(regs, "rightclick", (uint32_t)(selectedWindow->rightclick_func), args, 3);
+            args[0] = get_cindex(task);
+            map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+            task_call_subroutine(regs, task, "rightclick", (uint32_t)(selectedWindow->rightclick_func), args, 3);
             return;
          }
       }
@@ -1373,12 +1389,12 @@ void windowmgr_mousemove(int x, int y) {
             int task = get_task_from_window(getSelectedWindowIndex());
             registers_t *regs = get_regs();
             if(task < 0) return;
-            if(!switch_to_task(task, regs)) return;
+            task_state_t *task_state = &gettasks()[task];
             uint32_t *args = malloc(sizeof(uint32_t) * 3);
             args[2] = relX;
             args[1] = relY;
-            args[0] = get_cindex();
-            task_call_subroutine(regs, "hover", (uint32_t)(selectedWindow->hover_func), args, 3);
+            args[0] = get_cindex(task_state);
+            task_call_subroutine(regs, task_state, "hover", (uint32_t)(selectedWindow->hover_func), args, 3);
 
          }
       } else {
@@ -1390,10 +1406,10 @@ void windowmgr_mousemove(int x, int y) {
                int task = get_task_from_window(getSelectedWindowIndex());
                registers_t *regs = get_regs();
                if(task < 0) return;
-               if(!switch_to_task(task, regs)) return;
+               task_state_t *task_state = &gettasks()[task];
                uint32_t *args = malloc(sizeof(uint32_t) * 1);
-               args[0] = get_cindex();
-               task_call_subroutine(regs, "mouseout", (uint32_t)(selectedWindow->mouseout_func), args, 1);
+               args[0] = get_cindex(task_state);
+               task_call_subroutine(regs, task_state, "mouseout", (uint32_t)(selectedWindow->mouseout_func), args, 1);
             }
          }
          // set all window objs as not hovered
@@ -1453,7 +1469,11 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int old_height = window->surface.height;
 
    // unmap previous framebuffer
-   map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1);
+   int index = get_window_index_from_pointer(window);
+   int task = get_task_from_window(index);
+   task_state_t *task_state = &gettasks()[task];
+   if(task > -1)
+      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1);
 
    window->framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
    window->framebuffer = malloc(window->framebuffer_size);
@@ -1503,18 +1523,15 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    }
 
    // call resize func if exists
-   int index = get_window_index_from_pointer(window);
-   int task = get_task_from_window(index);
    if(regs && task > -1 && window->resize_func) {
-      if(!switch_to_task(task, regs)) return;
       uint32_t *args = malloc(sizeof(uint32_t) * 4);
       args[3] = (uint32_t)window->framebuffer;
       args[2] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
       args[1] = height - TITLEBAR_HEIGHT;
-      args[0] = get_cindex_from_window(window);
-      map_size(get_current_task_pagedir(), (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
-      map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
-      task_call_subroutine(regs, "resize", (uint32_t)(window->resize_func), args, 4);
+      args[0] = get_cindex_from_window(task_state, window);
+      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
+      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
+      task_call_subroutine(regs, task_state, "resize", (uint32_t)(window->resize_func), args, 4);
    }
 
    if(scrollerhidden) {
@@ -1529,14 +1546,13 @@ void window_release(registers_t *regs, gui_window_t *window) {
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
    if(task > -1 && window->release_func) {
-      if(switch_to_task(task, regs)) {
-         uint32_t *args = malloc(sizeof(uint32_t) * 3);
-         args[2] = gui_mouse_x - window->x; // x relative to window content
-         args[1] = gui_mouse_y - window->y - TITLEBAR_HEIGHT; // y relative to window content
-         args[0] = get_cindex();
-         map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*3, 1, 1);
-         task_call_subroutine(regs, "release", (uint32_t)(window->release_func), args, 3);
-      }
+      task_state_t *task_state = &gettasks()[task];
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = gui_mouse_x - window->x; // x relative to window content
+      args[1] = gui_mouse_y - window->y - TITLEBAR_HEIGHT; // y relative to window content
+      args[0] = get_cindex(task_state);
+      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*3, 1, 1);
+      task_call_subroutine(regs, task_state, "release", (uint32_t)(window->release_func), args, 3);
    }
 
    // check windowobjs
@@ -1556,8 +1572,8 @@ windowmgr_settings_t *windowmgr_get_settings() {
 
 // get 'cindex' of currently selected window
 // main task window has index -1, children 0+, not found -2
-int get_cindex() {
-   int w = get_task_window(get_current_task()); // main window of current task
+int get_cindex(task_state_t *task) {
+   int w = get_task_window(task->task_id); // main window of current task
    if(w < 0)
       return -2;
 
@@ -1574,8 +1590,8 @@ int get_cindex() {
    return -2;
 }
 
-int get_cindex_from_window(gui_window_t *window) {
-   int w = get_task_window(get_current_task()); // main window of current task
+int get_cindex_from_window(task_state_t *task, gui_window_t *window) {
+   int w = get_task_window(task->task_id); // main window of current task
    gui_window_t *mainwin = getWindow(w);
    if(w < 0)
       return -2;

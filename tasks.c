@@ -162,6 +162,9 @@ void end_task(int index, registers_t *regs) {
    if(task->in_syscall)
       debug_printf("Task was in syscall %i\n", task->syscall_no);
 
+   if(regs != NULL && (index == get_current_task() || !task_exists()))
+      switch_task(regs); // swap page dir before freeing
+
    if(task->process->threads[0] == task) {
       // main thread, terminate entire process
       debug_printf("Ending task process\n");
@@ -169,14 +172,23 @@ void end_task(int index, registers_t *regs) {
       // free task memory
       if(task->process->prog_size != 0)
          free(task->process->prog_start, task->process->prog_size);
-      // todo: free args, page dir at some point & fds
 
-      if(task->process->vmem_start != 0) {
-         debug_printf("Unmapping 0x%h - 0x%h\n", task->process->vmem_start, task->process->vmem_end);
+      // free args
+      for(int i = 0; i < task->routine_argc; i++) {
+         free(task->routine_args[i], PAGE_SIZE);
+      }
+      
+      // free events
+      for(int i = 0; i < task->process->event_queue_size; i++) {
+         task_event_t *event = task->process->event_queue[i];
+         if(event)
+            free((uint32_t)event, sizeof(task_event_t));
+      }
 
-         for(uint32_t i = task->process->vmem_start; i < task->process->vmem_end; i++) {
-            unmap(task->process->page_dir, i);
-         }
+      // free fds
+      for(int i = 0; i < task->process->fd_count; i++) {
+         fs_file_t *fd = task->process->file_descriptors[i];
+         fs_close(fd);
       }
 
       // kill other tasks
@@ -192,15 +204,20 @@ void end_task(int index, registers_t *regs) {
 
       task_reset_windows(index);
 
+      // free heap
+      if(task->process->heap_end > task->process->heap_start) {
+         for(uint32_t addr = task->process->heap_start; addr < task->process->heap_end; addr+=PAGE_SIZE) {
+            free(page_getphysical(task->process->page_dir, addr), PAGE_SIZE);
+         }
+      }
+      free_page_dir(task->process->page_dir);
+
       // free process
       free((uint32_t)task->process, sizeof(process_t));
       task->process = NULL;
    }
 
    task->enabled = false;
-
-   if(index == get_current_task() || !task_exists())
-      if(regs != NULL) switch_task(regs);
 }
 
 void tasks_alloc() {
@@ -235,6 +252,7 @@ bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
    elf_run(regs, prog, entry->fileSize, argc, args, focus);
    strcpy(get_current_task_state()->process->exe_path, path);
    free((uint32_t)prog, entry->fileSize);
+   free((uint32_t)entry, sizeof(fat_dir_t));
    return true;
 }
 
@@ -442,7 +460,11 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
    }
 }
 
-void task_queue_subroutine(char *name, uint32_t addr, uint32_t *args, int argc) {
+void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
+   if(!task->enabled) {
+      debug_printf("Couldn't queue routine for task %i - task is disabled\n", task->task_id);
+      return;
+   }
    // add to event queue
    task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
    strcpy(event->name, name);
@@ -450,7 +472,6 @@ void task_queue_subroutine(char *name, uint32_t addr, uint32_t *args, int argc) 
    event->args = args;
    event->argc = argc;
    event->task = current_task;
-   task_state_t *task = &tasks[current_task];
    if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
       debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
       return;
@@ -458,27 +479,29 @@ void task_queue_subroutine(char *name, uint32_t addr, uint32_t *args, int argc) 
    task->process->event_queue[task->process->event_queue_size++] = event;
 }
 
-void task_call_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
+void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
 
-   task_state_t *task = &tasks[current_task];
-   if(task->in_routine) {
-      // already running routine, queue up and add event
-      if(strstartswith(task->routine_name, "wo") && strequ(task->routine_name+2, name))
-         return; // wo event overrides main event
-
-      task_queue_subroutine(name, addr, args, argc);
-      return;
-   } else if(!tasks[current_task].enabled) {
-      debug_printf("Task %i is ended, exiting subroutine");
+   // call subroutine immediately, switching to task
+   
+   if(!task->enabled) {
+      debug_printf("Task %i is ended, exiting subroutine", task->task_id);
       return;
    }
+
+   if(task->paused || task->in_routine) {
+      task_queue_subroutine(task, name, addr, args, argc);
+      return;
+   }
+   
+   if(!switch_to_task(task->task_id, regs))
+      return;
 
    // if event queue is empty, launch into routine immediately
    // otherwise just wait for queued event
    if(task->process->event_queue_size > 0) {
       debug_printf("Not in routine but queue has content\n");
-      task_queue_subroutine(name, addr, args, argc);
-      task_execute_subroutine(regs, name, addr, args, argc);
+      task_queue_subroutine(task, name, addr, args, argc);
+      task_execute_queued_subroutine(regs, (void*)current_task);
    } else {
       task_execute_subroutine(regs, name, addr, args, argc);
    }

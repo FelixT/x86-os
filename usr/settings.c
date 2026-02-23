@@ -314,7 +314,7 @@ void _start() {
    dialog_init(dialog, -1);
    ui = dialog->ui;
 
-   override_resize((uint32_t)&resize, -1);
+   override_resize(&resize, -1);
 
    dialog_set_title(dialog, "System Settings");
 

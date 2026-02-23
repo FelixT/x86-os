@@ -47,6 +47,7 @@ typedef struct gui_window_t {
 
 	// function pointers, window is type *gui_window_t
 	void (*keypress_func)(uint16_t key, void *window);
+	void (*keyrelease_func)(uint16_t key, void *window);
    void (*click_func)(int x, int y);
    void (*drag_func)(int x, int y);
    void (*draw_func)(void *window);
