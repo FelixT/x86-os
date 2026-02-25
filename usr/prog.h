@@ -792,6 +792,16 @@ static inline void sleep(uint32_t ms) {
    );
 }
 
+static inline uint32_t get_tick() {
+   uint32_t ms;
+   asm volatile(
+      "int $0x30"
+      : "=b" (ms)
+      : "a" (57)
+   );
+   return ms;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(void *callback) {

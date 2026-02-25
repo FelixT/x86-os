@@ -10,6 +10,7 @@ push eax
 push ebx
 mov eax, 1
 mov ebx, msg
+mov ecx, -1
 int 0x30
 pop ebx
 pop eax

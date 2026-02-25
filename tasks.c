@@ -463,6 +463,12 @@ void task_execute_queued_subroutine(void *regs, void *msg) {
 void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
    if(!task->enabled) {
       debug_printf("Couldn't queue routine for task %i - task is disabled\n", task->task_id);
+      free((uint32_t)args, sizeof(uint32_t*)*argc);
+      return;
+   }
+   if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
+      debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
+      free((uint32_t)args, sizeof(uint32_t*)*argc);
       return;
    }
    // add to event queue
@@ -472,10 +478,6 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
    event->args = args;
    event->argc = argc;
    event->task = current_task;
-   if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
-      debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
-      return;
-   }
    task->process->event_queue[task->process->event_queue_size++] = event;
 }
 
@@ -485,6 +487,7 @@ void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
    
    if(!task->enabled) {
       debug_printf("Task %i is ended, exiting subroutine", task->task_id);
+      free((uint32_t)args, sizeof(uint32_t*)*argc);
       return;
    }
 
@@ -493,8 +496,10 @@ void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
       return;
    }
    
-   if(!switch_to_task(task->task_id, regs))
+   if(!switch_to_task(task->task_id, regs)) {
+      free((uint32_t)args, sizeof(uint32_t*)*argc);
       return;
+   }
 
    // if event queue is empty, launch into routine immediately
    // otherwise just wait for queued event

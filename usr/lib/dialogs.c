@@ -725,6 +725,7 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
    grid_t *grid_data = grid->data;
    grid_data->bordered = false;
    grid_data->click_func = &dialog_filepicker_grid_click;
+   grid_data->fill_hovered_empty_cells = false;
    canvas_add(groupbox->canvas, grid);
 
    if(content->entries)
@@ -750,6 +751,7 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
       // icon
       wo_t *icon = create_image(0, 6, 20, 20, NULL);
       image_t *icon_data = icon->data;
+      icon_data->white_is_transparent = true;
       if(entry->type == FS_TYPE_DIR)
          icon_data->data = dialog->folder_icon_data;
       else

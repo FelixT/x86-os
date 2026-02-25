@@ -325,7 +325,7 @@ void software_handler(registers_t *regs) {
          api_scroll_to(regs);
          break;
       case 57:
-         //api_windowobj_add_child(regs);
+         api_get_timer_tick(regs);
          break;
       case 58:
          api_rename(regs);
@@ -492,6 +492,10 @@ void timer_handler(registers_t *regs) {
    timer_i++;
    timer_i%=10000000;
 
+}
+
+int get_timer_tick() {
+   return timer_i;
 }
 
 void closewindow_event(registers_t *regs, void *msg) {
@@ -735,7 +739,7 @@ void err_exception_handler(int int_no, registers_t *regs) {
       window_writestr("\n", 0, 0);
       
       if(kernel)
-         debug_printf("System was kernel mode\n");
+         debug_printf("System was in kernel mode\n");
       if(task_state->in_routine)
          debug_printf("Task was in routine %s\n", task_state->routine_name);
       if(task_state->in_syscall)

@@ -746,7 +746,6 @@ void windowmgr_swap_window() {
 bool keyboard_shift = false;
 bool keyboard_caps = false;
 bool keyboard_alt = false;
-bool keyboard_control = false;
 
 void windowmgr_keypress(void *regs, int scan_code) {
    // check desktop window objects
@@ -818,6 +817,10 @@ void windowmgr_keypress(void *regs, int scan_code) {
          c = 0x1B;
       if(scan_code == 28) // return
          c = 0x0D;
+      if(scan_code == 0x1D) // control
+         c = 0x80;
+      if(scan_code == 0x2A || scan_code == 0x36) // shift
+         c = 0x81;
       if(scan_code == 72) // uparrow
          c = 0x100;
       if(scan_code == 80) // downarrow

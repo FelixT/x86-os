@@ -560,7 +560,6 @@ void api_read_stdin_callback(void *regs, char *buffer) {
 }
 
 void api_read_fd_callback(registers_t *regs, int task) {
-   debug_printf("api_read: callback task %i\n", task);
    gettasks()[task].paused = false;
    switch_to_task(task, regs); // wake
    task_execute_queued_subroutine(regs, (void*)task); // check for queued events while task was paused
@@ -575,8 +574,6 @@ void api_read(registers_t *regs) {
    int fd = regs->ebx;
    char *buf = (char*)regs->ecx;
    size_t count = regs->edx;
-
-   debug_printf("api_read: fd %i, buf 0x%h-0x%h (size %u)\n", fd, buf, buf+count, count);
    
    if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("read: fd not found\n");
@@ -1118,8 +1115,12 @@ void api_sleep(registers_t *regs) {
    uint32_t ms = regs->ebx;
    int ticks = (timer_hz * ms) / 1000;
    task_state_t *task = get_current_task_state();
-   if(ticks <= 0) return;
    task->paused = true;
    events_add(ticks, &api_sleep_callback, task, -1);
    switch_task(regs); // yield
+}
+
+void api_get_timer_tick(registers_t *regs) {
+   // OUT: ebx - tick
+   regs->ebx = get_timer_tick();
 }

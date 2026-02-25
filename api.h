@@ -72,5 +72,6 @@ void api_get_window_setting(registers_t *regs);
 void api_get_tasks(registers_t *regs);
 void api_kill_task(registers_t *regs);
 void api_sleep(registers_t *regs);
+void api_get_timer_tick(registers_t *regs);
 
 #endif

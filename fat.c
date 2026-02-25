@@ -778,8 +778,6 @@ void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset,
    state->readCount = 0;
    state->readBytes = 0;
 
-   debug_printf("fat_read: Buffer size %u task %u\n", state->size, state->task);
-
    // kick off read event chain
    events_add(1, &fat_read_file_callback, (void*)state, -1);
 }
