@@ -1,7 +1,7 @@
 // bootloader 1 loader
 // located in memory at 0x7e00 size 63.5k
 // init text mode terminal, interrupts, ata
-// loads kernel to 0x06380000 (KERNEL_START)
+// loads kernel to 0x1000000 (KERNEL_START)
 // just go ahead and load the kernel to the 'higher half location'
 // which simplies enabling paging (can identity map)
 

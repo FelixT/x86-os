@@ -231,14 +231,21 @@ void window_scroll_do_callback(void *regs, void *callback, int deltaY, int offse
          (*(void(*)(int, int))callback)(deltaY, offsetY);
       } else {
          task_state_t *task = &gettasks()[taskIndex];
+         gui_window_t *window = getSelectedWindow();
+         
+         if(task_queue_contains_routine(task, "scroll")) {
+            window->scrolledDeltaY += deltaY;
+            return;
+         }
          uint32_t *args = malloc(sizeof(int) * 3);
-         args[2] = deltaY;
-         args[1] = offsetY;
+         args[2] = deltaY + window->scrolledDeltaY;
+         args[1] = offsetY + window->scrolledDeltaY;
          args[0] = get_cindex(task);
          task_call_subroutine(regs, task, "scroll", (uint32_t)(callback), args, 3);
+         window->scrolledDeltaY = 0;
       }
    } else {
-      window_default_scroll(deltaY);
+      window_default_scroll(deltaY); // deprecated
    }
 }
 
@@ -271,9 +278,10 @@ void window_scroll_callback(void *wo, void *regs, int x, int y) {
 // periodically called while scrolling
 void window_scroll_event(void *regs, void *msg) {
    if(getSelectedWindowIndex() != (int)msg) return;
-   if(!getSelectedWindow() || !getSelectedWindow()->scrollbar) return;
-   windowobj_t *scroller = getSelectedWindow()->scrollbar->children[0];
-   if(!scroller->clicked) return; // not being dragged
+   gui_window_t *window = getSelectedWindow();
+   if(!window || !window->scrollbar) return;
+   windowobj_t *scroller = window->scrollbar->children[0];
+   if(!scroller->clicked && window->scrolledDeltaY == 0) return; // not being dragged & nothing remaining to scroll
    window_scroll_callback(scroller, regs, 0, 0);
    events_add(15, &window_scroll_event, msg, -1);
 }

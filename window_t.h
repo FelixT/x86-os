@@ -38,6 +38,7 @@ typedef struct gui_window_t {
    uint32_t framebuffer_size;
    int scrollable_content_height; // excludes titlebar height
    int scrolledY;
+   int scrolledDeltaY; // scrolled since last callback
    windowobj_t *scrollbar;
 
    surface_t surface;

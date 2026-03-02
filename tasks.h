@@ -106,6 +106,7 @@ void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
 void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 void task_subroutine_end(registers_t *regs);
 void task_execute_queued_subroutine(void *regs, void *msg);
+bool task_queue_contains_routine(task_state_t *task, char *name);
 void tss_init();
 
 void task_write_to_window(int task, char *out, bool children);

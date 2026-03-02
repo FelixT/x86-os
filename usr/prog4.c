@@ -17,7 +17,7 @@ dialog_t *dialog;
 
 void timer_callback() {
     //clear();
-    bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1, false);
+    bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1, true);
     ui_draw(dialog->ui);
     redraw();
 

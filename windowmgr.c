@@ -249,6 +249,7 @@ bool window_init(gui_window_t *window) {
    window->scrolledY = 0;
    window->scrollable_content_height = 0;
    window->scrollbar = NULL;
+   window->scrolledDeltaY = 0;
    window->hovering = false;
    window->child_count = 0;
 
@@ -1444,9 +1445,10 @@ void windowmgr_mousemove(int x, int y) {
 }
 
 void windowmgr_scroll(bool up) {
+   gui_window_t *window = getSelectedWindow();
+   if(!window || window->closed) return;
    int deltaY = up ? -20 : 20;
-   if(!getSelectedWindow() || getSelectedWindow()->closed) return;
-   int offsetY = getSelectedWindow()->scrolledY + deltaY;
+   int offsetY = window->scrolledY + deltaY;
    window_scroll_to(get_regs(), offsetY);
 }
 

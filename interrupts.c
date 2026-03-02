@@ -415,11 +415,11 @@ void mouse_handler(registers_t *regs) {
       mouse_update(relX, relY);
 
       if(mouse_scrolling_enabled) {
-         int scroll = mouse_data[3] & 0x0F; // only lower 4 bits are scroll data
-         if(scroll == 1) {
+         int scroll = (int8_t)mouse_data[3];
+         if(scroll == -1) {
             // scroll up
             windowmgr_scroll(true);
-         } else if(scroll == 0xF) {
+         } else if(scroll == 1) {
             // scroll down
             windowmgr_scroll(false);
          }

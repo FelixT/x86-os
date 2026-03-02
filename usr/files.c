@@ -376,6 +376,7 @@ void scroll(int deltaY, int offsetY, int window) {
    wo_menu->draw_func(wo_menu, ui_get_context(ui));
    offset = offsetY/(gridview ? 36 : 27);
    ui->scrolled_y = offsetY;
+   redraw();
    end_subroutine();
 }
 
@@ -462,6 +463,8 @@ void hover(int x, int y) {
    ui_hover(ui, x, y);
    draw_context_t context = ui_get_context(ui);
    wo_menu->draw_func(wo_menu, context);
+   if(ui->shown_menu)
+      ui->shown_menu->draw_func(ui->shown_menu, context);
    redraw();
    end_subroutine();
 }

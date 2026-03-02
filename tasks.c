@@ -481,6 +481,15 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
    task->process->event_queue[task->process->event_queue_size++] = event;
 }
 
+bool task_queue_contains_routine(task_state_t *task, char *name) {
+   for(int i = 0; i < task->process->event_queue_size; i++) {
+      task_event_t *event = task->process->event_queue[i];
+      if(event->task == task->task_id && strequ(event->name, name))
+         return true;
+   }
+   return false;
+}
+
 void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
 
    // call subroutine immediately, switching to task

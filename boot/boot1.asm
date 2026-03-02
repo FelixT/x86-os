@@ -34,7 +34,7 @@ kmain:
 
    jmp $
 
-; may located after 0xFFFF hence usable only in protected mode
+; may be located after 0xFFFF hence usable only in protected mode
 section .data
 
 %include "font7.asm"

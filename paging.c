@@ -95,8 +95,8 @@ page_dir_entry_t *new_page() {
    uint8_t *entry = (uint8_t*)dir;
    memset(entry, 0, 1024*(int)sizeof(page_dir_entry_t));
 
-   // identity map kernel binary (already loaded into higher half)
-   for(uint32_t i = KERNEL_START/0x1000; i <= KERNEL_END/0x1000; i++)
+   // identity map kernel binary
+   for(uint32_t i = KERNEL_START/0x1000; i < KERNEL_END/0x1000; i++)
       map(dir, i*0x1000, i*0x1000, 0, 0);
    // identity map program stack (maps whole system program stack - bad)
    for(uint32_t i = STACKS_START/0x1000; i < TOS_PROGRAM/0x1000; i++)

@@ -9,31 +9,32 @@
 // kernel is loaded into 100mb
 
 // physical memory layout
-#define KERNEL_SIZE 0x40000 // kernel binary size (~ the real size of 258k)
+#define KERNEL_SIZE  0x40000 // kernel binary size (~ the real size of 258k)
 
-#define KERNEL_START 0x06380000 // loaded to here in bootloader1
-#define KERNEL_END 0x06420000 // KERNEL_START + KERNEL_SIZE
+#define KERNEL_START 0x1000000 // loaded to here in bootloader1
+#define KERNEL_END   0x1040000 // KERNEL_START + KERNEL_SIZE
 
-#define STACKS_START 0x40000
-#define TOS_PROGRAM 0x50000 // STACKS_START + 0x10000
-#define HEAP_KERNEL 0x100000 // unified physical heap for user & kernel
-#define HEAP_KERNEL_END 0x2100000 // HEAP_KERNEL + 0x2000000
+#define STACKS_START 0x100000
+#define TOS_PROGRAM  0x110000 // STACKS_START + 0x10000
 
-#define KSTACK_START 0x06300000
-#define TOS_KERNEL 0x06370000 // V_STACKS_START + 0x2000 (k stack size 0x2000)
+#define KSTACK_START 0x110000
+#define TOS_KERNEL   0x180000 // V_STACKS_START + 0x70000 (k stack size 0x7000)
+
+#define HEAP_KERNEL     0x1040000 // unified physical heap for user & kernel
+#define HEAP_KERNEL_END 0x3040000 // HEAP_KERNEL + 0x2000000
 
 #define KERNEL_HEAP_SIZE 0x2000000 // bytes
-#define MEM_BLOCK_SIZE 0x1000 // 4096 bytes (page size) for now (previously 0x200/512 bytes)
+#define MEM_BLOCK_SIZE   0x1000 // 4096 bytes (page size) for now (previously 0x200/512 bytes)
 
 // virtual memory layout
 // todo: kernel mapped to highest half of memory (0xC0000000-0xFFFFFFFF)
 // currently, loaded & identity mapped to known location
 
-// physical -> virtual offset is 0xbffe8000 (V_KERNEL_START-KERNEL_START)
-#define V_KERNEL_START 0x06380000
-#define V_KERNEL_END 0x06420000 // V_KERNEL_START + 0x20000 (kernel size 0x20000)
-#define V_KSTACK_START 0x06300000 // V_KERNEL_END -> V_KERNEL_START + 0x20000 (kernel size 0x20000)
-#define V_TOS_KERNEL 0x06370000 // V_STACKS_START + 0x2000 (k stack size 0x2000)
+// physical -> virtual offset is 0 for now (V_KERNEL_START-KERNEL_START)
+#define V_KERNEL_START 0x1000000
+#define V_KERNEL_END   0x1040000 // V_KERNEL_START + 0x20000 (kernel size 0x20000)
+#define V_KSTACK_START 0x110000 // V_KERNEL_END -> V_KERNEL_START + 0x20000 (kernel size 0x20000)
+#define V_TOS_KERNEL   0x180000 // V_STACKS_START + 0x2000 (k stack size 0x2000)
 
 typedef struct mem_segment_status_t {
    bool allocated;
