@@ -20,6 +20,8 @@ typedef struct windowmgr_settings_t {
    char font_path[256];
 } windowmgr_settings_t;
 
+#define MAX_WINDOWS 64
+
 int windowmgr_add();
 bool window_init(gui_window_t *window);
 int getSelectedWindowIndex();

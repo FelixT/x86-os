@@ -45,7 +45,7 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
          continue;
 
       if(ph->p_offset + ph->p_filesz > size) {
-         debug_printf("ELF segment %u exceeds binary size \n", i, ph->p_offset, ph->p_filesz, size);
+         debug_printf("ELF segment %u exceeds binary size (offset 0x%h size 0x%h > 0x%h)\n", i, ph->p_offset, ph->p_filesz, size);
          return;
       }
    
@@ -120,6 +120,10 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    task->process->page_dir = dir;
    task->process->heap_start = heap_start;
    task->process->heap_end = heap_start;
+
+   // identity map program stack
+   for(uint32_t i = (task->stack_top - TASK_STACK_SIZE)/0x1000; i < task->stack_top/0x1000; i++)
+      map(dir, i*0x1000, i*0x1000, 1, 1);
    launch_task(task_index, regs, focus);
 
    // push args

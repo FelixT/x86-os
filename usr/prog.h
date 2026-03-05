@@ -191,7 +191,7 @@ static inline void kfree(void *addr, uint32_t size) {
    asm volatile (
       "int $0x30;"
       :: "a" (40),
-      "b" ((uint32_t*)addr),
+      "b" ((uint32_t)addr),
       "c" (size)
       : "cc", "memory"
    );

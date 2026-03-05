@@ -682,7 +682,7 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
 
    if(dialog->dir) {
       kfree(dialog->dir->entries, dialog->dir->size * sizeof(fs_dir_entry_t));
-      kfree(dialog->dir, sizeof(dialog->dir));
+      kfree(dialog->dir, sizeof(fs_dir_content_t));
       dialog->dir = NULL;
    }
    

@@ -152,6 +152,9 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
 }
 
 void ui_keypress(ui_mgr_t *ui, uint16_t c) {
+   if(c == 0x80 || c == 0x81)
+      return; // ignore control & shift
+
    if(ui->focused) {
       wo_t *wo = ui->focused;
       draw_context_t context = ui_get_context(ui);

@@ -324,7 +324,7 @@ int windowmgr_add() {
    int index = getFirstFreeIndex();
    if(index == -1) {
    
-      if(windowCount < 64) {
+      if(windowCount < MAX_WINDOWS) {
          windowCount++;
          index = windowCount - 1;
       } else {
@@ -603,10 +603,9 @@ void windowmgr_init() {
    strcpy(wm_settings.desktop_bgimg, "/bmp/bg16.bmp");
    strcpy(wm_settings.font_path, "/font/7.fon");
 
-   // assigned fixed memory for 64 windows for now to reduce bugs
-   // bug is just that resize func doesn't work i think
-   gui_windows = malloc(sizeof(gui_window_t) * 64);
-   memset(gui_windows, 0, sizeof(gui_window_t) * 64);
+   // assigned fixed memory for MAX_WINDOWS windows for now for simplicity
+   gui_windows = malloc(sizeof(gui_window_t) * MAX_WINDOWS);
+   memset(gui_windows, 0, sizeof(gui_window_t) * MAX_WINDOWS);
    for(int i = 0; i < 100; i++)
       render_order[i] = NULL;
    // Init with one (debug) window

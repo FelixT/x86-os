@@ -352,6 +352,7 @@ void window_scroll_to(void *regs, int y) {
    if(scrolledY > scrollableHeight) scrolledY = scrollableHeight;
    
    int deltaY = scrolledY - window->scrolledY;
+   if(window->scrolledY == scrolledY) return; // already at correct position
    window->scrolledY = scrolledY;
    
    windowobj_t *scroller = (windowobj_t*)window->scrollbar->children[0];

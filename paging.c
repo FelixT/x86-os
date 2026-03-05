@@ -98,9 +98,6 @@ page_dir_entry_t *new_page() {
    // identity map kernel binary
    for(uint32_t i = KERNEL_START/0x1000; i < KERNEL_END/0x1000; i++)
       map(dir, i*0x1000, i*0x1000, 0, 0);
-   // identity map program stack (maps whole system program stack - bad)
-   for(uint32_t i = STACKS_START/0x1000; i < TOS_PROGRAM/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 1, 1);
 
    // map kernel stack
    uint32_t v_offset = (V_KSTACK_START - KSTACK_START)/0x1000;
@@ -123,6 +120,10 @@ void page_init() {
    // set up kernel page and switch to it
 
    page_dir = new_page();
+
+   // map stack for idle process
+   for(uint32_t i = (TOS_PROGRAM - TASK_STACK_SIZE)/0x1000; i < TOS_PROGRAM/0x1000; i++)
+      map(page_dir, i*0x1000, i*0x1000, 1, 1);
 
    // this page is used for the idle process which needs heap to not crash
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)

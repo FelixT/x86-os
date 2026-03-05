@@ -188,6 +188,12 @@ void path_callback() {
       strcat(path, "/");
    }
 
+   if(dir_content) {
+      kfree(dir_content->entries, sizeof(fs_dir_entry_t) * dir_content->size);
+      kfree(dir_content, sizeof(fs_dir_content_t));
+      dir_content = NULL;
+   }
+
    fs_dir_content_t *content = read_dir(path);
    if(!content) {
       char buffer[500];
@@ -195,11 +201,10 @@ void path_callback() {
       dialog_msg("Error", buffer);
    } else {
       strcpy(cur_path, path_data->text);
-      dir_content = read_dir(cur_path);
+      dir_content = content;
       sort_dir();
       offset = 0;
       display_items();
-      kfree(content, sizeof(fs_dir_content_t) * content->size);
    }
 
    end_subroutine();
@@ -216,6 +221,16 @@ void click(int x, int y) {
    ui_click(ui, x, y);
 
    end_subroutine();
+}
+
+void refresh_dir_content() {
+   if(dir_content) {
+      kfree(dir_content->entries, sizeof(fs_dir_entry_t) * dir_content->size);
+      kfree(dir_content, sizeof(fs_dir_content_t));
+      dir_content = NULL;
+   }
+   dir_content = read_dir(cur_path);
+   sort_dir();
 }
 
 int entry_clicked(wo_t *grid, int window, int row, int col) {
@@ -274,8 +289,7 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
       }
 
       // read dir
-      dir_content = read_dir(cur_path);
-      sort_dir();
+      refresh_dir_content();
       display_items();
 
       redraw();
@@ -394,8 +408,7 @@ void add_file_callback(char *filename) {
          close(fd);
       }
       // refresh
-      dir_content = read_dir(cur_path);
-      sort_dir();
+      refresh_dir_content();
       display_items();
       redraw();
    }
@@ -417,8 +430,7 @@ void add_folder_callback(char *name) {
          dialog_msg("Error", buffer);
       }
       // refresh
-      dir_content = read_dir(cur_path);
-      sort_dir();
+      refresh_dir_content();
       display_items();
       redraw();
    }
@@ -527,8 +539,7 @@ void rename_callback(char *out) {
    debug_println("Renaming %s to %s", buffer, out);
    rename(buffer, out);
    // refresh
-   dir_content = read_dir(cur_path);
-   sort_dir();
+   refresh_dir_content();
    clear();
    display_items();
 }

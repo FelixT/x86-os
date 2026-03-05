@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// assuming a total memory size of 128mb
-// kernel is loaded into 100mb
+// assuming a total memory size of >~64mb
+// kernel is loaded into KERNEL_START
 
 // physical memory layout
 #define KERNEL_SIZE  0x40000 // kernel binary size (~ the real size of 258k)

@@ -107,16 +107,11 @@ void *malloc(int bytes) {
 }
 
 void *resize(uint32_t offset, int oldsize, int newsize) {
-   // TODO
-
-   // if current memory location block can be extended, extend
-   // otherwise malloc the new size, copy from old to new then free old
    uint8_t *newaddr = malloc(newsize);
    if(newaddr == NULL)
       return NULL;
    uint8_t *oldaddr = (uint8_t *)offset;
-   for(int i = 0; i < oldsize; i++)
-      newaddr[i] = oldaddr[i];
+   memcpy(newaddr, oldaddr, oldsize < newsize ? oldsize : newsize);
    free(offset, oldsize);
    return newaddr;
 }

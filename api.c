@@ -320,13 +320,13 @@ void api_malloc(registers_t *regs) {
 void api_free(registers_t *regs) {
    // IN: ebx = addr
    // IN: ecx = size
-   free(regs->ebx, regs->ecx);
-
    uint32_t mem = regs->ebx;
-   task_state_t *task = get_current_task_state();
+   uint32_t size = regs->ecx;
+   free(mem, size);
 
    // unmap from user
-   task->process->no_allocated -= map_size(task->process->page_dir, mem, mem, regs->ecx, 1, 0);
+   task_state_t *task = get_current_task_state();
+   task->process->no_allocated -= map_size(task->process->page_dir, mem, mem, size, 0, 1);
 }
 
 void api_draw_bmp(registers_t *regs) {
@@ -828,10 +828,10 @@ void api_create_thread(registers_t *regs) {
    task_state_t *parent = get_current_task_state();
 
    create_task_entry(task_index, regs->ebx, parent->process->prog_size, parent->process->privileged, parent->process);
+   task_state_t *thread = &gettasks()[task_index];
+   map_size(thread->process->page_dir, thread->stack_top - TASK_STACK_SIZE, thread->stack_top - TASK_STACK_SIZE, TASK_STACK_SIZE, 1, 1);
 
    // copy over essential fields
-   task_state_t *thread = &gettasks()[task_index];
-
    thread->registers.ds = USR_DATA_SEG | 3;
    thread->registers.cs = USR_CODE_SEG | 3; // user code segment
    thread->registers.ss = USR_DATA_SEG | 3;

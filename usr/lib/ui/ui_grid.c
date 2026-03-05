@@ -358,9 +358,10 @@ void destroy_grid(wo_t *grid) {
    for(int i = 0; i < grid_data->rows; i++) {
       for(int j = 0; j < grid_data->cols; j++) {
          for(int k = 0; k < grid_data->cells[i][j].child_count; k++) {
-         wo_t *child = grid_data->cells[i][j].children[k];
-            if(child)
-               destroy_wo(child);
+            wo_t *child = grid_data->cells[i][j].children[k];
+            if(!child) continue; 
+            destroy_wo(child);
+            free(child);
          }
       }
 

@@ -64,9 +64,7 @@ void fat_parse_dir_entry(fat_dir_t *fat_dir) {
 }
 
 // return clusterNo from filename and extension in a specific directory
-bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension) {
-   if(fat_dir->firstClusterNo < 2) return false;
-   
+bool fat_entry_matches_filename(fat_dir_t *fat_dir, char* name, char* extension) {   
    char entryName[9];
    char entryExtension[4];
    strcpy_fixed((char*)entryName, (char*)fat_dir->filename, 8);
@@ -116,6 +114,7 @@ int fat_get_dir_size(uint16_t clusterNo) {
          if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
          count++;
       }
+      free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
       return count;
    }
 
@@ -172,12 +171,13 @@ fat_dir_t *fat_find_in_root(char* filename, char* extension) {
       fat_dir_t *fat_dir = (fat_dir_t*)(rootBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
 
-      if(fat_entry_matches_filename(fat_dir, filename, extension))
+      if(fat_entry_matches_filename(fat_dir, filename, extension)) {
+         free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
          return fat_dir;
+      }
    }
 
    free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
-
    return NULL;
 
 }
@@ -782,14 +782,11 @@ void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset,
    events_add(1, &fat_read_file_callback, (void*)state, -1);
 }
 
-// this is potentially broken, but is still used in kernel in some places
-// see chunked version above
+// reads file contents synchronously, used by kernel
+// usermode uses chunker version above
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    bool readEntireFile = (size == 0); // read entry entry as stored on disk or the size supplied
-
-   uint32_t firstDataSector = rootSector + rootSize;
-   uint32_t fileFirstSector = ((clusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
 
    // read entire fat table
 
@@ -810,35 +807,32 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
 
-   int allocate = (readEntireFile) ? fileSizeDisk : size;
+   uint32_t allocate = (readEntireFile) ? fileSizeDisk : size;
    uint8_t *fileContents = malloc(allocate);
 
    uint32_t byte = 0;
-   int cluster = 0;
+   c = clusterNo;
    while(true) { // until we reach the end of the cluster chain or byte >= size
       // read all sectors of cluster
-      uint32_t diskAddr = baseAddr + (fileFirstSector + cluster*fat_bpb->sectorsPerCluster) * fat_bpb->bytesPerSector;
+      uint32_t currentClusterSector = ((c - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+      uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector;
       uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-      for(int i = 0; i < fat_bpb->sectorsPerCluster; i++) {
-         uint8_t *buf = (uint8_t*)(clusterBuf + i * fat_bpb->bytesPerSector); // sector buf
-         uint32_t memOffset = fat_bpb->bytesPerSector * (cluster*fat_bpb->sectorsPerCluster + i);
-         // copy to master buffer
+      bool done = false;
+      for(int i = 0; i < fat_bpb->sectorsPerCluster && !done; i++) {
+         uint8_t *buf = clusterBuf + i * fat_bpb->bytesPerSector;
          for(int b = 0; b < fat_bpb->bytesPerSector; b++) {
-            if(!readEntireFile && byte >= size) break;
-            fileContents[memOffset + b] = buf[b];
-            byte++;
-
-            if((int)byte >= allocate) {
-               free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
-               break; // reached the end of the file
+            if(byte >= (uint32_t)allocate) {
+               done = true;
+               break;
             }
+            fileContents[byte++] = buf[b];
          }
-
       }
       free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
+      if(done) break;
 
       // check if theres more clusters to read
-      uint16_t tableVal = ((uint16_t*)fat_table)[clusterNo];
+      uint16_t tableVal = ((uint16_t*)fat_table)[c];
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
          break;
@@ -846,14 +840,14 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
          // bad cluster
          break;
       } else { 
-         clusterNo = tableVal; // table value is the next cluster
-         cluster++;
+         c = tableVal; // table value is the next cluster
       }
    }
 
    return fileContents;
 
 }
+
 bool fat_rename(char *path, char *filename) {
    // get parent
    char parentpath[512];

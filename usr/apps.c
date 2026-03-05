@@ -196,6 +196,7 @@ void _start() {
 
    ui_draw(ui);
 
+   kfree(content->entries, sizeof(fs_dir_entry_t) * content->size);
    kfree(content, sizeof(fs_dir_content_t));
 
    redraw();

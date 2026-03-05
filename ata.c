@@ -37,6 +37,7 @@ void ata_identify(bool primaryBus, bool masterDrive) {
 
    // send identify cmd and read status
    outb(ioPort + ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
+   ata_delay(ioPort);
    uint8_t status = inb(ioPort + ATA_REG_STATUS);
    debug_printf("Status %i\n", status);
 
@@ -121,6 +122,7 @@ void ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
 
    if(write) {
       outb(ioPort + ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
+      ata_delay(ioPort);
       do {
          status = inb(ioPort + ATA_REG_STATUS);
          asm volatile("pause" ::: "memory");
@@ -148,7 +150,7 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    }
    
    // read multiple sectors
-   uint16_t *readBuf = malloc(sectorCount*512);
+   uint16_t *readBuf = malloc(bytesRequired);
    if(!readBuf) {
       free((uint32_t)outBuf, bytes);
       return NULL;
@@ -164,7 +166,7 @@ uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32
    
    // copy only the required bytes
    memcpy_fast(outBuf, ((uint8_t*)readBuf) + offset, bytes);
-   free((uint32_t)&readBuf[0], bytesRequired);
+   free((uint32_t)readBuf, bytesRequired);
    return outBuf;
 }
 

@@ -250,6 +250,8 @@ void term_cmd_ls(char *arg) {
       printf("\n");
    }
 
+   kfree(content->entries, sizeof(fs_dir_entry_t) * content->size);
+   kfree(content, sizeof(fs_dir_content_t));
 }
 
 void term_cmd_cd(char *arg) {
