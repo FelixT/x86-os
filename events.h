@@ -12,7 +12,7 @@ typedef struct event_t {
     int task;
 } __attribute__((packed)) event_t;
 
-void events_add(int delta, void *callback, void *msg, int taskid);
+void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, int taskid);
 void events_check(registers_t *regs);
 
 #endif

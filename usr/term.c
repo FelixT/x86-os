@@ -448,7 +448,7 @@ void checkcmd(char *buffer) {
    else if(strequ(command, "RENAME"))
       term_cmd_rename(arg);
    else if(strequ(command, "TASKS"))
-      term_cmd_tasks(arg);
+      term_cmd_tasks();
    else
       term_cmd_default(command);
 

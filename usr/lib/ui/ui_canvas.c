@@ -125,7 +125,11 @@ void canvas_release(wo_t *canvas, draw_context_t context, int x, int y) {
    }
 }
 
-void canvas_mousein() {
+void canvas_mousein(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   (void)wo;
+   (void)draw_context;
+   (void)x;
+   (void)y;
    // do nothing
 }
 
@@ -258,7 +262,7 @@ wo_t *create_canvas(int x, int y, int width, int height) {
    canvas->unfocus_func = &canvas_unfocus;
    canvas->keypress_func = &canvas_keypress;
    canvas->unhover_func = &canvas_unhover;
-   canvas->mousein_func = (void*)&canvas_mousein;
+   canvas->mousein_func = &canvas_mousein;
    canvas->focusable = true;
 
    return canvas;

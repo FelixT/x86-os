@@ -25,7 +25,7 @@ typedef struct windowmgr_settings_t {
 int windowmgr_add();
 bool window_init(gui_window_t *window);
 int getSelectedWindowIndex();
-void setSelectedWindowIndex();
+void setSelectedWindowIndex(int index);
 int getWindowCount();
 void windowmgr_init();
 void debug_writestr(char *str);
@@ -45,7 +45,7 @@ bool windowmgr_click(void *regs, int x, int y);
 void windowmgr_rightclick(void *regs, int x, int y);
 void windowmgr_draw();
 void windowmgr_redrawall();
-void windowmgr_dragged();
+void windowmgr_dragged(registers_t *regs, int relX, int relY);
 void desktop_draw();
 void desktop_click(registers_t *regs, int x, int y);
 void desktop_init();
@@ -61,7 +61,7 @@ void window_removefuncs(gui_window_t *window);
 void window_disable(gui_window_t *window);
 void window_draw_outline(gui_window_t *window, bool occlude);
 windowmgr_settings_t *windowmgr_get_settings();
-void windowmgr_launch_apps();
+void windowmgr_launch_apps(registers_t *regs);
 int get_cindex(task_state_t *task);
 int get_cindex_from_window(task_state_t *task, gui_window_t *window);
 

@@ -17,6 +17,7 @@ mkdir -p o
 mkdir -p o/lib
 mkdir -p fs_root
 mkdir -p fs_root/sys
+mkdir -p fs_root/font
 
 nasm boot/boot.asm -f bin -o o/boot.bin
 nasm boot/boot1.asm -f elf32 -o o/boot1.o

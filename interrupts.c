@@ -169,7 +169,7 @@ void software_handler(registers_t *regs) {
          api_print_program_stack(regs);
          break;
       case 5:
-         api_print_stack(regs);
+         api_print_stack();
          break;
       case 6:
          api_write_uint(regs);
@@ -178,7 +178,7 @@ void software_handler(registers_t *regs) {
          api_return_framebuffer(regs);
          break;
       case 8:
-         api_write_newline(regs);
+         api_write_newline();
          break;
       case 9:
          api_redraw_window(regs);
@@ -498,8 +498,8 @@ int get_timer_tick() {
    return timer_i;
 }
 
-void closewindow_event(registers_t *regs, void *msg) {
-   window_close(regs, (int)msg);
+void closewindow_event(void *regs, void *msg) {
+   window_close((registers_t*)regs, (int)msg);
 }
 
 void endtask_callback(void *regs) {

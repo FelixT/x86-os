@@ -348,7 +348,11 @@ void grid_unhover(wo_t *grid, draw_context_t context) {
    }
 }
 
-void grid_mousein() {
+void grid_mousein(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   (void)wo;
+   (void)draw_context;
+   (void)x;
+   (void)y;
    // do nothing
 }
 

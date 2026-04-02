@@ -176,7 +176,9 @@ void display_items() {
    ui_draw(ui);
 }
 
-void path_callback() {
+void path_callback(wo_t *wo, int window) {
+   (void)wo;
+   (void)window;
    input_t *path_data = (input_t *)wo_path->data;
 
    scroll_to(0, -1);

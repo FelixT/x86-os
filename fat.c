@@ -673,7 +673,7 @@ typedef struct {
    int task;
 } fat_read_file_state_t;
 
-void fat_read_file_callback(registers_t *regs, void *msg) {
+void fat_read_file_callback(void *regs, void *msg) {
    fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
 
    // skip clusters up to offset
@@ -682,7 +682,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
       uint16_t tableVal = ((uint16_t*)state->fatTable)[state->currentCluster];
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
-         (*(void(*)(void*,int))state->callback)((void*)regs, state->task); // callback
+         (*(void(*)(void*,int))state->callback)(regs, state->task); // callback
          return;
       } else if(tableVal == 0xFFF7) {
          debug_printf("FAT error: Hit bad cluster\n");
@@ -716,7 +716,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
 
       if(state->readBytes >= state->size) {
          // callback
-         (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
+         (*(void(*)(void*,int))state->callback)(regs, state->task);
          free((uint32_t)state, sizeof(fat_read_file_state_t));
          return;
       }
@@ -726,7 +726,7 @@ void fat_read_file_callback(registers_t *regs, void *msg) {
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
          // call callback
-         (*(void(*)(void*,int))state->callback)((void*)regs, state->task);
+         (*(void(*)(void*,int))state->callback)(regs, state->task);
          return;
       } else if(tableVal == 0xFFF7) {
          // bad cluster

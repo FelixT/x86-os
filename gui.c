@@ -121,7 +121,7 @@ void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
 
 extern int *font_letter;
 
-void gui_init_meat(registers_t *regs, void *msg) {
+void gui_init_meat(void *regs, void *msg) {
    // needs to be run from interrupt routine with interrupts disabled
    (void)msg;
    gui_writestr("Enabling ATA HD\n", COLOUR_ORANGE);
@@ -133,7 +133,7 @@ void gui_init_meat(registers_t *regs, void *msg) {
    gui_writestr("Enabling desktop\n", COLOUR_ORANGE);
    desktop_init();
    gui_writestr("Enabling tasks\n", COLOUR_ORANGE);
-   tasks_init(regs);
+   tasks_init((registers_t*)regs);
    gui_writestr("Set up timer\n", COLOUR_ORANGE);
    timer_set_hz(1000);
    gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
@@ -154,7 +154,7 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
-   surface.buffer-=128; // ??????? horrible alignment issue
+   //surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);

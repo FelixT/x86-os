@@ -37,11 +37,19 @@ void release(int x, int y, int window) {
    end_subroutine();
 }
 
-void btn_click() {
+void btn_click(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   (void)wo;
+   (void)draw_context;
+   (void)x;
+   (void)y;
    debug_println("Button clicked");
 }
 
-void btn_release() {
+void btn_release(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   (void)wo;
+   (void)draw_context;
+   (void)x;
+   (void)y;
    debug_println("Button released");
 }
 
@@ -100,7 +108,7 @@ void scroll(int deltaY, int offsetY, int window) {
    drawbg();
    ui_draw(ui);
    redraw();
-   end_subroutine(deltaY, offsetY);
+   end_subroutine();
 }
 
 void _start() {

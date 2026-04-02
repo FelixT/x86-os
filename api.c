@@ -1102,7 +1102,8 @@ void api_get_tasks(registers_t *regs) {
    regs->ecx = TOTAL_TASKS;
 }
 
-void api_sleep_callback(registers_t *regs, task_state_t *task) {
+void api_sleep_callback(void *regs, void *msg) {
+   task_state_t *task = (task_state_t*)msg;
    if(!task->enabled) return;
    task->paused = false;
    switch_to_task(task->task_id, regs); // wake

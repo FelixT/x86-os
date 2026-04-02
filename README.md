@@ -8,11 +8,13 @@ Compile and run script:
 
 This command recompiles the kernel and usermode programs, creates hard drive image **hd.bin**, and runs this in qemu.
 
-Required packages:
+Required packages (via brew / apt):
 
 - i686-elf-gcc
 - dosfstools
 - qemu
+- nasm
+- mtools
 
 ### build on windows
 

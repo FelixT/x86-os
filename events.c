@@ -14,7 +14,7 @@ int event_time_until(event_t *event) {
     return (event->time - timer_i + 10000000)%10000000;
 }
 
-void events_add(int delta, void *callback, void *msg, int taskid) {
+void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, int taskid) {
     if(!events_active) {
         events_active = true;
     }

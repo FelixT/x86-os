@@ -545,7 +545,7 @@ void parse_line(char *line) {
    else if(strequ(command, "free"))
       cmd_free(arg);
    else if(strequ(command, "reset"))
-      cmd_reset(arg);
+      cmd_reset();
    else if(strequ(command, "func"))
       cmd_func(arg);
    else if(strequ(command, "buffer"))

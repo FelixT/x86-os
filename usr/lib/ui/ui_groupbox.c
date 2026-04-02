@@ -77,7 +77,11 @@ void hover_groupbox(wo_t *groupbox, draw_context_t context, int x, int y) {
    }
 }
 
-void mousein_groupbox() {
+void mousein_groupbox(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   (void)wo;
+   (void)draw_context;
+   (void)x;
+   (void)y;
    // do nothing
 }
 
@@ -141,7 +145,7 @@ wo_t *create_groupbox(int x, int y, int width, int height, char *label) {
    groupbox->unfocus_func = &unfocus_groupbox;
    groupbox->keypress_func = &keypress_groupbox;
    groupbox->unhover_func = &unhover_groupbox;
-   groupbox->mousein_func = (void*)&mousein_groupbox;
+   groupbox->mousein_func = &mousein_groupbox;
    groupbox->type = WO_GROUPBOX;
    groupbox->focusable = true;
 

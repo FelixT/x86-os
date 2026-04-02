@@ -226,7 +226,7 @@ bool dialog_msg(char *title, char *text) {
    int x = (260 - 50)/2;
    wo_t *btn_wo = create_button(x, y, 50, 20, "Ok");
    button_t *btn = (button_t *)btn_wo->data;
-   btn->release_func = (void*)&dialog_close;
+   btn->release_func = &dialog_close;
    ui_add(msg->ui, btn_wo);
 
    ui_draw(msg->ui);
@@ -292,14 +292,14 @@ int dialog_yesno(char *title, char *text, void *return_func) {
    int x = btnsx;
    wo_t *btn_wo = create_button(x, y, 50, 20, "Yes");
    button_t *btn = (button_t *)btn_wo->data;
-   btn->release_func = (void *)&dialog_complete;
+   btn->release_func = &dialog_complete;
    ui_add(dialog->ui, btn_wo);
 
    x += 50 + 10;
 
    wo_t *btn_cancel_wo = create_button(x, y, 50, 20, "No");
    button_t *btn_cancel = (button_t *)btn_cancel_wo->data;
-   btn_cancel->release_func = (void*)&dialog_close;
+   btn_cancel->release_func = &dialog_close;
    ui_add(dialog->ui, btn_cancel_wo);
 
    ui_draw(dialog->ui);
@@ -348,14 +348,14 @@ int dialog_input(char *text, void *return_func) {
    int x = btnsx;
    wo_t *btn_wo = create_button(x, y, 50, 20, "Ok");
    button_t *btn = (button_t *)btn_wo->data;
-   btn->release_func = (void *)&dialog_complete;
+   btn->release_func = &dialog_complete;
    ui_add(input->ui, btn_wo);
 
    x += 50 + 10;
 
    wo_t *btn_cancel_wo = create_button(x, y, 50, 20, "Cancel");
    button_t *btn_cancel = (button_t *)btn_cancel_wo->data;
-   btn_cancel->release_func = (void*)&dialog_close;
+   btn_cancel->release_func = &dialog_close;
    ui_add(input->ui, btn_cancel_wo);
 
    ui_draw(input->ui);

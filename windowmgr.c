@@ -573,10 +573,10 @@ void windowmgr_getproperties() {
    window->state_size = sizeof(window_settings_t);
 }
 
-void windowmgr_closeselected_callback(registers_t *regs, void *msg) {
+void windowmgr_closeselected_callback(void *regs, void *msg) {
    int index = (int)msg;
    debug_printf("Closing window %i\n", index);
-   window_close(regs, index);
+   window_close((registers_t*)regs, index);
 }
 
 void windowmgr_closeselected() {
