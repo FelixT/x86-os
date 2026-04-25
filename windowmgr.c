@@ -708,7 +708,7 @@ void toolbar_draw() {
 
 }
 
-extern char scan_to_char(int scan_code, bool shift, bool caps);
+extern char scan_to_char(int scan_code, bool caps);
 
 void windowmgr_swap_window() {
    if(selectedWindow != NULL) {
@@ -764,12 +764,12 @@ void windowmgr_keypress(void *regs, int scan_code) {
    }
    if(keyboard_alt) {
       // alt+w
-      if(scan_to_char(scan_code, false, false) == 'w') {
+      if(scan_to_char(scan_code, false) == 'w') {
          window_close(regs, gui_selected_window);
          keyboard_alt = false;
       }
       // alt+space
-      if(scan_to_char(scan_code, false, false) == ' ') {
+      if(scan_to_char(scan_code, false) == ' ') {
          windowmgr_launch_apps((registers_t*)regs);
          keyboard_alt = false;
          return;
@@ -781,8 +781,8 @@ void windowmgr_keypress(void *regs, int scan_code) {
          return;
       }
       // alt+number
-      if(scan_to_char(scan_code, false, false) >= '1' && scan_to_char(scan_code, false, false) <= '9') {
-         int num = scan_to_char(scan_code, false, false) - '1';
+      if(scan_to_char(scan_code, false) >= '1' && scan_to_char(scan_code, false) <= '9') {
+         int num = scan_to_char(scan_code, false) - '1';
          int count = 0;
          for(int i = 0; i < getWindowCount(); i++) {
             if(getWindow(i)->closed) continue;
@@ -809,7 +809,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
       keyboard_shift = !released;
 
    // convert to char
-   uint16_t c = (uint16_t)scan_to_char(scan_code, keyboard_shift, keyboard_caps);
+   uint16_t c = (uint16_t)scan_to_char(scan_code, keyboard_shift^keyboard_caps);
    if(c == 0) { // special chars
       if(scan_code == 14) // backspace
          c = 0x08;

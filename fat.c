@@ -167,13 +167,15 @@ fat_dir_t *fat_find_in_root(char* filename, char* extension) {
    // read entire root in
    uint8_t *rootBuf = ata_read_exact(true, true, rootDirAddr, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
 
+   fat_dir_t *return_dir = malloc(sizeof(fat_dir_t));
    for(int i = 0; i < fat_bpb->noRootEntries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(rootBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
+         memcpy(return_dir, fat_dir, sizeof(fat_dir_t));
          free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
-         return fat_dir;
+         return return_dir;
       }
    }
 
@@ -372,7 +374,6 @@ bool fat_new_file(char *path) {
       debug_printf("Error: no free clusters\n");
       return false;
    }
-   ((uint16_t*)fat_table)[freeCluster] = 0xFFFF; // mark as end of chain
    filedir->firstClusterNo = freeCluster;
    debug_printf("Found free cluster %u\n", freeCluster);
 
@@ -402,6 +403,7 @@ bool fat_new_file(char *path) {
       if(memcmp((char*)fat_dir->filename, (char*)filedir->filename, 11) == 0) {
          debug_printf("Error: file already exists\n");
          free((uint32_t)dirBuf, bufSize);
+         free((uint32_t)parent, sizeof(fat_dir_t));
          free((uint32_t)filedir, sizeof(fat_dir_t));
          return false;
       }
@@ -419,12 +421,17 @@ bool fat_new_file(char *path) {
       ata_write_exact(true, true, dirAddr, dirBuf, bufSize);
 
       debug_writestr("Updating FAT table\n");
+      ((uint16_t*)fat_table)[freeCluster] = 0xFFFF; // mark as end of chain
       fat_table_write();
    } else {
       debug_printf("Error: No free entries found in directory '%'\n", parentpath);
    }
+   
+   free((uint32_t)dirBuf, bufSize);
+   free((uint32_t)parent, sizeof(fat_dir_t));
+   free((uint32_t)filedir, sizeof(fat_dir_t));
 
-   return true;
+   return found;
 }
 
 int fat_write_file(char *path, uint8_t *buffer, uint32_t size) {

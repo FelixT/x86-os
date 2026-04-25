@@ -39,7 +39,7 @@ gui_window_t *api_get_cwindow(int cindex) {
    if(cindex == -1)
       return mainwindow;
    // get child window
-   if(cindex < 0 || cindex > mainwindow->child_count)
+   if(cindex < 0 || cindex >= mainwindow->child_count)
       return NULL;
 
    return mainwindow->children[cindex];
@@ -215,7 +215,7 @@ void api_override_draw(registers_t *regs) {
    // IN: ecx = window
    uint32_t addr = regs->ebx;
    gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(addr != 0) return;
+   if(addr != 0 || !window) return;
    window->draw_func = (void *)(addr);
 }
 
@@ -802,7 +802,7 @@ void api_close_window(registers_t *regs) {
       return;
    }
    // close child window
-   if(cindex < 0 || cindex > mainwindow->child_count) {
+   if(cindex < 0 || cindex >= mainwindow->child_count) {
       regs->ebx = 0;
       return;
    }

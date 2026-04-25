@@ -16,7 +16,7 @@ void _start() {
    surface_t surface = get_surface();
    ui_mgr_t *ui = ui_init(&surface, -1);
 
-   ui_add(ui, create_label(10, 10, 200, 60, "f3os v0.2"));
+   ui_add(ui, create_label(10, 10, 200, 60, "f3os v0.2.1"));
    ui_draw(ui);
 
    while(true) {

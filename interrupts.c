@@ -139,7 +139,7 @@ char scan_to_char(int scan_code, bool caps) {
    if(scan_code == 57)
       c = ' ';
 
-   if(!caps && !caps && c >= 'A' && c <= 'Z')
+   if(!caps && c >= 'A' && c <= 'Z')
       c += ('a' - 'A');
 
    return c;
@@ -478,7 +478,9 @@ void timer_handler(registers_t *regs) {
          gui_draw();
       }
 
-      if(timer_i%3 == 0) {
+      if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
+         // only preempt if interrupted from ring-3: ring-0->ring-0 timer frames
+         // lack useresp/ss in registers_t, so switching there corrupts the iret
          /*if(switching_paused) {
             if(switching) window_writestr(" SP", 0, 0);
          } else {
@@ -673,7 +675,6 @@ void exception_handler(int int_no, registers_t *regs) {
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
-
    cur_regs = regs;
    //switching_paused = true;
 
@@ -681,6 +682,10 @@ void err_exception_handler(int int_no, registers_t *regs) {
    bool kernel = cpl == 0;
 
    extern int current_servicing_task;
+
+   if(get_current_task_pagedir() != page_get_current()) {
+      debug_printf("Current task page directory isn't current...\n");
+   }
 
    if(get_current_task() < 0) {
       debug_printf("Exception %i with task %i\n", int_no, get_current_task());
@@ -692,7 +697,7 @@ void err_exception_handler(int int_no, registers_t *regs) {
 
    if(int_no == 14) {
       if(page_fault_handler(regs)) {
-         switching_paused = false;
+         //switching_paused = false;
          return; // demand paging
       }
    }

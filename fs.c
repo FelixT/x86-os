@@ -25,8 +25,8 @@ fs_file_t *fs_open(char *path) {
 
    fat_dir_t *entry = fat_parse_path(path, true);
    if(!entry) {
-      free((uint32_t)entry, sizeof(fat_dir_t));
       free((uint32_t)file, sizeof(fs_file_t));
+      free((uint32_t)data, sizeof(fs_file_data_t));
       debug_printf("FS: file %s not found\n", path);
       return NULL;
    }

@@ -239,6 +239,7 @@ void tasks_launch_binary(registers_t *regs, char *path) {
    uint32_t progAddr = (uint32_t)prog;
    create_task_entry(index, progAddr, entry->fileSize, false, NULL);
    launch_task(index, regs, false);
+   free((uint32_t)entry, sizeof(fat_dir_t));
    gui_redrawall();
 }
 
@@ -317,7 +318,7 @@ void switch_task(registers_t *regs) {
 
 bool switch_to_task(int index, registers_t *regs) {
    //debug_printf("Switching from task %i to %i\n", current_task, index);
-   if(index < 0 || index > TOTAL_TASKS) {
+   if(index < 0 || index >= TOTAL_TASKS) {
       debug_printf("Invalid task %i\n", index);
       return false;
    }

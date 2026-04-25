@@ -15,10 +15,14 @@ dd if=o/main.bin of=o/hd3.bin bs=512000 count=1 conv=notrunc status=none
 rm -f fs.img
 
 find . -name ".DS_Store" -delete
-mkfs.fat -F 16 -n FATFS -C fs.img 10240
+mkfs.fat -F 16 -n FATFS -C fs.img 20480
 # mount drive & copy files from fs_root dir with mcopy (faster than mount & unmount bottleneck)
 mcopy -s -i fs.img fs_root/* ::
 
 # add fs at 512000
 cat o/hd3.bin fs.img > hd.bin
 chmod 644 hd.bin
+
+# get fs
+#dd if=hd.bin of=hd_fs.bin bs=1 skip=512000
+#hdiutil attach -imagekey diskimage-class=CRawDiskImage hd_fs.bin (mac)

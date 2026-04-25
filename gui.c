@@ -154,7 +154,6 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
-   //surface.buffer-=128; // ??????? horrible alignment issue
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);
