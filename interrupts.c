@@ -13,7 +13,6 @@
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
-extern void* software_interrupt_routine;
 
 extern int videomode;
 extern bool switching; // preemptive multitasking enabled
@@ -29,7 +28,8 @@ static idt_entry_t idt[256];
 
 static idtr_t idtr;
 
-void (*irqs[32])(registers_t *regs); // unused
+#define IRQ_SIZE 32
+void (*irqs[IRQ_SIZE])(registers_t *regs);
 
 registers_t *cur_regs = NULL;
 
@@ -80,8 +80,8 @@ void idt_init() {
    for(uint8_t vector = 32; vector < 49; vector++)
       idt_set_descriptor(vector, irq_stub_table[vector-32], 0x8E);
 
-   for(uint8_t irq = 0; irq < 32; irq++)
-      irqs[irq] = NULL;
+   for(uint8_t i = 0; i < IRQ_SIZE; i++)
+      irqs[i] = NULL;
 
    idt_set_descriptor(48, irq_stub_table[48-32], 0xEE); // software interrupt 0x30, can be called from ring 3
  
@@ -634,36 +634,21 @@ void exception_handler(int int_no, registers_t *regs) {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
 
       int irq_no = int_no - 32;
-
-      switch(irq_no) {
-         case 0:
-            timer_handler(regs);
-            break;
-         case 1:
-            keyboard_handler(regs);
-            break;
-         case 12:
-            mouse_handler(regs);
-            break;
-         case 14:
-            ata_interrupt(); // acknowledge, that's it
-            break;
-         case 16:
-            // 0x30: software interrupt
-            // uses eax, ebx, ecx as potential arguments
-            software_handler(regs);
-            break;
-         default:
-            // other interrupt no, print it
-            if(videomode == 0) {
-               terminal_writeat("  ", 0);
-               terminal_writenumat(int_no, 0);
-            } else {
-               gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
-               gui_writenumat(int_no, 0, 0, 0);
-            }
+      if(irq_no >= IRQ_SIZE || irqs[irq_no] == NULL) {
+         // unhandled interrupt, print it
+         char buffer[256];
+         sprintf(buffer, "Unhandled interrupt %i\n", irq_no);
+         if(videomode == 0) {
+            terminal_write(buffer);
+         } else {
+            gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
+            gui_writenumat(int_no, 0, 0, 0);
+            debug_writestr(buffer);
+         }
+         return;
       }
 
+      irqs[irq_no](regs);
    }
 
    // send end of command code 0x20 to pic
@@ -682,10 +667,6 @@ void err_exception_handler(int int_no, registers_t *regs) {
    bool kernel = cpl == 0;
 
    extern int current_servicing_task;
-
-   if(get_current_task_pagedir() != page_get_current()) {
-      debug_printf("Current task page directory isn't current...\n");
-   }
 
    if(get_current_task() < 0) {
       debug_printf("Exception %i with task %i\n", int_no, get_current_task());

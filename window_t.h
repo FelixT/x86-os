@@ -69,6 +69,7 @@ typedef struct gui_window_t {
 
    void *children[W_CHILDCOUNT]; // child windows
    int child_count;
+   struct gui_window_t *parent; // parent window, or NULL
 } gui_window_t;
 
 #endif

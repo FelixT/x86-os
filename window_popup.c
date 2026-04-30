@@ -50,8 +50,10 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
 }
 
 window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text) {
-   if(parent != NULL)
+   if(parent != NULL) {
       parent->children[parent->child_count++] = window;
+      window->parent = parent;
+   }
    
    int height = 95;
    
@@ -161,6 +163,7 @@ void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y)
 // init
 window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback, uint16_t colour) {
    parent->children[parent->child_count++] = window;
+   window->parent = parent;
 
    window_resize(NULL, window, 320, 340);
    window_popup_init(window, parent);

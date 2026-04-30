@@ -8,6 +8,7 @@ extern "C" {
 #include "tasks.h"
 #include "terminal.h"
 #include "registers_t.h"
+#include "ata.h"
 
 extern void gdt_flush();
 extern void tss_flush();
@@ -25,6 +26,7 @@ void cmain_gui_init() {
    register_irq(0, timer_handler);
    register_irq(1, keyboard_handler);
    register_irq(12, mouse_handler);
+   register_irq(14, ata_interrupt); // acknowledge
    register_irq(16, software_handler);
 }
 

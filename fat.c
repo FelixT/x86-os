@@ -702,6 +702,12 @@ void fat_read_file_callback(void *regs, void *msg) {
       }
    }
 
+   task_state_t *task_state = &gettasks()[state->task];
+   if(!task_state->enabled || !task_state->paused) {
+      free((uint32_t)state, sizeof(fat_read_file_state_t));
+      return; // stop if task has ended
+   }
+   
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
       uint32_t currentClusterSector = ((state->currentCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
       uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector + state->offset;

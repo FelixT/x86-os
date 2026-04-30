@@ -173,11 +173,16 @@ void end_task(int index, registers_t *regs) {
       if(task->process->prog_size != 0)
          free(task->process->prog_start, task->process->prog_size);
 
-      // free args
+      // free args - routine or calling
+      if(task->in_routine && task->routine_args) {
+         free((uint32_t)task->routine_args, task->routine_argc * sizeof(uint32_t*));
+         task->routine_args = NULL;
+         task->routine_argc = 0;
+      }
       for(int i = 0; i < task->routine_argc; i++) {
          free(task->routine_args[i], PAGE_SIZE);
       }
-      
+
       // free events
       for(int i = 0; i < task->process->event_queue_size; i++) {
          task_event_t *event = task->process->event_queue[i];
@@ -191,11 +196,11 @@ void end_task(int index, registers_t *regs) {
          fs_close(fd);
       }
 
-      // kill other tasks
+      // kill other threads
       debug_printf("Ending %i other threads of process\n", task->process->no_threads - 1);
       for(int i = 1; i < task->process->no_threads; i++) {
          task_state_t *thread = task->process->threads[i];
-         end_task(thread->task_id, regs);
+         end_task(thread->task_id, NULL);
          thread->process = NULL;
       }
 
@@ -385,6 +390,7 @@ int get_task_from_window(int windowIndex) {
       if(task->process->window == windowIndex) {
          return i;
       } else {
+         if(task->process->window < 0) continue;
          gui_window_t *searchWindow = getWindow(windowIndex);
          gui_window_t *mainWindow = getWindow(task->process->window);
          if(!mainWindow || mainWindow->closed) continue;
@@ -531,6 +537,8 @@ void task_subroutine_end(registers_t *regs) {
    *regs = tasks[current_task].routine_return_regs;
 
    free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t*));
+   tasks[current_task].routine_args = NULL;
+   tasks[current_task].routine_argc = 0;
 
    tasks[current_task].in_routine = false;
    // check for any other queued events and run if there are

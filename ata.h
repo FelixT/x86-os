@@ -2,6 +2,7 @@
 #define ATA_H
 
 #include "gui.h"
+#include "registers_t.h"
 
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
@@ -44,6 +45,6 @@
 void ata_identify(bool primaryBus, bool masterDrive);
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
 void ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *buf, int size);
-void ata_interrupt();
+void ata_interrupt(registers_t *regs);
 
 #endif

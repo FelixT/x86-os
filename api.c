@@ -785,6 +785,7 @@ void api_create_window(registers_t *regs) {
    int c = parent->child_count;
    parent->children[c] = newwindow;
    parent->child_count++;
+   newwindow->parent = parent;
    window_resize(regs, newwindow, width, height);
    regs->ebx = c;
 }

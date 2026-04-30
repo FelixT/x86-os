@@ -184,7 +184,8 @@ void ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *
       ata_readwrite(primaryBus, masterDrive, addr/512 + i, (uint16_t*)(buf + i*512), true);
 }
 
-void ata_interrupt() {
+void ata_interrupt(registers_t *regs) {
+   (void)regs;
    // read status
    uint16_t ioPort;
    ioPort = ATA_PORT_PRIMARY;

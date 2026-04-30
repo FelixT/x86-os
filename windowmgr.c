@@ -153,9 +153,10 @@ void window_close(void *regs, int windowIndex) {
       return;
    }
 
+   int task = get_task_from_window(windowIndex);
+   task_state_t *task_state = &gettasks()[task];
    if(regs) {
-      int task = get_task_from_window(windowIndex);
-      if(task > -1 && gettasks()[task].process->window == windowIndex) {
+      if(task > -1 && task_state->process->window == windowIndex) {
          end_task(task, regs); // don't kill task if closing child window
          // re-establish pointer as gui_windows may have been resized in end_task
          window = getWindow(windowIndex);
@@ -163,18 +164,32 @@ void window_close(void *regs, int windowIndex) {
          // call close func if set
          debug_printf("Calling close func for window %i\n", windowIndex);
          if(task > -1 && window->close_func != NULL) {
-            task_state_t *task_state = &gettasks()[task];
             uint32_t *args = malloc(sizeof(uint32_t) * 1);
             args[0] = get_cindex(task_state);
             task_call_subroutine(regs, task_state, "close", (uint32_t)(window->close_func), args, 1);
          }
       }
+   } else {
+      if(task_state->process->window == windowIndex)
+         task_state->process->window = -1;
    }
 
    if(windowIndex == getSelectedWindowIndex())
       setSelectedWindowIndex(-1);
 
    window->closed = true;
+
+   // remove from parent's child list
+   if(window->parent) {
+      gui_window_t *p = window->parent;
+      for(int i = 0; i < p->child_count; i++) {
+         if(p->children[i] == window) {
+            p->children[i] = NULL;
+            break;
+         }
+      }
+      window->parent = NULL;
+   }
 
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
       free((uint32_t)&window->cmd_history[i][0], TEXT_BUFFER_LENGTH);
@@ -215,9 +230,9 @@ void window_close(void *regs, int windowIndex) {
 
    // take children with them
    for(int i = 0; i < window->child_count; i++) {
-      if(window->children[i] != NULL) {
-         window_close(regs, get_window_index_from_pointer(window->children[i]));
-      }
+      gui_window_t *child = (gui_window_t*)window->children[i];
+      if(child == NULL || child->closed) continue;
+      window_close(regs, get_window_index_from_pointer(child));
    }
 
    gui_redrawall();
@@ -252,6 +267,7 @@ bool window_init(gui_window_t *window) {
    window->scrolledDeltaY = 0;
    window->hovering = false;
    window->child_count = 0;
+   window->parent = NULL;
 
    window_resetfuncs(window);
    // no window objects
