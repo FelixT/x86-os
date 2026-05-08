@@ -699,7 +699,19 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
    int cols = (width - 20) / 100;
    if(!cols) cols = 1;
 
-   int rows = ((content->size - 2) + cols - 1) / cols;
+   if(content->entries)
+      sort(content->entries, content->size, sizeof(fs_dir_entry_t), dialog_filepicker_sort);
+
+   int visible = 0;
+   for(int i = 0; i < content->size; i++) {
+      fs_dir_entry_t *entry = &content->entries[i];
+      if(entry->filename[0] == '.') continue;
+      if(entry->hidden) continue;
+      visible++;
+   }
+
+   int rows = (visible + cols - 1) / cols;
+   if(!rows) rows = 1;
 
    int grid_height = rows * 32;
 
@@ -728,15 +740,12 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
    grid_data->fill_hovered_empty_cells = false;
    canvas_add(groupbox->canvas, grid);
 
-   if(content->entries)
-      sort(content->entries, content->size, sizeof(fs_dir_entry_t), dialog_filepicker_sort);
-
    int row = 0;
    int col = 0;
 
-   int offset = strcmp((path), "/") == 0 ? 0 : 2; // hide dot entries
-   for(int i = offset; i < content->size; i++) {
+   for(int i = 0; i < content->size; i++) {
       fs_dir_entry_t *entry = &content->entries[i];
+      if(entry->filename[0] == '.') continue;
       if(entry->hidden)
          continue;
 

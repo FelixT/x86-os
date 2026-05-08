@@ -94,17 +94,18 @@ fs_dir_content_t *fs_read_dir(char *path) {
 
       fat_dir_t *items = fat_read_root();
       fat_bpb_t fat_bpb = fat_get_bpb();
-      content->size = fat_bpb.noRootEntries;
+      content->size = 0;
       for(int i = 0; i < fat_bpb.noRootEntries; i++) {
-         if(items[i].filename[0] == 0) {
-            content->size = i;
-            break;
-         }
+         if(items[i].filename[0] == 0) break;
+         if(items[i].filename[0] == 0xE5) continue; // deleted entry
+         content->size++;
       }
       content->entries = (fs_dir_entry_t*)malloc(sizeof(fs_dir_entry_t) * content->size);
-      for(int i = 0; i < content->size; i++) {
-         fs_dir_entry_t *entry = &content->entries[i];
-         *entry = fs_get_dir_entry(&items[i]);
+      int out = 0;
+      for(int i = 0; i < fat_bpb.noRootEntries && out < content->size; i++) {
+         if(items[i].filename[0] == 0) break;
+         if(items[i].filename[0] == 0xE5) continue; // deleted entry
+         content->entries[out++] = fs_get_dir_entry(&items[i]);
       }
       free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb.noRootEntries);
       return content;
@@ -212,6 +213,16 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
    fat_read_file_chunked(file->data->first_cluster, buffer, file->current_pos, size, callback, task);
    file->current_pos += size;
    return size;
+}
+
+bool fs_unlink(char *path) {
+   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
+   return fat_delete_file(path);
+}
+
+bool fs_rmdir(char *path) {
+   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
+   return fat_delete_dir(path);
 }
 
 bool fs_rename(char *oldpath, char *newname) {

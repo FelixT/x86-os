@@ -357,6 +357,12 @@ void software_handler(registers_t *regs) {
       case 67:
          api_kill_task(regs);
          break;
+      case 68:
+         api_unlink(regs);
+         break;
+      case 69:
+         api_rmdir(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

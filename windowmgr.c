@@ -571,6 +571,13 @@ void window_draw(gui_window_t *window) {
       (*(window->draw_func))(window);
 }
 
+void windowmgr_about(void *regs) {
+   default_menu->menuselected = -1;
+   default_menu->menuhovered = -1;
+
+   tasks_launch_elf(regs, "/sys/about.elf", 0, NULL, true);
+}
+
 void windowmgr_getproperties(void *regs) {
    default_menu->menuselected = -1;
    default_menu->menuhovered = -1;
@@ -641,22 +648,26 @@ void windowmgr_init() {
    default_menu->type = WO_MENU;
    default_menu->visible = false;
    default_menu->width = 80;
-   default_menu->height = 40;
+   default_menu->height = 50;
    default_menu->menuitems = malloc(sizeof(windowobj_menu_t) * 10);
 
-   strcpy(default_menu->menuitems[0].text, "Settings");
-   default_menu->menuitems[0].func = &windowmgr_getproperties;
+   strcpy(default_menu->menuitems[0].text, "About");
+   default_menu->menuitems[0].func = &windowmgr_about;
    default_menu->menuitems[0].disabled = false;
 
-   strcpy(default_menu->menuitems[1].text, "Close");
-   default_menu->menuitems[1].func = &windowmgr_closeselected;
+   strcpy(default_menu->menuitems[1].text, "Settings");
+   default_menu->menuitems[1].func = &windowmgr_getproperties;
    default_menu->menuitems[1].disabled = false;
 
-   strcpy(default_menu->menuitems[2].text, "TaskMgr");
-   default_menu->menuitems[2].func = &windowmgr_taskmanager;
+   strcpy(default_menu->menuitems[2].text, "Close");
+   default_menu->menuitems[2].func = &windowmgr_closeselected;
    default_menu->menuitems[2].disabled = false;
 
-   default_menu->menuitem_count = 3;
+   strcpy(default_menu->menuitems[3].text, "TaskMgr");
+   default_menu->menuitems[3].func = &windowmgr_taskmanager;
+   default_menu->menuitems[3].disabled = false;
+
+   default_menu->menuitem_count = 4;
 
    // set up app button
    app_button = (windowobj_t*)malloc(sizeof(windowobj_t));

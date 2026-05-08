@@ -71,5 +71,7 @@ bool fat_new_dir(char *path);
 bool fat_new_file(char *path);
 void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uint32_t size, void *callback, int task);
 bool fat_rename(char *path, char *filename);
+bool fat_delete_file(char *path);
+bool fat_delete_dir(char *path);
 
 #endif

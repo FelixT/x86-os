@@ -491,14 +491,16 @@ void rightclick(int x, int y) {
          bool dotentry = entry->filename[0] == '.';
          if(entry->hidden && !dotentry)
             continue;
-         if(i_pos == search_index)
+         if(i_pos == search_index && !dotentry)
             index = i;
          i_pos++;
       }
+      if(search_index >= i_pos) index = -1; // clicked empty space
       rightclicked_index = index;
       menu_t *menu = ui->default_menu->data;
-      menu->items[0].enabled = index > -1;
-      menu->items[1].enabled = index > -1;
+      menu->items[0].enabled = index > -1; // open
+      menu->items[1].enabled = index > -1; // rename
+      menu->items[2].enabled = index > -1; // delete
    }
    if(menu_visible) {
       display_items();
@@ -638,6 +640,73 @@ void show_view_menu(wo_t *wo, int window) {
    }
 }
 
+void get_full_path(char *out, int index) {
+   fs_dir_entry_t *entry = &dir_content->entries[index];
+   strcpy(out, cur_path);
+   if(!strequ(cur_path, "/"))
+      strcat(out, "/");
+   strcat(out, entry->filename);
+}
+
+void rmdir_recursive(char *path) {
+   fs_dir_content_t *content = read_dir(path);
+   debug_println("Recursively deleting %s with %i subitems", path, content ? content->size - 2 : 0);
+   if(!content) return;
+   for(int i = 2; i < content->size; i++) {
+      fs_dir_entry_t *subentry = &content->entries[i];
+      char *subpath = malloc(512);
+      strcpy(subpath, path);
+      if(!strendswith(subpath, "/"))
+         strcat(subpath, "/");
+      strcat(subpath, subentry->filename);
+      if(subentry->type == FS_TYPE_DIR) {
+         rmdir_recursive(subpath);
+      } else {
+         unlink(subpath);
+      }
+      free(subpath);
+   }
+   kfree(content->entries, sizeof(fs_dir_entry_t) * content->size);
+   kfree(content, sizeof(fs_dir_content_t));
+   rmdir(path);
+}
+
+int delete_item;
+
+void delete_confirm() {
+   fs_dir_entry_t *entry = &dir_content->entries[delete_item];
+   char path[512];
+   get_full_path(path, delete_item);
+   debug_println("Deleting %s", path);
+   if(entry->type == FS_TYPE_DIR) {
+      rmdir_recursive(path);
+   } else {
+      unlink(path);
+   }
+   // refresh
+   refresh_dir_content();
+   clear();
+   display_items();
+}
+
+void delete() {
+   if(rightclicked_index == -1) return;
+   delete_item = rightclicked_index;
+   fs_dir_entry_t *entry = &dir_content->entries[delete_item];
+   char path[512];
+   get_full_path(path, delete_item);
+   char buffer[256];
+   if(entry->type == FS_TYPE_DIR) {
+      fs_dir_content_t *content = read_dir(path);
+      debug_println("Deleting folder %s with %i items", path, content->size - 2);
+      sprintf(buffer, "Are you sure you want to delete\nfolder '%s' and its %i subitems", entry->filename, content->size - 2);
+      kfree(content, sizeof(fs_dir_content_t));
+   } else {
+      sprintf(buffer, "Are you sure you want to delete\nfile '%s'?", entry->filename);
+   }
+   dialog_yesno("Confirm delete", buffer, &delete_confirm);
+}
+
 void _start(int argc, char **args) {
    (void)argc;
    (void)args;
@@ -717,6 +786,7 @@ void _start(int argc, char **args) {
    ui->default_menu->visible = false;
    add_menu_item(ui->default_menu, "Open", &open_menuclick);
    add_menu_item(ui->default_menu, "Rename", &rename_menuclick);
+   add_menu_item(ui->default_menu, "Delete", (void*)&delete);
    add_menu_item(ui->default_menu, "New file", (void*)&add_file);
    add_menu_item(ui->default_menu, "New folder", (void*)&add_folder);
    add_menu_item(ui->default_menu, "Settings", (void*)&settings);

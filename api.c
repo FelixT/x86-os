@@ -666,6 +666,18 @@ void api_mkdir(registers_t *regs) {
    regs->ebx = fs_mkdir((char*)regs->ebx);
 }
 
+void api_unlink(registers_t *regs) {
+   // IN: ebx - file path
+   // OUT: ebx - bool success
+   regs->ebx = fs_unlink((char*)regs->ebx);
+}
+
+void api_rmdir(registers_t *regs) {
+   // IN: ebx - dir path
+   // OUT: ebx - bool success
+   regs->ebx = fs_rmdir((char*)regs->ebx);
+}
+
 void api_rename(registers_t *regs) {
    // IN: ebx - old path
    // IN: ecx - new name

@@ -55,6 +55,8 @@ void api_set_scrollable_height(registers_t *regs);
 void api_scroll_to(registers_t *regs);
 void api_new_file(registers_t *regs);
 void api_mkdir(registers_t *regs);
+void api_unlink(registers_t *regs);
+void api_rmdir(registers_t *regs);
 void api_rename(registers_t *regs);
 void api_seek(registers_t *regs);
 void api_set_window_size(registers_t *regs);

@@ -50,6 +50,8 @@ bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size);
 int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task);
 bool fs_mkdir(char *path);
 fs_file_t *fs_new(char *path);
+bool fs_unlink(char *path);
+bool fs_rmdir(char *path);
 bool fs_rename(char *oldpath, char *newname);
 fs_dir_content_t *fs_read_dir(char *path);
 void fs_dir_content_free(fs_dir_content_t *content);

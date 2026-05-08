@@ -209,6 +209,30 @@ static inline bool mkdir(char *path) {
    return (bool)success;
 }
 
+static inline bool unlink(char *path) {
+   int success;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (success)
+      : "a" (68),
+      "b" ((uint32_t)path)
+      : "cc", "memory"
+   );
+   return (bool)success;
+}
+
+static inline bool rmdir(char *path) {
+   int success;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (success)
+      : "a" (69),
+      "b" ((uint32_t)path)
+      : "cc", "memory"
+   );
+   return (bool)success;
+}
+
 static inline int seek(int fd, int offset, int type) {
    int pos;
    asm volatile (

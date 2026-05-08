@@ -112,6 +112,7 @@ int fat_get_dir_size(uint16_t clusterNo) {
       for(int i = 0; i < fat_bpb->noRootEntries; i++) {
          fat_dir_t *fat_dir = (fat_dir_t*)(rootBuf + i * sizeof(fat_dir_t));
          if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
+         if(fat_dir->filename[0] == 0xE5) continue; // deleted entry
          count++;
       }
       free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
@@ -132,6 +133,7 @@ int fat_get_dir_size(uint16_t clusterNo) {
       fat_dir_t *dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(dir->filename[0] == 0)
          break; // no more files/dirs in directory
+      if(dir->filename[0] == 0xE5) continue; // deleted entry
       count++;
    }
 
@@ -149,11 +151,12 @@ void fat_read_dir(uint16_t clusterNo, fat_dir_t *items) {
    uint8_t *dirBuf = ata_read_exact(true, true, dirAddr, dirSize);
 
    int entries = dirSize / sizeof(fat_dir_t);
+   int out = 0;
    for(int i = 0; i < entries; i++) {
       fat_dir_t *dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
-      items[i] = *dir;
-      if(dir->filename[0] == 0)
-         break; // no more files/dirs in directory
+      if(dir->filename[0] == 0) break;
+      if(dir->filename[0] == 0xE5) continue; // deleted entry
+      items[out++] = *dir;
    }
 
    free((uint32_t)dirBuf, dirSize);
@@ -171,6 +174,7 @@ fat_dir_t *fat_find_in_root(char* filename, char* extension) {
    for(int i = 0; i < fat_bpb->noRootEntries; i++) {
       fat_dir_t *fat_dir = (fat_dir_t*)(rootBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0) break; // no more files/dirs in directory
+      if(fat_dir->filename[0] == 0xE5) continue; // deleted entry
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
          memcpy(return_dir, fat_dir, sizeof(fat_dir_t));
@@ -205,6 +209,8 @@ fat_dir_t *fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension) 
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0)
          break; // no more files/dirs in directory
+      if(fat_dir->filename[0] == 0xE5)
+         continue; // deleted entry
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
          // allocate and copy the found entry to return
@@ -244,6 +250,8 @@ bool fat_update_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(fat_dir->filename[0] == 0)
          break; // no more files/dirs in directory
+      if(fat_dir->filename[0] == 0xE5)
+         continue; // deleted entry
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
          memcpy_fast(dirBuf + i * sizeof(fat_dir_t), dir, sizeof(fat_dir_t)); // update the entry
@@ -1008,6 +1016,126 @@ fat_dir_t *fat_parse_path(char *path, bool isFile) {
       free((uint32_t)lastDir, sizeof(fat_dir_t));
 
    return curDir; // note that NULL = file not found or root
+}
+
+bool fat_delete_file(char *path) {
+   fat_dir_t *file = fat_parse_path(path, true);
+   if(!file) {
+      debug_printf("fat_delete_file: '%s' not found\n", path);
+      return false;
+   }
+
+   // free cluster chain
+   uint16_t cur = file->firstClusterNo;
+   while(cur >= 2 && cur < 0xFFF8 && cur != 0xFFF7) {
+      uint16_t next = ((uint16_t*)fat_table)[cur];
+      ((uint16_t*)fat_table)[cur] = 0;
+      cur = next;
+   }
+   fat_table_write();
+
+   // read name/extension directly from stored 8.3 entry
+   char name[9], extension[4];
+   strcpy_fixed(name, (char*)file->filename, 8);
+   strcpy_fixed(extension, (char*)file->filename+8, 3);
+   strsplit(name, NULL, name, ' ');
+   strsplit(extension, NULL, extension, ' ');
+
+   fat_dir_t deleted = *file;
+   deleted.filename[0] = 0xE5;
+
+   char filenamefull[256], parentpath[256];
+   strsplit_last(parentpath, filenamefull, path, '/');
+   if(strequ(parentpath, "")) strcpy(parentpath, "/");
+   bool inroot = strequ(parentpath, "/");
+
+   uint16_t parentCluster = 0;
+   if(!inroot) {
+      fat_dir_t *parent = fat_parse_path(parentpath, true);
+      if(!parent) {
+         debug_printf("fat_delete_file: parent '%s' not found\n", parentpath);
+         free((uint32_t)file, sizeof(fat_dir_t));
+         return false;
+      }
+      parentCluster = parent->firstClusterNo;
+      free((uint32_t)parent, sizeof(fat_dir_t));
+   }
+
+   bool ok = fat_update_in_dir(parentCluster, name, extension, &deleted);
+   free((uint32_t)file, sizeof(fat_dir_t));
+   return ok;
+}
+
+bool fat_delete_dir(char *path) {
+   fat_dir_t *dir = fat_parse_path(path, true);
+   if(!dir) {
+      debug_printf("fat_delete_dir: '%s' not found\n", path);
+      return false;
+   }
+   if(!(dir->attributes & 0x10)) {
+      debug_printf("fat_delete_dir: '%s' is not a directory\n", path);
+      free((uint32_t)dir, sizeof(fat_dir_t));
+      return false;
+   }
+
+   // check directory is empty (only . and .. entries allowed)
+   uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+   uint32_t dirFirstSector = ((dir->firstClusterNo - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+   uint8_t *dirBuf = ata_read_exact(true, true, baseAddr + dirFirstSector * fat_bpb->bytesPerSector, clusterSize);
+   int entries = clusterSize / sizeof(fat_dir_t);
+   bool empty = true;
+   for(int i = 0; i < entries; i++) {
+      fat_dir_t *e = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
+      if(e->filename[0] == 0) break;
+      if(e->filename[0] == 0xE5) continue; // deleted
+      if(e->filename[0] == '.' && (e->filename[1] == ' ' || e->filename[1] == '.')) continue; // . or ..
+      empty = false;
+      break;
+   }
+   free((uint32_t)dirBuf, clusterSize);
+
+   if(!empty) {
+      debug_printf("fat_delete_dir: '%s' is not empty\n", path);
+      free((uint32_t)dir, sizeof(fat_dir_t));
+      return false;
+   }
+
+   // free cluster chain
+   uint16_t cur = dir->firstClusterNo;
+   while(cur >= 2 && cur < 0xFFF8 && cur != 0xFFF7) {
+      uint16_t next = ((uint16_t*)fat_table)[cur];
+      ((uint16_t*)fat_table)[cur] = 0;
+      cur = next;
+   }
+   fat_table_write();
+
+   char name[9];
+   strcpy_fixed(name, (char*)dir->filename, 8);
+   strsplit(name, NULL, name, ' ');
+
+   fat_dir_t deleted = *dir;
+   deleted.filename[0] = 0xE5;
+
+   char dirname[256], parentpath[256];
+   strsplit_last(parentpath, dirname, path, '/');
+   if(strequ(parentpath, "")) strcpy(parentpath, "/");
+   bool inroot = strequ(parentpath, "/");
+
+   uint16_t parentCluster = 0;
+   if(!inroot) {
+      fat_dir_t *parent = fat_parse_path(parentpath, true);
+      if(!parent) {
+         debug_printf("fat_delete_dir: parent '%s' not found\n", parentpath);
+         free((uint32_t)dir, sizeof(fat_dir_t));
+         return false;
+      }
+      parentCluster = parent->firstClusterNo;
+      free((uint32_t)parent, sizeof(fat_dir_t));
+   }
+
+   bool ok = fat_update_in_dir(parentCluster, name, "", &deleted);
+   free((uint32_t)dir, sizeof(fat_dir_t));
+   return ok;
 }
 
 fat_bpb_t fat_get_bpb() {
