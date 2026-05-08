@@ -154,23 +154,23 @@ void window_close(void *regs, int windowIndex) {
    }
 
    int task = get_task_from_window(windowIndex);
-   task_state_t *task_state = &gettasks()[task];
+   task_state_t *task_state = task > -1 ? &gettasks()[task] : NULL;
    if(regs) {
-      if(task > -1 && task_state->process->window == windowIndex) {
+      if(task_state && task_state->process->window == windowIndex) {
          end_task(task, regs); // don't kill task if closing child window
          // re-establish pointer as gui_windows may have been resized in end_task
          window = getWindow(windowIndex);
       } else {
          // call close func if set
          debug_printf("Calling close func for window %i\n", windowIndex);
-         if(task > -1 && window->close_func != NULL) {
+         if(task_state && window->close_func != NULL) {
             uint32_t *args = malloc(sizeof(uint32_t) * 1);
             args[0] = get_cindex(task_state);
             task_call_subroutine(regs, task_state, "close", (uint32_t)(window->close_func), args, 1);
          }
       }
    } else {
-      if(task_state->process->window == windowIndex)
+      if(task_state && task_state->process->window == windowIndex)
          task_state->process->window = -1;
    }
 
@@ -571,7 +571,7 @@ void window_draw(gui_window_t *window) {
       (*(window->draw_func))(window);
 }
 
-void windowmgr_getproperties() {
+void windowmgr_getproperties(void *regs) {
    default_menu->menuselected = -1;
    default_menu->menuhovered = -1;
 
@@ -579,7 +579,7 @@ void windowmgr_getproperties() {
    gui_window_t *selected = getSelectedWindow();
    if(!selected) {
       // get system settings
-      tasks_launch_elf(get_regs(), "/sys/settings.elf", 0, NULL, true);
+      tasks_launch_elf(regs, "/sys/settings.elf", 0, NULL, true);
       return;
    }
    int new = windowmgr_add();
@@ -607,11 +607,11 @@ void windowmgr_closeselected() {
    gui_redrawall();
 }
 
-void windowmgr_taskmanager() {
+void windowmgr_taskmanager(void *regs) {
    default_menu->menuselected = -1;
    default_menu->menuhovered = -1;
 
-   tasks_launch_elf(get_regs(), "/sys/taskmgr.elf", 0, NULL, true);
+   tasks_launch_elf(regs, "/sys/taskmgr.elf", 0, NULL, true);
 }
 
 void windowmgr_init() {
@@ -888,7 +888,7 @@ void windowmgr_keypress(void *regs, int scan_code) {
 
          if(taskIndex == -1 || selectedWindow->keypress_func == &window_term_keypress) {
             // launch into function directly as kernel
-            (*(selectedWindow->keypress_func))(c, selectedWindow);
+            (*(selectedWindow->keypress_func))(regs, c, selectedWindow);
          } else {
             // run as task
             task_state_t *task = &gettasks()[taskIndex];
@@ -1345,7 +1345,7 @@ void desktop_click(registers_t *regs, int x, int y) {
    }
 }
 
-void windowmgr_mousemove(int x, int y) {
+void windowmgr_mousemove(void *regs, int x, int y) {
    // check desktop windowobjects
    if(default_menu->visible) {
       // check if within menu
@@ -1406,7 +1406,6 @@ void windowmgr_mousemove(int x, int y) {
          // call hover function
          if(selectedWindow->hover_func) {
             int task = get_task_from_window(getSelectedWindowIndex());
-            registers_t *regs = get_regs();
             if(task < 0) return;
             task_state_t *task_state = &gettasks()[task];
             uint32_t *args = malloc(sizeof(uint32_t) * 3);
@@ -1423,7 +1422,6 @@ void windowmgr_mousemove(int x, int y) {
             if(!selectedWindow->resized && selectedWindow->mouseout_func) {
                // call mouseout routine
                int task = get_task_from_window(getSelectedWindowIndex());
-               registers_t *regs = get_regs();
                if(task < 0) return;
                task_state_t *task_state = &gettasks()[task];
                uint32_t *args = malloc(sizeof(uint32_t) * 1);
@@ -1459,12 +1457,12 @@ void windowmgr_mousemove(int x, int y) {
    }
 }
 
-void windowmgr_scroll(bool up) {
+void windowmgr_scroll(void *regs, bool up) {
    gui_window_t *window = getSelectedWindow();
    if(!window || window->closed) return;
    int deltaY = up ? -20 : 20;
    int offsetY = window->scrolledY + deltaY;
-   window_scroll_to(get_regs(), offsetY);
+   window_scroll_to(regs, offsetY);
 }
 
 int get_window_index_from_pointer(gui_window_t *window) {

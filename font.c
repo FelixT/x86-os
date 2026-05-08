@@ -23,10 +23,11 @@ void copyFont(font_t *font, uint8_t* letter, int* dest) {
 }
 
 void getFontLetter(font_t *font, char c, int* dest) {
-   if(font->fontmap[(int)c] != NULL)
-      copyFont(font, font->fontmap[(int)c], dest);
-   else if(c >= 'a' && c <= 'z' && font->fontmap[(int)((c-'a')+'A')] != NULL)
-      copyFont(font, font->fontmap[(int)((c-'a')+'A')], dest);
+   unsigned char uc = (unsigned char)c;
+   if(font->fontmap[uc] != NULL)
+      copyFont(font, font->fontmap[uc], dest);
+   else if(uc >= 'a' && uc <= 'z' && font->fontmap[uc-'a'+'A'] != NULL)
+      copyFont(font, font->fontmap[uc-'a'+'A'], dest);
    else
       copyFont(font, font->fontmap[0], dest); // null
 }
@@ -47,7 +48,7 @@ void font_load(fontfile_t *file) {
    }
 
    for(int i = 0; i < file->size; i++) {
-      char c = chars[i];
+      unsigned char c = chars[i];
 
       int offset = file->size + (file->height * i);
       default_font.fontmap[(int)c] = (uint8_t*)(chars + offset);

@@ -44,6 +44,7 @@ typedef struct {
 #define SEEK_END 2
 
 fs_file_t *fs_open(char *path);
+fs_file_t *fs_dup(fs_file_t *file);
 void fs_close(fs_file_t *file);
 bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size);
 int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task);

@@ -50,6 +50,18 @@ void fs_close(fs_file_t *file) {
    free((uint32_t)file, sizeof(fs_file_t));
 }
 
+fs_file_t *fs_dup(fs_file_t *file) {
+   if(!file) return NULL;
+   fs_file_t *dup = (fs_file_t*)malloc(sizeof(fs_file_t));
+   *dup = *file;
+   if(file->data) {
+      fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
+      *data = *file->data;
+      dup->data = data;
+   }
+   return dup;
+}
+
 fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
    fs_dir_entry_t entry;
    char fileName[9];

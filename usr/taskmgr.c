@@ -69,12 +69,11 @@ void show_tasks() {
    ui_draw(dialog->ui);
 }
 
-void launch_task_return (char *out, int window) {
+void launch_task_return(char *out, int window) {
    dialog_t *dialog = dialog_from_window(window);
    dialog->active = false;
-   close_window(window);
-   // have to do this before calling launch task as it ends subroutine
    launch_task(out, 0, NULL, false);
+   close_window(window);
 }
 
 void launch_task_callback(wo_t *wo, int window) {

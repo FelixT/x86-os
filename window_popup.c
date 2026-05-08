@@ -25,7 +25,6 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    int index = get_window_index_from_pointer(window);
    int parent_index = get_window_index_from_pointer(dialog->parent);
 
-   // launch callback if exists
    if(dialog->callback_func == NULL) {
       // self destruct
       debug_printf("Closing window %i\n", index);
@@ -35,13 +34,13 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
 
    if(get_task_from_window(getSelectedWindowIndex()) == -1) {
       // call as kernel
-      dialog->callback_func(regs);
+      if(dialog->callback_func)
+         dialog->callback_func(regs);
       if(getSelectedWindow()) {
          getSelectedWindow()->needs_redraw = true;
          window_draw(getSelectedWindow());
       }
    }
-   
    setSelectedWindowIndex(parent_index);
 
    // self destruct

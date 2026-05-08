@@ -48,12 +48,12 @@ uint32_t window_term_argtouint(char *str) {
    return num;
 }
 
-void window_term_keypress(uint16_t key, void *window) {
+void window_term_keypress(void *regs, uint16_t key, void *window) {
    if(key == 8) {
       window_term_backspace(window);
       return;
    } else if(key == 0x0D) {
-      window_term_return(get_regs(), window);
+      window_term_return(regs, window);
       return;
    } else if(key == 0x100) {
       window_term_uparrow(window);

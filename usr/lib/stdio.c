@@ -48,7 +48,8 @@ FILE *fopen(const char *filename, const char *mode) {
     file->fd = open(file->path, flag);
     if(file->fd == -1) {
         debug_println("fopen failed");
-        fclose(file);
+        free(file->path);
+        file->path = NULL;
         return NULL;
     }
 

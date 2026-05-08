@@ -42,5 +42,6 @@ typedef struct elf_prog_header_t {
 } __attribute__((packed)) elf_prog_header_t;
 
 void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args, bool focus);
+int elf_setup(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args, bool focus, bool open_fds);
 
 #endif

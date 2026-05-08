@@ -16,7 +16,7 @@ enum windowobj_type {
 
 typedef struct windowobj_menu_t {
    char text[20];
-   void (*func)();
+   void (*func)(void *regs);
    bool disabled;
 } windowobj_menu_t;
 

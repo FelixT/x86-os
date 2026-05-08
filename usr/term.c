@@ -315,13 +315,13 @@ void term_cmd_cat(char *arg) {
    char *buf = (char*)malloc(size+1);
    if(!fread(buf, size, 1, f)) {
       printf("Couldn't read file\n");
+      free(buf);
       return;
    }
    buf[f->content_size] = '\0';
    printf("%s\n", buf);
    free(buf);
    fclose(f);
-   free(f);
    printf("Closed file\n");
 }
 
@@ -337,7 +337,6 @@ void term_cmd_fappend(char *arg) {
    printf("Opened file '%s' with size %u\n", path, size);
    fwrite(buffer, strlen(buffer), 1, f);
    fclose(f);
-   free(f);
    printf("Closed file\n");
 }
 
@@ -354,7 +353,6 @@ void term_cmd_fwrite(char *arg) {
    int c = fwrite(buffer, strlen(buffer), 1, f);
    printf("Wrote %u bytes\n", c);
    fclose(f);
-   free(f);
    printf("Closed file\n");
 }
 

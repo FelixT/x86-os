@@ -325,7 +325,7 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
 
             if(wo == default_menu || task == -1) {
                // kernel
-               item->func();
+               item->func(regs);
             }
          }
       }

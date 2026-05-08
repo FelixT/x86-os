@@ -368,8 +368,8 @@ void api_launch_task(registers_t *regs) {
    char *path = (char*)regs->ebx;
    int argc = (int)regs->ecx;
    char **args = (char**)regs->edx;
-   bool copy = (bool)regs->esi;  
-   
+   bool copy = (bool)regs->esi;
+
    // copy args
    char **copied_args = NULL;
    if(argc > 0 && args != NULL) {
@@ -385,40 +385,43 @@ void api_launch_task(registers_t *regs) {
       }
    }
 
-   // copy path (as page directory will change)
+   // copy path
    char pathbuf[256];
    strcpy(pathbuf, path);
 
-   task_state_t *parenttask = &gettasks()[get_current_task()];
-
-   task_subroutine_end(regs);
-
+   int calling_task = get_current_task();
+   task_state_t *parenttask = &gettasks()[calling_task];
    int oldwindow = getSelectedWindowIndex();
 
-   tasks_launch_elf(regs, pathbuf, argc, copied_args, true);
-   task_state_t *task = &gettasks()[get_current_task()];
+   // set up the new task without switching context
+   int new_task = tasks_setup_elf(regs, pathbuf, argc, copied_args, !copy, copy);
+   if(new_task < 0) return;
+
+   task_state_t *task = &gettasks()[new_task];
 
    if(copy) {
-      // copy file descriptors and working dir from parent
-      for(int i = 0; i < parenttask->process->fd_count; i++) {
-         task->process->file_descriptors[i] = parenttask->process->file_descriptors[i];
-      }
+      // duplicate parent's fds
+      for(int i = 0; i < parenttask->process->fd_count; i++)
+         task->process->file_descriptors[i] = fs_dup(parenttask->process->file_descriptors[i]);
       task->process->fd_count = parenttask->process->fd_count;
-      strcpy(task->process->working_dir, parenttask->process->working_dir); // inherit working dir
-      window_close(NULL, getSelectedWindowIndex()); // may get issues from having task without window
+      strcpy(task->process->working_dir, parenttask->process->working_dir);
+      int child_win = task->process->window;
+      window_close(NULL, child_win);
       task->process->window = -1;
       setSelectedWindowIndex(oldwindow);
       gui_redrawall();
    }
 
    // map args to new task
-   if(argc > 0 && args != NULL) {
+   if(argc > 0 && copied_args != NULL) {
       for(int i = 0; i < argc; i++) {
-         // map args to task
-         map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
+         if(copied_args[i] != NULL)
+            map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
       }
       map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
    }
+
+   gettasks()[new_task].enabled = true;
 }
 
 void api_set_window_title(registers_t *regs) {

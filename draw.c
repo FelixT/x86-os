@@ -116,7 +116,7 @@ void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical,
 void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y) {
    getFontLetter(getFont(), c, font_letter);
 
-   int i = 0;      
+   int i = 0;
    for(int yi = y; yi < y+getFont()->height; yi++) {
       for(int xi = x; xi < x+getFont()->width; xi++) {
          if(font_letter[i] == 1)

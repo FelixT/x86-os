@@ -705,7 +705,7 @@ void fat_read_file_callback(void *regs, void *msg) {
    task_state_t *task_state = &gettasks()[state->task];
    if(!task_state->enabled || !task_state->paused) {
       free((uint32_t)state, sizeof(fat_read_file_state_t));
-      return; // stop if task has ended
+      return; // stop if task has ended - warning: doesn't catch task if task is reopened then paused, or if task crashes (stays paused - todo: add 'crashed' bool in task_state_t)
    }
    
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters

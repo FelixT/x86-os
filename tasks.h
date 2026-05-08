@@ -66,7 +66,7 @@ typedef struct task_state_t {
    bool paused; // thread won't be scheduled
    int task_id;
    uint32_t stack_top; // address
-   //uint32_t kernel_stack_top; // address
+   uint32_t kernel_stack_top; // address
    registers_t registers;
    registers_t routine_return_regs;
    int routine_return_window; // switch to this window after routine, potentially unneeded
@@ -81,6 +81,7 @@ typedef struct task_state_t {
 } task_state_t;
 
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
+void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds);
 void launch_task(int index, registers_t *regs, bool focus);
 void end_task(int index, registers_t *regs);
 void tasks_alloc();
@@ -89,6 +90,7 @@ void switch_task(registers_t *regs);
 bool switch_to_task(int index, registers_t *regs);
 void tasks_launch_binary(registers_t *regs, char *path);
 bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus);
+int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy);
 
 void pause_task(int index, registers_t *regs);
 

@@ -310,7 +310,6 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
       fullpath[pi+1] = '\0';
       strcat(fullpath, clicked_entry->filename);
 
-      bool launched = false;
       // handle supported extensions
       // bmp, elf, txt
       if(strequ(extension, "bmp")) {
@@ -321,14 +320,10 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          args[1] = malloc(strlen(fullpath)+1);
          strcpy(args[1], fullpath);
 
-         // note: this also ends the subroutine
-         launched = true;
          launch_task(elfpath, 2, args, false);
       }
 
       if(strequ(extension, "elf")) {
-         // note: this also ends the subroutine
-         launched = true;
          launch_task(fullpath, 0, NULL, false);
       }
 
@@ -337,8 +332,6 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          args[0] = malloc(strlen(fullpath)+1);
          strcpy(args[0], fullpath);
 
-         // note: this also ends the subroutine
-         launched = true;
          launch_task("/sys/text.elf", 1, args, false);
       }
 
@@ -346,11 +339,6 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          set_setting(SETTING_SYS_FONT_PATH, (uint32_t)fullpath);
          clear();
          display_items();
-      }
-
-      if(launched) {
-         debug_println("This should never happen!"); // launching task should end the subroutine
-         while(true) {}
       }
 
    }

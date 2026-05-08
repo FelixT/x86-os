@@ -314,7 +314,7 @@ void gui_cursor_draw() {
    gui_cursor_shown = true;
 }
 
-void mouse_update(int relX, int relY) {
+void mouse_update(void *regs, int relX, int relY) {
    if(relX == 0 && relY == 0) return;
 
    gui_mouse_x += relX;
@@ -330,7 +330,7 @@ void mouse_update(int relX, int relY) {
    if(gui_mouse_y >= surface.height) gui_mouse_y = surface.height - 1;
 
    gui_cursor_restore_bg();
-   windowmgr_mousemove(gui_mouse_x, gui_mouse_y);
+   windowmgr_mousemove(regs, gui_mouse_x, gui_mouse_y);
 
    gui_cursor_save_bg();
    if(mouse_enabled) gui_cursor_draw();

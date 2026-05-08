@@ -34,7 +34,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].enabled = false;
    tasks[index].paused = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
-   //tasks[index].kernel_stack_top = (uint32_t)(TOS_KERNEL - (TASK_STACK_SIZE * index));
+   tasks[index].kernel_stack_top = (uint32_t)(TOS_KERNEL - (TASK_STACK_SIZE * index));
    tasks[index].in_routine = false;
    tasks[index].in_syscall = false;
    
@@ -54,53 +54,50 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    }
 }
 
-void launch_task(int index, registers_t *regs, bool focus) {
-   int old_task = current_task;
-
-   current_task = index;
-
-   task_state_t *task = &tasks[current_task];
+void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
+   task_state_t *task = &tasks[index];
 
    task->registers.ds = USR_DATA_SEG | 3;
-   task->registers.cs = USR_CODE_SEG | 3; // user code segment
+   task->registers.cs = USR_CODE_SEG | 3;
    task->registers.eflags = regs->eflags;
-   task->registers.useresp = tasks[current_task].stack_top; // stack_top
+   task->registers.useresp = task->stack_top;
    task->registers.ss = USR_DATA_SEG | 3;
 
    int tmpwindow = getSelectedWindowIndex();
-   tasks[current_task].process->window = windowmgr_add();
-   if(focus) { 
+   task->process->window = windowmgr_add();
+   if(focus) {
       window_draw_outline(getSelectedWindow(), false);
    }
 
-   // setup stdio
-   fs_file_t *stdin = fs_open("/dev/stdin");
-   fs_file_t *stdout = fs_open("/dev/stdout");
-   fs_file_t *stderr = fs_open("/dev/stderr");
-   task->process->file_descriptors[0] = stdin;
-   task->process->file_descriptors[1] = stdout;
-   task->process->file_descriptors[2] = stderr;
-   task->process->fd_count = 3;
-
-   if(!focus) { 
-      setSelectedWindowIndex(tmpwindow);
+   if(open_fds) {
+      task->process->file_descriptors[0] = fs_open("/dev/stdin");
+      task->process->file_descriptors[1] = fs_open("/dev/stdout");
+      task->process->file_descriptors[2] = fs_open("/dev/stderr");
+      task->process->fd_count = 3;
    }
-   
-   debug_printf("Launching task %u\n", index);
 
-   // save regs
+   if(!focus)
+      setSelectedWindowIndex(tmpwindow);
+
+   debug_printf("Setting up task %u\n", index);
+}
+
+void launch_task(int index, registers_t *regs, bool focus) {
+   int old_task = current_task;
+   current_task = index;
+
+   setup_task_init(index, regs, focus, true);
+
    if(old_task >= 0) {
       tasks[old_task].registers = *regs;
    }
 
    tasks[current_task].enabled = true;
-
    swap_pagedir(get_current_task_pagedir());
-   
    *regs = tasks[current_task].registers;
 
-   //extern tss_t tss_start;
-   //tss_start.esp0 = tasks[current_task].kernel_stack_top;
+   extern tss_t tss_start;
+   tss_start.esp0 = tasks[current_task].kernel_stack_top;
 }
 
 bool task_exists() {
@@ -262,6 +259,23 @@ bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
    return true;
 }
 
+// doesn't immediately switch, caller is responsible for enabling the task
+int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy) {
+   fat_dir_t *entry = fat_parse_path(path, true);
+   if(entry == NULL) {
+      gui_writestr("Not found\n", 0);
+      return -1;
+   }
+   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   int task_index = elf_setup(regs, prog, entry->fileSize, argc, args, focus, !copy);
+   if(task_index >= 0) {
+      strcpy(gettasks()[task_index].process->exe_path, path);
+   }
+   free((uint32_t)prog, entry->fileSize);
+   free((uint32_t)entry, sizeof(fat_dir_t));
+   return task_index;
+}
+
 void tasks_init(registers_t *regs) {
    // enable preemptive multitasking
 
@@ -316,8 +330,8 @@ void switch_task(registers_t *regs) {
       // restore registers
       *regs = tasks[current_task].registers;
 
-      //extern tss_t tss_start;
-      //tss_start.esp0 = tasks[current_task].kernel_stack_top;
+      extern tss_t tss_start;
+      tss_start.esp0 = tasks[current_task].kernel_stack_top;
    }
 }
 
@@ -352,8 +366,8 @@ bool switch_to_task(int index, registers_t *regs) {
       // restore registers
       *regs = tasks[current_task].registers;
 
-      //extern tss_t tss_start;
-      //tss_start.esp0 = tasks[current_task].kernel_stack_top;
+      extern tss_t tss_start;
+      tss_start.esp0 = tasks[current_task].kernel_stack_top;
    }
 
    return true;

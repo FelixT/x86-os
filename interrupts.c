@@ -18,7 +18,7 @@ extern int videomode;
 extern bool switching; // preemptive multitasking enabled
 bool switching_paused = false;
 
-extern void mouse_update(uint32_t relX, uint32_t relY);
+extern void mouse_update(void *regs, int relX, int relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
 extern void mouse_rightclick(registers_t *regs);
 extern void mouse_release(registers_t *regs);
@@ -412,16 +412,16 @@ void mouse_handler(registers_t *regs) {
       if(mouse_data[0] & 0x10) relX -= 256;
       if(mouse_data[0] & 0x20) relY -= 256;
 
-      mouse_update(relX, relY);
+      mouse_update(regs, relX, relY);
 
       if(mouse_scrolling_enabled) {
          int scroll = (int8_t)mouse_data[3];
          if(scroll == -1) {
             // scroll up
-            windowmgr_scroll(true);
+            windowmgr_scroll(regs, true);
          } else if(scroll == 1) {
             // scroll down
-            windowmgr_scroll(false);
+            windowmgr_scroll(regs, false);
          }
       }
 
@@ -479,8 +479,7 @@ void timer_handler(registers_t *regs) {
       }
 
       if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
-         // only preempt if interrupted from ring-3: ring-0->ring-0 timer frames
-         // lack useresp/ss in registers_t, so switching there corrupts the iret
+         // don't preempty when interrupting kernel
          /*if(switching_paused) {
             if(switching) window_writestr(" SP", 0, 0);
          } else {
@@ -738,6 +737,6 @@ void err_exception_handler(int int_no, registers_t *regs) {
 
 }
 
-registers_t *get_regs() {
+registers_t *get_regs() { // debugging only
    return cur_regs;
 }
