@@ -46,7 +46,7 @@ void term_cmd_clear() {
 }
 
 void term_cmd_files() {
-   launch_task("/sys/files.elf", 0, NULL, false);
+   launch_task("/sys/files.elf", 0, NULL, false, false);
 }
 
 uint32_t argtouint(char *str) {
@@ -91,7 +91,8 @@ void term_cmd_font(char *arg) {
 void term_cmd_viewbmp(char *arg) {
    char **args = (char**)malloc(sizeof(char*) * 1);
    args[0] = arg;
-   launch_task("/sys/bmpview.elf", 1, args, false);
+   launch_task("/sys/bmpview.elf", 1, args, false, false);
+   free(args);
 }
 
 void term_cmd_fread(char *arg) {
@@ -145,6 +146,22 @@ void term_cmd_dmpmem(char *arg) {
    free(buf);
 }
 
+void term_get_args(char *arg, char **args, int *argc) {
+   char *p = arg;
+   char temp[256];
+   while(strsplit(temp, p, p, ' ')) {
+      args[*argc] = (char*)malloc(strlen(temp) + 1);
+      strcpy(args[*argc], temp);
+      (*argc)++;
+      if(*argc >= 10) break;
+   }
+   if(p[0] != '\0' && *argc < 10) {
+      args[*argc] = (char*)malloc(strlen(p) + 1);
+      strcpy(args[*argc], p);
+      (*argc)++;
+   }
+}
+
 void term_cmd_launch(char *arg, bool copy) {
    char patharg[256];
    char fullpath[256];
@@ -154,43 +171,27 @@ void term_cmd_launch(char *arg, bool copy) {
       // has args
       char **arglist = (char**)malloc(sizeof(char*) * 12);
       int argc = 0;
-      char *p = args;
-      char temp[256];
       // set path as first arg
       argtofullpath(fullpath, patharg);
       arglist[argc] = (char*)malloc(strlen(fullpath) + 1);
       strcpy(arglist[argc], fullpath);
       argc++;
-      // set other args
-      if(strchr(p, ' ')) {
-         while(strsplit(temp, p, p, ' ')) {
-            arglist[argc] = (char*)malloc(strlen(temp) + 1);
-            strcpy(arglist[argc], temp);
-            argc++;
-            if(argc >= 10) break;
-         }
-         if(p[0] == '\0' && temp[0] != '\0' && argc < 10) {
-            arglist[argc] = (char*)malloc(strlen(temp) + 1);
-            strcpy(arglist[argc], temp);
-            argc++;
-         }
-      } else {
-         arglist[argc] = (char*)malloc(strlen(p) + 1);
-         strcpy(arglist[argc], p);
-         argc++;
-      }
-      arglist[argc] = NULL;
-      launch_task(fullpath, argc, arglist, copy);
+      term_get_args(args, arglist, &argc);
+      launch_task(fullpath, argc, arglist, copy, false);
+      for(int i = 0; i < argc; i++)
+         free(arglist[i]);
+      free(arglist);
    } else {
       argtofullpath(fullpath, arg);
-      launch_task(fullpath, 0, NULL, copy);
+      launch_task(fullpath, 0, NULL, copy, false);
    }
 }
 
 void term_cmd_text(char *arg) {
    char **args = (char**)malloc(sizeof(char*) * 1);
    args[0] = arg;
-   launch_task("/sys/text.elf", 1, args, false);
+   launch_task("/sys/text.elf", 1, args, false, false);
+   free(args);
 }
 
 void term_cmd_rgbhex(char *arg) {
@@ -333,6 +334,10 @@ void term_cmd_fappend(char *arg) {
    get_abs_path(path, patharg);
    
    FILE *f = fopen(path, "a");
+   if(!f) {
+      printf("File '%s' not found\n", path);
+      return;
+   }
    int size = fsize(fileno(f));
    printf("Opened file '%s' with size %u\n", path, size);
    fwrite(buffer, strlen(buffer), 1, f);
@@ -398,11 +403,104 @@ void term_cmd_tasks() {
    printf("\n");
 }
 
+void term_pipe(char *arg1, char *arg2) {
+   bool arg1_args = strchr(arg1, ' ') != NULL;
+   bool arg2_args = strchr(arg2, ' ') != NULL;
+
+   char **args1 = (char**)malloc(sizeof(char*) * 10);
+   char **args2 = (char**)malloc(sizeof(char*) * 10);
+   int argc1 = 1;
+   int argc2 = 1;
+   char path[256];
+   char path1[256];
+   char path2[256];
+
+   if(arg1_args) {
+      strsplit(path, arg1, arg1, ' ');
+      get_abs_path(path1, path);
+      term_get_args(arg1, args1, &argc1);
+   } else {
+      get_abs_path(path1, arg1);
+   }
+
+   args1[0] = (char*)malloc(strlen(path1) + 1);
+   strcpy(args1[0], path1);
+
+   if(arg2_args) {
+      strsplit(path, arg2, arg2, ' ');
+      get_abs_path(path2, path);
+      term_get_args(arg2, args2, &argc2);
+   } else {
+      get_abs_path(path2, arg2);
+   }
+
+   args2[0] = (char*)malloc(strlen(path2) + 1);
+   strcpy(args2[0], path2);
+
+   int fds[2];
+   pipe(&fds[0], &fds[1]);  // create pipe first
+
+   int saved_stdout = dup(1);
+   dup2(fds[1], 1); // redirect stdout to pipe write end
+   int prog1_id = launch_task(path1, argc1, args1, true, true);
+   for(int i = 0; i < argc1; i++) free(args1[i]);
+   free(args1);
+   if(prog1_id < 0) {
+      printf("Failed to launch %s\n", path1);
+      for(int i = 0; i < argc2; i++) free(args2[i]);
+      free(args2);
+      return;
+   }
+   // restore stdout if exists, otherwise close fd 1 created by dup2 so child doesn't inherit it
+   if(saved_stdout >= 0) {
+      dup2(saved_stdout, 1);
+      close(saved_stdout);
+   } else {
+      close(1);
+   }
+   close(fds[1]); // parent no longer needs write end, child has its own copy
+
+   int saved_stdin = dup(0);
+   dup2(fds[0], 0); // redirect stdin to pipe read end
+   int prog2_id = launch_task(path2, argc2, args2, true, true);
+   for(int i = 0; i < argc2; i++) free(args2[i]);
+   free(args2);
+   if(prog2_id < 0) {
+      printf("Failed to launch %s\n", path2);
+      return;
+   }
+   // restore stdin
+   if(saved_stdin >= 0) {
+      dup2(saved_stdin, 0);
+      close(saved_stdin);
+   } else {
+      close(0);
+   }
+   close(fds[0]);
+
+   unpause_task(prog1_id);
+   unpause_task(prog2_id);
+}
+
 void checkcmd(char *buffer) {
 
-   char command[10];
-   char arg[50];
-   strsplit((char*)command, (char*)arg, buffer, ' '); // super unsafe
+   bool args = strchr(buffer, ' ') != NULL;
+   bool pipe = strchr(buffer, '|') != NULL;
+
+   char command[128];
+   char arg[128];
+   if(pipe) {
+      strsplit(command, arg, buffer, '|');
+      term_pipe(command, arg);
+      kfree(buffer, 1); // should be programs responsibility to free
+      end_subroutine();
+      return;
+   } else if(args) {
+      strsplit(command, arg, buffer, ' ');
+   } else {
+      strcpy(command, buffer);
+      arg[0] = '\0';
+   }
    strtoupper(command);
 
    if(strequ(command, "HELP"))
@@ -411,7 +509,7 @@ void checkcmd(char *buffer) {
       term_cmd_clear();
    else if(strequ(command, "FREAD"))
       term_cmd_fread(arg);
-   else if(strequ(command, "FILES"))
+   else if(strequ(command, "FILES")) 
       term_cmd_files();
    else if(strequ(command, "FONT"))
       term_cmd_font(arg);
@@ -455,7 +553,7 @@ void checkcmd(char *buffer) {
    end_subroutine();
 }
 
-void _start() {
+void _start(int argc, char **args) {
    set_window_title("User Terminal");
 
    char *wd = (char*)malloc(256);
@@ -464,6 +562,11 @@ void _start() {
    free(wd);
 
    printf("User Terminal at %s\n", path);
+
+   if(argc > 1) {
+      checkcmd(args[1]);
+      exit(0);
+   }
 
    override_term_checkcmd(&checkcmd);
 

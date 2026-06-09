@@ -3,7 +3,7 @@ global font7
 font7:
 
 ; size
-db 91
+db 92
 ; width
 db 5
 ; height
@@ -107,6 +107,7 @@ db 'y'
 db 'z'
 db 0x80 ; uparrow
 db 0x81 ; downarrow
+db 124 ; pipe
 
 global font_null
 font_null:
@@ -1005,3 +1006,13 @@ font_downarrow:
    db 01110b
    db 00100b
    db 00000b
+
+global font_pipe
+font_pipe:
+   db 00100b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 00100b
+   db 00100b

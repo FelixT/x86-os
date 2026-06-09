@@ -148,7 +148,7 @@ void open_func(wo_t *wo, int window) {
 void new_func(wo_t *wo, int window) {
    (void)wo;
    (void)window;
-   launch_task("/sys/text.elf", 0, NULL, false);
+   launch_task("/sys/text.elf", 0, NULL, false, false);
 }
 
 void scroll(int deltaY, int offsetY, int window) {
@@ -219,18 +219,18 @@ void _start(int argc, char **args) {
    wo_text->keypress_func = &text_keypress;
    ui_add(ui, wo_text);
 
-   if(argc == 1 && *args[0] != '\0') {
-      if(args[0][0] != '/') {
+   if(argc == 2 && *args[1] != '\0') {
+      if(args[1][0] != '/') {
          // relative path
          char path[256];
          getwd(path);
          if(!strequ(path, "/"))
             strcat(path, "/");
-         strcat(path, args[0]);
+         strcat(path, args[1]);
          load_file(path);
       } else {
          // absolute path
-         load_file(args[0]);
+         load_file(args[1]);
       }
    }
 

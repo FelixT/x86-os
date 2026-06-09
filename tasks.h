@@ -37,6 +37,8 @@ typedef struct {
 
 #define EVENT_QUEUE_SIZE 64
 
+#define TASK_MAX_FDS 64
+
 // process struct - shared between threads
 typedef struct process_t {
    uint32_t prog_start; // physical addr of start of program
@@ -52,7 +54,7 @@ typedef struct process_t {
    char exe_path[256]; // location of executable
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
-   fs_file_t *file_descriptors[64];
+   fs_file_t *file_descriptors[TASK_MAX_FDS];
    int fd_count;
    task_event_t *event_queue[EVENT_QUEUE_SIZE];
    int event_queue_size;
@@ -64,6 +66,8 @@ typedef struct process_t {
 typedef struct task_state_t {
    bool enabled;
    bool paused; // thread won't be scheduled
+   bool unpausable;
+   bool crashed;
    int task_id;
    uint32_t stack_top; // address
    uint32_t kernel_stack_top; // address

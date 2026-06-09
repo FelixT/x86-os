@@ -72,7 +72,7 @@ void show_tasks() {
 void launch_task_return(char *out, int window) {
    dialog_t *dialog = dialog_from_window(window);
    dialog->active = false;
-   launch_task(out, 0, NULL, false);
+   launch_task(out, 0, NULL, false, false);
    close_window(window);
 }
 

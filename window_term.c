@@ -65,7 +65,7 @@ void window_term_keypress(void *regs, uint16_t key, void *window) {
 
    if((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')
     || key == ' ' || key == '/' || key == '.' || key == '-' || key == '(' || key == ')' || key == '<' || key == '>'
-    || key == '=' || key == '+') {
+    || key == '=' || key == '+' || key == '|') {
 
       // write to current window
       gui_window_t *selected = (gui_window_t*)window;
@@ -200,12 +200,25 @@ void window_term_draw(void *window) {
    gui_window_t *selected = (gui_window_t*)window;
    surface_t *surface = gui_get_surface();
 
+   int maxchars = (selected->width - getFont()->padding*2) / (getFont()->width+getFont()->padding) - 1;
+   int startindex = selected->text_index - maxchars;
+   if(startindex < 0) startindex = 0;
+
+   int y = selected->y + selected->text_y + TITLEBAR_HEIGHT;
+   if(y + getFont()->height > selected->y + selected->height)
+      y = selected->y + selected->height - getFont()->height;
+
+   // clear bg
+   draw_rect(surface, selected->bgcolour, selected->x+1, y, selected->width-2, getFont()->height);
    // current text content/buffer
-   draw_rect(surface, selected->bgcolour, selected->x+1, selected->y+selected->text_y+TITLEBAR_HEIGHT, selected->width-2, getFont()->height);
-   draw_char(surface, '>', selected->txtcolour, selected->x + 1, selected->y + selected->text_y+TITLEBAR_HEIGHT);
-   draw_string(surface, selected->text_buffer, selected->txtcolour, selected->x + 1 + getFont()->width + getFont()->padding, selected->y + selected->text_y+TITLEBAR_HEIGHT);
-   // prompt
-   draw_char(surface, '_', selected->txtcolour, selected->x + selected->text_x + 1 + getFont()->width + getFont()->padding, selected->y + selected->text_y+TITLEBAR_HEIGHT);
+   bool showprompt = startindex == 0;
+   if(showprompt)
+      draw_char(surface, '>', selected->txtcolour, selected->x + 1, y);
+   int textx = selected->x + 1 + (showprompt ? (getFont()->width + getFont()->padding) : 0);
+   draw_string(surface, selected->text_buffer + startindex, selected->txtcolour, textx, y);
+   // cursor
+   int cursorx = textx + (selected->text_index - startindex)*(getFont()->width+getFont()->padding);
+   draw_char(surface, '_', selected->txtcolour, cursorx, y);
 }
 
 void window_term_clear(void *window) {

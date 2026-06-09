@@ -232,8 +232,10 @@ int prevY = -1;
 
 void click(int x, int y) {
 
-   if(info->bpp != 16)
+   if(info->bpp != 16) {
+      ui_click(dialog->ui, x, y);
       end_subroutine();
+   }
 
    if(x > width) // clicked scrollarea
       end_subroutine();

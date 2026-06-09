@@ -9,7 +9,7 @@ void printf(char *format, ...) {
    va_start(args, format);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
-   write(0, buffer, 512);
+   write(1, buffer, strlen(buffer));
    free(buffer);
 }
 
@@ -23,7 +23,9 @@ void _start() {
    printf("Size 0x%h\n", size);
 
    while(true) {
-      read(0, buf, size);
+      int r = read(0, buf, size);
+      if(r <= 0) break;
+      buf[r] = '\0';
       printf("Read string: %s\n", buf);
       int number;
       if(strstartswith(buf, "0x")) {

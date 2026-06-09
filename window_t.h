@@ -5,7 +5,7 @@
 #include "surface_t.h"
 #include "windowobj.h"
 
-#define TEXT_BUFFER_LENGTH 64
+#define TEXT_BUFFER_LENGTH 128
 #define CMD_HISTORY_LENGTH 10
 
 #define W_CHILDCOUNT 10

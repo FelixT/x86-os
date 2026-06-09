@@ -1,5 +1,5 @@
 ; bootloader 1
-; allows us to change video mode from real mode then enter real mode
+; allows us to change video mode from real mode then enter protected mode
 ; include command line interface
 ; calls cboot which then loads kernel and jumps to it
 

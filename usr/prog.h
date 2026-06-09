@@ -445,14 +445,28 @@ static inline void queue_event(void *callback, int delta, void *msg) {
    );
 }
 
-static inline void launch_task(char *path, int argc, char **args, bool copy) {
+static inline int launch_task(char *path, int argc, char **args, bool copy, bool paused) {
+   // copy args to kernel memory
+   int id; 
    asm volatile (
       "int $0x30;"
-      :: "a" (32),
+      : "=b" (id)
+      : "a" (32),
       "b" ((uint32_t)path),
       "c" ((uint32_t)argc),
       "d" ((uint32_t)args),
-      "S" ((uint32_t)copy) // inherit fds and wd from current task
+      "S" ((uint32_t)copy), // inherit fds and wd from current task
+      "D" ((uint32_t)paused) // start paused
+      : "cc", "memory"
+   );
+   return id;
+}
+
+static inline void unpause_task(int id) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (71),
+      "b" ((uint32_t)id)
       : "cc", "memory"
    );
 }
@@ -622,8 +636,12 @@ static inline int new_file(char *path) {
 }
 
 static inline int close(int fd) {
-   (void)fd;
-   // do nothing yet
+   asm volatile(
+      "int $0x30"
+      :: "a" (73),
+      "b" (fd)
+      : "cc", "memory"
+   );
    return 0;
 }
 
@@ -824,6 +842,39 @@ static inline uint32_t get_tick() {
       : "a" (57)
    );
    return ms;
+}
+
+static inline void pipe(int *readfd, int *writefd) {
+   int rfd, wfd;
+   asm volatile(
+      "int $0x30"
+      : "=b" (rfd), "=c" (wfd)
+      : "a" (70)
+      : "cc", "memory"
+   );
+   *readfd = rfd;
+   *writefd = wfd;
+}
+
+static inline int dup(int oldfd) {
+   int new_fd;
+   asm volatile(
+      "int $0x30"
+      : "=b" (new_fd)
+      : "a" (74), "b" (oldfd)
+      : "cc", "memory"
+   );
+   return new_fd;
+}
+
+static inline void dup2(int oldfd, int newfd) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (72),
+      "b" (oldfd),
+      "c" (newfd)
+      : "cc", "memory"
+   );
 }
 
 // terminal override

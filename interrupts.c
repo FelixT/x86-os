@@ -363,6 +363,21 @@ void software_handler(registers_t *regs) {
       case 69:
          api_rmdir(regs);
          break;
+      case 70:
+         api_pipe(regs);
+         break;
+      case 71:
+         api_unpause(regs);
+         break;
+      case 72:
+         api_dup2(regs);
+         break;
+      case 73:
+         api_close(regs);
+         break;
+      case 74:
+         api_dup(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -650,10 +665,9 @@ void exception_handler(int int_no, registers_t *regs) {
             gui_writenumat(int_no, 0, 0, 0);
             debug_writestr(buffer);
          }
-         return;
+      } else {
+         irqs[irq_no](regs);
       }
-
-      irqs[irq_no](regs);
    }
 
    // send end of command code 0x20 to pic

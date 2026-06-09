@@ -3,6 +3,7 @@
 #include "windowmgr.h"
 #include "paging.h"
 #include "events.h"
+#include "fs.h"
 
 task_state_t *tasks;
 int current_task = -1;
@@ -18,6 +19,8 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
    process->no_allocated = 0;
    process->fd_count = 0;
+   for(int i = 0; i < TASK_MAX_FDS; i++)
+      process->file_descriptors[i] = NULL;
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
    process->no_threads = 0;
@@ -33,6 +36,8 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].task_id = index;
    tasks[index].enabled = false;
    tasks[index].paused = false;
+   tasks[index].unpausable = false;
+   tasks[index].crashed = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
    tasks[index].kernel_stack_top = (uint32_t)(TOS_KERNEL - (TASK_STACK_SIZE * index));
    tasks[index].in_routine = false;
@@ -115,6 +120,7 @@ int get_free_task_index() {
 }
 
 void pause_task(int index, registers_t *regs) {
+   // program has crashed
    if(index < 0 || index >= TOTAL_TASKS) return;
    if(!tasks[index].enabled) {
       debug_printf("Task %u already ended\n", index);
@@ -124,6 +130,7 @@ void pause_task(int index, registers_t *regs) {
    task_reset_windows(index);
 
    tasks[index].paused = true;
+   tasks[index].crashed = true;
    if(index == get_current_task() || !task_exists())
       if(regs != NULL) switch_task(regs);
 }
@@ -190,7 +197,7 @@ void end_task(int index, registers_t *regs) {
       // free fds
       for(int i = 0; i < task->process->fd_count; i++) {
          fs_file_t *fd = task->process->file_descriptors[i];
-         fs_close(fd);
+         if(fd) fs_close(fd);
       }
 
       // kill other threads
@@ -568,10 +575,9 @@ void task_subroutine_end(registers_t *regs) {
 
 void task_write_to_window(int task, char *out, bool children) {
    task_state_t *t = &tasks[task];
-   // write to stdio
-   int w = t->process->file_descriptors[1]->window_index;
-   int curw = get_current_task_window();
-   if(w == curw || (w >= 0 && w < getWindowCount() && !getWindow(w)->closed)) {
+   // write to task main window if it exists, otherwise write to fd 1
+   int w = t->process->window;
+   if(w >= 0 && w < getWindowCount() && !getWindow(w)->closed) {
       gui_window_t *window = getWindow(w);
       window_writestr(out, window->txtcolour, w);
       if(children) {
@@ -580,7 +586,14 @@ void task_write_to_window(int task, char *out, bool children) {
          }
       }
    } else {
-      debug_printf("Tried to write '%s' to task %i window %i\n", out, task, w);
+      fs_file_t *fd1 = t->process->file_descriptors[1];
+      if(!fd1) {
+         debug_printf("task_write_to_window: no fd1 or main window\n");
+         return;
+      }
+      int r = fs_write(fd1, (uint8_t*)out, strlen(out), task);
+      if(r > 0 && fd1->type == FS_TYPE_PIPE && fd1->pipe)
+         fs_pipe_wake_reader(fd1->pipe);
    }
 }
 

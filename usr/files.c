@@ -320,19 +320,28 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          args[1] = malloc(strlen(fullpath)+1);
          strcpy(args[1], fullpath);
 
-         launch_task(elfpath, 2, args, false);
+         launch_task(elfpath, 2, args, false, false);
+         free(args[0]);
+         free(args[1]);
+         free(args);
       }
 
       if(strequ(extension, "elf")) {
-         launch_task(fullpath, 0, NULL, false);
+         launch_task(fullpath, 0, NULL, false, false);
       }
 
       if(strequ(extension, "txt") || strequ(extension, "c")) {
-         char **args = (char**)malloc(1*sizeof(char*));
-         args[0] = malloc(strlen(fullpath)+1);
-         strcpy(args[0], fullpath);
+         char **args = (char**)malloc(2*sizeof(char*));
+         char elfpath[32] = "/sys/text.elf";
+         args[0] = malloc(strlen(elfpath)+1);
+         strcpy(args[0], elfpath);
+         args[1] = malloc(strlen(fullpath)+1);
+         strcpy(args[1], fullpath);
 
-         launch_task("/sys/text.elf", 1, args, false);
+         launch_task(elfpath, 2, args, false, false);
+         free(args[0]);
+         free(args[1]);
+         free(args);
       }
 
       if(strequ(extension, "fon")) {
@@ -374,8 +383,16 @@ void scroll(int deltaY, int offsetY, int window) {
    // clear menu
    draw_context_t context = ui_get_context(ui);
    context.clipRect.height -= wo_menu->height;
-   ui_scroll_buffer_c(ui, deltaY, context);
+   ui_scroll_buffer_c(ui, -deltaY, context);
    wo_grid->y -= deltaY;
+   if(wo_grid->hovering) {
+      // unhover
+      wo_grid->hovering = false;
+      grid_t *grid_data = wo_grid->data;
+      grid_data->cells[grid_data->hoveredrow][grid_data->hoveredcol].hovering = false;
+      grid_data->hoveredcol = -1;
+      grid_data->hoveredrow = -1;
+   }
    wo_grid->draw_func(wo_grid, context);
    wo_menu->draw_func(wo_menu, ui_get_context(ui));
    offset = offsetY/(gridview ? 36 : 27);

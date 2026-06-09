@@ -697,7 +697,7 @@ void fat_read_file_callback(void *regs, void *msg) {
       uint16_t tableVal = ((uint16_t*)state->fatTable)[state->currentCluster];
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
-         (*(void(*)(void*,int))state->callback)(regs, state->task); // callback
+         (*(void(*)(void*,int,int))state->callback)(regs, state->task, state->readBytes); // callback
          return;
       } else if(tableVal == 0xFFF7) {
          debug_printf("FAT error: Hit bad cluster\n");
@@ -711,9 +711,9 @@ void fat_read_file_callback(void *regs, void *msg) {
    }
 
    task_state_t *task_state = &gettasks()[state->task];
-   if(!task_state->enabled || !task_state->paused) {
+   if(!task_state->enabled || task_state->crashed || !task_state->paused) {
       free((uint32_t)state, sizeof(fat_read_file_state_t));
-      return; // stop if task has ended - warning: doesn't catch task if task is reopened then paused, or if task crashes (stays paused - todo: add 'crashed' bool in task_state_t)
+      return;
    }
    
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
@@ -737,7 +737,7 @@ void fat_read_file_callback(void *regs, void *msg) {
 
       if(state->readBytes >= state->size) {
          // callback
-         (*(void(*)(void*,int))state->callback)(regs, state->task);
+         (*(void(*)(void*,int,int))state->callback)(regs, state->task, state->readBytes);
          free((uint32_t)state, sizeof(fat_read_file_state_t));
          return;
       }
@@ -747,14 +747,14 @@ void fat_read_file_callback(void *regs, void *msg) {
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
          // call callback
-         (*(void(*)(void*,int))state->callback)(regs, state->task);
+         (*(void(*)(void*,int, int))state->callback)(regs, state->task, state->readBytes);
          return;
       } else if(tableVal == 0xFFF7) {
          // bad cluster
          debug_printf("FAT error: Hit bad cluster\n");
          free((uint32_t)state, sizeof(fat_read_file_state_t));
          return;
-      } else { 
+      } else {
          state->currentCluster = tableVal; // table value is the next cluster
          state->readCount++;
       }

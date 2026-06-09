@@ -15,6 +15,7 @@
 // helper funcs
 
 static inline gui_window_t *api_get_window() {
+   if(get_current_task_window() < 0) return NULL;
    return &gui_get_windows()[get_current_task_window()];
 }
 
@@ -57,9 +58,18 @@ void api_write_string(registers_t *regs) {
       out = (char*)(task->process->prog_entry + regs->ebx);
    else // elf
       out = (char*)regs->ebx;
-
+   // write to task's main window
+   if((int)regs->ecx == -1) {
+      api_write_to_task(out);
+      return;
+   }
+   // write to specified window
    gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
+   if(!window) {
+      debug_printf("api_write_string: invalid window index %i\n", regs->ecx);
+      api_write_to_task(out);
+      return;
+   }
    int windowindex = get_window_index_from_pointer(window);
    window_writestr(out, window->txtcolour, windowindex);
 }
@@ -197,8 +207,9 @@ void api_end_task(registers_t *regs) {
 
 void api_override_checkcmd(registers_t *regs) {
    // override terminal checkcmd function with ebx
+   if(!api_get_window()) return;
    uint32_t addr = regs->ebx;
-  api_get_window()->checkcmd_func = (void *)(addr);
+   api_get_window()->checkcmd_func = (void *)(addr);
 }
 
 void api_override_mouseclick(registers_t *regs) {
@@ -364,11 +375,14 @@ void api_launch_task(registers_t *regs) {
    // IN: ecx = argc
    // IN: edx = args
    // IN: esi = copy environment of current task (use same wd & file descriptors)
+   // IN: edi = paused
+   // OUT: ebx = pid (-1 for failure)
 
    char *path = (char*)regs->ebx;
    int argc = (int)regs->ecx;
    char **args = (char**)regs->edx;
    bool copy = (bool)regs->esi;
+   bool paused = (bool)regs->edi;
 
    // copy args
    char **copied_args = NULL;
@@ -395,7 +409,11 @@ void api_launch_task(registers_t *regs) {
 
    // set up the new task without switching context
    int new_task = tasks_setup_elf(regs, pathbuf, argc, copied_args, !copy, copy);
-   if(new_task < 0) return;
+   if(new_task < 0) {
+      debug_printf("api_launch_task failed\n");
+      regs->ebx = -1;
+      return;
+   }
 
    task_state_t *task = &gettasks()[new_task];
 
@@ -421,7 +439,14 @@ void api_launch_task(registers_t *regs) {
       map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
    }
 
-   gettasks()[new_task].enabled = true;
+   task->enabled = true;
+   task->paused = paused;
+   task->unpausable = paused;
+   if(paused) {
+      if(get_current_task() == new_task)
+         switch_task(regs); // yield
+   }
+   regs->ebx = new_task;
 }
 
 void api_set_window_title(registers_t *regs) {
@@ -431,6 +456,7 @@ void api_set_window_title(registers_t *regs) {
    char *title = (char*)regs->ebx;
    if(strlen(title) > 19) return;
 
+   if(get_current_task_window() < 0) return;
    gui_window_t *mainwindow = &gui_get_windows()[get_current_task_window()];
    if(cindex == -1) {
       strcpy(mainwindow->title, title);
@@ -523,10 +549,21 @@ void api_sbrk(registers_t *regs) {
 
 }
 
+static int alloc_fd(process_t *process) {
+   for(int i = 0; i < TASK_MAX_FDS; i++) {
+      if(process->file_descriptors[i] == NULL) {
+         if(i >= process->fd_count) process->fd_count = i + 1;
+         return i;
+      }
+   }
+   return -1;
+}
+
 void api_open(registers_t *regs) {
    // IN: ebx - char* path
    // IN: ecx - flag (0 read, 1 write)
    // OUT: ebx - int fd
+   task_state_t *task = get_current_task_state();
    fs_file_t *file = fs_open((char*)regs->ebx);
    if(!file) {
       if(regs->ecx == 1) { // write
@@ -539,9 +576,14 @@ void api_open(registers_t *regs) {
          return;
       }
    }
-   task_state_t *task = get_current_task_state();
-   int fd = task->process->fd_count;
-   task->process->file_descriptors[task->process->fd_count++] = file;
+   int fd = alloc_fd(task->process);
+   if(fd < 0) {
+      debug_printf("api_open: too many open files\n");
+      fs_close(file);
+      regs->ebx = -1;
+      return;
+   }
+   task->process->file_descriptors[fd] = file;
    regs->ebx = fd;
 }
 
@@ -553,7 +595,7 @@ void api_read_stdin_callback(void *regs, char *buffer) {
       gui_window_t *window = getWindow(w);
       strcpy(window->read_buffer, buffer);
       task->paused = false;
-      r->ebx = strlen(buffer+1);
+      r->ebx = strlen(buffer);
       switch_to_task(task->task_id, regs); // wake
       task_execute_queued_subroutine(regs, (void*)task->task_id); // check for queued events while task was paused
    } else {
@@ -562,9 +604,10 @@ void api_read_stdin_callback(void *regs, char *buffer) {
    }
 }
 
-void api_read_fd_callback(registers_t *regs, int task) {
+void api_read_fd_callback(registers_t *regs, int task, int size) {
    gettasks()[task].paused = false;
    switch_to_task(task, regs); // wake
+   regs->ebx = size;
    task_execute_queued_subroutine(regs, (void*)task); // check for queued events while task was paused
 }
 
@@ -577,43 +620,55 @@ void api_read(registers_t *regs) {
    int fd = regs->ebx;
    char *buf = (char*)regs->ecx;
    size_t count = regs->edx;
+
+   if(count == 0) {
+      regs->ebx = 0;
+      return;
+   }
    
    if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("read: fd not found\n");
       regs->ebx = -1;
       return;
    }
-   if(!task->process->file_descriptors[fd]->active) {
+
+   fs_file_t *file = task->process->file_descriptors[fd];
+   if(!file || !file->active) {
       debug_printf("read: fd inactive\n");
       regs->ebx = -1;
       return;
    }
 
-   if(fd == 0) {
-      // read from stdin
-      // note: only one task can read from a windows stdin at a time as these get overwritten
-      gui_window_t *window = getWindow(task->process->file_descriptors[0]->window_index);
-      window->read_func = &api_read_stdin_callback;
-      window->read_buffer = buf;
-      window->read_task = get_current_task();
-      task->paused = true;
-      switch_task(regs); // yield
-   } else if(fd > 0 && fd < 3) {
-      // stdout/stderr - can only write to these
-   } else if(fd >= 3) {
-      // read from file descriptor
-      if(fd >= task->process->fd_count) {
-         debug_printf("api_read: fd not found\n");
-         regs->ebx = -1;
-         return;
-      }
-      regs->ebx = fs_read(task->process->file_descriptors[fd], buf, count, &api_read_fd_callback, get_current_task());
-      if(count > 0) {
-         task->paused = true;
-         switch_task(regs); // yield
-      }
+   void *callback;
+   if(file->type == FS_TYPE_TERM) {
+      callback = &api_read_stdin_callback;
+   } else if(file->type == FS_TYPE_FILE) {
+      callback = &api_read_fd_callback;
+   } else if(file->type == FS_TYPE_PIPE) {
+      callback = NULL;
+   } else {
+      debug_printf("api_read: invalid fd type\n");
+      regs->ebx = -1;
+      return;
    }
 
+   int result = fs_read(file, buf, count, callback, get_current_task());
+   regs->ebx = result;
+   if(result == FS_BLOCKING) {
+      if(file->type == FS_TYPE_PIPE && file->pipe) {
+         file->pipe->read_buf = buf;
+         file->pipe->read_size = count;
+      }
+      task->paused = true;
+      switch_task(regs); // yield
+   }
+   if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
+      int writer_task = file->pipe->write_waiting_task;
+      if(writer_task >= 0) {
+         fs_pipe_wake_writer(file->pipe);
+         switch_to_task(writer_task, regs);
+      }
+   }
 }
 
 void api_read_dir(registers_t *regs) {
@@ -635,16 +690,40 @@ void api_write(registers_t *regs) {
    // IN: ebx - int fd
    // IN: ecx - uint8_t *buffer
    // IN: edx - size_t size
+   // OUT: ebx - size_t bytes written
    task_state_t *task = get_current_task_state();
    int fd = regs->ebx;
    uint8_t *buffer = (uint8_t*)regs->ecx;
    size_t size = (size_t)regs->edx;
-   if(fd < 0 || fd > task->process->fd_count) {
+   if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("api_write: fd not found\n");
       regs->ebx = -1;
-   } else {
-      fs_write(task->process->file_descriptors[fd], buffer, size);
-      regs->ebx = size;
+      return;
+   }
+
+   fs_file_t *file = task->process->file_descriptors[fd];
+   if(!file || !file->active) {
+      debug_printf("api_write: fd inactive\n");
+      regs->ebx = -1;
+      return;
+   }
+
+   int result = fs_write(file, buffer, size, task->task_id);
+   regs->ebx = result;
+
+   if(result == FS_WRITE_WAIT && file->type == FS_TYPE_PIPE && file->pipe) {
+      file->pipe->write_buf = buffer;
+      file->pipe->write_size = size;
+      task->paused = true;
+      switch_task(regs); // yield
+   }
+
+   if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
+      int reader_task = file->pipe->read_waiting_task;
+      if(reader_task >= 0) {
+         fs_pipe_wake_reader(file->pipe);
+         switch_to_task(reader_task, regs);
+      }
    }
 }
 
@@ -653,7 +732,7 @@ void api_fsize(registers_t *regs) {
    // OUT: ebx - filesize
    task_state_t *task = get_current_task_state();
    int fd = regs->ebx;
-   if(fd < 0 || fd > task->process->fd_count) {
+   if(fd < 0 || fd >= task->process->fd_count || !task->process->file_descriptors[fd]) {
       regs->ebx = -1;
    } else {
       regs->ebx = fs_filesize(task->process->file_descriptors[fd]);
@@ -695,8 +774,14 @@ void api_new_file(registers_t *regs) {
       return;
    }
    task_state_t *task = get_current_task_state();
-   int fd = task->process->fd_count;
-   task->process->file_descriptors[task->process->fd_count++] = file;
+   int fd = alloc_fd(task->process);
+   if(fd < 0) {
+      debug_printf("api_new_file: too many open files\n");
+      fs_close(file);
+      regs->ebx = -1;
+      return;
+   }
+   task->process->file_descriptors[fd] = file;
    regs->ebx = fd;
 }
 
@@ -709,7 +794,7 @@ void api_seek(registers_t *regs) {
    int fd = regs->ebx;
    int offset = regs->ecx;
    int type = regs->edx;
-   if(fd < 0 || fd > task->process->fd_count) {
+   if(fd < 0 || fd >= task->process->fd_count || !task->process->file_descriptors[fd]) {
       regs->ebx = -1;
    } else {
       regs->ebx = fs_seek(task->process->file_descriptors[fd], offset, type);
@@ -753,6 +838,7 @@ void api_set_window_size(registers_t *regs) {
    if(width < 20 || height < 20) return;
 
    gui_window_t *window = api_get_window();
+   if(!window) return;
    int maxwidth = gui_get_surface()->width - 5;
    int maxheight = gui_get_surface()->height - TOOLBAR_HEIGHT;
    if(width > maxwidth)
@@ -1140,4 +1226,124 @@ void api_sleep(registers_t *regs) {
 void api_get_timer_tick(registers_t *regs) {
    // OUT: ebx - tick
    regs->ebx = get_timer_tick();
+}
+
+void api_pipe(registers_t *regs) {
+   // OUT: ebx - read fd
+   // OUT: ecx - write fd
+   task_state_t *task = get_current_task_state();
+   fs_file_t *read_file = NULL, *write_file = NULL;
+   fs_create_pipe(&read_file, &write_file);
+   int read_fd = alloc_fd(task->process);
+   if(read_fd == -1) {
+      debug_printf("api_pipe: couldn't create fds\n");
+      regs->ebx = -1;
+      regs->ecx = -1;
+      fs_close(read_file);
+      fs_close(write_file);
+      return;
+   }
+   task->process->file_descriptors[read_fd] = read_file;
+   int write_fd = alloc_fd(task->process);
+   if(write_fd == -1) {
+      debug_printf("api_pipe: couldn't create fds\n");
+      regs->ebx = -1;
+      regs->ecx = -1;
+      fs_close(read_file);
+      task->process->file_descriptors[read_fd] = NULL;
+      fs_close(write_file);
+      return;
+   }
+   task->process->file_descriptors[write_fd] = write_file;
+   regs->ebx = read_fd;
+   regs->ecx = write_fd;
+}
+
+void api_unpause(registers_t *regs) {
+   // IN: ebx - task id
+   // todo: check if child of calling process or called by root process
+   int task_id = regs->ebx;
+   if(task_id < 0 || task_id >= TOTAL_TASKS) {
+      debug_printf("api_unpause: invalid task id\n");
+      return;
+   }
+   task_state_t *task = &gettasks()[task_id];
+   if(task->paused) {
+      if(!task->unpausable) {
+         debug_printf("Couldn't unpause task %i", task->task_id);
+         return;
+      }
+      task->paused = false;
+      task->unpausable = false;
+      switch_to_task(task_id, regs);
+   }
+}
+
+void api_dup(registers_t *regs) {
+   // IN: ebx - old fd
+   // OUT: ebx - new fd / -1 on error
+   task_state_t *task = get_current_task_state();
+   int old_fd = regs->ebx;
+   if(old_fd < 0 || old_fd >= task->process->fd_count) {
+      debug_printf("api_dup: invalid fd\n");
+      regs->ebx = -1;
+      return;
+   }
+   fs_file_t *old_file = task->process->file_descriptors[old_fd];
+   if(!old_file || !old_file->active) {
+      debug_printf("api_dup: old fd inactive\n");
+      regs->ebx = -1;
+      return;
+   }
+   int new_fd = alloc_fd(task->process);
+   if(new_fd < 0) {
+      debug_printf("api_dup: too many open files\n");
+      regs->ebx = -1;
+      return;
+   }
+   task->process->file_descriptors[new_fd] = fs_dup(old_file);
+   regs->ebx = new_fd;
+}
+
+void api_dup2(registers_t *regs) {
+   // IN: ebx - old fd
+   // IN: ecx - new fd
+   // OUT: ebx - new fd / -1 on error
+   task_state_t *task = get_current_task_state();
+   int old_fd = regs->ebx;
+   int new_fd = regs->ecx;
+   if(old_fd < 0 || old_fd >= task->process->fd_count || new_fd < 0 || new_fd >= TASK_MAX_FDS) {
+      debug_printf("api_dup2: invalid fd\n");
+      regs->ebx = -1;
+      return;
+   }
+   if(old_fd == new_fd) { regs->ebx = new_fd; return; }
+   fs_file_t *old_file = task->process->file_descriptors[old_fd];
+   if(!old_file || !old_file->active) {
+      debug_printf("api_dup2: old fd inactive\n");
+      regs->ebx = -1;
+      return;
+   }
+   if(new_fd >= task->process->fd_count) {
+      for(int i = task->process->fd_count; i <= new_fd; i++)
+         task->process->file_descriptors[i] = NULL;
+      task->process->fd_count = new_fd + 1;
+   }
+   fs_file_t *existing = task->process->file_descriptors[new_fd];
+   if(existing) fs_close(existing);
+   task->process->file_descriptors[new_fd] = fs_dup(old_file);
+   regs->ebx = new_fd;
+}
+
+void api_close(registers_t *regs) {
+   // IN: ebx - fd
+   int fd = regs->ebx;
+   task_state_t *task = get_current_task_state();
+   if(fd < 0 || fd >= task->process->fd_count) {
+      debug_printf("api_close: invalid fd\n");
+      return;
+   }
+   fs_file_t *file = task->process->file_descriptors[fd];
+   fs_close(file);
+   task->process->file_descriptors[fd] = NULL;
 }

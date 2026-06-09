@@ -75,5 +75,10 @@ void api_get_tasks(registers_t *regs);
 void api_kill_task(registers_t *regs);
 void api_sleep(registers_t *regs);
 void api_get_timer_tick(registers_t *regs);
+void api_pipe(registers_t *regs);
+void api_unpause(registers_t *regs);
+void api_dup(registers_t *regs);
+void api_dup2(registers_t *regs);
+void api_close(registers_t *regs);
 
 #endif

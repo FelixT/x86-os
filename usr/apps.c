@@ -28,7 +28,7 @@ void app_launch(wo_t *label) {
    strcat(path, ".elf");
    debug_println(path);
    redraw();
-   launch_task(path, 0, NULL, false);
+   launch_task(path, 0, NULL, false, false);
 }
 
 int sort_filename(const void *v1, const void *v2) {

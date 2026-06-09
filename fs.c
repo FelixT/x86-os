@@ -4,7 +4,7 @@
 #include "windowmgr.h"
 #include "window.h"
 
-// interface for interacting with fat16 fs and terminal as files
+// interface for interacting with fat16 fs and terminal as files from usermode
 
 fs_file_t *fs_open(char *path) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
@@ -15,14 +15,22 @@ fs_file_t *fs_open(char *path) {
    fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
    file->active = true;
    file->data = data;
+   file->pipe = NULL;
    file->current_pos = 0;
    strcpy(file->filename, path);
+
+   // terminals
    if(strequ(path, "/dev/stdin") || strequ(path, "/dev/stdout") || strequ(path, "/dev/stderr")) {
       file->type = FS_TYPE_TERM;
       file->window_index = getSelectedWindowIndex();
+      if(strequ(path, "/dev/stdin"))
+         file->flags = FS_FLAG_READONLY;
+      else
+         file->flags = FS_FLAG_WRITEONLY;
       return file;
    }
 
+   // files
    fat_dir_t *entry = fat_parse_path(path, true);
    if(!entry) {
       free((uint32_t)file, sizeof(fs_file_t));
@@ -36,6 +44,7 @@ fs_file_t *fs_open(char *path) {
    } else {
       file->type = FS_TYPE_FILE;
    }
+   file->flags = 0;
    data->file_size = entry->fileSize;
    data->first_cluster = entry->firstClusterNo;
    file->data = data;
@@ -47,6 +56,28 @@ void fs_close(fs_file_t *file) {
    if(!file) return;
    if(file->data)
       free((uint32_t)file->data, sizeof(fs_file_data_t));
+   if(file->pipe) {
+      if(file->flags & FS_FLAG_WRITEONLY)
+         file->pipe->writer_count--;
+      if(file->pipe->read_waiting_task != -1) {
+         task_state_t *task = &gettasks()[file->pipe->read_waiting_task];
+         task->paused = false;
+         task->registers.ebx = FS_EOF;
+         file->pipe->read_waiting_task = -1;
+      }
+      if(file->pipe->write_waiting_task != -1) {
+         task_state_t *task = &gettasks()[file->pipe->write_waiting_task];
+         task->paused = false;
+         task->registers.ebx = FS_EOF;
+         file->pipe->write_waiting_task = -1;
+         file->pipe->write_buf = NULL;
+         file->pipe->write_size = 0;
+      }
+      if(file->pipe->ref_count > 0)
+         file->pipe->ref_count--;
+      if(file->pipe->ref_count == 0)
+         free((uint32_t)file->pipe, sizeof(fs_pipe_t));
+   }
    free((uint32_t)file, sizeof(fs_file_t));
 }
 
@@ -58,6 +89,12 @@ fs_file_t *fs_dup(fs_file_t *file) {
       fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
       *data = *file->data;
       dup->data = data;
+   }
+   if(file->pipe) {
+      dup->pipe = file->pipe;
+      dup->pipe->ref_count++;
+      if(dup->flags & FS_FLAG_WRITEONLY)
+         dup->pipe->writer_count++;
    }
    return dup;
 }
@@ -180,39 +217,127 @@ fs_file_t *fs_new(char *path) {
    return fs_open(path);
 }
 
-bool fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size) {
+int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
-      //debug_printf("Write %u to window %i\n", size, file->window_index);
       int w = file->window_index;
       if(w > 0 && w < getWindowCount() && !getWindow(w)->closed) {
          window_writestrn((char*)buffer, size, 0, file->window_index);
+         return size;
       } else {
          debug_printf("FS: error writing to window %s\n", file->window_index);
+         return FS_ERROR;
       }
-   } else if(file->type == FS_TYPE_FILE) {
+   }
+   
+   if(file->type == FS_TYPE_FILE) {
       // write to file
       if(fat_write_file(file->filename, buffer, size) < 0) {
          debug_printf("FS: error writing to file %s\n", file->filename);
-         return false;
+         return FS_ERROR;
       }
-   } else {
-      debug_printf("FS: cannot write to directory %s\n", file->filename);
-      return false;
+      return size;
+   }
+   
+   if(file->type == FS_TYPE_PIPE) {
+      fs_pipe_t *pipe = file->pipe;
+      if(!pipe) {
+         debug_printf("api_write: pipe not active\n");
+         return FS_ERROR;
+      }
+
+      if(pipe->size == FS_PIPE_BUF_SIZE) {
+         pipe->write_waiting_task = task;
+         return FS_WRITE_WAIT;
+      }
+
+      size_t written = 0;
+      while(written < size && pipe->size < FS_PIPE_BUF_SIZE) {
+         pipe->buf[pipe->write_pos] = buffer[written];
+         pipe->write_pos = (pipe->write_pos + 1) % FS_PIPE_BUF_SIZE;
+         pipe->size++;
+         written++;
+      }
+
+      return (int)written;
    }
 
-   return true;
+   if(file->type == FS_TYPE_DIR) {
+      debug_printf("FS: cannot write to directory %s\n", file->filename);
+      return FS_ERROR;
+   }
+
+   debug_printf("FS: invalid file type for writing %s\n", file->filename);
+   return FS_ERROR;
 }
 
 int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task) {
+   if(file->type == FS_TYPE_TERM) {
+      gui_window_t *window = getWindow(file->window_index);
+      if(window->closed) {
+         debug_printf("FS: error reading from window %i\n", file->window_index);
+         return FS_ERROR;
+      }
+
+      if(file->flags & FS_FLAG_WRITEONLY) {
+         debug_printf("FS: cannot read from write-only file %s\n", file->filename);
+         return FS_ERROR;
+      }
+      // note: only one task can read from a windows stdin at a time as these get overwritten
+      window->read_func = callback;
+      window->read_buffer = buffer;
+      window->read_task = task;
+      return FS_BLOCKING;
+   }
+
+   if(file->type == FS_TYPE_DIR) {
+      debug_printf("FS: cannot read from directory %s\n", file->filename);
+      return FS_ERROR;
+   }
+
+   if(file->type == FS_TYPE_PIPE) {
+      fs_pipe_t *pipe = file->pipe;
+      if(!pipe) {
+         debug_printf("FS: pipe not active\n");
+         return FS_ERROR;
+      }
+      size_t read = 0;
+      while(read < size && pipe->size > 0) {
+         ((uint8_t*)buffer)[read++] = pipe->buf[pipe->read_pos];
+         pipe->read_pos = (pipe->read_pos + 1) % FS_PIPE_BUF_SIZE;
+         pipe->size--;
+      }
+      if(read > 0) {
+         return read;
+      } else if(pipe->writer_count == 0) {
+         return FS_EOF;
+      } else {
+         // wait for data
+         pipe->read_waiting_task = task;
+         return FS_BLOCKING;
+      }
+   }
+
+   if(file->type == FS_TYPE_FILE) {
+      if(file->flags & FS_FLAG_WRITEONLY) {
+         debug_printf("FS: cannot read from write-only file %s\n", file->filename);
+         return FS_ERROR;
+      }
+      if(file->current_pos >= file->data->file_size)
+         return FS_EOF;
+   } else {
+      debug_printf("FS: cannot read from directory %s\n", file->filename);
+      return FS_ERROR;
+   }
+
    if((int)size < 0)
       size = file->data->file_size;
    if(file->current_pos + size > file->data->file_size)
       size = file->data->file_size - file->current_pos;
-   if(size == 0) return 0;
+   if(size == 0) return FS_EOF;
 
    fat_read_file_chunked(file->data->first_cluster, buffer, file->current_pos, size, callback, task);
    file->current_pos += size;
-   return size;
+   return FS_BLOCKING;
 }
 
 bool fs_unlink(char *path) {
@@ -254,4 +379,72 @@ int fs_seek(fs_file_t *file, int offset, int type) {
    if(file->current_pos > file->data->file_size)
       file->current_pos = file->data->file_size;
    return file->current_pos;
+}
+
+void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
+   fs_pipe_t *pipe = (fs_pipe_t*)malloc(sizeof(fs_pipe_t));
+   memset(pipe, 0, sizeof(fs_pipe_t));
+   pipe->read_waiting_task = -1;
+   pipe->write_waiting_task = -1;
+   pipe->writer_count = 1;
+   pipe->ref_count = 2;
+
+   fs_file_t *read_file = (fs_file_t*)malloc(sizeof(fs_file_t));
+   read_file->filename[0] = '\0';
+   read_file->window_index = -1;
+   read_file->current_pos = 0;
+   read_file->data = NULL;
+   read_file->active = true;
+   read_file->type = FS_TYPE_PIPE;
+   read_file->pipe = pipe;
+   read_file->flags = 0;
+
+   fs_file_t *write_file = (fs_file_t*)malloc(sizeof(fs_file_t));
+   write_file->filename[0] = '\0';
+   write_file->window_index = -1;
+   write_file->current_pos = 0;
+   write_file->data = NULL;
+   write_file->active = true;
+   write_file->type = FS_TYPE_PIPE;
+   write_file->pipe = pipe;
+   write_file->flags = FS_FLAG_WRITEONLY;
+
+   *read_end = read_file;
+   *write_end = write_file;
+}
+
+void fs_pipe_wake_reader(fs_pipe_t *pipe) {
+   int reader_task = pipe->read_waiting_task;
+   if(reader_task < 0) return;
+   uint8_t *rbuf = (uint8_t*)pipe->read_buf;
+   size_t rsize = pipe->read_size;
+   if(rbuf) {
+      size_t n = 0;
+      while(n < rsize && pipe->size > 0) {
+         rbuf[n++] = pipe->buf[pipe->read_pos];
+         pipe->read_pos = (pipe->read_pos + 1) % FS_PIPE_BUF_SIZE;
+         pipe->size--;
+      }
+      gettasks()[reader_task].registers.ebx = (int)n;
+   }
+   gettasks()[reader_task].paused = false;
+   pipe->read_waiting_task = -1;
+}
+
+void fs_pipe_wake_writer(fs_pipe_t *pipe) {
+   int writer_task = pipe->write_waiting_task;
+   if(writer_task < 0) return;
+   uint8_t *wbuf = (uint8_t*)pipe->write_buf;
+   size_t wsize = pipe->write_size;
+   if(wbuf) {
+      size_t n = 0;
+      while(n < wsize && pipe->size < FS_PIPE_BUF_SIZE) {
+         pipe->buf[pipe->write_pos] = wbuf[n++];
+         pipe->write_pos = (pipe->write_pos + 1) % FS_PIPE_BUF_SIZE;
+         pipe->size++;
+      }
+      gettasks()[writer_task].registers.ebx = (int)n;
+   }
+   gettasks()[writer_task].paused = false;
+   pipe->write_waiting_task = -1;
 }
