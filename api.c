@@ -11,6 +11,7 @@
 #include "windowmgr.h"
 #include "window_popup.h"
 #include "fs.h"
+#include "time.h"
 
 // helper funcs
 
@@ -1346,4 +1347,9 @@ void api_close(registers_t *regs) {
    fs_file_t *file = task->process->file_descriptors[fd];
    fs_close(file);
    task->process->file_descriptors[fd] = NULL;
+}
+
+void api_get_time(registers_t *regs) {
+   // OUT: ebx - seconds since midnight
+   regs->ebx = get_seconds();
 }

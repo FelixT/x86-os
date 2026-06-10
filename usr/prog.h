@@ -877,6 +877,17 @@ static inline void dup2(int oldfd, int newfd) {
    );
 }
 
+static inline uint32_t get_time() {
+   uint32_t time;
+   asm volatile(
+      "int $0x30"
+      : "=b" (time)
+      : "a" (75)
+      : "cc", "memory"
+   );
+   return time;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(void *callback) {

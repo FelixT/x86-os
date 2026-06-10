@@ -378,6 +378,9 @@ void software_handler(registers_t *regs) {
       case 74:
          api_dup(regs);
          break;
+      case 75:
+         api_get_time(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

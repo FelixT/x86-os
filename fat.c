@@ -729,7 +729,7 @@ void fat_read_file_callback(void *regs, void *msg) {
         free((uint32_t)clusterBuf, clusterReadSize);
         free((uint32_t)state, sizeof(fat_read_file_state_t));
         return;
-    }
+      }
       state->readBytes += clusterReadSize;
       state->offset = 0;
 

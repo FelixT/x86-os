@@ -84,7 +84,7 @@ void display_items() {
 
    int cols = gridview ? (get_width()/76) : 1;
    int rows = gridview ? shown/cols+1 : shown;
-   int grid_height = rows * (gridview ? 52 : 27);
+   int grid_height = rows * (gridview ? 50 : 27);
    int cell_width = get_width()/cols;
 
    wo_t *old_grid = wo_grid;
@@ -114,7 +114,7 @@ void display_items() {
       bool dotentry = entry->filename[0] == '.';
       if(entry->hidden && !dotentry)
          continue;
-      wo_t *label = create_label(gridview ? 0 : 25, gridview ? 25 : 2, gridview ? cell_width : 85, 23, entry->filename);
+      wo_t *label = create_label(gridview ? 0 : 25, gridview ? 24 : 2, gridview ? cell_width : 85, 23, entry->filename);
       label_t *label_data = label->data;
       label_data->padding_left = gridview ? 0 : 5;
       label_data->halign = false;
@@ -389,7 +389,8 @@ void scroll(int deltaY, int offsetY, int window) {
       // unhover
       wo_grid->hovering = false;
       grid_t *grid_data = wo_grid->data;
-      grid_data->cells[grid_data->hoveredrow][grid_data->hoveredcol].hovering = false;
+      if(grid_data->hoveredrow > -1 && grid_data->hoveredcol > -1)
+         grid_data->cells[grid_data->hoveredrow][grid_data->hoveredcol].hovering = false;
       grid_data->hoveredcol = -1;
       grid_data->hoveredrow = -1;
    }

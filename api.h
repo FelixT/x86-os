@@ -80,5 +80,6 @@ void api_unpause(registers_t *regs);
 void api_dup(registers_t *regs);
 void api_dup2(registers_t *regs);
 void api_close(registers_t *regs);
+void api_get_time(registers_t *regs);
 
 #endif

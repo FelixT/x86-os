@@ -149,15 +149,20 @@ void term_cmd_dmpmem(char *arg) {
 void term_get_args(char *arg, char **args, int *argc) {
    char *p = arg;
    char temp[256];
+   temp[0] = '\0';
+   bool hit_limit = false;
    while(strsplit(temp, p, p, ' ')) {
       args[*argc] = (char*)malloc(strlen(temp) + 1);
       strcpy(args[*argc], temp);
       (*argc)++;
-      if(*argc >= 10) break;
+      if(*argc >= 10) {
+         hit_limit = true;
+         break;
+      }
    }
-   if(p[0] != '\0' && *argc < 10) {
-      args[*argc] = (char*)malloc(strlen(p) + 1);
-      strcpy(args[*argc], p);
+   if(!hit_limit && temp[0] != '\0' && *argc < 10) {
+      args[*argc] = (char*)malloc(strlen(temp) + 1);
+      strcpy(args[*argc], temp);
       (*argc)++;
    }
 }
@@ -183,7 +188,12 @@ void term_cmd_launch(char *arg, bool copy) {
       free(arglist);
    } else {
       argtofullpath(fullpath, arg);
-      launch_task(fullpath, 0, NULL, copy, false);
+      char **arglist = (char**)malloc(sizeof(char*) * 1);
+      arglist[0] = (char*)malloc(strlen(fullpath) + 1);
+      strcpy(arglist[0], fullpath);
+      launch_task(fullpath, 1, arglist, copy, false);
+      free(arglist[0]);
+      free(arglist);
    }
 }
 
