@@ -888,6 +888,28 @@ static inline uint32_t get_time() {
    return time;
 }
 
+static inline int futex_wait(void *addr, uint32_t expected) {
+   int result;
+   asm volatile(
+      "int $0x30"
+      : "=b" (result)
+      : "a" (76),
+      "b" ((uint32_t)addr),
+      "c" (expected)
+      : "cc", "memory"
+   );
+   return result;
+}
+
+static inline void futex_wake(void *addr) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (77),
+      "b" ((uint32_t)addr)
+      : "cc", "memory"
+   );
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(void *callback) {

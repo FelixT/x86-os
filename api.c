@@ -12,6 +12,7 @@
 #include "window_popup.h"
 #include "fs.h"
 #include "time.h"
+#include "futex.h"
 
 // helper funcs
 
@@ -1352,4 +1353,30 @@ void api_close(registers_t *regs) {
 void api_get_time(registers_t *regs) {
    // OUT: ebx - seconds since midnight
    regs->ebx = get_seconds();
+}
+
+void api_futex_wait(registers_t *regs) {
+   // IN: ebx - addr
+   // IN: ecx - expected value at addr
+   // OUT: ebx - 0 on wake, 1 for no match/no block, -1 on error
+   void *addr = (void*)regs->ebx;
+   uint32_t expected = regs->ecx;
+   int result = futex_wait(addr, expected);
+   if(result == FUTEX_WAIT_BLOCK) {
+      get_current_task_state()->paused = true;
+      regs->ebx = 0;
+      switch_task(regs);
+   }
+   if(result == FUTEX_WAIT_FAIL) {
+      debug_printf("futex_wait: failed to read futex value\n");
+      regs->ebx = -1;
+   }
+   if(result == FUTEX_WAIT_NOBLOCK) {
+      regs->ebx = 1;
+   }
+}
+
+void api_futex_wake(registers_t *regs) {
+   // IN: ebx - addr
+   futex_wake(regs, (void*)regs->ebx);
 }

@@ -626,9 +626,11 @@ int current_servicing_task = -1;
 bool copy_to_task(int task, void *dest, void *src, size_t size) {
    task_state_t *task_state = &gettasks()[task];
    process_t *process = task_state->process;
-   if((uint32_t)dest < process->heap_start || ((uint32_t)dest + size) > process->heap_end) {
-      return false;
-   }
+   uint32_t d = (uint32_t)dest;
+   bool heap = d >= process->heap_start && d < process->heap_end && size <= process->heap_end - d;
+   if(!heap) return false;
+   
+   int prev = current_servicing_task;
    current_servicing_task = task;
    page_dir_entry_t *old_dir = page_get_current();
    page_dir_entry_t *task_dir = task_state->process->page_dir;
@@ -636,6 +638,28 @@ bool copy_to_task(int task, void *dest, void *src, size_t size) {
    if(swapped) swap_pagedir(task_dir);
    memcpy(dest, src, size);
    if(swapped) swap_pagedir(old_dir);
-   current_servicing_task = -1;
+   current_servicing_task = prev;
+   return true;
+}
+
+bool copy_from_task(int task, void *dest, void *src, size_t size) {
+   task_state_t *task_state = &gettasks()[task];
+   process_t *process = task_state->process;
+   uint32_t s = (uint32_t)src;
+   // check if on stack, heap or code
+   bool stack = s >= task_state->stack_top - PAGE_SIZE && s <  task_state->stack_top && size <= task_state->stack_top - s;
+   bool heap = s >= process->heap_start && s < process->heap_end && size <= process->heap_end - s;
+   bool prog = s >= process->vmem_start && s < process->vmem_end && size <= process->vmem_end - s;
+   if(!stack && !heap && !prog) return false;
+
+   int prev = current_servicing_task;
+   current_servicing_task = task;
+   page_dir_entry_t *old_dir = page_get_current();
+   page_dir_entry_t *task_dir = task_state->process->page_dir;
+   bool swapped = task_dir != old_dir;
+   if(swapped) swap_pagedir(task_dir);
+   memcpy(dest, src, size);
+   if(swapped) swap_pagedir(old_dir);
+   current_servicing_task = prev;
    return true;
 }

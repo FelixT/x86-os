@@ -41,9 +41,6 @@ void api_launch_task(registers_t *regs);
 void api_set_window_title(registers_t *regs);
 void api_set_working_dir(registers_t *regs);
 void api_get_working_dir(registers_t *regs);
-void api_display_popup(registers_t *regs);
-void api_display_colourpicker(registers_t *regs);
-void api_display_filepicker(registers_t *regs);
 void api_read(registers_t *regs);
 void api_debug_write_str(registers_t *regs);
 void api_sbrk(registers_t *regs);
@@ -81,5 +78,7 @@ void api_dup(registers_t *regs);
 void api_dup2(registers_t *regs);
 void api_close(registers_t *regs);
 void api_get_time(registers_t *regs);
+void api_futex_wait(registers_t *regs);
+void api_futex_wake(registers_t *regs);
 
 #endif

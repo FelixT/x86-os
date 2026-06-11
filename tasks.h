@@ -119,5 +119,6 @@ void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);
 
 bool copy_to_task(int task, void *dest, void *src, size_t size);
+bool copy_from_task(int task, void *dest, void *src, size_t size);
 
 #endif

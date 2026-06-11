@@ -381,6 +381,12 @@ void software_handler(registers_t *regs) {
       case 75:
          api_get_time(regs);
          break;
+      case 76:
+         api_futex_wait(regs);
+         break;
+      case 77:
+         api_futex_wake(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
