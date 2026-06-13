@@ -667,8 +667,8 @@ void api_read(registers_t *regs) {
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
       int writer_task = file->pipe->write_waiting_task;
       if(writer_task >= 0) {
-         fs_pipe_wake_writer(file->pipe);
-         switch_to_task(writer_task, regs);
+         if(fs_pipe_wake_writer(file->pipe))
+            switch_to_task(writer_task, regs);
       }
    }
 }
@@ -723,8 +723,8 @@ void api_write(registers_t *regs) {
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
       int reader_task = file->pipe->read_waiting_task;
       if(reader_task >= 0) {
-         fs_pipe_wake_reader(file->pipe);
-         switch_to_task(reader_task, regs);
+         if(fs_pipe_wake_reader(file->pipe))
+            switch_to_task(reader_task, regs);
       }
    }
 }
@@ -1206,9 +1206,16 @@ void api_get_tasks(registers_t *regs) {
    regs->ecx = TOTAL_TASKS;
 }
 
+typedef struct {
+   int task_id;
+   uint32_t task_uid;
+} api_sleep_msg_t;
+
 void api_sleep_callback(void *regs, void *msg) {
-   task_state_t *task = (task_state_t*)msg;
-   if(!task->enabled) return;
+   api_sleep_msg_t sleep_msg = *(api_sleep_msg_t*)msg;
+   free((uint32_t)msg, sizeof(api_sleep_msg_t));
+   task_state_t *task = &gettasks()[sleep_msg.task_id];
+   if(!task->enabled || task->task_uid != sleep_msg.task_uid) return;
    task->paused = false;
    switch_to_task(task->task_id, regs); // wake
    task_execute_queued_subroutine(regs, (void*)task->task_id); // check for queued events while task was paused
@@ -1221,7 +1228,10 @@ void api_sleep(registers_t *regs) {
    int ticks = (timer_hz * ms) / 1000;
    task_state_t *task = get_current_task_state();
    task->paused = true;
-   events_add(ticks, &api_sleep_callback, task, -1);
+   api_sleep_msg_t *msg = malloc(sizeof(api_sleep_msg_t));
+   msg->task_id = task->task_id;
+   msg->task_uid = task->task_uid;
+   events_add(ticks, &api_sleep_callback, msg, -1);
    switch_task(regs); // yield
 }
 

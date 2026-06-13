@@ -23,6 +23,8 @@ typedef struct {
     int ref_count;
     int read_waiting_task;
     int write_waiting_task;
+    uint32_t read_waiting_uid;
+    uint32_t write_waiting_uid;
     void *read_buf;
     size_t read_size;
     void *write_buf;
@@ -85,7 +87,7 @@ void fs_dir_content_free(fs_dir_content_t *content);
 int fs_filesize(fs_file_t *file);
 int fs_seek(fs_file_t *file, int offset, int type);
 void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end);
-void fs_pipe_wake_reader(fs_pipe_t *pipe);
-void fs_pipe_wake_writer(fs_pipe_t *pipe);
+bool fs_pipe_wake_reader(fs_pipe_t *pipe);
+bool fs_pipe_wake_writer(fs_pipe_t *pipe);
 
 #endif

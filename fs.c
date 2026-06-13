@@ -61,14 +61,18 @@ void fs_close(fs_file_t *file) {
          file->pipe->writer_count--;
       if(file->pipe->read_waiting_task != -1) {
          task_state_t *task = &gettasks()[file->pipe->read_waiting_task];
-         task->paused = false;
-         task->registers.ebx = FS_EOF;
+         if(task->enabled && task->task_uid == file->pipe->read_waiting_uid) {
+            task->paused = false;
+            task->registers.ebx = FS_EOF;
+         }
          file->pipe->read_waiting_task = -1;
       }
       if(file->pipe->write_waiting_task != -1) {
          task_state_t *task = &gettasks()[file->pipe->write_waiting_task];
-         task->paused = false;
-         task->registers.ebx = FS_EOF;
+         if(task->enabled && task->task_uid == file->pipe->write_waiting_uid) {
+            task->paused = false;
+            task->registers.ebx = FS_EOF;
+         }
          file->pipe->write_waiting_task = -1;
          file->pipe->write_buf = NULL;
          file->pipe->write_size = 0;
@@ -247,6 +251,7 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
 
       if(pipe->size == FS_PIPE_BUF_SIZE) {
          pipe->write_waiting_task = task;
+         pipe->write_waiting_uid = gettasks()[task].task_uid;
          return FS_WRITE_WAIT;
       }
 
@@ -286,6 +291,7 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
       window->read_func = callback;
       window->read_buffer = buffer;
       window->read_task = task;
+      window->read_task_uid = gettasks()[task].task_uid;
       return FS_BLOCKING;
    }
 
@@ -313,6 +319,7 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
       } else {
          // wait for data
          pipe->read_waiting_task = task;
+         pipe->read_waiting_uid = gettasks()[task].task_uid;
          return FS_BLOCKING;
       }
    }
@@ -413,9 +420,14 @@ void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
    *write_end = write_file;
 }
 
-void fs_pipe_wake_reader(fs_pipe_t *pipe) {
+bool fs_pipe_wake_reader(fs_pipe_t *pipe) {
    int reader_task = pipe->read_waiting_task;
-   if(reader_task < 0) return;
+   if(reader_task < 0) return false;
+   task_state_t *task = &gettasks()[reader_task];
+   if(!task->enabled || task->task_uid != pipe->read_waiting_uid) {
+      pipe->read_waiting_task = -1;
+      return false;
+   }
    uint8_t *rbuf = (uint8_t*)pipe->read_buf;
    size_t rsize = pipe->read_size;
    if(rbuf) {
@@ -425,15 +437,21 @@ void fs_pipe_wake_reader(fs_pipe_t *pipe) {
          pipe->read_pos = (pipe->read_pos + 1) % FS_PIPE_BUF_SIZE;
          pipe->size--;
       }
-      gettasks()[reader_task].registers.ebx = (int)n;
+      task->registers.ebx = (int)n;
    }
-   gettasks()[reader_task].paused = false;
+   task->paused = false;
    pipe->read_waiting_task = -1;
+   return true;
 }
 
-void fs_pipe_wake_writer(fs_pipe_t *pipe) {
+bool fs_pipe_wake_writer(fs_pipe_t *pipe) {
    int writer_task = pipe->write_waiting_task;
-   if(writer_task < 0) return;
+   if(writer_task < 0) return false;
+   task_state_t *task = &gettasks()[writer_task];
+   if(!task->enabled || task->task_uid != pipe->write_waiting_uid) {
+      pipe->write_waiting_task = -1;
+      return false;
+   }
    uint8_t *wbuf = (uint8_t*)pipe->write_buf;
    size_t wsize = pipe->write_size;
    if(wbuf) {
@@ -443,8 +461,9 @@ void fs_pipe_wake_writer(fs_pipe_t *pipe) {
          pipe->write_pos = (pipe->write_pos + 1) % FS_PIPE_BUF_SIZE;
          pipe->size++;
       }
-      gettasks()[writer_task].registers.ebx = (int)n;
+      task->registers.ebx = (int)n;
    }
-   gettasks()[writer_task].paused = false;
+   task->paused = false;
    pipe->write_waiting_task = -1;
+   return true;
 }

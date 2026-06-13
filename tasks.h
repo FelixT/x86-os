@@ -41,6 +41,7 @@ typedef struct {
 
 // process struct - shared between threads
 typedef struct process_t {
+   uint32_t uid;
    uint32_t prog_start; // physical addr of start of program
    uint32_t prog_entry; // addr of program entry point, may be different from prog_start
    uint32_t prog_size;
@@ -49,9 +50,11 @@ typedef struct process_t {
    uint32_t vmem_start; // virtual address where program is loaded
    uint32_t vmem_end;
    page_dir_entry_t *page_dir;
-   int no_allocated;
    char working_dir[256]; // current working directory
    char exe_path[256]; // location of executable
+
+   // resources
+   int no_allocated;
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[TASK_MAX_FDS];
@@ -69,6 +72,7 @@ typedef struct task_state_t {
    bool unpausable;
    bool crashed;
    int task_id;
+   uint32_t task_uid;
    uint32_t stack_top; // address
    uint32_t kernel_stack_top; // address
    registers_t registers;
@@ -112,7 +116,7 @@ void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
 void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 void task_subroutine_end(registers_t *regs);
 void task_execute_queued_subroutine(void *regs, void *msg);
-bool task_queue_contains_routine(task_state_t *task, char *name);
+int task_queue_contains_routine(task_state_t *task, char *name);
 void tss_init();
 
 void task_write_to_window(int task, char *out, bool children);

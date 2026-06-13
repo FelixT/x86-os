@@ -38,7 +38,6 @@ typedef struct gui_window_t {
    uint32_t framebuffer_size;
    int scrollable_content_height; // excludes titlebar height
    int scrolledY;
-   int scrolledDeltaY; // scrolled since last callback
    windowobj_t *scrollbar;
 
    surface_t surface;
@@ -61,6 +60,7 @@ typedef struct gui_window_t {
    void (*checkcmd_func)(void *regs, void *window); // override terminal behaviour
    void (*read_func)(void *regs, char *buffer); // kernel override terminal behaviour
    int read_task; // task to switch on read
+   uint32_t read_task_uid;
    char *read_buffer; // buffer for read_func, used by terminal
 
    void *state;

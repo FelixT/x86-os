@@ -9,9 +9,14 @@ task_state_t *tasks;
 int current_task = -1;
 bool switching = false; // preemptive multitasking
 
+uint32_t process_uid_counter = 0;
+uint32_t task_uid_counter = 0;
+
 process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process_t *process = malloc(sizeof(process_t));
+   process->uid = process_uid_counter++;
    process->prog_entry = entry;
+   process->prog_start = entry;
    process->prog_size = size;
    process->privileged = privileged;
    process->vmem_start = 0;
@@ -34,6 +39,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    // todo: clear stack
 
    tasks[index].task_id = index;
+   tasks[index].task_uid = task_uid_counter++;
    tasks[index].enabled = false;
    tasks[index].paused = false;
    tasks[index].unpausable = false;
@@ -177,21 +183,14 @@ void end_task(int index, registers_t *regs) {
       if(task->process->prog_size != 0)
          free(task->process->prog_start, task->process->prog_size);
 
-      // free args - routine or calling
-      if(task->in_routine && task->routine_args) {
-         free((uint32_t)task->routine_args, task->routine_argc * sizeof(uint32_t*));
-         task->routine_args = NULL;
-         task->routine_argc = 0;
-      }
-      for(int i = 0; i < task->routine_argc; i++) {
-         free(task->routine_args[i], PAGE_SIZE);
-      }
-
-      // free events
+      // free queued events
       for(int i = 0; i < task->process->event_queue_size; i++) {
          task_event_t *event = task->process->event_queue[i];
-         if(event)
+         if(event) {
+            if(event->args)
+               free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
             free((uint32_t)event, sizeof(task_event_t));
+         }
       }
 
       // free fds
@@ -225,6 +224,13 @@ void end_task(int index, registers_t *regs) {
       free((uint32_t)task->process, sizeof(process_t));
       task->process = NULL;
    }
+
+   if(task->routine_args) {
+      free((uint32_t)task->routine_args, task->routine_argc * sizeof(uint32_t*));
+      task->routine_args = NULL;
+      task->routine_argc = 0;
+   }
+   task->in_routine = false;
 
    task->enabled = false;
 }
@@ -509,13 +515,13 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
    task->process->event_queue[task->process->event_queue_size++] = event;
 }
 
-bool task_queue_contains_routine(task_state_t *task, char *name) {
+int task_queue_contains_routine(task_state_t *task, char *name) {
    for(int i = 0; i < task->process->event_queue_size; i++) {
       task_event_t *event = task->process->event_queue[i];
       if(event->task == task->task_id && strequ(event->name, name))
-         return true;
+         return i;
    }
-   return false;
+   return -1;
 }
 
 void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {

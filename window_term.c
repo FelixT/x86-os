@@ -105,6 +105,10 @@ void window_term_return(void *regs, void *window) {
       // read callback i.e. reading from stdin
       if(selected->read_task > 0) {
          task_state_t *readtask = &gettasks()[selected->read_task];
+         if(!readtask->enabled || readtask->task_uid != selected->read_task_uid) {
+            debug_printf("read: task %i not enabled or crashed\n", selected->read_task);
+            return;
+         }
          readtask->paused = false; // force switch
          if(!switch_to_task(selected->read_task, regs)) {
             debug_printf("read: couldn't switch to task %i\n", selected->read_task);

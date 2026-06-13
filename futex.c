@@ -4,7 +4,8 @@
 
 typedef struct futex_waiter_t {
    int task_id;
-   process_t *process;
+   uint32_t task_uid;
+   uint32_t process_uid;
    void *futex_addr;
    struct futex_waiter_t *next;
 } futex_waiter_t;
@@ -34,7 +35,8 @@ int futex_wait(void *futex_addr, uint32_t expected) {
       return FUTEX_WAIT_FAIL;
    }
    waiter->task_id = task_id;
-   waiter->process = get_current_task_state()->process;
+   waiter->task_uid = get_current_task_state()->task_uid;
+   waiter->process_uid = get_current_task_state()->process->uid;
    waiter->futex_addr = futex_addr;
 
    // add to start of waiters bucket list
@@ -47,23 +49,32 @@ int futex_wait(void *futex_addr, uint32_t expected) {
 
 void futex_wake(void *regs, void *futex_addr) {
    unsigned hash = private_hash((uintptr_t)futex_addr);
+   uint32_t waker_process_uid = get_current_task_state()->process->uid;
    futex_waiter_t *prev = NULL;
    futex_waiter_t *waiter = buckets[hash].w;
    while(waiter != NULL) {
-      if(waiter->futex_addr != futex_addr || waiter->process != get_current_task_state()->process) {
+      task_state_t *task = &gettasks()[waiter->task_id];
+      bool stale = !task->enabled || task->task_uid != waiter->task_uid;
+      bool match = waiter->futex_addr == futex_addr && waiter->process_uid == waker_process_uid;
+
+      if(!stale && !match) {
          prev = waiter;
          waiter = waiter->next;
          continue;
       }
-      // wake this task
-      gettasks()[waiter->task_id].paused = false;
-      switch_to_task(waiter->task_id, regs);
-      // remove from waiters list
+
+      futex_waiter_t *unlinked = waiter;
       if(prev)
          prev->next = waiter->next;
       else
          buckets[hash].w = waiter->next;
-      free((uint32_t)waiter, sizeof(futex_waiter_t));
-      return;
+      waiter = waiter->next;
+      free((uint32_t)unlinked, sizeof(futex_waiter_t));
+
+      if(!stale && match) {
+         task->paused = false;
+         switch_to_task(task->task_id, regs);
+         return; // wake only one waiter
+      }
    }
 }

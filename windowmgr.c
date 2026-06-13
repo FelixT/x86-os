@@ -264,7 +264,6 @@ bool window_init(gui_window_t *window) {
    window->scrolledY = 0;
    window->scrollable_content_height = 0;
    window->scrollbar = NULL;
-   window->scrolledDeltaY = 0;
    window->hovering = false;
    window->child_count = 0;
    window->parent = NULL;

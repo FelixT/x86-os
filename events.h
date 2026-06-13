@@ -10,6 +10,7 @@ typedef struct event_t {
     struct event_t *next;
     void *callback;
     int task;
+    uint32_t task_uid;
 } __attribute__((packed)) event_t;
 
 void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, int taskid);

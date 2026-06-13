@@ -23,6 +23,7 @@ void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, i
     event->time = (timer_i + delta)%10000000;
     event->callback = callback;
     event->task = taskid;
+    event->task_uid = (taskid >= 0) ? gettasks()[taskid].task_uid : 0;
     event->msg = msg;
     event->next = NULL;
 
@@ -60,9 +61,10 @@ void event_fire(registers_t *regs, event_t *event) {
     if(event->callback == NULL) return;
 
     if(event->task >= 0) {
+        task_state_t *task = &gettasks()[event->task];
+        if(task->task_uid != event->task_uid) return;
         uint32_t *args = malloc(sizeof(uint32_t) * 1);
         args[0] = (uint32_t)event->msg;
-        task_state_t *task = &gettasks()[event->task];
         task_call_subroutine(regs, task, "event", (uint32_t)(event->callback), args, 1);
     } else {
         // call function as kernel if task is -1

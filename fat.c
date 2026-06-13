@@ -686,10 +686,17 @@ typedef struct {
    uint32_t readBytes; // no bytes read
    uint8_t *fatTable;
    int task;
+   uint32_t task_uid;
 } fat_read_file_state_t;
 
 void fat_read_file_callback(void *regs, void *msg) {
    fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
+
+   task_state_t *task_state = &gettasks()[state->task];
+   if(!task_state->enabled || task_state->crashed || !task_state->paused || task_state->task_uid != state->task_uid) {
+      free((uint32_t)state, sizeof(fat_read_file_state_t));
+      return;
+   }
 
    // skip clusters up to offset
    uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
@@ -698,6 +705,7 @@ void fat_read_file_callback(void *regs, void *msg) {
       if(tableVal >= 0xFFF8) {
          // no more clusters in chain
          (*(void(*)(void*,int,int))state->callback)(regs, state->task, state->readBytes); // callback
+         free((uint32_t)state, sizeof(fat_read_file_state_t));
          return;
       } else if(tableVal == 0xFFF7) {
          debug_printf("FAT error: Hit bad cluster\n");
@@ -708,12 +716,6 @@ void fat_read_file_callback(void *regs, void *msg) {
          state->currentCluster = tableVal; // table value is the next cluster
          state->readCount++;
       }
-   }
-
-   task_state_t *task_state = &gettasks()[state->task];
-   if(!task_state->enabled || task_state->crashed || !task_state->paused) {
-      free((uint32_t)state, sizeof(fat_read_file_state_t));
-      return;
    }
    
    for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
@@ -748,6 +750,7 @@ void fat_read_file_callback(void *regs, void *msg) {
          // no more clusters in chain
          // call callback
          (*(void(*)(void*,int, int))state->callback)(regs, state->task, state->readBytes);
+         free((uint32_t)state, sizeof(fat_read_file_state_t));
          return;
       } else if(tableVal == 0xFFF7) {
          // bad cluster
@@ -773,6 +776,7 @@ void fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset,
    state->size = size;
    state->callback = callback;
    state->task = task;
+   state->task_uid = gettasks()[task].task_uid;
 
    state->fatTable = fat_table;
 
