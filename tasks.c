@@ -4,6 +4,7 @@
 #include "paging.h"
 #include "events.h"
 #include "fs.h"
+#include "shared.h"
 
 task_state_t *tasks;
 int current_task = -1;
@@ -218,6 +219,11 @@ void end_task(int index, registers_t *regs) {
             free(page_getphysical(task->process->page_dir, addr), PAGE_SIZE);
          }
       }
+
+      // close shared memory
+      shared_cleanup(task->process);
+
+      // free page dir
       free_page_dir(task->process->page_dir);
 
       // free process

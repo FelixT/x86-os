@@ -404,7 +404,7 @@ void term_cmd_tasks() {
       if(!task->enabled) continue;
       printf("\nTask %i: ", task->id);
       if(task->parentid == task->id)
-         printf("%s (allc %i pages / heap size 0x%h)", task->main_window_name, task->no_allocated, task->heap_start - task->heap_end);
+         printf("%s (allc %i pages / heap size 0x%h)", task->main_window_name, task->no_allocated, task->heap_end - task->heap_start);
       else
          printf("(parent %i) ", task->parentid);
       if(task->paused)

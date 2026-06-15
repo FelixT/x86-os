@@ -13,6 +13,7 @@
 #include "fs.h"
 #include "time.h"
 #include "futex.h"
+#include "shared.h"
 
 // helper funcs
 
@@ -347,7 +348,9 @@ void api_draw_bmp(registers_t *regs) {
    // IN: ecx = x
    // IN: edx = y
    // IN: esi = scale
+   if(get_current_task_window() < 0) return;
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   if(window->closed) return;
 
    bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, regs->edi, regs->esi);
 }
@@ -1389,4 +1392,46 @@ void api_futex_wait(registers_t *regs) {
 void api_futex_wake(registers_t *regs) {
    // IN: ebx - addr
    futex_wake(regs, (void*)regs->ebx);
+}
+
+void api_shared_create(registers_t *regs) {
+   // IN: ebx - size
+   // OUT: ebx - addr, NULL on fail
+   // OUT: ecx - block uid
+   shared_block_t *block = shared_create(get_current_task_state()->process, regs->ebx);
+   if(!block) {
+      regs->ebx = 0;
+   } else {
+      regs->ebx = block->vaddr;
+      regs->ecx = block->uid;
+   }
+}
+
+void api_shared_grant(registers_t *regs) {
+   // IN: ebx - task id
+   // IN: ecx - block uid
+   int task_id = regs->ebx;
+   if(task_id < 0 || task_id >= TOTAL_TASKS) {
+      debug_printf("api_shared_grant: invalid task id\n");
+      return;
+   }
+   task_state_t *task = &gettasks()[task_id];
+   if(!task->enabled || !task->process) {
+      debug_printf("api_shared_grant: task disabled\n");
+      return;
+   }
+   uint32_t target_uid = task->process->uid;
+   shared_grant_access(get_current_task_state()->process, regs->ecx, target_uid);
+}
+
+void api_shared_map(registers_t *regs) {
+   // IN: ebx - block uid
+   // OUT: ebx - addr or NULL
+   regs->ebx = shared_map_uid(get_current_task_state()->process, regs->ebx);
+}
+
+void api_shared_close(registers_t *regs) {
+   // IN: ebx - block uid
+   // OUT: ebx 1 success 0 fail
+   regs->ebx = shared_close(get_current_task_state()->process, regs->ebx);
 }

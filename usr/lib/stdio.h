@@ -15,6 +15,7 @@ typedef struct {
    int is_open;
    int dirty; // Track if buffer has been modified
    int fd;
+   int is_stream;
 } FILE;
 
 #define MAX_FILES 16

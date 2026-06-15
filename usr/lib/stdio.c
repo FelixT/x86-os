@@ -53,6 +53,18 @@ FILE *fopen(const char *filename, const char *mode) {
         return NULL;
     }
 
+    // handle streams
+    if(strncmp(file->path, "/dev/", 5) == 0) {
+        file->is_stream = 1;
+        file->buffer = NULL;
+        file->size = 0;
+        file->content_size = 0;
+        file->position = 0;
+        file->is_open = 1;
+        file->dirty = 0;
+        return file;
+    }
+
     if(strchr(mode, 'a') || (strchr(mode, 'r') && strchr(mode, '+'))) {
         // append or rw, read in current file contents but allocate an extra 4096 bytes
         int size = fsize(file->fd);
@@ -94,9 +106,17 @@ FILE *fopen(const char *filename, const char *mode) {
 
 size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
     if(!stream || !stream->is_open) return 0;
-    
+
     size_t total_bytes = size * count;
-    
+
+    // streams: no buffering
+    if(stream->is_stream) {
+        if(total_bytes == 0) return 0;
+        int n = write(stream->fd, (char*)ptr, total_bytes);
+        if(n <= 0) return 0;
+        return (size_t)n / size;
+    }
+
     debug_println("fwrite: Position %i bytes %i size %i", stream->position, total_bytes, stream->size);
 
     // expand buffer if needed
@@ -124,8 +144,17 @@ size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
 
 size_t fread(void *ptr, size_t size, size_t count, FILE *stream) {
     if(!stream || !stream->is_open) return 0;
-    
+
     size_t total_bytes = size * count;
+
+    // streams: read straight from the fd (blocks for stdin/pipes)
+    if(stream->is_stream) {
+        if(total_bytes == 0) return 0;
+        int n = read(stream->fd, (char*)ptr, total_bytes);
+        if(n <= 0) return 0;
+        return (size_t)n / size;
+    }
+
     size_t available = stream->size - stream->position;
     
     if(total_bytes > available) {

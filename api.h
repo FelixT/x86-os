@@ -80,5 +80,9 @@ void api_close(registers_t *regs);
 void api_get_time(registers_t *regs);
 void api_futex_wait(registers_t *regs);
 void api_futex_wake(registers_t *regs);
+void api_shared_create(registers_t *regs);
+void api_shared_grant(registers_t *regs);
+void api_shared_map(registers_t *regs);
+void api_shared_close(registers_t *regs);
 
 #endif

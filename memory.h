@@ -36,6 +36,9 @@
 #define V_KSTACK_START 0x110000 // V_KERNEL_END -> V_KERNEL_START + 0x20000 (kernel size 0x20000)
 #define V_TOS_KERNEL   0x180000 // V_STACKS_START + 0x2000 (k stack size 0x2000)
 
+#define V_SHARED_START 0xA0000000
+#define V_SHARED_END   0xC0000000
+
 typedef struct mem_segment_status_t {
    bool allocated;
 } mem_segment_status_t;

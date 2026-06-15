@@ -9,14 +9,16 @@ targets i686 (FPU not required)
 ### features
 
 - Multitasking, per process threads
-- FAT16 support
+- FAT16 support, VFS
 - GUI & Window manager
 - Demand paging of process heaps
 - ELF32 loader
-- BMP viewer & editor, text editor, file manager & task manager
+- BMP viewer & editor, text editor, file manager, task manager, clock & shell
 - f3basic script interpreter
 - User mode ui/widget & dialog libraries
 - Anonymous pipes
+- Private futexes
+- Shared memory
 
 ### build on mac/linux
 
@@ -63,6 +65,8 @@ Kernel (identity mapped): 0x1000000 - 0x1040000 (256KB reserved)
 Unified kernel/user heap: 0x1040000 – 0x3040000 (32MB)
 
 Heap is mapped to a process's page directory via demand paging.
+
+Shared memory vmapped to each process: 0xA0000000 - 0xC0000000
 
 #### kernel
 

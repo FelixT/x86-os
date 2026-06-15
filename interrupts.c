@@ -387,6 +387,18 @@ void software_handler(registers_t *regs) {
       case 77:
          api_futex_wake(regs);
          break;
+      case 78:
+         api_shared_create(regs);
+         break;
+      case 79:
+         api_shared_grant(regs);
+         break;
+      case 80:
+         api_shared_map(regs);
+         break;
+      case 81:
+         api_shared_close(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

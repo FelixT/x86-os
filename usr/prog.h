@@ -910,6 +910,58 @@ static inline void futex_wake(void *addr) {
    );
 }
 
+typedef struct shared_t {
+   uint32_t uid;
+   void *mem;
+} shared_t;
+
+static inline shared_t shared_create(int size) {
+   shared_t shared;
+   asm volatile(
+      "int $0x30"
+      : "=b" (shared.mem),
+      "=c" (shared.uid)
+      : "a" (78),
+      "b" ((uint32_t)size)
+      : "cc", "memory"
+   );
+   return shared;
+}
+
+static inline void shared_grant(int task_id, uint32_t block_uid) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (79),
+      "b" ((uint32_t)task_id),
+      "c" (block_uid)
+      : "cc", "memory"
+   );
+}
+
+static inline void *shared_map(uint32_t block_uid) {
+   uint32_t addr;
+   asm volatile(
+      "int $0x30"
+      : "=b" (addr)
+      : "a" (80),
+      "b" ((uint32_t)block_uid)
+      : "cc", "memory"
+   );
+   return (void*)addr;
+}
+
+static inline bool shared_close(uint32_t block_uid) {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (81),
+      "b" ((uint32_t)block_uid)
+      : "cc", "memory"
+   );
+   return success;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(void *callback) {
