@@ -14,6 +14,7 @@
 #include "time.h"
 #include "futex.h"
 #include "shared.h"
+#include "pci.h"
 
 // helper funcs
 
@@ -48,6 +49,7 @@ gui_window_t *api_get_cwindow(int cindex) {
 
    return mainwindow->children[cindex];
 }
+
 
 // api funcs
 
@@ -155,7 +157,7 @@ void api_return_framebuffer(registers_t *regs) {
    uint32_t size = window->framebuffer_size;
    // map to task
    for(uint32_t i = framebuffer/0x1000; i < (framebuffer+size+0xFFF)/0x1000; i++) {
-      map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1);
+      map(get_current_task_pagedir(), i*0x1000, i*0x1000, 1, 1, 0);
    }
    regs->ebx = framebuffer;
    regs->ecx = window->surface.width;
@@ -326,7 +328,7 @@ void api_malloc(registers_t *regs) {
    task_state_t *task = get_current_task_state();
 
    // identity map
-   task->process->no_allocated += map_size(task->process->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1);
+   task->process->no_allocated += map_size(task->process->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1, 0);
 
    regs->ebx = (uint32_t)mem;
 }
@@ -340,7 +342,7 @@ void api_free(registers_t *regs) {
 
    // unmap from user
    task_state_t *task = get_current_task_state();
-   task->process->no_allocated -= map_size(task->process->page_dir, mem, mem, size, 0, 1);
+   task->process->no_allocated -= map_size(task->process->page_dir, mem, mem, size, 0, 1, 0);
 }
 
 void api_draw_bmp(registers_t *regs) {
@@ -439,9 +441,9 @@ void api_launch_task(registers_t *regs) {
    if(argc > 0 && copied_args != NULL) {
       for(int i = 0; i < argc; i++) {
          if(copied_args[i] != NULL)
-            map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1);
+            map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1, 0);
       }
-      map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1);
+      map(task->process->page_dir, (uint32_t)copied_args, (uint32_t)copied_args, 1, 1, 0);
    }
 
    task->enabled = true;
@@ -685,9 +687,9 @@ void api_read_dir(registers_t *regs) {
       return;
    }
    page_dir_entry_t *page_dir = get_current_task_pagedir();
-   map_size(page_dir, (uint32_t)content, (uint32_t)content, sizeof(fs_dir_content_t), 1, 1);
+   map_size(page_dir, (uint32_t)content, (uint32_t)content, sizeof(fs_dir_content_t), 1, 1, 0);
    uint32_t entries_size = sizeof(fs_dir_entry_t)*content->size;
-   map_size(page_dir, (uint32_t)content->entries, (uint32_t)content->entries, entries_size, 1, 1);
+   map_size(page_dir, (uint32_t)content->entries, (uint32_t)content->entries, entries_size, 1, 1, 0);
    regs->ebx = (uint32_t)content;
 }
 
@@ -936,7 +938,7 @@ void api_create_thread(registers_t *regs) {
 
    create_task_entry(task_index, regs->ebx, parent->process->prog_size, parent->process->privileged, parent->process);
    task_state_t *thread = &gettasks()[task_index];
-   map_size(thread->process->page_dir, thread->stack_top - TASK_STACK_SIZE, thread->stack_top - TASK_STACK_SIZE, TASK_STACK_SIZE, 1, 1);
+   map_size(thread->process->page_dir, thread->stack_top - TASK_STACK_SIZE, thread->stack_top - TASK_STACK_SIZE, TASK_STACK_SIZE, 1, 1, 0);
 
    // copy over essential fields
    thread->registers.ds = USR_DATA_SEG | 3;
@@ -960,7 +962,7 @@ void api_set_setting(registers_t *regs) {
    // IN: ecx: value
    // OUT: ebx: 0 = success, -1 failure
 
-   // todo require priviledge
+   // todo require privilege
    windowmgr_settings_t *settings = windowmgr_get_settings();
 
    switch(regs->ebx) {
@@ -1050,7 +1052,7 @@ void api_get_setting(registers_t *regs) {
       case SETTING_DESKTOP_BGIMG_PATH:
          char *out = malloc(sizeof(settings->desktop_bgimg));
          strcpy(out, settings->desktop_bgimg);
-         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->desktop_bgimg), 1, 1);
+         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->desktop_bgimg), 1, 1, 0);
          regs->ebx = (uint32_t)out;
          break;
       case SETTING_DESKTOP_ENABLED:
@@ -1059,7 +1061,7 @@ void api_get_setting(registers_t *regs) {
       case SETTING_SYS_FONT_PATH:
          out = malloc(sizeof(settings->font_path));
          strcpy(out, settings->font_path);
-         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->font_path), 1, 1);
+         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->font_path), 1, 1, 0);
          regs->ebx = (uint32_t)out;
          break;
       case SETTING_THEME_TYPE:
@@ -1204,7 +1206,7 @@ void api_get_tasks(registers_t *regs) {
       else
          strcpy(api_task->main_window_name, "");
    }
-   map_size(get_current_task_pagedir(), (uint32_t)tasks, (uint32_t)tasks, sizeof(api_task_t)*TOTAL_TASKS, 1, 1);
+   map_size(get_current_task_pagedir(), (uint32_t)tasks, (uint32_t)tasks, sizeof(api_task_t)*TOTAL_TASKS, 1, 1, 0);
    regs->ebx = (uint32_t)tasks;
    regs->ecx = TOTAL_TASKS;
 }
@@ -1434,4 +1436,161 @@ void api_shared_close(registers_t *regs) {
    // IN: ebx - block uid
    // OUT: ebx 1 success 0 fail
    regs->ebx = shared_close(get_current_task_state()->process, regs->ebx);
+}
+
+void api_pci_map(registers_t *regs) {
+   // IN: ebx - vendor
+   // IN: ecx - device id
+   // OUT: ebx - vaddr (0 on failure)
+   // mapping device MMIO enables bus-master DMA, granting the task access to
+   // arbitrary physical memory - restrict to privileged tasks only
+   process_t *process = get_current_task_state()->process;
+   if(!process->privileged) {
+      debug_printf("api_pci_map: denied for unprivileged task\n");
+      regs->ebx = 0;
+      return;
+   }
+   regs->ebx = pci_map_device(process, regs->ebx, regs->ecx);
+}
+
+void api_pci_exists(registers_t *regs) {
+   // IN: ebx - vendor
+   // IN: ecx - device id
+   // OUT: bool exists
+   process_t *process = get_current_task_state()->process;
+   if(!process->privileged) {
+      debug_printf("api_pci_exists: denied for unprivileged task\n");
+      regs->ebx = 0;
+      return;
+   }
+
+   regs->ebx = (pci_find_device(regs->ebx, regs->ecx) != NULL);
+}
+
+void api_dma(registers_t *regs) {
+   // IN: ebx - size
+   // OUT: ebx - physical addr (0 on failure)
+   // todo: on newer processors use iommu
+   process_t *process = get_current_task_state()->process;
+   if(!process->privileged) {
+      debug_printf("api_dma: denied for unprivileged task\n");
+      regs->ebx = 0;
+      return;
+   }
+   if(process->dma_count >= TASK_MAX_DMA) {
+      debug_printf("api_dma: dma table full\n");
+      regs->ebx = 0;
+      return;
+   }
+   // dma requires physical address of continuous memory
+   // kmalloc identity maps and marks physical memory as used
+   uint32_t size = regs->ebx;
+   api_malloc(regs); // ebx = addr
+   if(regs->ebx == 0)
+      return;
+
+   // track in process
+   process->dma_allocs[process->dma_count].addr = regs->ebx;
+   process->dma_allocs[process->dma_count].size = size;
+   process->dma_count++;
+}
+
+void api_dma_free(registers_t *regs) {
+   // IN: ebx - addr
+   // IN: ecx - size
+   process_t *process = get_current_task_state()->process;
+   if(!process->privileged) {
+      debug_printf("api_dma_free: denied for unprivileged task\n");
+      regs->ebx = 0;
+      return;
+   }
+   // drop from the tracking table
+   for(int i = 0; i < process->dma_count; i++) {
+      if(process->dma_allocs[i].addr == regs->ebx) {
+         process->dma_allocs[i] = process->dma_allocs[process->dma_count - 1];
+         process->dma_count--;
+         break;
+      }
+   }
+   // free physical memory and unmap from process
+   api_free(regs);
+}
+
+void api_escalate_do(void *dialog, void *regs) {
+   // OUT: ebx - bool success
+   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
+
+   task_state_t *task = &gettasks()[d->task_id];
+   if(task->enabled && task->process && task->process->uid == d->process_uid) {
+      debug_printf("Escalating process %u\n", d->process_uid);
+      task->process->privileged = true;
+      task->registers.ebx = 1;
+      task->paused = false;
+      switch_to_task(task->task_id, regs);
+   } else {
+      debug_printf("Couldn't escalate: requesting task ended\n");
+   }
+}
+
+// escalate close action - deny request by default
+void api_escalate_dismiss(void *dialog) {
+   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
+   task_state_t *task = &gettasks()[d->task_id];
+   if(task->enabled && task->process && task->process->uid == d->process_uid) {
+      debug_printf("Escalation dismissed - denying process %u\n", d->process_uid);
+      task->registers.ebx = 0;
+      task->paused = false;
+   } else {
+      debug_printf("Couldn't deny: requesting task ended\n");
+   }
+}
+
+void api_escalate_cancel(void *window, void *regs) {
+   (void)window;
+   window_popup_dialog_t *dialog = getSelectedWindow()->state;
+   debug_printf("Denied escalating process %u\n", dialog->process_uid);
+   dialog->answered = true;
+
+   task_state_t *task = &gettasks()[dialog->task_id];
+   if(task->enabled && task->process && task->process->uid == dialog->process_uid) {
+      task->registers.ebx = 0;
+      task->paused = false;
+      switch_to_task(task->task_id, regs);
+   } else {
+      debug_printf("Couldn't escalate: requesting task ended\n");
+   }
+   window_close(regs, getSelectedWindowIndex());
+}
+
+void api_escalate(registers_t *regs) {
+   // escalate process privilege
+   // used for trusted drivers as this gives access to:
+   // api_pci_map, api_pci_exists, api_dma, api_dma_free
+   // OUT: ebx - bool success
+   debug_printf("api_escalate\n");
+   task_state_t *task = get_current_task_state();
+   if(task->process->privileged) {
+      debug_printf("already privileged\n");
+      regs->ebx = 1;
+      return;
+   }
+   
+   // show dialog
+   int popup = windowmgr_add();
+   char buffer[512];
+   sprintf(buffer, "Process %u wants privilege escalation", task->process->uid);
+   window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
+   dialog->callback_func = &api_escalate_do;
+   dialog->dismiss_func = &api_escalate_dismiss; // closing dialog window = deny
+   dialog->wo_okbtn->x = 75;
+   dialog->process_uid = task->process->uid;
+   dialog->task_id = task->task_id;
+   window_create_button(getWindow(popup), 135, 45, "Deny", &api_escalate_cancel);
+   strcpy(getWindow(popup)->title, "Escalate Process");
+   strcpy(dialog->wo_okbtn->text, "Grant");
+   toolbar_draw();
+   window_draw_outline(getWindow(popup), false);
+
+   task->paused = true;
+   switch_task(regs); // yield
 }

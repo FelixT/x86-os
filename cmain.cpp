@@ -9,6 +9,7 @@ extern "C" {
 #include "terminal.h"
 #include "registers_t.h"
 #include "ata.h"
+#include "pci.h"
 
 extern void gdt_flush();
 extern void tss_flush();
@@ -22,6 +23,7 @@ void cmain_gui_init() {
    tss_init();
    gdt_flush();
    tss_flush();
+   pci_check_devices();
 
    register_irq(0, timer_handler);
    register_irq(1, keyboard_handler);

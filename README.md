@@ -19,6 +19,7 @@ targets i686 (FPU not required)
 - Anonymous pipes
 - Private futexes
 - Shared memory
+- PCI driver and privileged usermode network driver (RTL8139)
 
 ### build on mac/linux
 
@@ -66,7 +67,9 @@ Unified kernel/user heap: 0x1040000 – 0x3040000 (32MB)
 
 Heap is mapped to a process's page directory via demand paging.
 
-Shared memory vmapped to each process: 0xA0000000 - 0xC0000000
+Shared memory vmapped to each process: 0xA0000000 - 0xB0000000
+
+MMIO memory vmapped to each process: 0xB0000000 - 0xC0000000
 
 #### kernel
 

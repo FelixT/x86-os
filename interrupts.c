@@ -399,6 +399,21 @@ void software_handler(registers_t *regs) {
       case 81:
          api_shared_close(regs);
          break;
+      case 82:
+         api_pci_map(regs);
+         break;
+      case 83:
+         api_pci_exists(regs);
+         break;
+      case 84:
+         api_dma(regs);
+         break;
+      case 85:
+         api_dma_free(regs);
+         break;
+      case 86:
+         api_escalate(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;
@@ -545,19 +560,37 @@ void closewindow_event(void *regs, void *msg) {
    window_close((registers_t*)regs, (int)msg);
 }
 
-void endtask_callback(void *regs) {
+void endtask_callback(void *dialog, void *regs) {
    // callback for close window dialog
-   int task = strtoint(getSelectedWindow()->window_objects[0]->text+strlen("Task "));
-   events_add(35, &closewindow_event, (void*)get_task_window(task), -1);
-   end_task(task, regs);
+   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
+   task_state_t *task = &gettasks()[d->task_id];
+   if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
+      debug_printf("Task %i no longer paused\n", task->task_id);
+      return;
+   }
+   events_add(35, &closewindow_event, (void*)get_task_window(task->task_id), -1);
+   end_task(task->task_id, regs);
+}
+
+// ends task if dialog is closed
+void endtask_dismiss(void *dialog) {
+   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
+   task_state_t *task = &gettasks()[d->task_id];
+   if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
+      debug_printf("Task %i no longer paused\n", task->task_id);
+      return;
+   }
+   events_add(35, &closewindow_event, (void*)get_task_window(d->task_id), -1);
+   end_task(d->task_id, NULL);
 }
 
 void endtask_debug(void *window, void *regs) {
    (void)window;
-   int task_index = strtoint(getSelectedWindow()->window_objects[0]->text+strlen("Task "));
-   task_state_t *task = &gettasks()[task_index];
-   if(!task->paused) {
-      debug_printf("Task %i no longer paused\n", task_index);
+   window_popup_dialog_t *dialog = getSelectedWindow()->state;
+   dialog->answered = true;
+   task_state_t *task = &gettasks()[dialog->task_id];
+   if(!task->paused || !task->enabled || !task->process || task->process->uid != dialog->process_uid) {
+      debug_printf("Task %i no longer paused\n", task->task_id);
       return;
    }
    uint32_t eip = task->registers.eip;
@@ -574,9 +607,9 @@ void endtask_debug(void *window, void *regs) {
    args[0] = malloc(strlen(debug_path)+1);
    strcpy(args[0], debug_path);
    tasks_launch_elf(regs, debug_path, argc, args, true);
-   map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*argc, 1, 1);
+   map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*argc, 1, 1, 0);
    for(int i = 0; i < argc; i++)
-      map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1);
+      map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1, 0);
 }
 
 void show_endtask_dialog(int int_no, registers_t *regs, int task) {
@@ -585,7 +618,10 @@ void show_endtask_dialog(int int_no, registers_t *regs, int task) {
    sprintf(buffer, "Task %i paused due to exception %i", task, int_no);
    window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
    dialog->callback_func = &endtask_callback;
+   dialog->dismiss_func = &endtask_dismiss; // closing dialog ends task
    dialog->wo_okbtn->x = 75;
+   dialog->process_uid = gettasks()[task].process->uid;
+   dialog->task_id = task;
    window_create_button(getWindow(popup), 135, 45, "Debug", &endtask_debug);
    window_disable(getWindow(get_task_window(task)));
    strcpy(getWindow(popup)->title, "Error");
@@ -617,7 +653,7 @@ bool page_fault_handler(registers_t *regs) {
    if(addr >= process->heap_start && addr < process->heap_end) {
       uint8_t *page = malloc(0x1000); // returns physical addr
       addr = addr & ~0xFFF;  // page align
-      map(dir, (uint32_t)page, addr, 1, 1);
+      map(dir, (uint32_t)page, addr, 1, 1, 0);
       invlpg(addr);
       return true;
    }

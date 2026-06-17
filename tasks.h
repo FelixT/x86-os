@@ -14,6 +14,7 @@
 #include "elf.h"
 #include "paging.h"
 #include "fs.h"
+#include "pci.h"
 
 #define TOTAL_STACK_SIZE 0x0020000
 #define TASK_STACK_SIZE 0x0001000
@@ -38,6 +39,8 @@ typedef struct {
 #define EVENT_QUEUE_SIZE 64
 
 #define TASK_MAX_FDS 64
+#define TASK_MAX_DMA 16
+#define TASK_MAX_PCI 4
 
 // process struct - shared between threads
 typedef struct process_t {
@@ -59,8 +62,13 @@ typedef struct process_t {
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[TASK_MAX_FDS];
    int fd_count;
-   task_event_t *event_queue[EVENT_QUEUE_SIZE];
+   task_event_t *event_queue[EVENT_QUEUE_SIZE]; // could be linked list
    int event_queue_size;
+   uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
+   dma_alloc_t dma_allocs[TASK_MAX_DMA];
+   int dma_count;
+   pci_device_t *devices[TASK_MAX_PCI]; // mapped pci devices
+   int device_count;
 
    task_state_t *threads[MAX_TASK_THREADS];
    int no_threads;

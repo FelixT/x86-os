@@ -18,6 +18,16 @@ void window_popup_init(gui_window_t *window, gui_window_t *parent) {
 
 // define default popups - common mini-progs
 
+void window_popup_dialog_state_free(void *windowp) {
+   gui_window_t *window = (gui_window_t*)windowp;
+   window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
+   if(dialog == NULL) return;
+   if(!dialog->answered && dialog->dismiss_func != NULL)
+      dialog->dismiss_func(dialog); // if window is closed
+   free((uint32_t)dialog, window->state_size);
+   window->state = NULL;
+}
+
 void window_popup_dialog_close(void *windowobj, void *regs) {
    (void)windowobj;
    gui_window_t *window = getSelectedWindow();
@@ -34,8 +44,10 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
 
    if(get_task_from_window(getSelectedWindowIndex()) == -1) {
       // call as kernel
-      if(dialog->callback_func)
-         dialog->callback_func(regs);
+      if(dialog->callback_func) {
+         dialog->answered = true; // explicit resolution - suppress dismiss default
+         dialog->callback_func(dialog, regs);
+      }
       if(getSelectedWindow()) {
          getSelectedWindow()->needs_redraw = true;
          window_draw(getSelectedWindow());
@@ -72,8 +84,13 @@ window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *p
    window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
    dialog->callback_func = NULL;
+   dialog->dismiss_func = NULL;
+   dialog->answered = false;
+   dialog->process_uid = 0;
+   dialog->task_id = -1;
    window->state = (void*)dialog;
    window->state_size = sizeof(window_popup_dialog_t);
+   window->state_free = &window_popup_dialog_state_free;
    window->resizable = false;
 
    // dialog message
@@ -122,6 +139,7 @@ void window_popup_colourpicker_click(int x, int y) {
 }
 
 void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y) {
+   (void)regs;
    (void)windowobj;
    (void)x;
    (void)y;
@@ -145,12 +163,6 @@ void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y)
       if(taskIndex == -1) {
          // call as kernel
          callback(colour);
-      } else {
-         // calling function as task
-         uint32_t *args = malloc(sizeof(uint32_t) * 1);
-         args[0] = (uint32_t)colour;
-         task_state_t *task = &gettasks()[taskIndex];
-         task_call_subroutine(regs, task, "colourpickerreturn", (uint32_t)callback, args, 1);
       }
 
       getSelectedWindow()->needs_redraw = true;

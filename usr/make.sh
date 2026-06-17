@@ -68,3 +68,6 @@ cp o/debug.elf fs_root/sys/debug.elf
 cp o/about.elf fs_root/sys/about.elf
 cp o/clock.elf fs_root/sys/clock.elf
 
+# compile device drivers
+bash usr/device/make.sh
+

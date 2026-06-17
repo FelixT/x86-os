@@ -68,7 +68,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    debug_printf("Mapping 0x%h - 0x%h to 0x%h - 0x%h\n", (uint32_t)newProg, (uint32_t)newProg + vmem_size, vmem_start, vmem_end);
 
    for(uint32_t i = 0; i < vmem_size; i+=0x1000)
-      map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1);
+      map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1, 0);
 
    uint32_t heap_start = page_align_up(vmem_end);
    if(heap_start < KERNEL_END)
@@ -100,7 +100,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    task->process->heap_end = heap_start;
 
    for(uint32_t i = (task->stack_top - TASK_STACK_SIZE)/0x1000; i < task->stack_top/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 1, 1);
+      map(dir, i*0x1000, i*0x1000, 1, 1, 0);
 
    return task_index;
 }

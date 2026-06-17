@@ -37,7 +37,10 @@
 #define V_TOS_KERNEL   0x180000 // V_STACKS_START + 0x2000 (k stack size 0x2000)
 
 #define V_SHARED_START 0xA0000000
-#define V_SHARED_END   0xC0000000
+#define V_SHARED_END   0xB0000000
+
+#define V_MMIO_START 0xB0000000 // start for each process
+#define V_MMIO_END   0xC0000000
 
 typedef struct mem_segment_status_t {
    bool allocated;

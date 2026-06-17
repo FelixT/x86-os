@@ -36,7 +36,7 @@ void unmap(page_dir_entry_t *dir, uint32_t vaddr) {
    }
 }
 
-void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw) {
+void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache) {
 
    // map 4 KiB aligned vadddr to 4 KiB aligned physical addr
    if(!dir) return;
@@ -53,7 +53,6 @@ void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw)
       dir[dir_index].present = 1;
       dir[dir_index].rw = 1;
       dir[dir_index].user = 1;
-      //page_dir[dir_index].no_cache = 1;
 
       // default everything to 0
       memset(page_table, 0, 1024*(int)sizeof(page_table_entry_t)); // set to 2 for rw = 1, else 0
@@ -65,11 +64,11 @@ void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw)
    page_table[table_index].rw = rw;
    page_table[table_index].user = user;
    page_table[table_index].address = addr >> 12;
-   //page_table[table_index].no_cache = 1;
+   page_table[table_index].no_cache = no_cache;
 
 }
 
-int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw) {
+int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw, int no_cache) {
    uint32_t phys_start = page_align_down(phys_addr);
    uint32_t virt_start = page_align_down(virt_addr);
 
@@ -77,7 +76,7 @@ int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint
 
    int mapped = 0;
    for(uint32_t paddr = phys_start, vaddr = virt_start; paddr < phys_end; paddr += PAGE_SIZE, vaddr += PAGE_SIZE) {
-      map(dir, paddr, vaddr, user, rw);
+      map(dir, paddr, vaddr, user, rw, no_cache);
       mapped++;
    }
 
@@ -97,20 +96,20 @@ page_dir_entry_t *new_page() {
 
    // identity map kernel binary
    for(uint32_t i = KERNEL_START/0x1000; i < KERNEL_END/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 0, 0);
+      map(dir, i*0x1000, i*0x1000, 0, 0, 0);
 
    // map kernel stack
    uint32_t v_offset = (V_KSTACK_START - KSTACK_START)/0x1000;
    for(uint32_t i = KSTACK_START/0x1000; i < TOS_KERNEL/0x1000; i++)
-      map(dir, i*0x1000, (v_offset+i)*0x1000, 0, 0);
+      map(dir, i*0x1000, (v_offset+i)*0x1000, 0, 0, 0);
 
    // identity map heap for kernel
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 0, 0);
+      map(dir, i*0x1000, i*0x1000, 0, 0, 0);
 
    // identity map framebuffer
    for(uint32_t i = (uint32_t)gui_get_framebuffer()/0x1000; i < ((uint32_t)gui_get_framebuffer()+gui_get_framebuffer_size()+0xFFF)/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 0, 0);
+      map(dir, i*0x1000, i*0x1000, 0, 0, 0);
 
    return dir;
 }
@@ -123,11 +122,11 @@ void page_init() {
 
    // map stack for idle process
    for(uint32_t i = (TOS_PROGRAM - TASK_STACK_SIZE)/0x1000; i < TOS_PROGRAM/0x1000; i++)
-      map(page_dir, i*0x1000, i*0x1000, 1, 1);
+      map(page_dir, i*0x1000, i*0x1000, 1, 1, 0);
 
    // this page is used for the idle process which needs heap to not crash
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)
-      map(page_dir, i*0x1000, i*0x1000, 1, 1);
+      map(page_dir, i*0x1000, i*0x1000, 1, 1, 0);
 
    swap_pagedir(page_dir);
 

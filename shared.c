@@ -83,7 +83,7 @@ bool shared_map_instance(process_t *process, shared_block_t *block) {
    block->instances = instance;
    shared_consume_grant(process, block);
 
-   map_size(process->page_dir, block->paddr, block->vaddr, block->size, 1, 1);
+   map_size(process->page_dir, block->paddr, block->vaddr, block->size, 1, 1, 0);
    return true;
 }
 

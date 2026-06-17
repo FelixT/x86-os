@@ -1188,7 +1188,7 @@ bool windowmgr_click(void *regs, int x, int y) {
       args[2] = x - selectedWindow->x;
       args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
       args[0] = get_cindex(task);
-      map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+      map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1, 0);
       task_call_subroutine(regs, task, "click", (uint32_t)(selectedWindow->click_func), args, 3);
    }
 
@@ -1212,7 +1212,7 @@ void windowmgr_rightclick(void *regs, int x, int y) {
             args[2] = x - selectedWindow->x;
             args[1] = y - (selectedWindow->y + TITLEBAR_HEIGHT);
             args[0] = get_cindex(task);
-            map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
+            map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1, 0);
             task_call_subroutine(regs, task, "rightclick", (uint32_t)(selectedWindow->rightclick_func), args, 3);
             return;
          }
@@ -1501,7 +1501,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int task = get_task_from_window(index);
    task_state_t *task_state = &gettasks()[task];
    if(task > -1)
-      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1);
+      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1, 0);
 
    window->framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
    window->framebuffer = malloc(window->framebuffer_size);
@@ -1557,8 +1557,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[2] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
       args[1] = height - TITLEBAR_HEIGHT;
       args[0] = get_cindex_from_window(task_state, window);
-      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1);
-      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1);
+      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1, 0);
+      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1, 0);
       task_call_subroutine(regs, task_state, "resize", (uint32_t)(window->resize_func), args, 4);
    }
 
@@ -1579,7 +1579,7 @@ void window_release(registers_t *regs, gui_window_t *window) {
       args[2] = gui_mouse_x - window->x; // x relative to window content
       args[1] = gui_mouse_y - window->y - TITLEBAR_HEIGHT; // y relative to window content
       args[0] = get_cindex(task_state);
-      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*3, 1, 1);
+      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*3, 1, 1, 0);
       task_call_subroutine(regs, task_state, "release", (uint32_t)(window->release_func), args, 3);
    }
 

@@ -27,6 +27,9 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->fd_count = 0;
    for(int i = 0; i < TASK_MAX_FDS; i++)
       process->file_descriptors[i] = NULL;
+   process->mmio_end = V_MMIO_START;
+   process->device_count = 0;
+   process->dma_count = 0;
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
    process->no_threads = 0;
@@ -222,6 +225,9 @@ void end_task(int index, registers_t *regs) {
 
       // close shared memory
       shared_cleanup(task->process);
+
+      // silence mapped devices + reclaim DMA buffers
+      dma_cleanup(task->process);
 
       // free page dir
       free_page_dir(task->process->page_dir);

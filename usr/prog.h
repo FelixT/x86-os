@@ -962,6 +962,67 @@ static inline bool shared_close(uint32_t block_uid) {
    return success;
 }
 
+static inline uint8_t *pci_map(uint16_t vendor, uint16_t device_id) {
+   uint32_t addr;
+   asm volatile(
+      "int $0x30"
+      : "=b" (addr)
+      : "a" (82),
+      "b" ((uint32_t)vendor),
+      "c" ((uint32_t)device_id)
+      : "cc", "memory"
+   );
+   return (uint8_t*)addr;
+}
+
+static inline bool pci_exists(uint16_t vendor, uint16_t device_id) {
+   bool exists;
+   asm volatile(
+      "int $0x30"
+      : "=b" (exists)
+      : "a" (83),
+      "b" ((uint32_t)vendor),
+      "c" ((uint32_t)device_id)
+      : "cc", "memory"
+   );
+   return exists;
+}
+
+static inline void *dma(uint32_t size) {
+   uint32_t addr;
+
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (addr)
+      : "a" (84),
+      "b" (size)
+      : "cc", "memory"
+   );
+
+   return (void*)addr;
+}
+
+static inline void dma_free(void *addr, uint32_t size) {
+   asm volatile (
+      "int $0x30;"
+      :: "a" (85),
+      "b" ((uint32_t)addr),
+      "c" (size)
+      : "cc", "memory"
+   );
+}
+
+static inline bool escalate() {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (86)
+      : "cc", "memory"
+   );
+   return success;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(void *callback) {

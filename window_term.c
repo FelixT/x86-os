@@ -11,8 +11,10 @@
 #include "events.h"
 #include "windowmgr.h"
 #include "paging.h"
+#include "pci.h"
 
 // default terminal behaviour
+// implement kernel mode terminal for debugging
 
 void window_term_printf(char *format, ...) {
    char *buffer = malloc(512);
@@ -134,8 +136,8 @@ void window_term_return(void *regs, void *window) {
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)buffer;
          // map both to prog
-         map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1);
-         map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1);
+         map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1, 0);
+         map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1, 0);
 
          task_call_subroutine(regs, task, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
       }
@@ -245,6 +247,7 @@ void term_cmd_help() {
    window_term_printf("  MEM <page>, DMPMEM addr <bytes>\n");
    window_term_printf("  BG colour, BGIMG path\n");
    window_term_printf("  PADDING size, REDRAWALL\n");
+   window_term_printf("  PCI, TASKI <task>\n");
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -306,6 +309,7 @@ void term_cmd_tasks() {
             window_term_printf("\n%i: Disabled", i);
       }
    }
+   window_term_printf("\nCurrent task is %i\n", get_current_task());
 }
 
 void term_cmd_prog1(void *regs) {
@@ -437,6 +441,39 @@ void term_cmd_padding(char *arg) {
    getFont()->padding = padding;
 }
 
+void term_cmd_pci() {
+   pci_check_devices();
+   int c;
+   pci_device_t *devices = get_pci_devices(&c);
+   for(int i = 0; i < c; i++) {
+      pci_device_t *device = &devices[i];
+      window_term_printf("Found device 0x%h vendor 0x%h\n", device->device, device->vendor);
+   }
+}
+
+void term_cmd_taski(char *arg) {
+   int id = strtoint(arg);
+   if(id <= 0 || id >= TOTAL_TASKS) {
+      debug_printf("Task not found\n");
+      return;
+   }
+   task_state_t *task = &gettasks()[id];
+   window_term_printf("Task %i uid %u (enabled %i paused %i unpausable %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->unpausable, task->crashed, task->in_routine);
+   window_term_printf("Stack top 0x%h\n", task->stack_top);
+   process_t *process = task->process;
+   if(process) {
+      window_term_printf("Process uid %u threads %i privileged %i\n", process->uid, process->no_threads, process->privileged);
+      window_term_printf("Working dir %s\n", process->working_dir);
+      window_term_printf("Prog mem 0x%h - 0x%h\n", process->vmem_start, process->vmem_end);
+      window_term_printf("Heap 0x%h - 0x%h\n", process->heap_start, process->heap_end);
+      window_term_printf("MMIO 0x%h - 0x%h\n", V_MMIO_START, process->mmio_end);
+      window_term_printf("Exe path %s\n", process->exe_path);
+      window_term_printf("Window %i\n", process->window);
+      window_term_printf("Event queue size %i\n", process->event_queue_size);
+      window_term_printf("DMAs %i mapped devices %i fds %i\n", process->dma_count, process->device_count, process->fd_count);
+   }
+}
+
 void term_cmd_default(char *command) {
    gui_drawchar('\'', 1);
    window_term_printf(command, 1);
@@ -485,6 +522,10 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_mem((char*)arg);
    else if(strequ(command, "DMPMEM"))
       term_cmd_dmpmem((char*)arg);
+   else if(strequ(command, "PCI"))
+      term_cmd_pci();
+   else if(strequ(command, "TASKI"))
+      term_cmd_taski((char*)arg);
    else
       term_cmd_default((char*)command);
    
