@@ -34,6 +34,8 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    strcpy(process->exe_path, "");
    process->no_threads = 0;
    process->event_queue_size = 0;
+   process->heap_start = 0;
+   process->heap_end = 0;
    
    return process;
 }
@@ -103,7 +105,7 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
    setup_task_init(index, regs, focus, true);
 
-   if(old_task >= 0) {
+   if(old_task >= 0 && tasks[old_task].enabled) {
       tasks[old_task].registers = *regs;
    }
 
@@ -124,7 +126,7 @@ bool task_exists() {
 
 int get_free_task_index() {
    for(int i = 0; i < TOTAL_TASKS; i++)
-      if(!tasks[i].enabled) return i;
+      if(!tasks[i].enabled && i != current_task) return i;
       
    return -1;
 }
@@ -176,6 +178,7 @@ void end_task(int index, registers_t *regs) {
    if(task->in_syscall)
       debug_printf("Task was in syscall %i\n", task->syscall_no);
 
+   task->enabled = false;
    if(regs != NULL && (index == get_current_task() || !task_exists()))
       switch_task(regs); // swap page dir before freeing
 
@@ -230,7 +233,8 @@ void end_task(int index, registers_t *regs) {
       dma_cleanup(task->process);
 
       // free page dir
-      free_page_dir(task->process->page_dir);
+      if(task->process->page_dir != page_get_kernel_pagedir())
+         free_page_dir(task->process->page_dir);
 
       // free process
       free((uint32_t)task->process, sizeof(process_t));
@@ -243,8 +247,6 @@ void end_task(int index, registers_t *regs) {
       task->routine_argc = 0;
    }
    task->in_routine = false;
-
-   task->enabled = false;
 }
 
 void tasks_alloc() {
@@ -314,9 +316,9 @@ void tasks_init(registers_t *regs) {
    // launch idle process
    tasks_launch_binary(regs, "/sys/progidle.bin");
    
-   gui_get_windows()[tasks[0].process->window].minimised = true;
-   gui_get_windows()[tasks[0].process->window].draw_func = NULL;
-   strcpy(gui_get_windows()[tasks[0].process->window].title, "Idle Process");
+   gui_get_windows()[tasks[current_task].process->window].minimised = true;
+   gui_get_windows()[tasks[current_task].process->window].draw_func = NULL;
+   strcpy(gui_get_windows()[tasks[current_task].process->window].title, "Idle Process");
    //elf_run(regs, prog, 0, 0, NULL);
    //free((uint32_t)prog, entry->fileSize);
 

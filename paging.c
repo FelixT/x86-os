@@ -120,8 +120,8 @@ void page_init() {
 
    page_dir = new_page();
 
-   // map stack for idle process
-   for(uint32_t i = (TOS_PROGRAM - TASK_STACK_SIZE)/0x1000; i < TOS_PROGRAM/0x1000; i++)
+   // map stacks for all task slots as binaries launch in kernel page dir - hacky
+   for(uint32_t i = (TOS_PROGRAM - TASK_STACK_SIZE*TOTAL_TASKS)/0x1000; i < TOS_PROGRAM/0x1000; i++)
       map(page_dir, i*0x1000, i*0x1000, 1, 1, 0);
 
    // this page is used for the idle process which needs heap to not crash

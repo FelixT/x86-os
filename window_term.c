@@ -453,7 +453,7 @@ void term_cmd_pci() {
 
 void term_cmd_taski(char *arg) {
    int id = strtoint(arg);
-   if(id <= 0 || id >= TOTAL_TASKS) {
+   if(id < 0 || id >= TOTAL_TASKS) {
       debug_printf("Task not found\n");
       return;
    }
