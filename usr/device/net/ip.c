@@ -14,7 +14,7 @@
 static uint16_t icmp_id = 0x1234;
 static uint16_t icmp_seq = 0;
 
-uint8_t *packet;
+uint8_t *packet = NULL;
 
 typedef struct ip_header_t {
    uint8_t ihl : 4; // internet header length (in 32-bit words)
@@ -45,18 +45,20 @@ static uint16_t ip_checksum(void *data, uint16_t len) {
    return (uint16_t)~sum;
 }
 
-// next-hop routing: on-subnet destinations go direct, everything else via the
-// gateway. single /24 + single gateway for now, but keyed by next-hop so a real
-// routing table drops in right here without touching the send/queue path.
+// next-hop routing: on-subnet destinations go direct, everything else via the gateway
+// single /24 + single gateway for now, routing table later
 static uint32_t ip_next_hop(uint32_t dst) {
    uint32_t local = pack_ip(LOCAL_IP);
-   if((dst & 0x00FFFFFF) == (local & 0x00FFFFFF)) // same a.b.c (/24)
+   if((dst & 0x00FFFFFF) == (local & 0x00FFFFFF)) // same a.b.c (/24) matches 
       return dst;
    return pack_ip(GATEWAY_IP);
 }
 
 int ip_send(netdev_t *dev, uint32_t dst_ip, uint8_t protocol, uint8_t *payload, uint16_t len) {
-   if(len > IP_MTU - sizeof(ip_header_t)) return -1; // todo: fragmentation
+   if(len > IP_MTU - sizeof(ip_header_t)) {
+      printf("ip_send: packet dropped length %u\n", len);
+      return -1; // todo: fragmentation
+   }
 
    if(!packet) {
       packet = malloc(sizeof(ip_header_t) + IP_MTU); // lazily alloc shared tx buffer
@@ -84,6 +86,7 @@ int ip_send(netdev_t *dev, uint32_t dst_ip, uint8_t protocol, uint8_t *payload, 
 }
 
 // todo: separate out into files
+// == ICMP ==
 typedef struct icmp_header_t {
    uint8_t type;
    uint8_t code;
@@ -96,7 +99,9 @@ void icmp_input(netdev_t *dev, uint32_t src_ip, uint8_t *payload, uint16_t len) 
    if(len < sizeof(icmp_header_t)) return;
    icmp_header_t *head = (icmp_header_t*)payload;
    if(ip_checksum(head, len) != 0) return; // bad checksum
-   printf("icmp type %u\n", head->type);
+
+   uint8_t a, b, c, d;
+   unpack_ip(src_ip, &a, &b, &c, &d);
 
    if(head->type == 8) {
       // handle echo request (type 8) - turn it into a reply and send it back
@@ -104,18 +109,21 @@ void icmp_input(netdev_t *dev, uint32_t src_ip, uint8_t *payload, uint16_t len) 
       head->checksum = 0; // must zero before recomputing
       head->checksum = ip_checksum(head, len);
       ip_send(dev, src_ip, IP_PROTO_ICMP, (uint8_t*)head, len);
+      printf("icmp request from %u.%u.%u.%u\n", a, b, c, d);
    } else if(head->type == 0) {
       // echo reply (type 0)
       uint16_t seq = htons(head->rest_of_header >> 16);
       uint8_t a, b, c, d;
       unpack_ip(src_ip, &a, &b, &c, &d);
-      printf("reply from %u.%u.%u.%u seq=%u\n", a,b,c,d, seq);
+      printf("icmp reply from %u.%u.%u.%u seq=%u\n", a, b, c, d, seq);
+   } else {
+      printf("icmp type %u from %u.%u.%u.%u\n", head->type, a, b, c, d);
    }
 }
 
 void icmp_send_echo(netdev_t *dev, uint32_t dst_ip) {
    (void)dev;
-   uint8_t buf[sizeof(icmp_header_t) + 32];
+   uint8_t buf[sizeof(icmp_header_t) + 32]; // small so just allocate on stack
    icmp_header_t *icmp = (icmp_header_t*)buf;
    icmp->type = 8; // echo request
    icmp->code = 0;
@@ -125,6 +133,50 @@ void icmp_send_echo(netdev_t *dev, uint32_t dst_ip) {
    icmp->checksum = 0;
    icmp->checksum = ip_checksum(icmp, sizeof(buf));
    ip_send(dev, dst_ip, IP_PROTO_ICMP, buf, sizeof(buf));
+}
+
+// == UDP ==
+typedef struct udp_header_t {
+   uint16_t src_port;
+   uint16_t dest_port;
+   uint16_t length; // udp header + data
+   uint16_t checksum; // optional for ipv4
+} __attribute__((packed)) udp_header_t;
+
+// ports passed in host byte order
+int udp_send(netdev_t *dev, uint32_t dst_ip, uint16_t dst_port, uint16_t src_port, uint8_t *payload, uint16_t len) {
+   uint16_t total = sizeof(udp_header_t) + len;
+   uint8_t *packet_udp = malloc(total);
+   if(!packet_udp)
+      return -1;
+
+   udp_header_t *udp = (udp_header_t*)packet_udp;
+   udp->src_port = htons(src_port);
+   udp->dest_port = htons(dst_port);
+   udp->length = htons(total);
+   udp->checksum = 0; // optional, todo
+   memcpy(packet_udp+sizeof(udp_header_t), payload, len);
+   int result = ip_send(dev, dst_ip, IP_PROTO_UDP, packet_udp, total);
+   free(packet_udp);
+   return result;
+}
+
+void udp_input(netdev_t *dev, uint32_t src_ip, uint8_t *payload, uint16_t len) {
+   (void)dev;
+   udp_header_t *udp = (udp_header_t*)payload;
+   uint16_t udp_len = htons(udp->length);
+   if(udp_len < sizeof(udp_header_t) || udp_len > len) return;
+   // todo: if checksum != 0, check using pseudo header
+   uint8_t a, b, c, d;
+   unpack_ip(src_ip, &a, &b, &c, &d);
+   printf("UDP length %i src %u.%u.%u.%u:%i dest :%i\n", udp_len, a, b, c, d, htons(udp->src_port), htons(udp->dest_port));
+   for(int i = sizeof(udp_header_t); i < udp_len; i++)
+      printf("%c", (char)payload[i]);
+   printf("\n");
+   // send test reply
+   char msg[8];
+   strcpy(msg, "test");
+   udp_send(dev, src_ip, htons(udp->src_port), 7777, (uint8_t*)msg, strlen(msg)+1); // reply
 }
 
 void ip_input(netdev_t *dev, uint8_t *frame, uint16_t len) {
@@ -147,10 +199,10 @@ void ip_input(netdev_t *dev, uint8_t *frame, uint16_t len) {
          icmp_input(dev, ip->src, payload, payload_len);
          break;
       case IP_PROTO_UDP:
-         // udp_input(dev, ip->src, payload, payload_len);
-         //break;
+         udp_input(dev, ip->src, payload, payload_len);
+         break;
       case IP_PROTO_TCP:
-         // tcp_input(dev, ip->src, payload, payload_len);
+         //tcp_input(dev, ip->src, payload, payload_len);
          //break;
       default:
          printf("ip_input.: unsupported protocol %u\n", ip->protocol);

@@ -297,6 +297,20 @@ void callback(char *buffer) {
          printf("usage: ping <a.b.c.d>\n");
    }
 
+   if(strequ(cmd, "udp")) {
+      char tmp[64];
+      char ipstr[16], portstr[16], msg[32];
+      uint32_t ip;
+      if(strsplit(ipstr, tmp, arg, ' ') 
+      && strsplit(portstr, msg, tmp, ' ')
+      && parse_ip(ipstr, &ip)) {
+         uint16_t port = (uint16_t)strtoint(portstr);
+         udp_send(dev, ip, port, 7777, (uint8_t*)msg, strlen(msg));
+      } else {
+         printf("usage: udp <a.b.c.d> <port> <msg>\n");
+      }
+   }
+
    end_subroutine();
 }
 
@@ -333,7 +347,7 @@ void _start() {
    // prime the gateway mac (tracked, so it retransmits if the request is lost)
    arp_resolve(dev, pack_ip(GATEWAY_IP));
 
-   printf("Polling\n");
+   printf("Polling - IP: %i.%i.%i.%i\n", LOCAL_IP);
 
    override_term_checkcmd(&callback); // debugging commands
 

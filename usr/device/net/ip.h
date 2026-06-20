@@ -15,4 +15,6 @@ int ip_send(netdev_t *dev, uint32_t dst_ip, uint8_t protocol, uint8_t *payload, 
 
 void icmp_send_echo(netdev_t *dev, uint32_t dst_ip);
 
+int udp_send(netdev_t *dev, uint32_t dst_ip, uint16_t dst_port, uint16_t src_port, uint8_t *payload, uint16_t len);
+
 #endif

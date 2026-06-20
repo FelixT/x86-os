@@ -202,7 +202,7 @@ void software_handler(registers_t *regs) {
          api_return_window_height(regs);
          break;
       case 16:
-         api_malloc(regs);
+         api_malloc(regs); // todo: remove, replaced with dma
          break;
       case 17:
          api_override_rightclick(regs);

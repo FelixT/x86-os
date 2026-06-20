@@ -401,6 +401,7 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
    // centered text
    int titleWidth = font_width(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
+   int titleY = window->y + (TITLEBAR_HEIGHT - getFont()->height)/2;
 
    if(wm_settings.theme == 1) {
       // gradient titlebar
@@ -415,17 +416,17 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
       draw_rect(&surface, wm_settings.titlebar_colour, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
    }
    // draw text
-   draw_string(&surface, window->title, rgb16(210,210,210), titleX, window->y+6); // shadow
-   draw_string(&surface, window->title, 0, titleX, window->y+5);
+   draw_string(&surface, window->title, rgb16(210,210,210), titleX, titleY+1); // shadow
+   draw_string(&surface, window->title, 0, titleX, titleY);
    if(window->active) {
       // draw underline
-      draw_line(&surface, rgb16(170,170,170), titleX, window->y+6+getFont()->height, false, titleWidth);
-      draw_line(&surface, rgb16(210,210,210), titleX, window->y+6+getFont()->height+1, false, titleWidth);
+      draw_line(&surface, rgb16(180,180,180), titleX, titleY+getFont()->height+1, false, titleWidth);
+      draw_line(&surface, rgb16(220,220,220), titleX, titleY+getFont()->height+2, false, titleWidth);
    }
 
    // titlebar buttons
-   draw_char(&surface, 0, 0, window->x+window->width-(getFont()->width+3), window->y+2);
-   draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, window->y+2);
+   draw_char(&surface, 0, 0, window->x+window->width-(getFont()->width+3), titleY);
+   draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, titleY);
 
    draw_line(&surface, rgb16(170,170,170), window->x, window->y+TITLEBAR_HEIGHT-1, false, window->width);
 
@@ -1060,9 +1061,11 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
       }
    }
 
+   gui_cursor_restore_bg();
+
    // restore dotted outline
    draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, (int*)draw_buffer, true);
-   
+
    if(window->dragged) {
       window->x += relX;
       window->y -= relY;
@@ -1083,9 +1086,8 @@ void windowmgr_dragged(registers_t *regs, int relX, int relY) {
    window->needs_redraw = true;
 
    // draw dotted outline
-   gui_cursor_restore_bg();
    draw_dottedrect(&surface, COLOUR_LIGHT_GREY, window->x, window->y, window->width, window->height, (int*)draw_buffer, false);
-   //gui_cursor_draw();
+   //gui_cursor_draw(); - interrupt handler redraws cursor
 }
 
 void windowmgr_launch_apps(registers_t *regs) {
