@@ -151,6 +151,24 @@ uint32_t page_getphysical(page_dir_entry_t *dir, uint32_t vaddr) {
    return (page_table[table_index].address << 12) + (vaddr & 0xFFF);
 }
 
+int page_checkmapping(page_dir_entry_t *dir, uint32_t vaddr) {
+   uint32_t dir_index = vaddr >> 22;
+   uint32_t table_index = vaddr >> 12 & 0x03FF;
+
+   if(!dir[dir_index].present)
+      return PAGE_NOTPRESENT;
+
+   page_table_entry_t *page_table = (page_table_entry_t *)(dir[dir_index].address << 12);
+
+   if(!page_table[table_index].present)
+      return PAGE_NOTPRESENT;
+
+   if(!page_table[table_index].user)
+      return page_table[table_index].rw ? PAGE_KERNELRW : PAGE_KERNELREAD;
+   else
+      return page_table[table_index].rw ? PAGE_USERRW : PAGE_USERREAD;
+}
+
 page_dir_entry_t *page_get_kernel_pagedir() {
    return page_dir;
 }

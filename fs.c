@@ -221,6 +221,49 @@ fs_file_t *fs_new(char *path) {
    return fs_open(path);
 }
 
+// copy up to max bytes from pipe ring buffer into task (reader)
+static size_t fs_pipe_drain(fs_pipe_t *pipe, int task, void *dest, size_t max) {
+   size_t read = 0;
+   // handle wrap - read in continuous chunks validated by copy_to_task
+   while(read < max && pipe->size > 0) {
+      size_t run = FS_PIPE_BUF_SIZE - pipe->read_pos; // contiguous bytes until the ring wraps
+      size_t chunk = max - read;
+      if(chunk > run) chunk = run;
+      if(chunk > (size_t)pipe->size) chunk = pipe->size;
+      int written = copy_to_task(task, (uint8_t*)dest + read, &pipe->buf[pipe->read_pos], chunk);
+      if(written < 0)
+         break; // bad/unmapped user buffer
+      pipe->read_pos = (pipe->read_pos + written) % FS_PIPE_BUF_SIZE;
+      pipe->size -= written;
+      read += written;
+      if((size_t)written < chunk)
+         break; // ran out of mapping mid chunk
+   }
+   return read;
+}
+
+// copy up to max bytes from task (writer) buffer into pipe ring buffer
+static size_t fs_pipe_fill(fs_pipe_t *pipe, int task, void *src, size_t max) {
+   // write in continuous chunks validated in copy_from_task
+   size_t written = 0;
+   while(written < max && pipe->size < FS_PIPE_BUF_SIZE) {
+      size_t run = FS_PIPE_BUF_SIZE - pipe->write_pos;
+      size_t space = FS_PIPE_BUF_SIZE - pipe->size;
+      size_t chunk = max - written;
+      if(chunk > run) chunk = run;
+      if(chunk > space) chunk = space;
+      int read = copy_from_task(task, &pipe->buf[pipe->write_pos], (uint8_t*)src + written, chunk);
+      if(read < 0)
+         break; // bad/unmapped user buffer
+      pipe->write_pos = (pipe->write_pos + read) % FS_PIPE_BUF_SIZE;
+      pipe->size += read;
+      written += read;
+      if((size_t)read < chunk)
+         break; // ran out of mapping mid chunk
+   }
+   return written;
+}
+
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
       int w = file->window_index;
@@ -255,13 +298,9 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
          return FS_WRITE_WAIT;
       }
 
-      size_t written = 0;
-      while(written < size && pipe->size < FS_PIPE_BUF_SIZE) {
-         pipe->buf[pipe->write_pos] = buffer[written];
-         pipe->write_pos = (pipe->write_pos + 1) % FS_PIPE_BUF_SIZE;
-         pipe->size++;
-         written++;
-      }
+      size_t written = fs_pipe_fill(pipe, task, buffer, size);
+      if(written == 0 && size > 0)
+         return FS_ERROR; // invalid/unmapped buffer
 
       return (int)written;
    }
@@ -306,14 +345,11 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
          debug_printf("FS: pipe not active\n");
          return FS_ERROR;
       }
-      size_t read = 0;
-      while(read < size && pipe->size > 0) {
-         ((uint8_t*)buffer)[read++] = pipe->buf[pipe->read_pos];
-         pipe->read_pos = (pipe->read_pos + 1) % FS_PIPE_BUF_SIZE;
-         pipe->size--;
-      }
+      size_t read = fs_pipe_drain(pipe, task, buffer, size);
       if(read > 0) {
          return read;
+      } else if(pipe->size > 0 && size > 0) {
+         return FS_ERROR; // invalid/unmapped buffer
       } else if(pipe->writer_count == 0) {
          return FS_EOF;
       } else {
@@ -431,13 +467,11 @@ bool fs_pipe_wake_reader(fs_pipe_t *pipe) {
    uint8_t *rbuf = (uint8_t*)pipe->read_buf;
    size_t rsize = pipe->read_size;
    if(rbuf) {
-      size_t n = 0;
-      while(n < rsize && pipe->size > 0) {
-         rbuf[n++] = pipe->buf[pipe->read_pos];
-         pipe->read_pos = (pipe->read_pos + 1) % FS_PIPE_BUF_SIZE;
-         pipe->size--;
-      }
+      // read from pipe
+      size_t n = fs_pipe_drain(pipe, reader_task, rbuf, rsize);
       task->registers.ebx = (int)n;
+   } else {
+      task->registers.ebx = FS_ERROR;
    }
    task->paused = false;
    pipe->read_waiting_task = -1;
@@ -455,13 +489,11 @@ bool fs_pipe_wake_writer(fs_pipe_t *pipe) {
    uint8_t *wbuf = (uint8_t*)pipe->write_buf;
    size_t wsize = pipe->write_size;
    if(wbuf) {
-      size_t n = 0;
-      while(n < wsize && pipe->size < FS_PIPE_BUF_SIZE) {
-         pipe->buf[pipe->write_pos] = wbuf[n++];
-         pipe->write_pos = (pipe->write_pos + 1) % FS_PIPE_BUF_SIZE;
-         pipe->size++;
-      }
+      // write into pipe
+      size_t n = fs_pipe_fill(pipe, writer_task, wbuf, wsize);
       task->registers.ebx = (int)n;
+   } else {
+      task->registers.ebx = FS_ERROR;
    }
    task->paused = false;
    pipe->write_waiting_task = -1;

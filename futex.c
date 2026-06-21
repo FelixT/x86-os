@@ -22,7 +22,7 @@ int futex_wait(void *futex_addr, uint32_t expected) {
    // check if value matches expected
    uint32_t val;
    int task_id = get_current_task();
-   if(!copy_from_task(task_id, &val, futex_addr, sizeof(uint32_t))) {
+   if(copy_from_task(task_id, &val, futex_addr, sizeof(uint32_t)) != sizeof(uint32_t)) {
       return FUTEX_WAIT_FAIL;
    }
    if(val != expected) {

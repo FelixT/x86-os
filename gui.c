@@ -35,11 +35,6 @@ static inline void set_framebuffer(int index, uint16_t colour) {
    }
 }
 
-inline uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
-   // 5r 6g 5b
-   return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
-}
-
 void gui_drawrect(uint16_t colour, int x, int y, int width, int height) {
    draw_rect(&surface, colour, x, y, width, height);
 }

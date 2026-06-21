@@ -15,6 +15,7 @@ bool strstartswith(char* src, char* startswith);
 bool strendswith(char* src, char* endswith);
 bool strsplit_last(char* dest1, char* dest2, char* src, char splitat);
 int strlen(char* str);
+int strnlen(char* str, int maxlen);
 bool strequ(char* str1, char* str2);
 void uinttohexstr(uint32_t num, char* out);
 void uinttostr(uint32_t num, char* out);

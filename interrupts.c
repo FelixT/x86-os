@@ -598,16 +598,17 @@ void endtask_debug(void *window, void *regs) {
    char addrbuffer[10];
    uinttohexstr(eip, addrbuffer);
    int argc = 3;
-   char **args = malloc(sizeof(char*)*argc);
+   char **args = malloc(sizeof(char*)*(argc+1));  // args includes trailing null str
    char *debug_path = "/sys/debug.elf";
    args[2] = malloc(strlen(addrbuffer)+1);
    strcpy(args[2], addrbuffer);
    args[1] = malloc(strlen(exe_path)+1);
    strcpy(args[1], exe_path);
    args[0] = malloc(strlen(debug_path)+1);
+   args[argc] = NULL;
    strcpy(args[0], debug_path);
    tasks_launch_elf(regs, debug_path, argc, args, true);
-   map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*argc, 1, 1, 0);
+   map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*(argc+1), 1, 1, 0);
    for(int i = 0; i < argc; i++)
       map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1, 0);
 }
@@ -650,8 +651,13 @@ bool page_fault_handler(registers_t *regs) {
       debug_printf("int 14 - task page directory isn't current...\n");
    }
 
-   if(addr >= process->heap_start && addr < process->heap_end) {
+   if(addr >= process->heap_start && addr < process->heap_end) { // task_addr_demand_paged()
       uint8_t *page = malloc(0x1000); // returns physical addr
+      if(!page) {
+         debug_printf("demand paging: system ran out of physical memory\n");
+         return false;
+      }
+      memset(page, 0, 0x1000); // zero mem
       addr = addr & ~0xFFF;  // page align
       map(dir, (uint32_t)page, addr, 1, 1, 0);
       invlpg(addr);

@@ -726,18 +726,19 @@ void fat_read_file_callback(void *regs, void *msg) {
          clusterReadSize = state->size - state->readBytes;
       
       uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, clusterReadSize); // read cluster from disk
-      if(!copy_to_task(state->task, state->buffer + state->readBytes, clusterBuf, clusterReadSize)) {
-        debug_printf("Error writing to task memory\n");
+      int written = copy_to_task(state->task, state->buffer + state->readBytes, clusterBuf, clusterReadSize);
+      if(written < 0) {
+        debug_printf("Error writing to task memory 0x%h size %u\n", state->buffer, clusterReadSize);
         free((uint32_t)clusterBuf, clusterReadSize);
         free((uint32_t)state, sizeof(fat_read_file_state_t));
         return;
       }
-      state->readBytes += clusterReadSize;
+      state->readBytes += written;
       state->offset = 0;
 
       free((uint32_t)clusterBuf, clusterReadSize);
 
-      if(state->readBytes >= state->size) {
+      if(state->readBytes >= state->size || (uint32_t)written < clusterReadSize) { // finished read or hit end of buffer map
          // callback
          (*(void(*)(void*,int,int))state->callback)(regs, state->task, state->readBytes);
          free((uint32_t)state, sizeof(fat_read_file_state_t));

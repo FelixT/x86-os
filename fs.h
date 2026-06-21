@@ -15,7 +15,7 @@ typedef struct {
 #define FS_PIPE_BUF_SIZE 4096
 
 typedef struct {
-    uint8_t buf[FS_PIPE_BUF_SIZE];
+    uint8_t buf[FS_PIPE_BUF_SIZE]; // ring buffer
     int read_pos;
     int write_pos;
     int size;

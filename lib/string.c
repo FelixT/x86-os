@@ -130,6 +130,13 @@ int strlen(char* str) {
    return len;
 }
 
+int strnlen(char* str, int maxlen) {
+   int len = 0;
+   while(len < maxlen && str[len] != '\0')
+      len++;
+   return len;
+}
+
 bool strequ(char* str1, char* str2) {
    int len = strlen(str1);
    if(len != strlen(str2))

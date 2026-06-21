@@ -75,15 +75,15 @@ void rtl_poll(netdev_t *dev) {
    while(!(io[RTL_CMD] & 0x01)) {
       uint16_t status = *(volatile uint16_t*)(rx + rx_offset);
       uint16_t len = *(volatile uint16_t*)(rx + rx_offset + 2);
-      if(len < 4 || len > ETHERNET_MAX) {
-         // skip bad headers, set read position
+      if(len < 4 || len > ETHERNET_MAX) { // received bad length
+         // skip bad headers, set read position rx_offset (fix desync by reading from device counter)
          uint16_t cbr = *(volatile uint16_t*)(io + RTL_CBR);
          rx_offset = cbr % RX_BUF_LEN;
          *(volatile uint16_t*)(io + RTL_CAPR) = rx_offset - 0x10;
          break;
       }
       uint8_t *frame = (uint8_t*)(rx + rx_offset + 4);
-      uint16_t frame_len = len - 4; // strip crc
+      uint16_t frame_len = len - 4; // strip crc at end of frame (already validated by device)
 
       if((status & 0x01) && dev->rx) // rok - receive ok
          dev->rx(dev, frame, frame_len);
@@ -147,7 +147,7 @@ netdev_t *rtl_init() {
 
    *(volatile uint16_t*)(io+RTL_IMR) = 0; // disable interrupts (use polling)
 
-   *(volatile uint32_t*)(io+RTL_RCR) = 0xf | (1 << 7); // set 'receive' config AB+AM+APM+AAP + WRAP
+   *(volatile uint32_t*)(io+RTL_RCR) = 0xf | (1 << 7); // set 'receive' config AB+AM+APM+AAP + WRAP (ensure rx mem is continuous - requires padding)
 
    io[RTL_CMD] = 0x0C; // re + te: enable receiver & transmitter
 

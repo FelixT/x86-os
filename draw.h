@@ -5,6 +5,19 @@
 
 #include "surface_t.h"
 
+static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
+   // 5r 6g 5b
+   return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+}
+
+static inline void setpixel_safe(surface_t *surface, int index, uint16_t colour) {
+   if(index < 0 || index >= surface->width*surface->height) {
+      //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
+   } else {
+      ((uint16_t*)surface->buffer)[index] = colour;
+   }
+}
+
 void draw_rect(surface_t *surface, uint16_t colour, int x, int y, int width, int height);
 void draw_rect_gradient(surface_t *surface, uint16_t color1, uint16_t color2, int x, int y, int width, int height, int direction);
 void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height);
@@ -12,8 +25,5 @@ void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int widt
 void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length);
 void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y);
 void draw_string(surface_t *surface, char *c, uint16_t colour, int x, int y);
-uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b);
-
-void setpixel_safe(surface_t *surface, int index, uint16_t colour);
 
 #endif

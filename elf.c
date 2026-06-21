@@ -110,6 +110,7 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    if(task_index < 0) return;
 
    launch_task(task_index, regs, focus);
+   process_t *process = gettasks()[task_index].process;
 
    // push args
    regs->useresp -= 4;
@@ -117,7 +118,10 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    regs->useresp -= 4;
    ((uint32_t*)regs->useresp)[0] = argc;
    regs->useresp -= 4;
-   ((uint32_t*)regs->useresp)[0] = gettasks()[task_index].process->vmem_start;
+   ((uint32_t*)regs->useresp)[0] = process->vmem_start;
+   
+   process->launch_args = args;
+   process->launch_argc = argc;
 }
 
 // like elf_run but doesn't switch to new task. task is not enabled
@@ -140,6 +144,9 @@ int elf_setup(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **
    ((uint32_t*)task->registers.useresp)[0] = argc;
    task->registers.useresp -= 4;
    ((uint32_t*)task->registers.useresp)[0] = vmem_start;
+
+   task->process->launch_args = args;
+   task->process->launch_argc = argc;
 
    swap_pagedir(saved_dir);
 

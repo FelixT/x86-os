@@ -43,6 +43,7 @@ void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw,
 int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw, int no_cache);
 void page_init();
 uint32_t page_getphysical(page_dir_entry_t *dir, uint32_t vaddr);
+int page_checkmapping(page_dir_entry_t *dir, uint32_t vaddr);
 page_dir_entry_t *page_get_kernel_pagedir();
 void swap_pagedir(page_dir_entry_t *dir);
 page_dir_entry_t *new_page();
@@ -52,6 +53,12 @@ void free_page_dir(page_dir_entry_t *dir);
 
 #define PAGE_SIZE 0x1000
 #define PAGE_MASK (PAGE_SIZE - 1)
+
+#define PAGE_USERRW 2
+#define PAGE_USERREAD 1
+#define PAGE_NOTPRESENT 0
+#define PAGE_KERNELREAD -1
+#define PAGE_KERNELRW -2
 
 static inline uint32_t page_align_up(uint32_t addr) {
    return (addr + PAGE_MASK) & ~PAGE_MASK;

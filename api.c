@@ -50,8 +50,21 @@ gui_window_t *api_get_cwindow(int cindex) {
    return mainwindow->children[cindex];
 }
 
+static inline int api_validate_str(char *str, int maxlen) {
+   return task_validate_str(get_current_task_state(), str, maxlen);
+}
+
+static inline bool api_validate_mem(void *mem, int len, bool rw) {
+   return task_validate_mem(get_current_task_state(), mem, len, rw);
+}
+
+static inline int api_validate_maxsize(void *mem, int max, bool rw) {
+   return task_validate_maxsize(get_current_task_state(), mem, max, rw);
+}
 
 // api funcs
+
+#define API_WRITESTR_MAX_LENGTH 0x2000
 
 void api_write_string(registers_t *regs) {
    task_state_t *task = get_current_task_state();
@@ -63,9 +76,24 @@ void api_write_string(registers_t *regs) {
       out = (char*)(task->process->prog_entry + regs->ebx);
    else // elf
       out = (char*)regs->ebx;
+   
+   int len = api_validate_str(out, API_WRITESTR_MAX_LENGTH);
+   if(len == -1) return; // invalid buffer
+   bool truncate = false;
+   // truncate long writes
+   if(len == -2) {
+      truncate = true;
+      char *newout = malloc(API_WRITESTR_MAX_LENGTH+1);
+      if(!newout) return;
+      memcpy(newout, out, API_WRITESTR_MAX_LENGTH);
+      newout[API_WRITESTR_MAX_LENGTH] = '\0';
+      out = newout;
+   }
    // write to task's main window
    if((int)regs->ecx == -1) {
       api_write_to_task(out);
+      if(truncate)
+         free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
       return;
    }
    // write to specified window
@@ -73,10 +101,14 @@ void api_write_string(registers_t *regs) {
    if(!window) {
       debug_printf("api_write_string: invalid window index %i\n", regs->ecx);
       api_write_to_task(out);
+      if(truncate)
+         free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
       return;
    }
    int windowindex = get_window_index_from_pointer(window);
    window_writestr(out, window->txtcolour, windowindex);
+   if(truncate)
+      free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
 }
 
 void api_write_number(registers_t *regs) {
@@ -99,13 +131,15 @@ void api_write_string_at(registers_t *regs) {
    // IN: edx = y
    // IN: esi = colour (-1 for window colour)
    // IN: edi = cindex (-1 for main window)
+   char *str = (char*)regs->ebx;
+   if(api_validate_str(str, 256) < 0) return;
    gui_window_t *window = api_get_cwindow(regs->edi);
    if(!window) return;
    int colour = regs->esi;
    if(colour == -1)
       colour = window->txtcolour;
    int windowindex = get_window_index_from_pointer(window);
-   window_writestrat((char*)regs->ebx, colour, regs->ecx, regs->edx, windowindex);
+   window_writestrat(str, colour, regs->ecx, regs->edx, windowindex);
 }
 
 void api_write_number_at(registers_t *regs) {
@@ -377,6 +411,7 @@ void api_queue_event(registers_t *regs) {
    events_add(delta, (void *)callback, (void*)regs->edx, get_current_task());
 }
 
+#define API_LAUNCH_MAX_ARGS 32
 void api_launch_task(registers_t *regs) {
    // IN: ebx = path
    // IN: ecx = argc
@@ -391,19 +426,51 @@ void api_launch_task(registers_t *regs) {
    bool copy = (bool)regs->esi;
    bool paused = (bool)regs->edi;
 
+   if(argc > API_LAUNCH_MAX_ARGS) {
+      debug_printf("api_launch_task: max %u args\n", API_LAUNCH_MAX_ARGS);
+      regs->ebx = -1;
+      return;
+   }
+
+   if(api_validate_str(path, 256) < 0) {
+      debug_printf("api_launch_task: invalid path\n");
+      regs->ebx = -1;
+      return;
+   }
+
    // copy args
+   // todo: handle malloc failures
    char **copied_args = NULL;
    if(argc > 0 && args != NULL) {
-      copied_args = malloc(sizeof(char*) * argc);
+      if(!api_validate_mem(args, argc*sizeof(char*), false)) {
+         debug_printf("api_launch_task: invalid args\n");
+         regs->ebx = -1;
+         return;
+      }
+
+      copied_args = malloc(sizeof(char*) * (argc+1)); // args includes training null str
+      if(!copied_args) { regs->ebx = -1; return; }
+      memset(copied_args, 0, sizeof(char*) * (argc+1));
       for(int i = 0; i < argc; i++) {
          if(args[i] != NULL) {
-            size_t len = strlen(args[i]);
+            int len = api_validate_str(args[i], 0x1000);
+            if(len < 0) {
+               debug_printf("api_launch_task: arg %u is invalid\n", i);
+               copied_args[i] = NULL;
+               continue;
+            }
             copied_args[i] = malloc(len + 1);
+            if(!copied_args[i]) {
+               free_launch_args(copied_args, argc);
+               regs->ebx = -1;
+               return;
+            }
             strcpy(copied_args[i], args[i]);
          } else {
             copied_args[i] = NULL;
          }
       }
+      copied_args[argc] = NULL;
    }
 
    // copy path
@@ -417,6 +484,7 @@ void api_launch_task(registers_t *regs) {
    // set up the new task without switching context
    int new_task = tasks_setup_elf(regs, pathbuf, argc, copied_args, !copy, copy);
    if(new_task < 0) {
+      free_launch_args(copied_args, argc);
       debug_printf("api_launch_task failed\n");
       regs->ebx = -1;
       return;
@@ -461,7 +529,7 @@ void api_set_window_title(registers_t *regs) {
    // IN: ecx = window child index
    int cindex = regs->ecx;
    char *title = (char*)regs->ebx;
-   if(strlen(title) > 19) return;
+   if(api_validate_str(title, 20) < 0) return;
 
    if(get_current_task_window() < 0) return;
    gui_window_t *mainwindow = &gui_get_windows()[get_current_task_window()];
@@ -487,12 +555,21 @@ void api_set_window_title(registers_t *regs) {
 void api_set_working_dir(registers_t *regs) {
    // IN: ebx = path
    char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0)
+      return;
    strcpy(gettasks()[get_current_task()].process->working_dir, path);
 }
 
 void api_get_working_dir(registers_t *regs) {
    // IN: ebx = size 256 buf for working dif
+   // OUT: ebx = success
+   char *buf = (char*)regs->ebx;
+   if(!api_validate_mem(buf, 256, true)) {
+      regs->ebx = 0;
+      return;
+   }
    strcpy((char*)regs->ebx, gettasks()[get_current_task()].process->working_dir);
+   regs->ebx = 1;
 }
 
 void api_debug_write_str(registers_t *regs) {
@@ -527,10 +604,10 @@ void api_sbrk(registers_t *regs) {
       if(delta_pages > 0) {
          physical_addrs = malloc(delta_pages * sizeof(uint32_t));
          if(physical_addrs) {
-               for(int i = 0; i < delta_pages; i++) {
-                  uint32_t virt = old_end - (i + 1) * 0x1000;
-                  physical_addrs[i] = page_getphysical(task->process->page_dir, virt);
-               }
+            for(int i = 0; i < delta_pages; i++) {
+               uint32_t virt = old_end - (i + 1) * 0x1000;
+               physical_addrs[i] = page_getphysical(task->process->page_dir, virt);
+            }
          }
       }
       
@@ -543,9 +620,9 @@ void api_sbrk(registers_t *regs) {
       // free physical memory
       if(physical_addrs) {
          for(int i = 0; i < delta_pages; i++) {
-               if(physical_addrs[i]) {
-                  free(physical_addrs[i], 0x1000);
-               }
+            if(physical_addrs[i]) {
+               free(physical_addrs[i], 0x1000);
+            }
          }
          free((uint32_t)physical_addrs, 0x1000);
       }
@@ -570,12 +647,19 @@ void api_open(registers_t *regs) {
    // IN: ebx - char* path
    // IN: ecx - flag (0 read, 1 write)
    // OUT: ebx - int fd
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      debug_printf("api_open: couldn't parse filename\n");
+      regs->ebx = -1;
+      return;
+   }
+
    task_state_t *task = get_current_task_state();
-   fs_file_t *file = fs_open((char*)regs->ebx);
+   fs_file_t *file = fs_open(path);
    if(!file) {
       if(regs->ecx == 1) { // write
-         debug_printf("api_open: creating new file %s\n", (char*)regs->ebx);
-         file = fs_new((char*)regs->ebx);
+         debug_printf("api_open: creating new file %s\n", path);
+         file = fs_new(path);
       }
       if(!file) {
          debug_printf("api_open: could not create new file\n");
@@ -626,12 +710,10 @@ void api_read(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    int fd = regs->ebx;
    char *buf = (char*)regs->ecx;
-   size_t count = regs->edx;
+   int count = regs->edx;
 
-   if(count == 0) {
-      regs->ebx = 0;
-      return;
-   }
+   if(count == 0) { regs->ebx = 0; return; }
+   if(count < 0) { regs->ebx = -1; return; }
    
    if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("read: fd not found\n");
@@ -650,6 +732,13 @@ void api_read(registers_t *regs) {
    if(file->type == FS_TYPE_TERM) {
       callback = &api_read_stdin_callback;
    } else if(file->type == FS_TYPE_FILE) {
+      int maxsize = api_validate_maxsize(buf, count, 1);
+      if(maxsize < 0 || (count > 0 && maxsize == 0)) {
+         debug_printf("api_read: invalid buffer\n");
+         regs->ebx = -1;
+         return;
+      }
+      count = maxsize;
       callback = &api_read_fd_callback;
    } else if(file->type == FS_TYPE_PIPE) {
       callback = NULL;
@@ -663,8 +752,16 @@ void api_read(registers_t *regs) {
    regs->ebx = result;
    if(result == FS_BLOCKING) {
       if(file->type == FS_TYPE_PIPE && file->pipe) {
+         if(count >= FS_PIPE_BUF_SIZE)
+            count = FS_PIPE_BUF_SIZE;
+         int maxsize = api_validate_maxsize(buf, count, 1);
+         if(maxsize < 0 || (count > 0 && maxsize == 0)) {
+            debug_printf("api_read: invalid buffer\n");
+            regs->ebx = -1;
+            return;
+         }
          file->pipe->read_buf = buf;
-         file->pipe->read_size = count;
+         file->pipe->read_size = maxsize;
       }
       task->paused = true;
       switch_task(regs); // yield
@@ -681,7 +778,12 @@ void api_read(registers_t *regs) {
 void api_read_dir(registers_t *regs) {
    // IN: ebx - char *path
    // OUT: ebx - fs_dir_content_t *
-   fs_dir_content_t *content = fs_read_dir((char*)regs->ebx);
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      regs->ebx = 0;
+      return;
+   }
+   fs_dir_content_t *content = fs_read_dir(path);
    if(!content) {
       regs->ebx = 0;
       return;
@@ -701,7 +803,13 @@ void api_write(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    int fd = regs->ebx;
    uint8_t *buffer = (uint8_t*)regs->ecx;
-   size_t size = (size_t)regs->edx;
+   int size = (int)regs->edx;
+   int maxsize = api_validate_maxsize(buffer, size, 0);
+   if(maxsize < 0 || (size > 0 && maxsize == 0)) {
+      debug_printf("api_write: invalid buffer\n");
+      regs->ebx = -1;
+      return;
+   }
    if(fd < 0 || fd >= task->process->fd_count) {
       debug_printf("api_write: fd not found\n");
       regs->ebx = -1;
@@ -715,12 +823,12 @@ void api_write(registers_t *regs) {
       return;
    }
 
-   int result = fs_write(file, buffer, size, task->task_id);
+   int result = fs_write(file, buffer, maxsize, task->task_id);
    regs->ebx = result;
 
    if(result == FS_WRITE_WAIT && file->type == FS_TYPE_PIPE && file->pipe) {
       file->pipe->write_buf = buffer;
-      file->pipe->write_size = size;
+      file->pipe->write_size = maxsize;
       task->paused = true;
       switch_task(regs); // yield
    }
@@ -749,32 +857,60 @@ void api_fsize(registers_t *regs) {
 void api_mkdir(registers_t *regs) {
    // IN: ebx - dir path
    // OUT: ebx - bool success
-   regs->ebx = fs_mkdir((char*)regs->ebx);
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      regs->ebx = 0;
+      return;
+   }
+   regs->ebx = fs_mkdir(path);
 }
 
 void api_unlink(registers_t *regs) {
    // IN: ebx - file path
    // OUT: ebx - bool success
-   regs->ebx = fs_unlink((char*)regs->ebx);
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      regs->ebx = 0;
+      return;
+   }
+   regs->ebx = fs_unlink(path);
 }
 
 void api_rmdir(registers_t *regs) {
    // IN: ebx - dir path
    // OUT: ebx - bool success
-   regs->ebx = fs_rmdir((char*)regs->ebx);
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      regs->ebx = 0;
+      return;
+   }
+   regs->ebx = fs_rmdir(path);
 }
 
 void api_rename(registers_t *regs) {
    // IN: ebx - old path
    // IN: ecx - new name
    // OUT: ebx - bool success
-   regs->ebx = fs_rename((char*)regs->ebx, (char*)regs->ecx);
+   char *old_path = (char*)regs->ebx;
+   char *new_path = (char*)regs->ecx;
+   if(api_validate_str(old_path, 256) < 0
+   || api_validate_str(new_path, 256) < 0) {
+      regs->ebx = 0;
+      return;
+   }
+   regs->ebx = fs_rename(old_path, new_path);
 }
 
 void api_new_file(registers_t *regs) {
    // IN: ebx - file path
    // OUT: ebx - int fd / -1 on error
-   fs_file_t *file = fs_new((char*)regs->ebx);
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      regs->ebx = -1;
+      debug_printf("api_new_file: invalid path\n");
+      return;
+   }
+   fs_file_t *file = fs_new(path);
    if(!file) {
       regs->ebx = -1;
       debug_printf("api_new_file: error\n");
@@ -970,45 +1106,47 @@ void api_set_setting(registers_t *regs) {
          settings->desktop_bgimg_enabled = (bool)regs->ecx;
          gui_redrawall();
          break;
-      case SETTING_DESKTOP_BGIMG_PATH:
-         if(page_getphysical(get_current_task_pagedir(), regs->ecx) == (uint32_t)-1) {
-            regs->ebx = -1; // not mapped
+      case SETTING_DESKTOP_BGIMG_PATH : {
+         char *path = (char*)regs->ecx;
+         if(api_validate_str(path, 256) < 0) {
+            regs->ebx = -1; // invalid path
             return;
          }
-         fat_dir_t *entry = fat_parse_path((char*)regs->ecx, true);
+         fat_dir_t *entry = fat_parse_path(path, true);
          if(entry == NULL || entry->attributes == 0x10) {
             regs->ebx = -1; // not found
             return;
          }
-         strncpy(settings->desktop_bgimg, (char*)regs->ecx, sizeof(settings->desktop_bgimg));
+         strncpy(settings->desktop_bgimg, path, sizeof(settings->desktop_bgimg));
 
          uint8_t *img = fat_read_file(entry->firstClusterNo, entry->fileSize);
          desktop_setbgimg(img, entry->fileSize);
          free((uint32_t)entry, sizeof(fat_dir_t));
          break;
+      }
       case SETTING_DESKTOP_ENABLED:
          settings->desktop_enabled = (bool)regs->ecx;
          gui_redrawall();
          break;
-      case SETTING_SYS_FONT_PATH:
-         uint32_t physical = page_getphysical(get_current_task_pagedir(), regs->ecx);
-         if(physical == (uint32_t)-1) {
-            regs->ebx = -1; // path not mapped
+      case SETTING_SYS_FONT_PATH: {
+         char *path = (char*)regs->ecx;
+         if(api_validate_str(path, 256) < 0) {
+            regs->ebx = -1; // invalid path
             return;
          }
-         char *path = (char*)regs->ecx;
-         entry = fat_parse_path(path, true);
+         fat_dir_t *entry = fat_parse_path(path, true);
          if(entry == NULL || entry->attributes == 0x10) {
             regs->ebx = -1; // not found
             return;
          }
-         strncpy(settings->font_path, (char*)regs->ecx, sizeof(settings->font_path));
+         strncpy(settings->font_path, path, sizeof(settings->font_path));
          fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
          font_load(file);
          free((uint32_t)entry, sizeof(fat_dir_t));
 
          // memory leak as never free prev file
          break;
+      }
       case SETTING_THEME_TYPE:
          settings->theme = (int)regs->ecx;
          break;

@@ -69,6 +69,8 @@ typedef struct process_t {
    int dma_count;
    pci_device_t *devices[TASK_MAX_PCI]; // mapped pci devices
    int device_count;
+   char **launch_args;
+   int launch_argc;
 
    task_state_t *threads[MAX_TASK_THREADS];
    int no_threads;
@@ -99,6 +101,7 @@ typedef struct task_state_t {
 void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
 void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds);
 void launch_task(int index, registers_t *regs, bool focus);
+void free_launch_args(char **args, int argc);
 void end_task(int index, registers_t *regs);
 void tasks_alloc();
 void tasks_init(registers_t *regs);
@@ -130,7 +133,11 @@ void tss_init();
 void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);
 
-bool copy_to_task(int task, void *dest, void *src, size_t size);
-bool copy_from_task(int task, void *dest, void *src, size_t size);
+int task_validate_str(task_state_t *task, char *str, int maxlen);
+bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw);
+int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw);
+
+int copy_to_task(int task, void *dest, void *src, size_t size);
+int copy_from_task(int task, void *dest, void *src, size_t size);
 
 #endif
