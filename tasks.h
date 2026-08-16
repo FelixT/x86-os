@@ -32,8 +32,6 @@ typedef struct {
    uint32_t addr; // subroutine addr
    uint32_t *args;
    int argc;
-   int task;
-   int window;
 } task_event_t;
 
 #define EVENT_QUEUE_SIZE 64

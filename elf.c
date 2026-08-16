@@ -57,11 +57,11 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    uint32_t vmem_size = vmem_end - vmem_start;
 
    // create page directory
-   page_dir_entry_t *dir = new_page();
    if(vmem_start <= KERNEL_END && vmem_end >= KERNEL_START) {
       debug_printf("ELF virtual addresses conflict with kernel space\n");
       return -1;
    }
+   page_dir_entry_t *dir = new_page();
 
    uint8_t *newProg = malloc(vmem_size);
    memset(newProg, 0, vmem_size);
@@ -105,9 +105,9 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    return task_index;
 }
 
-void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args, bool focus) {
+bool elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args, bool focus) {
    int task_index = elf_load(prog, size);
-   if(task_index < 0) return;
+   if(task_index < 0) return false;
 
    launch_task(task_index, regs, focus);
    process_t *process = gettasks()[task_index].process;
@@ -122,6 +122,7 @@ void elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    
    process->launch_args = args;
    process->launch_argc = argc;
+   return true;
 }
 
 // like elf_run but doesn't switch to new task. task is not enabled

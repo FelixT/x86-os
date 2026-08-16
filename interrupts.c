@@ -536,7 +536,7 @@ void timer_handler(registers_t *regs) {
       }
 
       if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
-         // don't preempty when interrupting kernel
+         // don't preempt when interrupting kernel
          /*if(switching_paused) {
             if(switching) window_writestr(" SP", 0, 0);
          } else {
@@ -607,7 +607,10 @@ void endtask_debug(void *window, void *regs) {
    args[0] = malloc(strlen(debug_path)+1);
    args[argc] = NULL;
    strcpy(args[0], debug_path);
-   tasks_launch_elf(regs, debug_path, argc, args, true);
+   if(!tasks_launch_elf(regs, debug_path, argc, args, true)) {
+      free_launch_args(args, argc);
+      return;
+   }
    map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*(argc+1), 1, 1, 0);
    for(int i = 0; i < argc; i++)
       map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1, 0);
@@ -735,10 +738,22 @@ void exception_handler(int int_no, registers_t *regs) {
 
    // send end of command code 0x20 to pic
    if(int_no >= 8) {
-      outb(0xA0, 0x20); // slave command
+      if(int_no >= 40) {
+         outb(0xA0, 0x20); // slave command
+      }
       outb(0x20, 0x20); // master command
    }
 
+}
+
+void kernel_panic() {
+   // show debug window and panic
+   setSelectedWindowIndex(0);
+   gui_window_t *window = getSelectedWindow();
+   window->minimised = false;
+   window->needs_redraw = true;
+   window_draw(window);
+   while(true) {};
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
@@ -784,13 +799,7 @@ void err_exception_handler(int int_no, registers_t *regs) {
    uint32_t addr;
    asm volatile("mov %%cr2, %0" : "=r" (addr));
    if(kernel && (int_no != 14 || (addr >= KERNEL_START && addr < KERNEL_END))) {
-      // show debug window and panic
-      setSelectedWindowIndex(0);
-      gui_window_t *window = getSelectedWindow();
-      window->minimised = false;
-      window->needs_redraw = true;
-      window_draw(window);
-      while(true) {};
+      kernel_panic();
    } else {
       int task = get_current_task();
       task_state_t *task_state = get_current_task_state();

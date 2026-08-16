@@ -231,14 +231,6 @@ void window_scroll_do_callback(void *regs, void *callback, int deltaY, int offse
          (*(void(*)(int, int))callback)(deltaY, offsetY);
       } else {
          task_state_t *task = &gettasks()[taskIndex];
-         // update existing scroll event if exists
-         int queue_index = task_queue_contains_routine(task, "scroll");
-         if(queue_index != -1) {
-            task_event_t *event = task->process->event_queue[queue_index];
-            event->args[2] += deltaY;
-            event->args[1] = offsetY;
-            return;
-         }
          uint32_t *args = malloc(sizeof(int) * 3);
          args[2] = deltaY;
          args[1] = offsetY;

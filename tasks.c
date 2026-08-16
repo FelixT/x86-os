@@ -284,11 +284,12 @@ bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
       return false;
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   elf_run(regs, prog, entry->fileSize, argc, args, focus);
-   strcpy(get_current_task_state()->process->exe_path, path);
+   bool launched = elf_run(regs, prog, entry->fileSize, argc, args, focus);
+   if(launched)
+      strcpy(get_current_task_state()->process->exe_path, path);
    free((uint32_t)prog, entry->fileSize);
    free((uint32_t)entry, sizeof(fat_dir_t));
-   return true;
+   return launched;
 }
 
 // doesn't immediately switch, caller is responsible for enabling the task
@@ -330,6 +331,7 @@ void tasks_init(registers_t *regs) {
    switching = true;
 }
 
+extern tss_t tss_start;
 void switch_task(registers_t *regs) {
    if(!switching)
       return;
@@ -356,14 +358,13 @@ void switch_task(registers_t *regs) {
       swap_pagedir(task->process->page_dir);
 
    if(old_task != current_task) {
+      tss_start.esp0 = tasks[current_task].kernel_stack_top;
+
       // save registers
       tasks[old_task].registers = *regs;
 
       // restore registers
       *regs = tasks[current_task].registers;
-
-      extern tss_t tss_start;
-      tss_start.esp0 = tasks[current_task].kernel_stack_top;
    }
 }
 
@@ -392,14 +393,13 @@ bool switch_to_task(int index, registers_t *regs) {
       swap_pagedir(get_current_task_pagedir());
 
    if(current_task != old_task) {
+      tss_start.esp0 = tasks[current_task].kernel_stack_top;
+
       // save registers
       tasks[old_task].registers = *regs;
 
       // restore registers
       *regs = tasks[current_task].registers;
-
-      extern tss_t tss_start;
-      tss_start.esp0 = tasks[current_task].kernel_stack_top;
    }
 
    return true;
@@ -519,6 +519,30 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
       free((uint32_t)args, sizeof(uint32_t*)*argc);
       return;
    }
+
+   // coalesce scroll and hover events
+   if(strequ(name, "hover") || strequ(name, "scroll")) {
+      for(int i = 0; i < task->process->event_queue_size; i++) {
+         task_event_t *existing = task->process->event_queue[i];
+         if(existing->addr != addr) continue;
+         if(!strequ(existing->name, name)) continue;
+
+         if(strequ(name, "scroll") && existing->argc == 3 && argc == 3) {
+            existing->args[2] += args[2]; // delta
+            existing->args[1] = args[1];  // offset
+            existing->args[0] = args[0];
+            free((uint32_t)args, sizeof(uint32_t*)*argc);
+         } else {
+            // replace hover coords
+            if(existing->args)
+               free((uint32_t)existing->args, sizeof(uint32_t*)*existing->argc);
+            existing->args = args;
+            existing->argc = argc;
+         }
+         return;
+      }
+   }
+
    if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
       debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
       free((uint32_t)args, sizeof(uint32_t*)*argc);
@@ -530,17 +554,7 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
    event->addr = addr;
    event->args = args;
    event->argc = argc;
-   event->task = current_task;
    task->process->event_queue[task->process->event_queue_size++] = event;
-}
-
-int task_queue_contains_routine(task_state_t *task, char *name) {
-   for(int i = 0; i < task->process->event_queue_size; i++) {
-      task_event_t *event = task->process->event_queue[i];
-      if(event->task == task->task_id && strequ(event->name, name))
-         return i;
-   }
-   return -1;
 }
 
 void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
@@ -557,7 +571,7 @@ void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
       task_queue_subroutine(task, name, addr, args, argc);
       return;
    }
-   
+
    if(!switch_to_task(task->task_id, regs)) {
       free((uint32_t)args, sizeof(uint32_t*)*argc);
       return;

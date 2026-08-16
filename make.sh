@@ -11,7 +11,7 @@ c_files="font gui terminal interrupts events tasks ata memory fat bmp elf paging
 o_files="o/start_32.o o/main.o o/cmain.o o/gui.o o/terminal.o o/irq.o o/interrupts.o o/events.o o/tasks.o o/ata.o o/memory.o o/fat.o o/bmp.o o/elf.o o/paging.o o/windowmgr.o o/window.o o/font.o o/draw.o o/lib/string.o o/api.o o/windowobj.o o/window_term.o o/window_settings.o o/window_popup.o o/fs.o o/time.o o/futex.o o/shared.o o/pci.o"
 boot_o_files="o/boot1.o o/memory.o o/ata.o o/cboot.o o/font.o o/draw.o o/terminal.o o/lib/string.o"
 
-rm -r o/*
+rm -rf o/*
 
 mkdir -p o
 mkdir -p o/lib

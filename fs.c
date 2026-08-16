@@ -156,7 +156,7 @@ fs_dir_content_t *fs_read_dir(char *path) {
       fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
       if(entry == NULL) {
          // not found
-         free((uint32_t)content, sizeof(fat_dir_t));
+         free((uint32_t)content, sizeof(fs_dir_content_t));
          return NULL;
       }
 

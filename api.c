@@ -150,6 +150,7 @@ void api_write_number_at(registers_t *regs) {
 }
 
 void api_yield(registers_t *regs) {
+   task_execute_queued_subroutine(regs, (void*)get_current_task()); // launch queued routine if any
    switch_task(regs);
 }
 
