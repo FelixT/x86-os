@@ -414,6 +414,9 @@ void software_handler(registers_t *regs) {
       case 86:
          api_escalate(regs);
          break;
+      case 87:
+         api_fpsize(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

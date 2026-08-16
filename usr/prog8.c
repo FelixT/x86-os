@@ -5,6 +5,10 @@
 
 // ipc shared memory test program
 
+typedef struct shared_mem_t {
+   uint32_t flag; // futex flag for sync
+} __attribute__((packed)) shared_mem_t;
+
 void _start(int argc, char **args) {
    if(argc > 0 && strequ(args[0], "child")) {
       // child
@@ -17,7 +21,13 @@ void _start(int argc, char **args) {
          exit(0);
       }
 
-      bmp_draw(buf, 0, 0, 1, false);
+      shared_mem_t *shared_obj = (shared_mem_t*)buf;
+      while(shared_obj->flag == 0) {
+         futex_wait((void*)&shared_obj->flag, 0);
+      }
+
+      uint8_t *bmp = buf + sizeof(shared_mem_t);
+      bmp_draw(bmp, 0, 0, 1, false);
       redraw();
       exit(0);
    }
@@ -25,24 +35,23 @@ void _start(int argc, char **args) {
    // parent
    set_window_title("prog8 parent");
    override_draw(NULL, -1);
-   FILE *f = fopen("/bmp/bg2.bmp", "r");
-   if(!f) {
-      printf("Couldn't open file\n");
+   
+   // create shared memory
+   char *bmp_path = "/bmp/bg2.bmp";
+   int bmp_size = fpsize(bmp_path);
+   if(bmp_size <= 0) {
+      printf("fpsize failed\n");
       exit(0);
    }
-   int size = fsize(fileno(f));
-
-   shared_t shared = shared_create(size);
+   int shared_size = sizeof(shared_mem_t) + bmp_size;
+   shared_t shared = shared_create(shared_size);
    if(!shared.mem) {
       printf("shared_create failed\n");
       exit(0);
    }
 
-   if(!fread(shared.mem, size, 1, f)) { printf("read failed\n"); exit(0); }
-   fclose(f);
-   uint8_t *pbuf = (uint8_t*)shared.mem;
-   bmp_draw(pbuf, 0, 0, 1, false);
-   redraw();
+   shared_mem_t *shared_obj = (shared_mem_t*)shared.mem;
+   shared_obj->flag = 0;
 
    // launch child with block uid as 2nd param
    char uidstr[16]; 
@@ -52,6 +61,27 @@ void _start(int argc, char **args) {
    int task = launch_task("/sys/prog8.elf", 2, cargs, false, true);
    shared_grant(task, shared.uid);
    unpause_task(task);
+
+   // open bmp file and read into shared memory
+   FILE *f = fopen(bmp_path, "r");
+   if(!f) {
+      printf("couldn't open file\n");
+      exit(0);
+   }
+
+   void *bmp_ptr = shared.mem + sizeof(shared_mem_t);
+
+   if(!fread(bmp_ptr, bmp_size, 1, f)) {
+      printf("read failed\n");
+      exit(0);
+   }
+   fclose(f);
+
+   shared_obj->flag = 1; // signal child to draw
+   futex_wake((void*)&shared_obj->flag);
+
+   bmp_draw((uint8_t*)bmp_ptr, 0, 0, 1, false);
+   redraw();
 
    exit(0);
 }

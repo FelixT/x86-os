@@ -30,6 +30,7 @@ typedef struct shared_block_t {
    struct shared_block_t *next;
 } shared_block_t;
 
+bool shared_addr_accessible(process_t *process, uint32_t vaddr);
 bool shared_grant_access(process_t *process, uint32_t block_uid, uint32_t target_uid);
 uint32_t shared_map_uid(process_t *process, uint32_t block_uid);
 shared_block_t *shared_create(process_t *process, uint32_t size);

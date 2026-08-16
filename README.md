@@ -17,7 +17,7 @@ targets i686 (FPU not required)
 - f3basic script interpreter
 - User mode ui/widget & dialog libraries
 - Anonymous pipes
-- Private futexes
+- Futexes (private + cross process via shared memory)
 - Shared memory
 - PCI driver and privileged usermode network driver (RTL8139)
 

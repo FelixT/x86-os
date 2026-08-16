@@ -595,6 +595,18 @@ static inline int fsize(int fd) {
    return size;
 }
 
+static inline int fpsize(char *path) {
+   int size;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (size)
+      : "a" (87),
+      "b" ((uint32_t)path)
+      : "cc", "memory"
+   );
+   return size;
+}
+
 static inline int read(int fd, char *buf, size_t count) {
    int c;
    asm volatile (

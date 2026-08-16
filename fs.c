@@ -409,6 +409,14 @@ int fs_filesize(fs_file_t *file) {
    return file->data->file_size;
 }
 
+int fs_filesize_path(char *path) {
+   fat_dir_t *entry = fat_parse_path(path, true);
+   if(!entry) return -1;
+   int size = entry->fileSize;
+   free((uint32_t)entry, sizeof(fat_dir_t));
+   return size;
+}
+
 int fs_seek(fs_file_t *file, int offset, int type) {
    if(type == SEEK_SET)
       file->current_pos = offset;

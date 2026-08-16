@@ -1,6 +1,7 @@
 #include "futex.h"
+#include "shared.h"
 
-// futex for synchronisation between threads of the same process
+// futex for synchronisation
 
 typedef struct futex_waiter_t {
    int task_id;
@@ -55,7 +56,11 @@ void futex_wake(void *regs, void *futex_addr) {
    while(waiter != NULL) {
       task_state_t *task = &gettasks()[waiter->task_id];
       bool stale = !task->enabled || task->task_uid != waiter->task_uid;
-      bool match = waiter->futex_addr == futex_addr && waiter->process_uid == waker_process_uid;
+      bool match = waiter->futex_addr == futex_addr;
+      // check if the waker is from the same process as the waiter, or shared memory
+      if(match && !stale) {
+         match &= (waiter->process_uid == waker_process_uid) || shared_addr_accessible(task->process, (uint32_t)futex_addr);
+      }
 
       if(!stale && !match) {
          prev = waiter;

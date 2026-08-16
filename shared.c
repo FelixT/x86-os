@@ -9,6 +9,18 @@ shared_block_t *shared_blocks = NULL; // linked list
 
 uint32_t shared_next = V_SHARED_START; // note: never reclaimed
 
+bool shared_addr_accessible(process_t *process, uint32_t vaddr) {
+   for(shared_block_t *b = shared_blocks; b; b = b->next) {
+      if(vaddr < b->vaddr || vaddr >= b->vaddr + b->size)
+         continue;
+      for(shared_instance_t *i = b->instances; i; i = i->next)
+         if(i->process == process)
+            return true;
+      return false;
+   }
+   return false;
+}
+
 bool shared_check_access(process_t *process, shared_block_t *block) {
    if(process->uid == block->owner_uid)
       return true;

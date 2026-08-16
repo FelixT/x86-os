@@ -855,6 +855,17 @@ void api_fsize(registers_t *regs) {
    }
 }
 
+void api_fpsize(registers_t *regs) {
+   // IN: ebx - char *path
+   // OUT: ebx - filesize
+   char *path = (char*)regs->ebx;
+   if(api_validate_str(path, 256) < 0) {
+      regs->ebx = -1;
+      return;
+   }
+   regs->ebx = fs_filesize_path(path);
+}
+
 void api_mkdir(registers_t *regs) {
    // IN: ebx - dir path
    // OUT: ebx - bool success

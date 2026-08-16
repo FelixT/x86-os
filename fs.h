@@ -85,6 +85,7 @@ bool fs_rename(char *oldpath, char *newname);
 fs_dir_content_t *fs_read_dir(char *path);
 void fs_dir_content_free(fs_dir_content_t *content);
 int fs_filesize(fs_file_t *file);
+int fs_filesize_path(char *path);
 int fs_seek(fs_file_t *file, int offset, int type);
 void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end);
 bool fs_pipe_wake_reader(fs_pipe_t *pipe);
