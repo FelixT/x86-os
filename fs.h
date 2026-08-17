@@ -65,6 +65,9 @@ typedef struct {
 
 #define FS_FLAG_WRITEONLY 1
 #define FS_FLAG_READONLY 2
+#define FS_FLAG_TRUNCATE 4
+#define FS_FLAG_APPEND 8
+#define FS_FLAG_CREATE 16
 
 // returns
 #define FS_EOF 0
@@ -72,13 +75,13 @@ typedef struct {
 #define FS_BLOCKING -2
 #define FS_WRITE_WAIT -3
 
-fs_file_t *fs_open(char *path);
+fs_file_t *fs_open(char *path, int flags);
 fs_file_t *fs_dup(fs_file_t *file);
 void fs_close(fs_file_t *file);
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task);
 int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task);
 bool fs_mkdir(char *path);
-fs_file_t *fs_new(char *path);
+fs_file_t *fs_new(char *path, int flags);
 bool fs_unlink(char *path);
 bool fs_rmdir(char *path);
 bool fs_rename(char *oldpath, char *newname);

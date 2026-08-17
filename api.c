@@ -646,9 +646,10 @@ static int alloc_fd(process_t *process) {
 
 void api_open(registers_t *regs) {
    // IN: ebx - char* path
-   // IN: ecx - flag (0 read, 1 write)
+   // IN: ecx - flags (see fs.h)
    // OUT: ebx - int fd
    char *path = (char*)regs->ebx;
+   int flags = (int)regs->ecx;
    if(api_validate_str(path, 256) < 0) {
       debug_printf("api_open: couldn't parse filename\n");
       regs->ebx = -1;
@@ -656,11 +657,11 @@ void api_open(registers_t *regs) {
    }
 
    task_state_t *task = get_current_task_state();
-   fs_file_t *file = fs_open(path);
+   fs_file_t *file = fs_open(path, flags);
    if(!file) {
-      if(regs->ecx == 1) { // write
+      if(flags & FS_FLAG_CREATE) {
          debug_printf("api_open: creating new file %s\n", path);
-         file = fs_new(path);
+         file = fs_new(path, flags);
       }
       if(!file) {
          debug_printf("api_open: could not create new file\n");
@@ -922,7 +923,7 @@ void api_new_file(registers_t *regs) {
       debug_printf("api_new_file: invalid path\n");
       return;
    }
-   fs_file_t *file = fs_new(path);
+   fs_file_t *file = fs_new(path, 0);
    if(!file) {
       regs->ebx = -1;
       debug_printf("api_new_file: error\n");

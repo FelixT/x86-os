@@ -17,6 +17,8 @@ volatile uint16_t *framebuffer;
 volatile uint32_t width;
 volatile uint32_t height;
 uint16_t *file_icon;
+uint16_t *elf_icon;
+uint16_t *font_icon;
 uint16_t *folder_icon;
 volatile int offset;
 fs_dir_content_t *dir_content;
@@ -133,7 +135,13 @@ void display_items() {
          icon_data->data = folder_icon;
          //bmp_draw((uint8_t*)folder_icon, x, y, 1, true);
       } else {
-         icon_data->data = file_icon;
+         if(strendswith(entry->filename, ".elf")) {
+            icon_data->data = elf_icon;
+         } else if(strendswith(entry->filename, ".fon")) {
+            icon_data->data = font_icon;
+         } else {
+            icon_data->data = file_icon;
+         }
 
          if(!gridview) {
             uint32_t size = entry->file_size;
@@ -743,6 +751,16 @@ void _start(int argc, char **args) {
    file_icon = dialog_load_icon("/bmp/file20.bmp", NULL, NULL);
    if(!file_icon) {
       write_str("File icon not found\n");
+      exit(0);
+   }
+   elf_icon = dialog_load_icon("/bmp/elf20.bmp", NULL, NULL);
+   if(!elf_icon) {
+      write_str("ELF icon not found\n");
+      exit(0);
+   }
+   font_icon = dialog_load_icon("/bmp/font20.bmp", NULL, NULL);
+   if(!font_icon) {
+      write_str("Font icon not found\n");
       exit(0);
    }
    folder_icon = dialog_load_icon("/bmp/folder20.bmp", NULL, NULL);

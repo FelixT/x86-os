@@ -40,10 +40,27 @@ FILE *fopen(const char *filename, const char *mode) {
     strncpy(file->mode, mode, sizeof(file->mode) - 1);
     file->mode[sizeof(file->mode) - 1] = '\0';
     
-    // create if doesn't exist
+    bool mode_r = strchr(mode, 'r') != NULL;
+    bool mode_w = strchr(mode, 'w') != NULL;
+    bool mode_a = strchr(mode, 'a') != NULL;
+    bool mode_plus = strchr(mode, '+') != NULL;
+
+    if(!mode_r && !mode_w && !mode_a) {
+        debug_write_str("fopen: invalid mode\n");
+        free(file->path);
+        file->path = NULL;
+        return NULL;
+    }
+
     int flag = 0;
-    if(strchr(mode, 'w'))
-        flag = 1;
+    if(mode_w || mode_a)
+        flag |= FS_FLAG_CREATE;
+    if(mode_w || mode_a || mode_plus)
+        flag |= FS_FLAG_TRUNCATE;
+    if(mode_r && !mode_w && !mode_a && !mode_plus)
+        flag |= FS_FLAG_READONLY; // "r"
+    else if(mode_w && !mode_plus)
+        flag |= FS_FLAG_WRITEONLY; // "w"
 
     file->fd = open(file->path, flag);
     if(file->fd == -1) {
@@ -65,37 +82,32 @@ FILE *fopen(const char *filename, const char *mode) {
         return file;
     }
 
-    if(strchr(mode, 'a') || (strchr(mode, 'r') && strchr(mode, '+'))) {
+    if(mode_r || mode_a) {
         // append or rw, read in current file contents but allocate an extra 4096 bytes
+        // todo: lazy loading
         int size = fsize(file->fd);
         file->buffer = malloc(size + 0x1000);
-        read(file->fd, (char*)file->buffer, size);
+        if(!file->buffer) {
+            free(file->path);
+            file->path = NULL;
+            return NULL;
+        }
+        if(size > 0)
+            read(file->fd, (char*)file->buffer, size);
         file->size = size + 0x1000;
-        file->position = strchr(mode, 'a') ? size : 0; // append starts at content size
         file->content_size = size;
-    } else if(strchr(mode, 'r')) {
-        // read the whole buffer into the file object at init for now
-        // ideally, start with empty buffer and only read on first fread
-        int size = fsize(file->fd);
-        file->buffer = malloc(size);
-        read(file->fd, (char*)file->buffer, size);
-        file->size = size;
-        file->content_size = size;
-        file->position = 0;
-    } else if(strchr(mode, 'w')) { // w+ unsupported
-         // for write mode allocate 4096 bytes to start with
+        file->position = mode_a ? (uint32_t)size : 0; // append starts at eof
+    } else {
+        // w/w+
         file->buffer = (uint8_t*)malloc(0x1000);
         if(!file->buffer) {
             free(file->path);
+            file->path = NULL;
             return NULL;
         }
         file->size = 0x1000;
-        file->position = 0;
         file->content_size = 0;
-    } else {
-        debug_write_str("fopen: unsupported write mode\n");
-        free(file->path);
-        return NULL;
+        file->position = 0;
     }
     
     file->is_open = 1;

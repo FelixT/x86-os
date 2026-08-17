@@ -89,9 +89,9 @@ void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
    }
 
    if(open_fds) {
-      task->process->file_descriptors[0] = fs_open("/dev/stdin");
-      task->process->file_descriptors[1] = fs_open("/dev/stdout");
-      task->process->file_descriptors[2] = fs_open("/dev/stderr");
+      task->process->file_descriptors[0] = fs_open("/dev/stdin", FS_FLAG_READONLY);
+      task->process->file_descriptors[1] = fs_open("/dev/stdout", FS_FLAG_WRITEONLY);
+      task->process->file_descriptors[2] = fs_open("/dev/stderr", FS_FLAG_WRITEONLY);
       task->process->fd_count = 3;
    }
 

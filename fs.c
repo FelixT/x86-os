@@ -6,7 +6,7 @@
 
 // interface for interacting with fat16 fs and terminal as files from usermode
 
-fs_file_t *fs_open(char *path) {
+fs_file_t *fs_open(char *path, int flags) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
       debug_printf("FS: invalid file path\n");
       return NULL;
@@ -17,6 +17,7 @@ fs_file_t *fs_open(char *path) {
    file->data = data;
    file->pipe = NULL;
    file->current_pos = 0;
+   file->flags = 0;
    strcpy(file->filename, path);
 
    // terminals
@@ -44,7 +45,7 @@ fs_file_t *fs_open(char *path) {
    } else {
       file->type = FS_TYPE_FILE;
    }
-   file->flags = 0;
+   file->flags = flags;
    data->file_size = entry->fileSize;
    data->first_cluster = entry->firstClusterNo;
    file->data = data;
@@ -204,7 +205,7 @@ bool fs_mkdir(char *path) {
    return fat_new_dir(path);
 }
 
-fs_file_t *fs_new(char *path) {
+fs_file_t *fs_new(char *path, int flags) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
       debug_printf("FS: invalid file path\n");
       return NULL;
@@ -218,7 +219,7 @@ fs_file_t *fs_new(char *path) {
    }
    if(!fat_new_file(path))
       return NULL;
-   return fs_open(path);
+   return fs_open(path, flags);
 }
 
 // copy up to max bytes from pipe ring buffer into task (reader)
@@ -278,11 +279,34 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    
    if(file->type == FS_TYPE_FILE) {
       // write to file
-      if(fat_write_file(file->filename, buffer, size) < 0) {
+      if(file->flags & FS_FLAG_READONLY) {
+         debug_printf("FS: fs_write failed as %s was opened read only\n", file->filename);
+         return FS_ERROR;
+      }
+      int written;
+      if(file->flags & FS_FLAG_TRUNCATE) {
+         written = fat_write_file(file->filename, buffer, size);
+         if(written >= 0) {
+            file->current_pos = written;
+            file->data->file_size = written;
+         }
+      } else {
+         uint32_t pos = file->current_pos;
+         if(file->flags & FS_FLAG_APPEND)
+            pos = file->data->file_size;
+         written = fat_write_file_at(file->filename, buffer, pos, size);
+         if(written > 0) {
+            file->current_pos += written;
+            if(file->current_pos > file->data->file_size)
+               file->data->file_size = file->current_pos;
+         }
+      }
+
+      if(written < 0) {
          debug_printf("FS: error writing to file %s\n", file->filename);
          return FS_ERROR;
       }
-      return size;
+      return written;
    }
    
    if(file->type == FS_TYPE_PIPE) {
@@ -458,7 +482,7 @@ void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
    write_file->active = true;
    write_file->type = FS_TYPE_PIPE;
    write_file->pipe = pipe;
-   write_file->flags = FS_FLAG_WRITEONLY;
+   write_file->flags |= FS_FLAG_WRITEONLY;
 
    *read_end = read_file;
    *write_end = write_file;

@@ -570,6 +570,12 @@ static inline void getwd(char *buf) {
    );
 }
 
+#define FS_FLAG_WRITEONLY 1
+#define FS_FLAG_READONLY 2
+#define FS_FLAG_TRUNCATE 4
+#define FS_FLAG_APPEND 8
+#define FS_FLAG_CREATE 16
+
 static inline int open(char *path, int flag) {
    int fd;
    asm volatile (
