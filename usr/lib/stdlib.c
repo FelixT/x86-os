@@ -91,6 +91,8 @@ void free(void *ptr) {
     block->is_free = 1;
     
     coalesce_free_blocks();
+
+    // todo: shrink heap
 }
 
 block_t* find_free_block(size_t size) {
@@ -127,4 +129,16 @@ void coalesce_free_blocks(void) {
         
         current = current->next;
     }
+}
+
+int used_blocks() {
+    int count = 0;
+    block_t *current = heap_list_head;
+    while(current) {
+        if(!current->is_free)
+            count++;
+        current = current->next;
+    }
+    
+    return count;
 }

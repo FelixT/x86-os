@@ -14,12 +14,14 @@ uint32_t baseAddr = 512000;
 
 fat_bpb_t *fat_bpb = NULL;
 uint8_t *fat_table = NULL; // cache
+bool *dirty_clusters = NULL; // clusterNo->bool map of which fat table entries are dirty
 fat_ebr_t *fat_ebr;
 uint32_t noSectors;
 uint32_t noClusters;
 uint32_t rootSize;
 uint32_t rootSector;
 uint32_t firstDataSector;
+uint32_t tableSize;
 
 bool fat_get_info() {
    // get drive formatting info
@@ -125,13 +127,25 @@ fat_dir_t *fat_read_root() {
 bool fat_setup() {
    if(!fat_get_info())
       return false;
+   uint32_t newTableSize = fat_bpb->sectorsPerFat * fat_bpb->bytesPerSector;
    uint32_t fatTableAddr = baseAddr + fat_bpb->noReservedSectors * fat_bpb->bytesPerSector;
-   uint8_t *fat_table_buffer = ata_read_exact(true, true, fatTableAddr, fat_bpb->sectorsPerFat * fat_bpb->bytesPerSector);
+   uint8_t *fat_table_buffer = ata_read_exact(true, true, fatTableAddr, newTableSize);
    if(!fat_table_buffer)
       return false;
+   bool *dirty_clusters_new = malloc(sizeof(bool) * newTableSize/sizeof(uint16_t));
+   if(!dirty_clusters_new) {
+      free((uint32_t)fat_table_buffer, newTableSize);
+      return false;
+   }
+   for(int i = 0; i < (int)(newTableSize/sizeof(uint16_t)); i++)
+      dirty_clusters_new[i] = false;
    if(fat_table)
-      free((uint32_t)fat_table, fat_bpb->sectorsPerFat * fat_bpb->bytesPerSector);
+      free((uint32_t)fat_table, tableSize);
+   if(dirty_clusters)
+      free((uint32_t)dirty_clusters, sizeof(bool) * tableSize/sizeof(uint16_t));
    fat_table = fat_table_buffer;
+   tableSize = newTableSize;
+   dirty_clusters = dirty_clusters_new;
    return true;
 }
 
@@ -147,20 +161,61 @@ bool fat_valid_cluster(uint16_t cluster) {
    return true;
 }
 
-bool fat_table_update_cluster(uint32_t clusterNo) {
-   if(clusterNo >= noClusters) return false;
-   // writes need to be 512 aligned
-   uint32_t sectorOffset = ((sizeof(uint16_t) * clusterNo) / 512) * 512;
-   if(sectorOffset + 512 > fat_bpb->sectorsPerFat * fat_bpb->bytesPerSector) // entry is past cached sectors
-      return false;
+bool fat_table_update_cluster(uint32_t clusterNo, uint16_t value) {
+   if(clusterNo >= noClusters || clusterNo >= tableSize/sizeof(uint16_t)) return false;
+   dirty_clusters[clusterNo] = true;
+   ((uint16_t*)fat_table)[clusterNo] = value;
+   return true;
+}
+
+static bool fat_table_flush_write(uint32_t firstSector, uint32_t count) {
+   uint32_t byteOffset = firstSector * ATA_SECTOR_SIZE;
+   uint32_t size = count * ATA_SECTOR_SIZE;
    bool ok = true;
    for(int i = 0; i < fat_bpb->noTables; i++) {
-      if(!ata_write_exact(true, true, fat_table_addr(i) + sectorOffset, &fat_table[sectorOffset], 512)) {
-         debug_printf("FAT error: failed writing cluster %u to fat table %i\n", clusterNo, i);
+      if(!ata_write_exact(true, true, fat_table_addr(i) + byteOffset, &fat_table[byteOffset], size)) {
+         debug_printf("FAT error: failed writing sectors %u-%u to fat table %i\n", firstSector, firstSector + count - 1, i);
          ok = false;
       }
    }
    return ok;
+}
+
+bool fat_table_flush_cache(uint32_t start, uint32_t end) {
+   uint32_t entries = tableSize / sizeof(uint16_t);
+   if(start >= entries) return true;
+   if(end >= entries) end = entries - 1;
+
+   uint32_t perSector = ATA_SECTOR_SIZE / sizeof(uint16_t);
+   uint32_t runStart = 0; // coalesce continuous sectors
+   uint32_t runLen = 0;
+   bool ok = true;
+
+   for(uint32_t sector = start/perSector; sector <= end/perSector; sector++) {
+      bool sectorDirty = false;
+      uint32_t to = (sector + 1) * perSector;
+      if(to > entries) to = entries;
+      for(uint32_t c = sector * perSector; c < to; c++) {
+         if(dirty_clusters[c]) {
+            sectorDirty = true;
+            dirty_clusters[c] = false;
+         }
+      }
+
+      if(sectorDirty) {
+         if(runLen == 0) runStart = sector;
+         runLen++;
+      } else if(runLen > 0) {
+         ok &= fat_table_flush_write(runStart, runLen);
+         runLen = 0;
+      }
+   }
+   if(runLen > 0) ok &= fat_table_flush_write(runStart, runLen);
+   return ok;
+}
+
+bool fat_table_flush_cache_all() {
+   return fat_table_flush_cache(0, tableSize/sizeof(uint16_t)-1);
 }
 
 // number of unallocated clusters in the cached table
@@ -184,15 +239,13 @@ void fat_unwind_chain(uint16_t lastCluster, uint16_t origTail) {
    if(cur == origTail)
       return; // nothing linked on yet, chain is untouched
 
-   ((uint16_t*)fat_table)[lastCluster] = origTail; // restore end of original chain
-   if(!fat_table_update_cluster(lastCluster))
+   if(!fat_table_update_cluster(lastCluster, origTail)) // restore end of original chain
       debug_printf("FAT error: unwind failed restoring cluster %u\n", lastCluster);
 
    // free every cluster linked on after it
    while(fat_valid_cluster(cur)) {
       uint16_t next = ((uint16_t*)fat_table)[cur];
-      ((uint16_t*)fat_table)[cur] = 0;
-      if(!fat_table_update_cluster(cur))
+      if(!fat_table_update_cluster(cur, 0))
          debug_printf("FAT error: unwind failed freeing cluster %u\n", cur);
       cur = next;
    }
@@ -402,7 +455,7 @@ int fat_shrink_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    if(newClusters >= oldClusters)
       return 0;
 
-   // find last cluster in chain
+   // find last cluster in new chain
    uint16_t cur = startCluster;
    for(uint32_t i = 1; i < newClusters; i++) {
       uint16_t next = ((uint16_t*)fat_table)[cur];
@@ -411,19 +464,24 @@ int fat_shrink_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    }
 
    uint16_t toFree = ((uint16_t*)fat_table)[cur];
-   ((uint16_t*)fat_table)[cur] = 0xFFFF; // mark cur as end of chain
-   bool ok = fat_table_update_cluster(cur);
+   bool ok = fat_table_update_cluster(cur, 0xFFFF); // mark cur as end of chain
 
    // free remaining clusters in chain
    int freed = 0;
+   uint32_t min = cur;
+   uint32_t max = cur;
    while(fat_valid_cluster(toFree)) {
       uint16_t next = ((uint16_t*)fat_table)[toFree];
-      ((uint16_t*)fat_table)[toFree] = 0; // Mark as free
-      if(!fat_table_update_cluster(toFree))
+      if(!fat_table_update_cluster(toFree, 0)) // mark as free
          ok = false;
+      if(toFree < min) min = toFree;
+      if(toFree > max) max = toFree;
       toFree = next;
       freed++;
    }
+
+   if(!fat_table_flush_cache(min, max))
+      ok = false;
 
    if(!ok) {
       debug_printf("FAT error: failed writing shrunk chain from cluster %u\n", startCluster);
@@ -466,7 +524,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
       uint32_t gapAddr = baseAddr + gapSector * fat_bpb->bytesPerSector;
       uint8_t *gapBuf;
       if(from == 0) {
-         // fast past - entire cluster is overwritten, skip read
+         // fast path - entire cluster is overwritten, skip read
          gapBuf = malloc(bytesPerCluster);
          if(gapBuf)
             memset(gapBuf, 0, bytesPerCluster);
@@ -498,7 +556,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
       return -1;
    }
 
-   // aallocate new clusters
+   // allocate new clusters
    uint16_t origTail = ((uint16_t*)fat_table)[lastCluster];
    uint16_t prev = lastCluster;
    int allocated = 0;
@@ -509,6 +567,8 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    memset(zeros, 0, bytesPerCluster);
 
    uint16_t searchFrom = 2; // clusters below this are known to be taken
+   int min = lastCluster;
+   int max = lastCluster;
    for(uint32_t i = oldClusters; i < newClusters; i++) {
       uint16_t freeCluster = searchFrom;
       while(freeCluster < noClusters && ((uint16_t*)fat_table)[freeCluster] != 0)
@@ -520,6 +580,9 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
          return -1; // no free clusters
       }
       searchFrom = freeCluster + 1;
+
+      if(freeCluster < min) min = freeCluster;
+      if(freeCluster > max) max = freeCluster;
       
       // zero new cluster data
       uint32_t clusterFirstSector = ((freeCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
@@ -531,11 +594,8 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
          return -1;
       }
 
-      // mark new cluster as end of chain (0xFFFF)
-      ((uint16_t*)fat_table)[freeCluster] = 0xFFFF;
-      // update fat table
-      ((uint16_t*)fat_table)[prev] = freeCluster;
-      if(!fat_table_update_cluster(freeCluster) || !fat_table_update_cluster(prev)) {
+      // mark new cluster as end of chain (0xFFFF) and point prev at it
+      if(!fat_table_update_cluster(freeCluster, 0xFFFF) || !fat_table_update_cluster(prev, freeCluster)) {
          debug_printf("Error writing fat table for cluster %u\n", freeCluster);
          free((uint32_t)zeros, bytesPerCluster);
          fat_unwind_chain(lastCluster, origTail);
@@ -543,6 +603,13 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
       }
       prev = freeCluster;
       allocated++;
+   }
+   if(!fat_table_flush_cache(min, max)) {
+      debug_printf("FAT error: failed flushing table for chain from cluster %u\n", startCluster);
+      free((uint32_t)zeros, bytesPerCluster);
+      fat_unwind_chain(lastCluster, origTail);
+      fat_table_flush_cache(min, max); // part of the chain may have reached disk, best effort
+      return -1;
    }
    free((uint32_t)zeros, bytesPerCluster);
 
@@ -655,8 +722,9 @@ bool fat_new_file(char *path) {
          found = false;
       } else {
          debug_writestr("Updating FAT table\n");
-         ((uint16_t*)fat_table)[freeCluster] = 0xFFFF; // mark as end of chain
-         if(!fat_table_update_cluster(freeCluster))
+         // claim the cluster and get it onto disk before reporting success
+         if(!fat_table_update_cluster(freeCluster, 0xFFFF) // mark as end of chain
+         || !fat_table_flush_cache(freeCluster, freeCluster))
             found = false;
       }
    } else {
@@ -665,10 +733,10 @@ bool fat_new_file(char *path) {
 
    if(!found && ((uint16_t*)fat_table)[freeCluster] != 0) {
       // release the reserved cluster, it may already have reached disk
-      ((uint16_t*)fat_table)[freeCluster] = 0;
-      fat_table_update_cluster(freeCluster); // best effort
+      fat_table_update_cluster(freeCluster, 0);
+      fat_table_flush_cache(freeCluster, freeCluster); // best effort
    }
-   
+
    free((uint32_t)dirBuf, bufSize);
    free((uint32_t)parent, sizeof(fat_dir_t));
    free((uint32_t)filedir, sizeof(fat_dir_t));
@@ -707,7 +775,9 @@ int fat_resize_file(char *path, uint32_t size) {
          free((uint32_t)dir, sizeof(fat_dir_t));
          return -2;
       }
-      debug_printf("Allocated %u clusters\n", allocated);
+   } else {
+      free((uint32_t)dir, sizeof(fat_dir_t));
+      return 0;
    }
 
    // update the file size in the directory entry
@@ -728,7 +798,6 @@ int fat_resize_file(char *path, uint32_t size) {
    if(!inroot)
       firstCluster = parentDir->firstClusterNo;
 
-   debug_printf("Updating file '%s' in directory %u\n", path, firstCluster);
    if(!fat_update_in_dir(firstCluster, name, extension, dir)) {
       debug_printf("Error updating directory entry\n");
       free((uint32_t)dir, sizeof(fat_dir_t));
@@ -766,15 +835,12 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
 
    uint32_t newsize = offset + size;
    if(newsize > oldsize) {
-      debug_printf("Changing size from %u to %u\n", oldsize, newsize);
-
       int allocated = fat_extend_cluster_chain(clusterNo, oldsize, newsize);
       if(allocated < 0) {
          debug_printf("Error extending cluster chain\n");
          free((uint32_t)dir, sizeof(fat_dir_t));
          return -2;
       }
-      debug_printf("Allocated %u clusters\n", allocated);
    }
 
    // skip to first cluster from offset
@@ -856,7 +922,6 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
       if(!inroot)
          firstCluster = parentDir->firstClusterNo;
 
-      debug_printf("Updating file '%s' in directory %u\n", path, firstCluster);
       if(!fat_update_in_dir(firstCluster, name, extension, dir)) {
          debug_printf("Error updating directory entry\n");
          free((uint32_t)dir, sizeof(fat_dir_t));
@@ -916,7 +981,13 @@ bool fat_new_dir(char *path) {
          free((uint32_t)parent, sizeof(fat_dir_t));
       return false;
    }
-   ((uint16_t*)fat_table)[freeCluster] = 0xFFFF; // mark as end of chain
+   if(!fat_table_update_cluster(freeCluster, 0xFFFF)) { // claim cluster, mark as end of chain
+      debug_printf("Error writing fat table for cluster %u\n", freeCluster);
+      free((uint32_t)dir, sizeof(fat_dir_t));
+      if(!inroot)
+         free((uint32_t)parent, sizeof(fat_dir_t));
+      return false;
+   }
    dir->firstClusterNo = freeCluster;
    debug_printf("Found free cluster %u\n", freeCluster);
    // clear cluster
@@ -955,7 +1026,7 @@ bool fat_new_dir(char *path) {
    if(!ok) {
       // zero write failed
       debug_printf("Error writing new directory cluster %u\n", freeCluster);
-      ((uint16_t*)fat_table)[freeCluster] = 0; // return cluster
+      fat_table_update_cluster(freeCluster, 0); // return cluster
       free((uint32_t)dir, sizeof(fat_dir_t));
       if(!inroot)
          free((uint32_t)parent, sizeof(fat_dir_t));
@@ -1012,9 +1083,7 @@ bool fat_new_dir(char *path) {
             debug_printf("Error writing directory entry for '%s'\n", path);
          } else {
             debug_writestr("Updating FAT table\n");
-            if(!fat_table_update_cluster(freeCluster))
-               debug_printf("Error writing fat table for cluster %u\n", freeCluster);
-            else
+            if(fat_table_flush_cache(freeCluster, freeCluster))
                success = true;
          }
       } else if(!exists) {
@@ -1022,8 +1091,11 @@ bool fat_new_dir(char *path) {
       }
    }
 
-   if(!success)
-      ((uint16_t*)fat_table)[freeCluster] = 0; // release the reserved cluster
+   if(!success) {
+      // return cluster - the claim may already have reached disk
+      fat_table_update_cluster(freeCluster, 0);
+      fat_table_flush_cache(freeCluster, freeCluster); // best effort
+   }
 
    if(dirBuf)
       free((uint32_t)dirBuf, bufSize);
@@ -1031,7 +1103,6 @@ bool fat_new_dir(char *path) {
    if(!inroot)
       free((uint32_t)parent, sizeof(fat_dir_t));
    return success;
-
 }
 
 typedef struct {
@@ -1188,7 +1259,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    // get no clusters
    uint16_t c = clusterNo;
    uint16_t clusterCount = 1;
-   while(true) {
+   while(clusterCount <= noClusters) {
       uint16_t tableVal = ((uint16_t*)fat_table)[c];
       if(!fat_valid_cluster(tableVal)) {
          break;
@@ -1196,6 +1267,11 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
          c = tableVal;
          clusterCount++;
       }
+   }
+
+   if(clusterCount >= noClusters) {
+      debug_printf("fat_read_file: cycle detected in chain starting %u\n", clusterNo);
+      return NULL;
    }
 
    uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
@@ -1438,13 +1514,22 @@ bool fat_delete_file(char *path) {
    bool ok = fat_update_in_dir(parentCluster, name, extension, &deleted);
    if(ok) {
       // free cluster chain
-      uint16_t cur = file->firstClusterNo;
+      uint16_t head = file->firstClusterNo;
+      uint16_t cur = head;
+      uint32_t min = cur;
+      uint32_t max = cur;
       while(fat_valid_cluster(cur)) {
          uint16_t next = ((uint16_t*)fat_table)[cur];
-         ((uint16_t*)fat_table)[cur] = 0;
-         fat_table_update_cluster(cur);
+         if(!fat_table_update_cluster(cur, 0))
+            ok = false;
+         if(cur < min) min = cur;
+         if(cur > max) max = cur;
          cur = next;
       }
+      if(!fat_table_flush_cache(min, max))
+         ok = false;
+      if(!ok)
+         debug_printf("FAT error: failed freeing chain from cluster %u\n", head);
    }
    free((uint32_t)file, sizeof(fat_dir_t));
    return ok;
@@ -1516,13 +1601,22 @@ bool fat_delete_dir(char *path) {
    bool ok = fat_update_in_dir(parentCluster, name, "", &deleted);
    if(ok) {
       // free cluster chain
-      uint16_t cur = dir->firstClusterNo;
+      uint16_t head = dir->firstClusterNo;
+      uint16_t cur = head;
+      uint32_t min = cur;
+      uint32_t max = cur;
       while(fat_valid_cluster(cur)) {
          uint16_t next = ((uint16_t*)fat_table)[cur];
-         ((uint16_t*)fat_table)[cur] = 0;
-         fat_table_update_cluster(cur);
+         if(!fat_table_update_cluster(cur, 0))
+            ok = false;
+         if(cur < min) min = cur;
+         if(cur > max) max = cur;
          cur = next;
       }
+      if(!fat_table_flush_cache(min, max))
+         ok = false;
+      if(!ok)
+         debug_printf("FAT error: failed freeing chain from cluster %u\n", head);
    }
    free((uint32_t)dir, sizeof(fat_dir_t));
    return ok;

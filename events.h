@@ -5,7 +5,7 @@
 #include "registers_t.h"
 
 typedef struct event_t {
-    int time;
+    uint32_t time;
     void *msg;
     struct event_t *next;
     void *callback;

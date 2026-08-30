@@ -506,7 +506,7 @@ void mouse_handler(registers_t *regs) {
    }
 }
 
-int timer_i = 0;
+uint32_t timer_i = 0;
 int timer_hz;
 
 void timer_set_hz(int hz) {
@@ -554,11 +554,10 @@ void timer_handler(registers_t *regs) {
    events_check(regs);
 
    timer_i++;
-   timer_i%=10000000;
 
 }
 
-int get_timer_tick() {
+uint32_t get_timer_tick() {
    return timer_i;
 }
 

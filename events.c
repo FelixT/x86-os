@@ -8,10 +8,11 @@ bool events_active = false;
 // events queue
 event_t *first_event = NULL;
 
-extern int timer_i;
+// wraps at ~25 days
+extern uint32_t timer_i;
 
-int event_time_until(event_t *event) {
-    return (event->time - timer_i + 10000000)%10000000;
+static inline int event_time_until(event_t *event) {
+    return (int)(event->time - timer_i);
 }
 
 void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, int taskid) {
@@ -20,7 +21,7 @@ void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, i
     }
     
     event_t *event = malloc(sizeof(event_t));
-    event->time = (timer_i + delta)%10000000;
+    event->time = timer_i + delta;
     event->callback = callback;
     event->task = taskid;
     event->task_uid = (taskid >= 0) ? gettasks()[taskid].task_uid : 0;
@@ -78,7 +79,7 @@ void events_check(registers_t *regs) {
 
     while(first_event != NULL) {
         
-        if(timer_i >= first_event->time) {
+        if(event_time_until(first_event) <= 0) {
             // skip if task is ended
             if(first_event->task >= 0
             && !gettasks()[first_event->task].enabled) {
