@@ -17,6 +17,7 @@ fs_file_t *fs_open(char *path, int flags) {
    file->data = data;
    file->pipe = NULL;
    file->current_pos = 0;
+   file->request = NULL;
    file->flags = 0;
    strcpy(file->filename, path);
 
@@ -50,11 +51,36 @@ fs_file_t *fs_open(char *path, int flags) {
    data->first_cluster = entry->firstClusterNo;
    file->data = data;
    free((uint32_t)entry, sizeof(fat_dir_t));
+
+   // truncate at open
+   if(file->type == FS_TYPE_FILE && (flags & FS_FLAG_TRUNCATE) && !(flags & FS_FLAG_READONLY) && data->file_size > 0) {
+      if(fat_resize_file(path, 0) < 0) {
+         debug_printf("FS: failed to truncate %s\n", path);
+         free((uint32_t)file, sizeof(fs_file_t));
+         free((uint32_t)data, sizeof(fs_file_data_t));
+         return NULL;
+      }
+      data->file_size = 0;
+   }
+
    return file;
+}
+
+bool fs_exists(char *path) {
+   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
+   fat_dir_t *entry = fat_parse_path(path, true);
+   if(!entry) return false;
+   free((uint32_t)entry, sizeof(fat_dir_t));
+   return true;
 }
 
 void fs_close(fs_file_t *file) {
    if(!file) return;
+   if(file->request) {
+      // read still in progress - mark as orphaned so callback isn't called
+      file->request->file = NULL;
+      file->request = NULL;
+   }
    if(file->data)
       free((uint32_t)file->data, sizeof(fs_file_data_t));
    if(file->pipe) {
@@ -90,6 +116,7 @@ fs_file_t *fs_dup(fs_file_t *file) {
    if(!file) return NULL;
    fs_file_t *dup = (fs_file_t*)malloc(sizeof(fs_file_t));
    *dup = *file;
+   dup->request = NULL; // in flight reads belong to the fd they were issued on
    if(file->data) {
       fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
       *data = *file->data;
@@ -135,6 +162,11 @@ fs_dir_content_t *fs_read_dir(char *path) {
       // root
 
       fat_dir_t *items = fat_read_root();
+      if(!items) {
+         debug_printf("FS: failed reading root directory\n");
+         free((uint32_t)content, sizeof(fs_dir_content_t));
+         return NULL;
+      }
       fat_bpb_t fat_bpb = fat_get_bpb();
       content->size = 0;
       for(int i = 0; i < fat_bpb.noRootEntries; i++) {
@@ -163,8 +195,24 @@ fs_dir_content_t *fs_read_dir(char *path) {
 
       if(entry->attributes & 0x10) {
          int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
-         fat_dir_t *items = malloc(size*sizeof(fat_dir_t));
-         fat_read_dir(entry->firstClusterNo, items);
+         if(size < 0) {
+            debug_printf("FS: failed reading directory '%s'\n", path);
+            free((uint32_t)entry, sizeof(fat_dir_t));
+            free((uint32_t)content, sizeof(fs_dir_content_t));
+            return NULL;
+         }
+         fat_dir_t *items = NULL;
+         if(size > 0) {
+            items = malloc(size*sizeof(fat_dir_t));
+            if(!items || !fat_read_dir(entry->firstClusterNo, items)) {
+               debug_printf("FS: failed reading directory '%s'\n", path);
+               if(items)
+                  free((uint32_t)items, size*sizeof(fat_dir_t));
+               free((uint32_t)entry, sizeof(fat_dir_t));
+               free((uint32_t)content, sizeof(fs_dir_content_t));
+               return NULL;
+            }
+         }
          content->size = size;
          for(int i = 0; i < size; i++) {
             if(items[i].filename[0] == 0) {
@@ -177,7 +225,8 @@ fs_dir_content_t *fs_read_dir(char *path) {
             fs_dir_entry_t *entry = &content->entries[i];
             *entry = fs_get_dir_entry(&items[i]);
          }
-         free((uint32_t)items, size*sizeof(fat_dir_t));
+         if(items)
+            free((uint32_t)items, size*sizeof(fat_dir_t));
       } else {
          // not a dir
          free((uint32_t)entry, sizeof(fat_dir_t));
@@ -283,23 +332,14 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
          debug_printf("FS: fs_write failed as %s was opened read only\n", file->filename);
          return FS_ERROR;
       }
-      int written;
-      if(file->flags & FS_FLAG_TRUNCATE) {
-         written = fat_write_file(file->filename, buffer, size);
-         if(written >= 0) {
-            file->current_pos = written;
-            file->data->file_size = written;
-         }
-      } else {
-         uint32_t pos = file->current_pos;
-         if(file->flags & FS_FLAG_APPEND)
-            pos = file->data->file_size;
-         written = fat_write_file_at(file->filename, buffer, pos, size);
-         if(written > 0) {
-            file->current_pos += written;
-            if(file->current_pos > file->data->file_size)
-               file->data->file_size = file->current_pos;
-         }
+      uint32_t pos = file->current_pos;
+      if(file->flags & FS_FLAG_APPEND)
+         pos = file->data->file_size;
+      int written = fat_write_file_at(file->filename, buffer, pos, size);
+      if(written > 0) {
+         file->current_pos = pos + written;
+         if(file->current_pos > file->data->file_size)
+            file->data->file_size = file->current_pos;
       }
 
       if(written < 0) {
@@ -338,7 +378,33 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    return FS_ERROR;
 }
 
-int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task) {
+static void fs_read_done(void *regs, int task, int bytes, void *data) {
+   (void)task;
+   fs_request_t *request = (fs_request_t*)data;
+   if(!request) return;
+
+   uint32_t read = (bytes > 0) ? (uint32_t)bytes : 0;
+   if(read > request->len) read = request->len;
+
+   if(request->file) { // still open
+      request->file->current_pos = request->start + read;
+      request->file->request = NULL;
+   }
+
+   fs_read_done_t callback = request->callback;
+   int task_id = request->task;
+   uint32_t task_uid = request->task_uid;
+   free((uint32_t)request, sizeof(fs_request_t));
+
+   if(!callback || task_id < 0) return;
+   task_state_t *task_state = &gettasks()[task_id];
+   if(!task_state->enabled || task_state->crashed || !task_state->paused || task_state->task_uid != task_uid)
+      return;
+
+   callback(regs, task_id, bytes);
+}
+
+int fs_read(fs_file_t *file, void *buffer, size_t size, fs_read_callbacks_t callbacks, int task) {
    if(file->type == FS_TYPE_TERM) {
       gui_window_t *window = getWindow(file->window_index);
       if(window->closed) {
@@ -351,7 +417,7 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
          return FS_ERROR;
       }
       // note: only one task can read from a windows stdin at a time as these get overwritten
-      window->read_func = callback;
+      window->read_func = callbacks.on_term;
       window->read_buffer = buffer;
       window->read_task = task;
       window->read_task_uid = gettasks()[task].task_uid;
@@ -389,6 +455,10 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
          debug_printf("FS: cannot read from write-only file %s\n", file->filename);
          return FS_ERROR;
       }
+      if(file->request) {
+         debug_printf("FS: %s already has a read in flight\n", file->filename);
+         return FS_ERROR;
+      }
       if(file->current_pos >= file->data->file_size)
          return FS_EOF;
    } else {
@@ -402,9 +472,51 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task
       size = file->data->file_size - file->current_pos;
    if(size == 0) return FS_EOF;
 
-   fat_read_file_chunked(file->data->first_cluster, buffer, file->current_pos, size, callback, task);
-   file->current_pos += size;
+   if(!fat_valid_cluster(file->data->first_cluster)) {
+      debug_printf("FS: %s has bad first cluster %u\n", file->filename, file->data->first_cluster);
+      return FS_ERROR;
+   }
+
+   fs_request_t *request = (fs_request_t*)malloc(sizeof(fs_request_t));
+   if(!request) return FS_ERROR;
+   request->file = file;
+   request->start = file->current_pos;
+   request->len = size;
+   request->task = task;
+   request->task_uid = gettasks()[task].task_uid;
+   request->callback = callbacks.on_file;
+   file->request = request;
+
+   if(!fat_read_file_chunked(file->data->first_cluster, buffer, request->start, size, &fs_read_done, task, request)) {
+      debug_printf("FS: couldn't start read of %s\n", file->filename);
+      file->request = NULL;
+      free((uint32_t)request, sizeof(fs_request_t));
+      return FS_ERROR;
+   }
    return FS_BLOCKING;
+}
+
+int fs_truncate(fs_file_t *file, int size) {
+   if(file->type != FS_TYPE_FILE) {
+      debug_printf("FS: cannot truncate non-file %s\n", file->filename);
+      return FS_ERROR;
+   }
+   if(size < 0 || (uint32_t)size > fat_max_file_size()) {
+      debug_printf("FS: invalid truncate size %i\n", size);
+      return FS_ERROR;
+   }
+   if(file->flags & FS_FLAG_READONLY) {
+      debug_printf("FS: cannot truncate read only file %s\n", file->filename);
+      return FS_ERROR;
+   }
+   if(fat_resize_file(file->filename, (uint32_t)size) < 0) {
+      debug_printf("FS: failed to truncate %s\n", file->filename);
+      return FS_ERROR;
+   }
+   file->data->file_size = size;
+   if(file->current_pos > (uint32_t)size)
+      file->current_pos = size;
+   return 0;
 }
 
 bool fs_unlink(char *path) {
@@ -442,18 +554,33 @@ int fs_filesize_path(char *path) {
 }
 
 int fs_seek(fs_file_t *file, int offset, int type) {
+   if(file->type != FS_TYPE_FILE || !file->data) {
+      debug_printf("FS: cannot seek on non-file %s\n", file->filename);
+      return -1;
+   }
+
+   int size = file->data->file_size;
+   int base;
    if(type == SEEK_SET)
-      file->current_pos = offset;
+      base = 0;
    else if(type == SEEK_CUR)
-      file->current_pos += offset;
+      base = file->current_pos;
    else if(type == SEEK_END)
-      file->current_pos = file->data->file_size;
+      base = size;
    else
       return -1;
-   
-   if(file->current_pos > file->data->file_size)
-      file->current_pos = file->data->file_size;
-   return file->current_pos;
+
+   if(offset > 0 && base > 0x7FFFFFFF - offset)
+      return -1; // would overflow
+
+   int pos = base + offset;
+   if(pos < 0)
+      return -1; // can't seek before start of file
+   if(pos > size)
+      pos = size; // clamp to end
+
+   file->current_pos = pos;
+   return pos;
 }
 
 void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
@@ -468,6 +595,7 @@ void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
    read_file->filename[0] = '\0';
    read_file->window_index = -1;
    read_file->current_pos = 0;
+   read_file->request = NULL;
    read_file->data = NULL;
    read_file->active = true;
    read_file->type = FS_TYPE_PIPE;
@@ -478,6 +606,7 @@ void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
    write_file->filename[0] = '\0';
    write_file->window_index = -1;
    write_file->current_pos = 0;
+   write_file->request = NULL;
    write_file->data = NULL;
    write_file->active = true;
    write_file->type = FS_TYPE_PIPE;

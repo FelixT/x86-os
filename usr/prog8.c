@@ -71,7 +71,7 @@ void _start(int argc, char **args) {
 
    void *bmp_ptr = shared.mem + sizeof(shared_mem_t);
 
-   if(!fread(bmp_ptr, bmp_size, 1, f)) {
+   if((int)fread(bmp_ptr, 1, bmp_size, f) != bmp_size) {
       printf("read failed\n");
       exit(0);
    }

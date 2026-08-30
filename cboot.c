@@ -111,6 +111,10 @@ void cboot() {
    ata_identify(true, true);
 
    uint8_t *bytes = ata_read_exact(true, true, 64000, size);
+   if(!bytes) {
+      cboot_printf("FATAL: failed reading kernel from disk");
+      while(true) {} // hang
+   }
    int used = 0;
    for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
       if(memory_get_table()[i].allocated) used++;

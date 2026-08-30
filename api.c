@@ -634,14 +634,18 @@ void api_sbrk(registers_t *regs) {
 
 }
 
+// find the lowest free fd, slot claimed via commit_fd
 static int alloc_fd(process_t *process) {
    for(int i = 0; i < TASK_MAX_FDS; i++) {
-      if(process->file_descriptors[i] == NULL) {
-         if(i >= process->fd_count) process->fd_count = i + 1;
+      if(process->file_descriptors[i] == NULL)
          return i;
-      }
    }
    return -1;
+}
+
+static void commit_fd(process_t *process, int fd, fs_file_t *file) {
+   process->file_descriptors[fd] = file;
+   if(fd >= process->fd_count) process->fd_count = fd + 1;
 }
 
 void api_open(registers_t *regs) {
@@ -657,9 +661,16 @@ void api_open(registers_t *regs) {
    }
 
    task_state_t *task = get_current_task_state();
+   int fd = alloc_fd(task->process);
+   if(fd < 0) {
+      debug_printf("api_open: too many open files\n");
+      regs->ebx = -1;
+      return;
+   }
+
    fs_file_t *file = fs_open(path, flags);
    if(!file) {
-      if(flags & FS_FLAG_CREATE) {
+      if((flags & FS_FLAG_CREATE) && !fs_exists(path)) {
          debug_printf("api_open: creating new file %s\n", path);
          file = fs_new(path, flags);
       }
@@ -669,15 +680,38 @@ void api_open(registers_t *regs) {
          return;
       }
    }
-   int fd = alloc_fd(task->process);
-   if(fd < 0) {
-      debug_printf("api_open: too many open files\n");
-      fs_close(file);
+   commit_fd(task->process, fd, file);
+   regs->ebx = fd;
+}
+
+void api_truncate(registers_t *regs) {
+   // IN: ebx - int fd
+   // IN: ecx - size
+   task_state_t *task = get_current_task_state();
+   int fd = regs->ebx;
+   int size = regs->ecx;
+
+   if(fd < 0 || fd >= task->process->fd_count) {
+      debug_printf("api_truncate: fd not found\n");
       regs->ebx = -1;
       return;
    }
-   task->process->file_descriptors[fd] = file;
-   regs->ebx = fd;
+
+   fs_file_t *file = task->process->file_descriptors[fd];
+   if(!file || !file->active) {
+      debug_printf("api_truncate: fd inactive\n");
+      regs->ebx = -1;
+      return;
+   }
+
+   if(file->type != FS_TYPE_FILE) {
+      debug_printf("api_truncate: invalid fd type\n");
+      regs->ebx = -1;
+      return;
+   }
+
+   int result = fs_truncate(file, size);
+   regs->ebx = result;
 }
 
 void api_read_stdin_callback(void *regs, char *buffer) {
@@ -697,11 +731,12 @@ void api_read_stdin_callback(void *regs, char *buffer) {
    }
 }
 
-void api_read_fd_callback(registers_t *regs, int task, int size) {
+void api_read_fd_callback(void *regs, int task, int size) {
+   registers_t *r = (registers_t*)regs;
    gettasks()[task].paused = false;
-   switch_to_task(task, regs); // wake
-   regs->ebx = size;
-   task_execute_queued_subroutine(regs, (void*)task); // check for queued events while task was paused
+   switch_to_task(task, r); // wake
+   r->ebx = size;
+   task_execute_queued_subroutine(r, (void*)task); // check for queued events while task was paused
 }
 
 void api_read(registers_t *regs) {
@@ -730,10 +765,7 @@ void api_read(registers_t *regs) {
       return;
    }
 
-   void *callback;
-   if(file->type == FS_TYPE_TERM) {
-      callback = &api_read_stdin_callback;
-   } else if(file->type == FS_TYPE_FILE) {
+   if(file->type == FS_TYPE_FILE) {
       int maxsize = api_validate_maxsize(buf, count, 1);
       if(maxsize < 0 || (count > 0 && maxsize == 0)) {
          debug_printf("api_read: invalid buffer\n");
@@ -741,16 +773,14 @@ void api_read(registers_t *regs) {
          return;
       }
       count = maxsize;
-      callback = &api_read_fd_callback;
-   } else if(file->type == FS_TYPE_PIPE) {
-      callback = NULL;
-   } else {
+   } else if(file->type != FS_TYPE_TERM && file->type != FS_TYPE_PIPE) {
       debug_printf("api_read: invalid fd type\n");
       regs->ebx = -1;
       return;
    }
 
-   int result = fs_read(file, buf, count, callback, get_current_task());
+   fs_read_callbacks_t callbacks = { .on_file = &api_read_fd_callback, .on_term = &api_read_stdin_callback };
+   int result = fs_read(file, buf, count, callbacks, get_current_task());
    regs->ebx = result;
    if(result == FS_BLOCKING) {
       if(file->type == FS_TYPE_PIPE && file->pipe) {
@@ -937,7 +967,7 @@ void api_new_file(registers_t *regs) {
       regs->ebx = -1;
       return;
    }
-   task->process->file_descriptors[fd] = file;
+   commit_fd(task->process, fd, file);
    regs->ebx = fd;
 }
 
@@ -1411,7 +1441,7 @@ void api_pipe(registers_t *regs) {
       fs_close(write_file);
       return;
    }
-   task->process->file_descriptors[read_fd] = read_file;
+   commit_fd(task->process, read_fd, read_file);
    int write_fd = alloc_fd(task->process);
    if(write_fd == -1) {
       debug_printf("api_pipe: couldn't create fds\n");
@@ -1422,7 +1452,7 @@ void api_pipe(registers_t *regs) {
       fs_close(write_file);
       return;
    }
-   task->process->file_descriptors[write_fd] = write_file;
+   commit_fd(task->process, write_fd, write_file);
    regs->ebx = read_fd;
    regs->ecx = write_fd;
 }
@@ -1469,7 +1499,7 @@ void api_dup(registers_t *regs) {
       regs->ebx = -1;
       return;
    }
-   task->process->file_descriptors[new_fd] = fs_dup(old_file);
+   commit_fd(task->process, new_fd, fs_dup(old_file));
    regs->ebx = new_fd;
 }
 

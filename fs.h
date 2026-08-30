@@ -31,13 +31,34 @@ typedef struct {
     size_t write_size;
 } fs_pipe_t;
 
+struct fs_file_t;
+
+typedef void (*fs_read_done_t)(void *regs, int task, int bytes); // bytes actually read, -1 for error
+typedef void (*fs_term_read_t)(void *regs, char *buffer);
+
 typedef struct {
+    fs_read_done_t on_file;
+    fs_term_read_t on_term;
+} fs_read_callbacks_t;
+
+// tracks in-flight read - only one is allowed at a time to stop race conditions
+typedef struct {
+    struct fs_file_t *file;
+    uint32_t start; // position the read began at
+    uint32_t len; // bytes requested
+    int task;
+    uint32_t task_uid;
+    fs_read_done_t callback;
+} fs_request_t;
+
+typedef struct fs_file_t {
     bool active;
     char filename[FS_MAX_FILENAME];
     int flags;
     uint8_t type;
     int window_index; // terminal window for terms
     uint32_t current_pos;
+    fs_request_t *request; // in-flight read, NULL when idle
     fs_file_data_t *data;
     fs_pipe_t *pipe;
 } fs_file_t;
@@ -78,8 +99,9 @@ typedef struct {
 fs_file_t *fs_open(char *path, int flags);
 fs_file_t *fs_dup(fs_file_t *file);
 void fs_close(fs_file_t *file);
+bool fs_exists(char *path);
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task);
-int fs_read(fs_file_t *file, void *buffer, size_t size, void *callback, int task);
+int fs_read(fs_file_t *file, void *buffer, size_t size, fs_read_callbacks_t callbacks, int task);
 bool fs_mkdir(char *path);
 fs_file_t *fs_new(char *path, int flags);
 bool fs_unlink(char *path);
@@ -93,5 +115,6 @@ int fs_seek(fs_file_t *file, int offset, int type);
 void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end);
 bool fs_pipe_wake_reader(fs_pipe_t *pipe);
 bool fs_pipe_wake_writer(fs_pipe_t *pipe);
+int fs_truncate(fs_file_t *file, int size);
 
 #endif

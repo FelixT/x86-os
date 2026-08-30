@@ -81,6 +81,7 @@ static inline uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
 #define COLOUR_BLACK gui_rgb16(0, 0, 0)
 #define COLOUR_CYAN gui_rgb16(0, 128, 138)
 #define COLOUR_ORANGE gui_rgb16(200, 125, 0)
+#define COLOUR_RED gui_rgb16(220, 40, 40)
 
 void gui_init();
 void gui_clear(uint16_t colour);

@@ -17,7 +17,7 @@ void draw_menu_item(wo_t *menu, draw_context_t context, int index) {
 
    int bgwidth = menu->width - 2;
    if(menu_data->scrollbar_visible)
-      bgwidth -= 14;
+      bgwidth -= MENU_SCROLLBAR_WIDTH;
 
    int item_height = get_font_info().height + 7;
 
@@ -37,7 +37,7 @@ void draw_menu_item(wo_t *menu, draw_context_t context, int index) {
    // border
    draw_line(&context, border_light, x + 1, y + item_height - 1, false, bgwidth);
    // draw text
-   context.clipRect.width -= 5*2;
+   context.clipRect.width -= MENU_TEXT_INSET*2;
    uint16_t txtcolour = item->enabled ? 0 : rgb16(200, 200, 200);
    draw_string(&context, item->text, txtcolour, x + 5, y + 4);
 }
@@ -55,7 +55,7 @@ void draw_menu_scrollbar(wo_t *menu, draw_context_t context) {
    int item_height = get_font_info().height + 7;
    int max_items = menu->height/item_height;
 
-   int width = 14;
+   int width = MENU_SCROLLBAR_WIDTH;
    int scrollbarX = x + menu->width - width - 1;
    int scrollbarY = y + 1;
    int scrollAreaHeight = menu->height - width*2 - 2;
@@ -112,7 +112,7 @@ void draw_menu(wo_t *menu, draw_context_t context) {
 
    int bgwidth = menu->width - 2;
    if(menu_data->scrollbar_visible)
-      bgwidth -= 14;
+      bgwidth -= MENU_SCROLLBAR_WIDTH;
 
    // draw background
    draw_rect(&context, bg, x + 1, y + 1 + shown_height, bgwidth, menu->height - 2 - shown_height);
@@ -185,7 +185,7 @@ void menu_click(wo_t *menu, draw_context_t context, int x, int y) {
    if(menu == NULL || menu->data == NULL) return;
    menu_t *menu_data = (menu_t *)menu->data;
    // scrollbar click
-   if(menu_data->scrollbar_visible && x > menu->width - 14 - 1) {
+   if(menu_data->scrollbar_visible && x > menu->width - MENU_SCROLLBAR_WIDTH - 1) {
       if(y < 15) {
          // up click
          menu_data->offset--;
@@ -295,7 +295,7 @@ void menu_hover(wo_t *menu, draw_context_t context, int x, int y) {
       menu_data->scrolling = false;
    }
    int old_index = menu_data->hover_index;
-   if(menu_data->scrollbar_visible && x > menu->width - 14 - 1) {
+   if(menu_data->scrollbar_visible && x > menu->width - MENU_SCROLLBAR_WIDTH - 1) {
       if(menu_data->hover_index == -1) return;
       menu_data->hover_index = -1;
       draw_menu_item(menu, context, old_index);
@@ -322,10 +322,24 @@ void menu_unhover(wo_t *menu, draw_context_t context) {
 }
 
 void resize_menu(wo_t *menu) {
+   if(menu == NULL || menu->data == NULL) return;
+   font_info_t font_info = get_font_info();
    menu_t *menu_data = (menu_t *)menu->data;
-   int item_height = get_font_info().height + 7;
+   int item_height = font_info.height + 7;
+   int max_len = 0;
+   for(int i = 0; i < menu_data->item_count; i++) {
+      menu_item_t *item = &menu_data->items[i];
+      int len = strlen(item->text);
+      if(len > max_len)
+         max_len = len;
+   }
+
    menu->height = menu_data->item_count*item_height;
    menu_data->scrollbar_visible = false;
+   menu_data->offset = 0;
+
+   int width = max_len * (font_info.width + font_info.padding) + MENU_TEXT_INSET*2;
+   menu->width = (width < MENU_MIN_WIDTH) ? MENU_MIN_WIDTH : width;
 }
 
 wo_t *create_menu(int x, int y, int width, int height) {

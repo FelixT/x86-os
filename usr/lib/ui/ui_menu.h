@@ -5,6 +5,10 @@
 
 #include "wo.h"
 
+#define MENU_SCROLLBAR_WIDTH 14
+#define MENU_TEXT_INSET 5 // padding either side of item text
+#define MENU_MIN_WIDTH 40
+
 typedef struct menu_item_t {
    char text[64];
    void (*func)(wo_t *item, int index, int window);

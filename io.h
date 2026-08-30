@@ -31,4 +31,12 @@ static inline void outl(uint16_t port, uint32_t val) {
    asm volatile("outl %0, %1" : : "a"(val), "Nd"(port));
 }
 
+static inline void insw(uint16_t port, void *addr, uint32_t count) {
+   asm volatile("rep insw" : "+D"(addr), "+c"(count) : "d"(port) : "memory");
+}
+
+static inline void outsw(uint16_t port, void *addr, uint32_t count) {
+   asm volatile("rep outsw" : "+S"(addr), "+c"(count) : "d"(port) : "memory");
+}
+
 #endif

@@ -615,6 +615,7 @@ void show_add_menu(wo_t *wo, int window) {
       add_menu_item(menu, "New file", (void*)&add_file);
       add_menu_item(menu, "New folder", (void*)&add_folder);
       resize_menu(menu);
+      menu->x = wo_menu->width - menu->width; // resize_menu content-sizes the width
       menu->y = wo_menu->y - menu->height;
       if(wo->x < menu->x)
          menu->x = wo->x;
@@ -625,7 +626,7 @@ void show_add_menu(wo_t *wo, int window) {
    } else {
       addnew_menu->visible = !addnew_menu->visible;
       if(addnew_menu->visible) {
-         addnew_menu->x = wo_menu->width - 70;
+         addnew_menu->x = wo_menu->width - addnew_menu->width;
          addnew_menu->y = wo_menu->y - addnew_menu->height;
          if(wo->x < addnew_menu->x)
             addnew_menu->x = wo->x;
@@ -644,6 +645,7 @@ void show_view_menu(wo_t *wo, int window) {
       add_menu_item(menu, "View list", (void*)&view_list);
       add_menu_item(menu, "View grid", (void*)&view_grid);
       resize_menu(menu);
+      menu->x = wo_menu->width - menu->width; // resize_menu content-sizes the width
       menu->y = wo_menu->y - menu->height;
       if(wo->x < menu->x)
          menu->x = wo->x;
@@ -654,7 +656,7 @@ void show_view_menu(wo_t *wo, int window) {
    } else {
       view_menu->visible = !view_menu->visible;
       if(view_menu->visible) {
-         view_menu->x = wo_menu->width - 70;
+         view_menu->x = wo_menu->width - view_menu->width;
          view_menu->y = wo_menu->y - view_menu->height;
          if(wo->x < view_menu->x)
             view_menu->x = wo->x;

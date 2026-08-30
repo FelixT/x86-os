@@ -451,7 +451,7 @@ void cmd_open(char *arg) {
 
    int size = fsize(fileno(f));
    char *buffer = malloc(size+1);
-   if(!fread(buffer, size, 1, f)) {
+   if((int)fread(buffer, 1, size, f) != size) {
       free(buffer);
       printf("open: Couldn't read file '%s'\n", path);
       fclose(f);

@@ -19,6 +19,7 @@ int width = 0;
 int height = 0;
 char path[256];
 surface_t surface;
+bool transparent = false;
 
 wo_t *wo_menu; // canvas
 wo_t *options = NULL;
@@ -47,6 +48,15 @@ void drawbg() {
    draw_checkeredrect(&surface, 0xBDF7, 0xDEDB, 0, 0, width, height);
 }
 
+void redraw_all() {
+   drawbg();
+   bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
+   ui_draw(dialog->ui);
+   redraw();
+}
+
+bool ignore_draw = false; // don't paint until the mouse is released
+
 void resize(uint32_t fb, uint32_t w, uint32_t h) {
    framebuffer = (uint16_t*)fb;
 
@@ -58,7 +68,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_menu->y = height - wo_menu->height;
    wo_menu->width = w;
    drawbg();
-   bmp_draw(bmp, -offsetX, -offsetY, scale, false);
+   bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
    ui_draw(dialog->ui);
    redraw();
    end_subroutine();
@@ -232,6 +242,20 @@ int prevY = -1;
 
 void click(int x, int y) {
 
+   if(dialog->ui->shown_menu) {
+      ui_click(dialog->ui, x, y);
+      ignore_draw = true; // swallow the drag events until release
+      prevX = -1;
+      prevY = -1;
+      hover_x = -1;
+      hover_y = -1;
+      redraw_all();
+      end_subroutine();
+   }
+
+   if(ignore_draw)
+      end_subroutine();
+
    if(info->bpp != 16) {
       ui_click(dialog->ui, x, y);
       end_subroutine();
@@ -245,16 +269,8 @@ void click(int x, int y) {
       end_subroutine();
    }
 
-   bool menu_visible = dialog->ui->default_menu->visible;
-   if(ui_click(dialog->ui, x, y)) {
-      if(menu_visible && !dialog->ui->default_menu->visible) {
-         drawbg();
-         bmp_draw(bmp, -offsetX, -offsetY, scale, false);
-         ui_draw(dialog->ui);
-         redraw();
-      }
+   if(ui_click(dialog->ui, x, y))
       end_subroutine();
-   }
 
    if(hover_x != -1 && hover_y != -1) {
       // restore old colour
@@ -289,6 +305,7 @@ void release(int x, int y, int window) {
    (void)window;
    prevX = -1;
    prevY = -1;
+   ignore_draw = false;
 
    ui_release(dialog->ui, x, y);
 
@@ -297,6 +314,9 @@ void release(int x, int y, int window) {
 
 void hover(int x, int y) {
    ui_hover(dialog->ui, x, y);
+
+   if(dialog->ui->shown_menu)
+      end_subroutine();
 
    int sz = scale*size;
    if(y >= height - wo_menu->height - sz - 2) {
@@ -378,7 +398,7 @@ void zoomout_click(wo_t *wo, int window) {
    sprintf(buf, "%i00%", scale);
    set_input_text(zoomtext_wo, buf);
    drawbg();
-   bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale, transparent);
    ui_draw(dialog->ui);
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
@@ -393,7 +413,7 @@ void zoomin_click(wo_t *wo, int window) {
    sprintf(buf, "%i00%", scale);
    set_input_text(zoomtext_wo, buf);
    drawbg();
-   bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+   bmp_draw((uint8_t*)bmp, 0, 0, scale, transparent);
    ui_draw(dialog->ui);
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
@@ -440,7 +460,7 @@ void load_img() {
    }
    int size = fsize(fileno(f));
    char *buf = (char*)malloc(size);
-   if(!fread(buf, size, 1, f)) {
+   if((int)fread(buf, 1, size, f) != size) {
       dialog_msg("Error", "Couldn't read file\n");
       exit(0);
    }
@@ -451,7 +471,7 @@ void load_img() {
    info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
    if(bmp_check()) {
       drawbg();
-      bmp_draw((uint8_t*)bmp, 0, 0, scale, false);
+      bmp_draw((uint8_t*)bmp, 0, 0, scale, transparent);
    }
 
    bmp_header_t *header = (bmp_header_t*)bmp;
@@ -482,9 +502,18 @@ void write_file() {
    height -= wo_menu->height; // remove menu bar
    bmp_header_t *header = (bmp_header_t*)bmp;
    uint32_t size = header->dataOffset + rowSize * info->height;
-   fseek(current_file, 0, SEEK_SET);
-   fwrite(bmp, size, 1, current_file);
-   fflush(current_file);
+   if(fseek(current_file, 0, SEEK_SET) < 0) {
+      dialog_msg("Error", "Couldn't write file");
+      height += wo_menu->height; // restore
+      return;
+   }
+   if(fwrite(bmp, size, 1, current_file) != 1) {
+      dialog_msg("Error", "Couldn't write file");
+   } else if(fflush(current_file) < 0) {
+      dialog_msg("Error", "Couldn't write file");
+   } else if(ftruncate(fileno(current_file), (int)size) < 0) {
+      dialog_msg("Error", "Couldn't resize file");
+   }
    height += wo_menu->height; // restore
 }
 
@@ -519,7 +548,7 @@ void scroll(int deltaY, int offY, int window) {
    (void)window;
    offsetY = offY;
    dialog->ui->scrolled_y = offY;
-   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
+   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, transparent);
    ui_draw(dialog->ui);
    redraw();
    end_subroutine();
@@ -536,7 +565,7 @@ void brush_close(wo_t *wo, int window) {
    wo->selected = false;
    options->visible = false;
    drawbg();
-   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, false);
+   bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, transparent);
    ui_draw(dialog->ui);
 }
 
@@ -653,7 +682,7 @@ void resize_complete(wo_t *wo, int window) {
    info->height = newheight;
    dialog_close(wo, window);
    drawbg();
-   bmp_draw(bmp, -offsetX, -offsetY, scale, false);
+   bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
    ui_draw(dialog->ui);
    redraw();
    dialog->content_height = info->height*scale + 20;
@@ -745,7 +774,17 @@ void new_image(wo_t *wo, int index, int window) {
       memset16(row, colour, width);
    }
    if(bmp_check())
-      bmp_draw(bmp, 0, 0, scale, false);
+      bmp_draw(bmp, 0, 0, scale, transparent);
+}
+
+void toggle_transparent(wo_t *wo, int index, int window) {
+   (void)wo;
+   (void)index;
+   (void)window;
+   transparent = !transparent;
+   drawbg();
+   bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
+   ui_draw(dialog->ui);
 }
 
 void _start(int argc, char **args) {
@@ -871,6 +910,7 @@ void _start(int argc, char **args) {
    add_menu_item(dialog->ui->default_menu, "Invert colours", &invert_colours);
    add_menu_item(dialog->ui->default_menu, "Resize/Info", &resize_image);
    add_menu_item(dialog->ui->default_menu, "New image", &new_image);
+   add_menu_item(dialog->ui->default_menu, "Toggle transparent", &toggle_transparent);
    resize_menu(dialog->ui->default_menu);
 
    while(1==1) {

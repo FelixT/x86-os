@@ -60,6 +60,8 @@ void memory_init() {
 }
 
 void *malloc(int bytes) {
+   if(bytes <= 0) return NULL;
+
    // find continuous block of free memory of size bytes
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;  // rounding up
 

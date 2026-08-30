@@ -331,7 +331,10 @@ void term_cmd_test() {
 }
 
 void term_cmd_fat() {
-   fat_setup();
+   if(fat_setup())
+      window_term_printf("\nFAT re-initialised");
+   else
+      window_term_printf("\nFAT init failed");
 }
 
 void term_cmd_desktop() {

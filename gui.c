@@ -122,7 +122,10 @@ void gui_init_meat(void *regs, void *msg) {
    gui_writestr("Enabling ATA HD\n", COLOUR_ORANGE);
    ata_identify(true, true);
    gui_writestr("Enabling FAT\n", COLOUR_ORANGE);
-   fat_setup();
+   if(!fat_setup()) {
+      gui_writestr("Failed to init fat\n", COLOUR_RED);
+      while(true) {} // hang
+   }
    gui_writestr("Enabling paging\n", COLOUR_ORANGE);
    page_init();
    gui_writestr("Enabling desktop\n", COLOUR_ORANGE);

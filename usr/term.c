@@ -98,18 +98,21 @@ void term_cmd_viewbmp(char *arg) {
 void term_cmd_fread(char *arg) {
    char path[256];
    get_abs_path(path, arg);
-   FILE *f = fopen(path, 0);
+   FILE *f = fopen(path, "r");
    if(!f) {
       printf("File not found\n");
       return;
    }
    int size = fsize(fileno(f));
    char *buffer = malloc(size);
-   int read = fread(buffer, size, 1, f);
-   if(read)
+   int read = (int)fread(buffer, 1, size, f);
+   fclose(f);
+   if(read == size) {
       printf("File size %i loaded into 0x%h\n", size, (uint32_t)buffer);
-   else
+   } else {
       printf("Couldn't read file\n");
+      free(buffer);
+   }
 }
 
 void term_cmd_dmpmem(char *arg) {
@@ -324,12 +327,13 @@ void term_cmd_cat(char *arg) {
    int size = fsize(fileno(f));
    printf("Opened file '%s' with size %u\n", path, size);
    char *buf = (char*)malloc(size+1);
-   if(!fread(buf, size, 1, f)) {
+   if((int)fread(buf, 1, size, f) != size) {
       printf("Couldn't read file\n");
       free(buf);
+      fclose(f);
       return;
    }
-   buf[f->content_size] = '\0';
+   buf[size] = '\0';
    printf("%s\n", buf);
    free(buf);
    fclose(f);

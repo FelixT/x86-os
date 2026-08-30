@@ -100,13 +100,22 @@ static inline void redraw_pixel(int x, int y) {
    );
 }
 
-static inline void exit(int status) {
+// exit syscall
+static inline void _exit(int status) {
    asm volatile(
       "int $0x30"
       :: "a" (10),
       "b" (status)
       : "cc", "memory"
    );
+}
+
+extern void fclose_all(void) __attribute__((weak));
+
+static inline void exit(int status) {
+   if(fclose_all) // if linked with stdio
+      fclose_all();
+   _exit(status);
 }
 
 static inline void end_subroutine() {
@@ -611,6 +620,19 @@ static inline int fpsize(char *path) {
       : "cc", "memory"
    );
    return size;
+}
+
+static inline int ftruncate(int fd, int size) {
+   int result;
+   asm volatile (
+      "int $0x30;movl %%ebx, %0;"
+      : "=r" (result)
+      : "a" (88),
+      "b" ((uint32_t)fd),
+      "c" ((uint32_t)size)
+      : "cc", "memory"
+   );
+   return result;
 }
 
 static inline int read(int fd, char *buf, size_t count) {

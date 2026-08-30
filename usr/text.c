@@ -114,24 +114,39 @@ void save_func(wo_t *wo, int window) {
          FILE *f = fopen(get_input(wo_path)->text, "w");
          if(!f) {
             error("Couldn't create file");
+            return;
          }
          current_file = f;
       } else {
          char buffer[256];
          sprintf(buffer, "Invalid path '%s'", get_input(wo_path)->text);
          error(buffer);
+         return;
       }
    }
 
-   fseek(current_file, 0, SEEK_SET);
-   int w = fwrite(get_textarea(wo_text)->text, strlen(get_textarea(wo_text)->text), 1, current_file);
-   debug_println("Wrote %i bytes %i", w, strlen(get_textarea(wo_text)->text));
-   if(w <= 0 && strlen(get_textarea(wo_text)->text) > 0) {
+   char *text = get_textarea(wo_text)->text;
+   int len = strlen(text);
+
+   if(fseek(current_file, 0, SEEK_SET) < 0) {
       error("Write failed");
-   } else {
-      fflush(current_file);
-      set_input_text(wo_status, "Saved");
+      return;
    }
+   int w = fwrite(text, len, 1, current_file);
+   debug_println("Wrote %i bytes %i", w, len);
+   if(w <= 0 && len > 0) {
+      error("Write failed");
+      return;
+   }
+   if(fflush(current_file) < 0) {
+      error("Write failed");
+      return;
+   }
+   if(ftruncate(fileno(current_file), len) < 0) {
+      error("Couldn't resize file");
+      return;
+   }
+   set_input_text(wo_status, "Saved");
 }
 
 void filepicker_return(char *path, int window) {

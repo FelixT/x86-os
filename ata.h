@@ -31,20 +31,29 @@
 #define ATA_REG_STATUS 0x07
 #define ATA_REG_COMMAND 0x07
 
-#define ATA_CTRL_REG_ALT_STATUS 0x00
+#define ATA_CTRL_REG_ALT_STATUS 0x00 // read
+#define ATA_CTRL_REG_DEV_CONTROL 0x00 // write
+#define ATA_CTRL_SRST 0x04 // software reset, resets both drives on the bus
 
-#define ATA_STATUS_BIT_ERR 0x01
-#define ATA_STATUS_BIT_DRQ 0x08
-#define ATA_STATUS_BIT_SRV 0x10
-#define ATA_STATUS_BIT_DF 0x20
-#define ATA_STATUS_BIT_RDY 0x40
-#define ATA_STATUS_BIT_BSY 0x80
+#define ATA_STATUS_BIT_ERR 0x01 // error
+#define ATA_STATUS_BIT_DRQ 0x08 // data request, drive has data ready / wants data
+#define ATA_STATUS_BIT_SRV 0x10 // service request
+#define ATA_STATUS_BIT_DF 0x20 // drive fail
+#define ATA_STATUS_BIT_RDY 0x40 // ready
+#define ATA_STATUS_BIT_BSY 0x80 // busy
 
 #define ATA_SECTOR_SIZE 512 // bytes
+#define ATA_MAX_SECTORS 256 // max sectors per r/w op (8-bit count reg, 0 encodes 256)
+
+#define ATA_POLL_SPINS 10000000
+#define ATA_DRAIN_SPINS (ATA_MAX_SECTORS*256)
+#define ATA_RESET_DELAYS 20
 
 void ata_identify(bool primaryBus, bool masterDrive);
+void ata_recover(uint16_t ioPort);
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes);
-void ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *buf, int size);
+bool ata_read_exact_into(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes, uint8_t *outBuf);
+bool ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *buf, int size);
 void ata_interrupt(registers_t *regs);
 
 #endif

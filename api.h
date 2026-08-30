@@ -45,6 +45,7 @@ void api_read(registers_t *regs);
 void api_debug_write_str(registers_t *regs);
 void api_sbrk(registers_t *regs);
 void api_open(registers_t *regs);
+void api_truncate(registers_t *regs);
 void api_write(registers_t *regs);
 void api_fsize(registers_t *regs);
 void api_fpsize(registers_t *regs);

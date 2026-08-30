@@ -31,14 +31,10 @@ FILE *fopen(const char *filename, const char *mode) {
     FILE *file = get_free_file();
     if(!file) return NULL;
     
-    // copy filename
-    file->path = (char*)malloc(512);
-    if(!file->path) return NULL;
-    strcpy(file->path, (char*)filename);
-    
     // copy mode
     strncpy(file->mode, mode, sizeof(file->mode) - 1);
     file->mode[sizeof(file->mode) - 1] = '\0';
+    file->is_stream = 0;
     
     bool mode_r = strchr(mode, 'r') != NULL;
     bool mode_w = strchr(mode, 'w') != NULL;
@@ -47,166 +43,152 @@ FILE *fopen(const char *filename, const char *mode) {
 
     if(!mode_r && !mode_w && !mode_a) {
         debug_write_str("fopen: invalid mode\n");
-        free(file->path);
-        file->path = NULL;
         return NULL;
     }
 
-    int flag = 0;
-    if(mode_w || mode_a)
-        flag |= FS_FLAG_CREATE;
-    if(mode_w || mode_a || mode_plus)
-        flag |= FS_FLAG_TRUNCATE;
-    if(mode_r && !mode_w && !mode_a && !mode_plus)
-        flag |= FS_FLAG_READONLY; // "r"
-    else if(mode_w && !mode_plus)
-        flag |= FS_FLAG_WRITEONLY; // "w"
+    file->buffer_pos = 0;
+    file->buffer = NULL; // lazy allocated on first write
 
-    file->fd = open(file->path, flag);
-    if(file->fd == -1) {
-        debug_println("fopen failed");
-        free(file->path);
-        file->path = NULL;
-        return NULL;
-    }
-
-    // handle streams
-    if(strncmp(file->path, "/dev/", 5) == 0) {
+    if(strncmp((char*)filename, "/dev/", 5) == 0) {
+        file->fd = open((char*)filename, mode_r ? FS_FLAG_READONLY : FS_FLAG_WRITEONLY);
+        if(file->fd == -1) return NULL;
         file->is_stream = 1;
-        file->buffer = NULL;
-        file->size = 0;
-        file->content_size = 0;
-        file->position = 0;
         file->is_open = 1;
-        file->dirty = 0;
         return file;
     }
 
-    if(mode_r || mode_a) {
-        // append or rw, read in current file contents but allocate an extra 4096 bytes
-        // todo: lazy loading
-        int size = fsize(file->fd);
-        file->buffer = malloc(size + 0x1000);
-        if(!file->buffer) {
-            free(file->path);
-            file->path = NULL;
-            return NULL;
-        }
-        if(size > 0)
-            read(file->fd, (char*)file->buffer, size);
-        file->size = size + 0x1000;
-        file->content_size = size;
-        file->position = mode_a ? (uint32_t)size : 0; // append starts at eof
-    } else {
-        // w/w+
-        file->buffer = (uint8_t*)malloc(0x1000);
-        if(!file->buffer) {
-            free(file->path);
-            file->path = NULL;
-            return NULL;
-        }
-        file->size = 0x1000;
-        file->content_size = 0;
-        file->position = 0;
+    int flag = 0;
+    if(!mode_plus)
+        flag |= mode_r ? FS_FLAG_READONLY : FS_FLAG_WRITEONLY; // "r" / "w" / "a"
+    if(mode_w || mode_a)
+        flag |= FS_FLAG_CREATE;
+    if(mode_a)
+        flag |= FS_FLAG_APPEND; // writes always go to eof
+    if(mode_w)
+        flag |= FS_FLAG_TRUNCATE; // "w"/"w+": existing contents are dropped on open
+
+    file->fd = open((char*)filename, flag);
+    if(file->fd == -1) {
+        debug_println("fopen failed");
+        return NULL;
     }
-    
+
     file->is_open = 1;
-    file->dirty = 0;
-    
     return file;
 }
 
 size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream) {
-    if(!stream || !stream->is_open) return 0;
+    if(!stream || !stream->is_open || size == 0) return 0;
 
     size_t total_bytes = size * count;
+    if(total_bytes == 0) return 0;
 
-    // streams: no buffering
+    // unbuffered
     if(stream->is_stream) {
-        if(total_bytes == 0) return 0;
         int n = write(stream->fd, (char*)ptr, total_bytes);
-        if(n <= 0) return 0;
+        if(n < 0) return 0;
         return (size_t)n / size;
     }
 
-    debug_println("fwrite: Position %i bytes %i size %i", stream->position, total_bytes, stream->size);
+    if(!stream->buffer) {
+        stream->buffer = malloc(STDIO_BUFFER_SIZE);
+        if(!stream->buffer) return 0;
+        stream->buffer_pos = 0;
+    }
 
-    // expand buffer if needed
-    if(stream->position + total_bytes > stream->size) {
-        uint32_t new_size = stream->position + total_bytes + 0x1000;
-        uint8_t *new_buffer = malloc(new_size);
-        if(!new_buffer) return 0; // resize failed
-        memset(new_buffer, 0, new_size);
-        memcpy(new_buffer, stream->buffer, stream->content_size);
-        free(stream->buffer);
-        stream->buffer = new_buffer;
-        stream->size = new_size;
+    uint32_t written_bytes = 0;
+    uint32_t remaining_bytes = total_bytes;
+    while(remaining_bytes > 0) {
+        uint32_t capacity = STDIO_BUFFER_SIZE - stream->buffer_pos;
+        uint32_t write_bytes = (remaining_bytes > STDIO_BUFFER_SIZE) ? STDIO_BUFFER_SIZE : remaining_bytes;
+        if(write_bytes > capacity) {
+            write_bytes = capacity;
+        }
+        if(write_bytes == 0) {
+            if(fflush(stream) < 0) {
+                return written_bytes / size;
+            }
+            continue;
+        }
+
+        memcpy(stream->buffer + stream->buffer_pos, (uint8_t*)ptr + written_bytes, write_bytes);
+        stream->buffer_pos += write_bytes;
+        written_bytes += write_bytes;
+        remaining_bytes -= write_bytes;
     }
-    
-    // copy data to buffer
-    memcpy(stream->buffer + stream->position, ptr, total_bytes);
-    if(stream->position + total_bytes > stream->content_size) {
-        stream->content_size = stream->position + total_bytes;
-    }
-    stream->position += total_bytes;
-    stream->dirty = 1;
-    
-    return count;
+
+    return written_bytes / size;
 }
 
 size_t fread(void *ptr, size_t size, size_t count, FILE *stream) {
-    if(!stream || !stream->is_open) return 0;
+    if(!stream || !stream->is_open || size == 0) return 0;
 
     size_t total_bytes = size * count;
+    if(total_bytes == 0) return 0;
 
-    // streams: read straight from the fd (blocks for stdin/pipes)
+    // flush writes before reading
+    if(fflush(stream) < 0)
+        return 0;
+
     if(stream->is_stream) {
-        if(total_bytes == 0) return 0;
         int n = read(stream->fd, (char*)ptr, total_bytes);
         if(n <= 0) return 0;
         return (size_t)n / size;
     }
 
-    size_t available = stream->size - stream->position;
-    
-    if(total_bytes > available) {
-        total_bytes = available;
-        count = total_bytes / size;
+
+    size_t read_bytes = 0;
+    while(read_bytes < total_bytes) {
+        int n = read(stream->fd, (char*)ptr + read_bytes, total_bytes - read_bytes);
+        if(n <= 0) break;
+        read_bytes += (size_t)n;
     }
-    memcpy(ptr, stream->buffer + stream->position, total_bytes);
-    stream->position += total_bytes;
-    
-    return count;
+
+    return read_bytes / size;
 }
 
 int fclose(FILE *stream) {
     if(!stream || !stream->is_open) return -1;
-    
-    // if file was modified, write it back
-    if(stream->dirty && (strchr(stream->mode, 'w') || strchr(stream->mode, 'a') || strchr(stream->mode, '+'))) {
-        debug_println("Writing %u bytes", stream->content_size);
-        write(stream->fd, (char*)stream->buffer, stream->content_size);
-    }
-    
-    // Clean up
-    if(stream->path)
-        free(stream->path);
-    if(stream->buffer)
+
+    int result = (fflush(stream) < 0) ? -1 : 0;
+    close(stream->fd);
+    if(stream->buffer) {
         free(stream->buffer);
-    
+        stream->buffer = NULL;
+    }
     memset(stream, 0, sizeof(FILE));
-    
-    return 0;
+
+    return result; // flush successful
+}
+
+void fclose_all() {
+    if(!files_initialized) return; // nothing was ever opened
+    for(int i = 0; i < MAX_FILES; i++) {
+        if(file_table[i].is_open)
+            fclose(&file_table[i]);
+    }
 }
 
 int fflush(FILE *stream) {
     if(!stream || !stream->is_open) return -1;
-    
-    if(stream->dirty && (strchr(stream->mode, 'w') || strchr(stream->mode, 'a') || strchr(stream->mode, '+'))) {
-        write(stream->fd, (char*)stream->buffer, stream->content_size);
-        stream->dirty = 0;
+    if(!stream->buffer || stream->buffer_pos == 0) return 0; // nothing to flush
+
+    uint32_t sent = 0;
+    while(sent < stream->buffer_pos) {
+        int n = write(stream->fd, (char*)stream->buffer + sent, stream->buffer_pos - sent);
+        if(n <= 0) break; // error
+        sent += (uint32_t)n;
     }
-    
+
+    if(sent < stream->buffer_pos) {
+        // in case of error, keep bytes awaiting flush
+        memmove(stream->buffer, stream->buffer + sent, stream->buffer_pos - sent);
+        stream->buffer_pos -= sent;
+        return -1;
+    }
+
+    stream->buffer_pos = 0;
+
     return 0;
 }
 
@@ -216,15 +198,17 @@ int fileno(FILE *stream) {
     return stream->fd;
 }
 
-void fseek(FILE *stream, int pos, int type) {
-    if(!stream) return;
-
-    if(type == SEEK_SET)
-        stream->position = pos;
-    if(type == SEEK_CUR)
-        stream->position += pos;
-    if(type == SEEK_END)
-        stream->position = stream->content_size;
+int fseek(FILE *stream, int pos, int type) {
+    if(!stream || !stream->is_open || stream->is_stream) return -1;
+    if(fflush(stream) < 0) {
+        debug_write_str("fseek: flush failed, not seeking\n");
+        return -1;
+    }
+    if(seek(stream->fd, pos, type) < 0) {
+        debug_write_str("fseek: seek failed\n");
+        return -1;
+    }
+    return 0;
 }
 
 void debug_println(const char *format, ...) {
@@ -270,6 +254,13 @@ void fprintf(FILE *stream, const char *format, ...) {
 }
 
 int ftell(FILE *stream) {
-    if(!stream) return -1;
-    return stream->position;
+    if(!stream || !stream->is_open) return -1;
+    if(stream->is_stream) return 0;
+    int size;
+    if(strchr(stream->mode, 'a') != NULL && !(strchr(stream->mode, '+') != NULL))
+        size = fsize(stream->fd);
+    else
+        size = seek(stream->fd, 0, SEEK_CUR);
+    if(size < 0) return -1;
+    return size + stream->buffer_pos;
 }
