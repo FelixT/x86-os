@@ -16,7 +16,7 @@ void resize() {
 }
 
 void _start() {
-   set_window_size(160, 40);
+   set_window_size(160, 25);
    set_window_position(get_surface_w(-2).width - 160 - 10, 10, -1);
    set_window_title("Clock");
 
@@ -25,23 +25,23 @@ void _start() {
    override_draw(0, -1);
    override_resize(&resize, -1);
 
-   wo_t *hour_label = create_label(10, 10, 40, 14, "HH");
+   wo_t *hour_label = create_label(10, 5, 40, 14, "HH");
    get_label(hour_label)->filled = true;
    ui_add(ui, hour_label);
 
-   wo_t *colon_label1 = create_label(50, 12, 10, 14, ":");
+   wo_t *colon_label1 = create_label(50, 7, 10, 14, ":");
    get_label(colon_label1)->bordered = false;
    ui_add(ui, colon_label1);
 
-   wo_t *minute_label = create_label(60, 10, 40, 14, "MM");
+   wo_t *minute_label = create_label(60, 5, 40, 14, "MM");
    get_label(minute_label)->filled = true;
    ui_add(ui, minute_label);
 
-   wo_t *colon_label2 = create_label(100, 12, 10, 14, ":");
+   wo_t *colon_label2 = create_label(100, 7, 10, 14, ":");
    get_label(colon_label2)->bordered = false;
    ui_add(ui, colon_label2);
 
-   wo_t *second_label = create_label(110, 10, 40, 14, "SS");
+   wo_t *second_label = create_label(110, 5, 40, 14, "SS");
    get_label(second_label)->filled = true;
    ui_add(ui, second_label);
 

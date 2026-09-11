@@ -20,6 +20,7 @@ targets i686 (FPU not required)
 - Futexes (private + cross process via shared memory)
 - Shared memory
 - PCI driver and privileged usermode network driver (RTL8139)
+- Message passing IPC with async queues
 
 ### build on mac/linux
 
@@ -47,7 +48,7 @@ Graphics performance seems best using `-display gtk`
 
 ### hot reload usrmode/hd
 
-`bash usr/make.sh && bash make_hd.sh && bash make_run.sh`
+`bash usr/make.sh && bash make_hd.sh`
 
 ### architecture
 

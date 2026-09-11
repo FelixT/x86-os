@@ -1423,9 +1423,10 @@ fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir) {
 }
 
 fat_dir_t *fat_parse_path(char *path, bool isFile) {
-   char *pathRemaining = malloc(strlen(path)+1);
-   char *tmp = malloc(strlen(path)+1);
-   char *pathElement = malloc(strlen(path)+1);
+   int pathlen = strlen(path);
+   char *pathRemaining = malloc(pathlen+1);
+   char *tmp = malloc(pathlen+1);
+   char *pathElement = malloc(pathlen+1);
    strcpy(pathRemaining, path);
 
    int i = 0; // arg no
@@ -1446,9 +1447,9 @@ fat_dir_t *fat_parse_path(char *path, bool isFile) {
          free((uint32_t)lastDir, sizeof(fat_dir_t));
 
          if(curDir == NULL) {
-            free((uint32_t)tmp, strlen(path)+1);
-            free((uint32_t)pathRemaining, strlen(path)+1);
-            free((uint32_t)pathElement, strlen(path)+1);
+            free((uint32_t)tmp, pathlen+1);
+            free((uint32_t)pathRemaining, pathlen+1);
+            free((uint32_t)pathElement, pathlen+1);
             return NULL; // file not found
          }
       }
@@ -1457,9 +1458,9 @@ fat_dir_t *fat_parse_path(char *path, bool isFile) {
    }
 
    if(!isFile) {
-      free((uint32_t)tmp, strlen(path)+1);
-      free((uint32_t)pathRemaining, strlen(path)+1);
-      free((uint32_t)pathElement, strlen(path)+1);
+      free((uint32_t)tmp, pathlen+1);
+      free((uint32_t)pathRemaining, pathlen+1);
+      free((uint32_t)pathElement, pathlen+1);
       return curDir; // don't follow into the file itself
    }
    
@@ -1467,9 +1468,9 @@ fat_dir_t *fat_parse_path(char *path, bool isFile) {
    fat_dir_t *lastDir = curDir;
    curDir = fat_follow_path_chain(pathRemaining, curDir);
 
-   free((uint32_t)tmp, strlen(path)+1);
-   free((uint32_t)pathRemaining, strlen(path)+1);
-   free((uint32_t)pathElement, strlen(path)+1);
+   free((uint32_t)tmp, pathlen+1);
+   free((uint32_t)pathRemaining, pathlen+1);
+   free((uint32_t)pathElement, pathlen+1);
 
    if(lastDir != curDir)
       free((uint32_t)lastDir, sizeof(fat_dir_t));

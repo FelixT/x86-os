@@ -15,6 +15,7 @@
 #include "futex.h"
 #include "shared.h"
 #include "pci.h"
+#include "msg.h"
 
 // helper funcs
 
@@ -60,6 +61,11 @@ static inline bool api_validate_mem(void *mem, int len, bool rw) {
 
 static inline int api_validate_maxsize(void *mem, int max, bool rw) {
    return task_validate_maxsize(get_current_task_state(), mem, max, rw);
+}
+
+// write to correct registers even after potential task switch
+static inline registers_t *api_write_regs(registers_t *regs, task_state_t *task) {
+   return get_current_task_state() == task ? regs : &task->registers;
 }
 
 // api funcs
@@ -150,7 +156,7 @@ void api_write_number_at(registers_t *regs) {
 }
 
 void api_yield(registers_t *regs) {
-   task_execute_queued_subroutine(regs, (void*)get_current_task()); // launch queued routine if any
+   task_execute_queued_subroutine(regs, get_current_task()); // launch queued routine if any
    switch_task(regs);
 }
 
@@ -636,7 +642,7 @@ void api_sbrk(registers_t *regs) {
 
 // find the lowest free fd, slot claimed via commit_fd
 static int alloc_fd(process_t *process) {
-   for(int i = 0; i < TASK_MAX_FDS; i++) {
+   for(int i = 0; i < PROCESS_MAX_FDS; i++) {
       if(process->file_descriptors[i] == NULL)
          return i;
    }
@@ -724,7 +730,7 @@ void api_read_stdin_callback(void *regs, char *buffer) {
       task->paused = false;
       r->ebx = strlen(buffer);
       switch_to_task(task->task_id, regs); // wake
-      task_execute_queued_subroutine(regs, (void*)task->task_id); // check for queued events while task was paused
+      task_execute_queued_subroutine(regs, task->task_id); // check for queued events while task was paused
    } else {
       debug_printf("Couldn't find window\n");
       r->ebx = -1;
@@ -736,7 +742,7 @@ void api_read_fd_callback(void *regs, int task, int size) {
    gettasks()[task].paused = false;
    switch_to_task(task, r); // wake
    r->ebx = size;
-   task_execute_queued_subroutine(r, (void*)task); // check for queued events while task was paused
+   task_execute_queued_subroutine(r, task); // check for queued events while task was paused
 }
 
 void api_read(registers_t *regs) {
@@ -1358,10 +1364,12 @@ void api_get_tasks(registers_t *regs) {
    // OUT: ebx api_task_t *
    // OUT: ecx size
    api_task_t *tasks = malloc(sizeof(api_task_t)*TOTAL_TASKS);
+   memset(tasks, 0, sizeof(api_task_t)*TOTAL_TASKS);
    for(int i = 0; i < TOTAL_TASKS; i++) {
       task_state_t *task_state = &gettasks()[i];
       api_task_t *api_task = &tasks[i];
       api_task->id = task_state->task_id;
+      api_task->uid = task_state->task_uid;
       api_task->enabled = task_state->enabled;
       api_task->paused = task_state->paused;
       if(!api_task->enabled || !task_state->process || task_state->process->no_threads == 0)
@@ -1371,6 +1379,7 @@ void api_get_tasks(registers_t *regs) {
          continue; // child process
       // parent thread
       process_t *process = task_state->process;
+      api_task->process_uid = process->uid;
       api_task->heap_start = process->heap_start;
       api_task->heap_end = process->heap_end;
       api_task->prog_start = process->prog_start;
@@ -1404,7 +1413,7 @@ void api_sleep_callback(void *regs, void *msg) {
    if(!task->enabled || task->task_uid != sleep_msg.task_uid) return;
    task->paused = false;
    switch_to_task(task->task_id, regs); // wake
-   task_execute_queued_subroutine(regs, (void*)task->task_id); // check for queued events while task was paused
+   task_execute_queued_subroutine(regs, task->task_id); // check for queued events while task was paused
 }
 
 void api_sleep(registers_t *regs) {
@@ -1466,15 +1475,14 @@ void api_unpause(registers_t *regs) {
       return;
    }
    task_state_t *task = &gettasks()[task_id];
-   if(task->paused) {
-      if(!task->unpausable) {
-         debug_printf("Couldn't unpause task %i", task->task_id);
-         return;
-      }
-      task->paused = false;
-      task->unpausable = false;
-      switch_to_task(task_id, regs);
+   if(task->paused && !task->unpausable) {
+      debug_printf("Couldn't unpause task %i", task->task_id);
+      return;
    }
+   bool was_paused = task->paused;
+   task_wake(task);
+   if(was_paused)
+      switch_to_task(task_id, regs);
 }
 
 void api_dup(registers_t *regs) {
@@ -1510,7 +1518,7 @@ void api_dup2(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    int old_fd = regs->ebx;
    int new_fd = regs->ecx;
-   if(old_fd < 0 || old_fd >= task->process->fd_count || new_fd < 0 || new_fd >= TASK_MAX_FDS) {
+   if(old_fd < 0 || old_fd >= task->process->fd_count || new_fd < 0 || new_fd >= PROCESS_MAX_FDS) {
       debug_printf("api_dup2: invalid fd\n");
       regs->ebx = -1;
       return;
@@ -1658,7 +1666,7 @@ void api_dma(registers_t *regs) {
       regs->ebx = 0;
       return;
    }
-   if(process->dma_count >= TASK_MAX_DMA) {
+   if(process->dma_count >= PROCESS_MAX_DMA) {
       debug_printf("api_dma: dma table full\n");
       regs->ebx = 0;
       return;
@@ -1774,4 +1782,145 @@ void api_escalate(registers_t *regs) {
 
    task->paused = true;
    switch_task(regs); // yield
+}
+
+void api_create_port(registers_t *regs) {
+   // IN: ebx - name
+   // IN: ecx - client reserves queue slot for response from server (no blocks)
+   // OUT: ebx - port uid, -1 on fail
+   char *name = (char*)regs->ebx;
+   bool client_reserves = regs->ecx;
+   if(api_validate_str(name, MSG_PORT_NAME_LEN) < 0) {
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+   regs->ebx = create_port(get_current_task_state(), name, client_reserves);
+}
+
+void api_port_connect(registers_t *regs) {
+   // IN: ebx - name
+   // OUT: ebx - channel uid
+   // OUT: ecx - port uid
+   char *name = (char*)regs->ebx;
+   if(api_validate_str(name, MSG_PORT_NAME_LEN) < 0) {
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      regs->ecx = 0;
+      return;
+   }
+   uint32_t port = 0;
+   uint32_t channel = port_connect(get_current_task_state(), name, &port);
+   regs->ebx = channel;
+   regs->ecx = port;
+}
+
+void api_override_msg(registers_t *regs) {
+   // IN: ebx - msg func
+   get_current_task_state()->msg_func = (void*)regs->ebx;
+}
+
+void api_msg_read(registers_t *regs) {
+   // IN: ebx - port uid
+   // IN: ecx - channel uid
+   // IN: edx - receive buffer
+   // IN: esi - buffer size
+   // OUT: ebx - bytes read, 0 if queue is empty, negative error code on fail
+   uint32_t port_uid = regs->ebx;
+   uint32_t channel_uid = regs->ecx;
+   uint8_t *buffer = (uint8_t*)regs->edx;
+   uint32_t size = regs->esi;
+   task_state_t *task = get_current_task_state();
+   if(!api_validate_mem(buffer, size, true)) {
+      debug_printf("api_msg_read: validation failed\n");
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+
+   uint32_t channel_flags;
+   uint32_t msg_flags;
+   int r = port_receive(regs, task, port_uid, channel_uid, buffer, size, &channel_flags, &msg_flags);
+   registers_t *write_regs = api_write_regs(regs, task);
+   write_regs->ebx = r;
+   write_regs->ecx = 0;
+   write_regs->edx = 0;
+   if(r >= 0) {
+      write_regs->ecx = channel_flags;
+      write_regs->edx = msg_flags;
+   }
+}
+
+void api_msg_send(registers_t *regs) {
+   // IN: ebx - port uid
+   // IN: ecx - channel uid
+   // IN: edx - source buffer
+   // IN: esi - source length
+   // IN: edi - flags (MSG_EXPECT_REPLY)
+   // OUT: ebx - return (0 success)
+   uint32_t port_uid = regs->ebx;
+   uint32_t channel_uid = regs->ecx;
+   uint8_t *buffer = (uint8_t*)regs->edx;
+   uint32_t length = regs->esi;
+   uint32_t flags = regs->edi;
+   task_state_t *task = get_current_task_state();
+   if(!api_validate_mem(buffer, length, false)) {
+      debug_printf("api_msg_send: validation failed\n");
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+   int r = port_send(regs, task, port_uid, channel_uid, buffer, length, flags);
+   api_write_regs(regs, task)->ebx = r;
+}
+
+void api_snooze(registers_t *regs) {
+   // pause + yield, wait for something to wake
+   // can be a api_unpause or a waking callback (e.g. msg)
+   task_state_t *task = get_current_task_state();
+   if(task->in_routine) {
+      regs->ebx = -1;
+      return;
+   }
+   if(task_find_queued_subroutine(task) >= 0) {
+      task_execute_queued_subroutine(regs, get_current_task());
+      return;
+   }
+   if(task->wake_pending) {
+      task->wake_pending = false;
+      return;
+   }
+   task->paused = true;
+   task->unpausable = true;
+   switch_task(regs); // yield
+}
+
+void api_wait_on_receive(registers_t *regs) {
+   // wait until slot opens in queue for writing, aka last 'blocking' message is received
+   // IN: ebx - port uid
+   // IN: ecx - channel uid
+   // OUT: ebx - bool result
+   uint32_t port_uid = regs->ebx;
+   uint32_t channel_uid = regs->ecx;
+   task_state_t *task = get_current_task_state();
+   bool success = msg_wait_on_receive(task, port_uid, channel_uid);
+   regs->ebx = success;
+   if(success)
+      switch_task(regs); // yield
+}
+
+void api_port_close(registers_t *regs) {
+   // IN: ebx - port uid
+   // OUT: ebx - bool result
+   uint32_t port_uid = regs->ebx;
+   task_state_t *task = get_current_task_state();
+   bool success = close_port(regs, task, port_uid);
+   api_write_regs(regs, task)->ebx = success;
+}
+
+void api_port_disconnect(registers_t *regs) {
+   // IN: ebx - port uid
+   // IN: ecx - channel uid
+   // OUT: ebx - bool result
+   uint32_t port_uid = regs->ebx;
+   uint32_t channel_uid = regs->ecx;
+   task_state_t *task = get_current_task_state();
+   bool success = port_disconnect(regs, task, port_uid, channel_uid);
+   api_write_regs(regs, task)->ebx = success;
 }

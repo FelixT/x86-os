@@ -420,6 +420,33 @@ void software_handler(registers_t *regs) {
       case 88:
          api_truncate(regs);
          break;
+      case 89:
+         api_create_port(regs);
+         break;
+      case 90:
+         api_port_connect(regs);
+         break;
+      case 91:
+         api_override_msg(regs);
+         break;
+      case 92:
+         api_msg_send(regs);
+         break;
+      case 93:
+         api_msg_read(regs);
+         break;
+      case 94:
+         api_wait_on_receive(regs);
+         break;
+      case 95:
+         api_snooze(regs);
+         break;
+      case 96:
+         api_port_close(regs);
+         break;
+      case 97:
+         api_port_disconnect(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

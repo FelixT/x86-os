@@ -13,26 +13,26 @@ int selected_task = -1;
 void task_show_info(int index) {
    selected_task = index;
    api_task_t *task = &tasks.tasks[index];
+   bool main_thread = task->id == task->parentid;
    dialog_get(dialog, "info_label")->visible = false;
    dialog_get(dialog, "info_canvas")->visible = true;
 
    label_t *label_id = dialog_get(dialog, "info_label_id")->data;
-   char buffer[64];
-   sprintf(buffer, "Task ID: %i\n%s", task->id, task->exe_path);
-   strcpy(label_id->label, buffer);
+   if(main_thread)
+      snprintf(label_id->label, sizeof(label_id->label), "Task ID: %i - UID: %u\n%s", task->id, task->uid, task->exe_path);
+   else
+      snprintf(label_id->label, sizeof(label_id->label), "Task ID: %i - UID: %u", task->id, task->uid);
 
    label_t *label_window = dialog_get(dialog, "info_label_window")->data;
-   if(task->id == task->parentid) { // main thread
-      sprintf(buffer, "Main window:\n%s", strlen(task->main_window_name)==0 ? "none" : task->main_window_name);
+   if(main_thread) { // main thread
+      snprintf(label_window->label, sizeof(label_window->label), "Process UID: %u", task->process_uid);
    } else { // child
-      sprintf(buffer, "Task is child of task %i", task->parentid);
+      snprintf(label_window->label, sizeof(label_window->label), "Task is child of task %i", task->parentid);
    }
-   strcpy(label_window->label, buffer);
 
    label_t *label_memory = dialog_get(dialog, "info_label_memory")->data;
    int kb = task->no_allocated*0x1000/1000;
-   sprintf(buffer, "Malloc: %i pages (%i kb)\nHeap size: %i", task->no_allocated, kb, task->heap_end - task->heap_start);
-   strcpy(label_memory->label, buffer);
+   snprintf(label_memory->label, sizeof(label_memory->label), "Kmalloc: %i pages (%i kb)\nHeap size: %i", task->no_allocated, kb, task->heap_end - task->heap_start);
 
    ui_draw(dialog->ui);
 }

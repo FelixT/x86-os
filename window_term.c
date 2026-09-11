@@ -139,7 +139,7 @@ void window_term_return(void *regs, void *window) {
          map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1, 0);
          map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1, 0);
 
-         task_call_subroutine(regs, task, "checkcmd",(uint32_t)selected->checkcmd_func, args, 1);
+         task_call_subroutine(regs, task, "checkcmd", (uint32_t)selected->checkcmd_func, args, 1);
       }
    } else {
       window_term_checkcmd(regs, selected); // default term behaviour

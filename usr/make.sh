@@ -38,6 +38,7 @@ $GCC $FLAGS usr/prog5.c -o o/prog5.elf $DIALOGS_LIB
 $GCC $FLAGS usr/prog6.c -o o/prog6.elf $UI_LIB
 $GCC $FLAGS usr/prog7.c -o o/prog7.elf o/lib/stdlib.o 
 $GCC $FLAGS usr/prog8.c -o o/prog8.elf o/lib/string.o o/lib/stdio.o o/lib/stdlib.o
+$GCC $FLAGS usr/prog9.c -o o/prog9.elf o/lib/string.o o/lib/stdio.o o/lib/stdlib.o
 $GCC -g -O2 $FLAGS usr/settings.c -o o/settings.elf $DIALOGS_LIB
 $GCC -O2 $FLAGS usr/taskmgr.c -o o/taskmgr.elf $DIALOGS_LIB
 $GCC -O2 $FLAGS usr/apps.c -o o/apps.elf o/lib/sort.o $UI_LIB
@@ -45,6 +46,7 @@ $GCC $FLAGS usr/debug.c -o o/debug.elf $DIALOGS_LIB
 $GCC $FLAGS usr/about.c -o o/about.elf $UI_LIB
 $GCC $FLAGS usr/clock.c -o o/clock.elf $UI_LIB
 $GCC $FLAGS usr/test.c -o o/test.elf o/lib/string.o o/lib/stdio.o o/lib/stdlib.o
+$GCC $FLAGS usr/msgr.c -o o/msgr.elf o/lib/string.o o/lib/stdio.o o/lib/stdlib.o
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -63,12 +65,14 @@ cp o/prog5.elf fs_root/sys/prog5.elf
 cp o/prog6.elf fs_root/sys/prog6.elf
 cp o/prog7.elf fs_root/sys/prog7.elf
 cp o/prog8.elf fs_root/sys/prog8.elf
+cp o/prog9.elf fs_root/sys/prog9.elf
 cp o/settings.elf fs_root/sys/settings.elf
 cp o/taskmgr.elf fs_root/sys/taskmgr.elf
 cp o/debug.elf fs_root/sys/debug.elf
 cp o/about.elf fs_root/sys/about.elf
 cp o/clock.elf fs_root/sys/clock.elf
 cp o/test.elf fs_root/sys/test.elf
+cp o/msgr.elf fs_root/sys/msgr.elf
 
 # compile device drivers
 bash usr/device/make.sh

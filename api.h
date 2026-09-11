@@ -91,5 +91,14 @@ void api_pci_exists(registers_t *regs);
 void api_dma(registers_t *regs);
 void api_dma_free(registers_t *regs);
 void api_escalate(registers_t *regs);
+void api_create_port(registers_t *regs);
+void api_port_connect(registers_t *regs);
+void api_override_msg(registers_t *regs);
+void api_msg_send(registers_t *regs);
+void api_msg_read(registers_t *regs);
+void api_snooze(registers_t *regs);
+void api_wait_on_receive(registers_t *regs);
+void api_port_close(registers_t *regs);
+void api_port_disconnect(registers_t *regs);
 
 #endif

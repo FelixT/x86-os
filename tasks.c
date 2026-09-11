@@ -5,6 +5,7 @@
 #include "events.h"
 #include "fs.h"
 #include "shared.h"
+#include "msg.h"
 
 task_state_t *tasks;
 int current_task = -1;
@@ -25,11 +26,12 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
    process->no_allocated = 0;
    process->fd_count = 0;
-   for(int i = 0; i < TASK_MAX_FDS; i++)
+   for(int i = 0; i < PROCESS_MAX_FDS; i++)
       process->file_descriptors[i] = NULL;
    process->mmio_end = V_MMIO_START;
    process->device_count = 0;
    process->dma_count = 0;
+   process->port_count = 0;
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
    process->no_threads = 0;
@@ -51,11 +53,14 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].enabled = false;
    tasks[index].paused = false;
    tasks[index].unpausable = false;
+   tasks[index].wake_pending = false;
    tasks[index].crashed = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
    tasks[index].kernel_stack_top = (uint32_t)(TOS_KERNEL - (TASK_STACK_SIZE * index));
    tasks[index].in_routine = false;
    tasks[index].in_syscall = false;
+   tasks[index].msg_func = NULL;
+   tasks[index].msg_channel_count = 0;
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
@@ -184,6 +189,9 @@ void end_task(int index, registers_t *regs) {
    if(regs != NULL && (index == get_current_task() || !task_exists()))
       switch_task(regs); // swap page dir before freeing
 
+   // free channels
+   msg_cleanup_task(task);
+
    if(task->process->threads[0] == task) {
       // main thread, terminate entire process
       debug_printf("Ending task process\n");
@@ -201,6 +209,7 @@ void end_task(int index, registers_t *regs) {
             free((uint32_t)event, sizeof(task_event_t));
          }
       }
+      task->process->event_queue_size = 0;
 
       // free fds
       for(int i = 0; i < task->process->fd_count; i++) {
@@ -234,6 +243,9 @@ void end_task(int index, registers_t *regs) {
       // silence mapped devices + reclaim DMA buffers
       dma_cleanup(task->process);
 
+      // free ports
+      msg_cleanup_process(task->process);
+
       // free page dir
       if(task->process->page_dir != page_get_kernel_pagedir())
          free_page_dir(task->process->page_dir);
@@ -244,6 +256,16 @@ void end_task(int index, registers_t *regs) {
       // free process
       free((uint32_t)task->process, sizeof(process_t));
       task->process = NULL;
+   } else {
+      // remove events for ended thread of still running process
+      int e;
+      while((e = task_find_queued_subroutine(task)) >= 0) {
+         task_event_t *event = task->process->event_queue[e];
+         task_remove_queued_subroutine(task, e);
+         if(event->args)
+            free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
+         free((uint32_t)event, sizeof(task_event_t));
+      }
    }
 
    if(task->routine_args) {
@@ -482,48 +504,77 @@ void task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
    tasks[current_task].in_routine = true;
 }
 
-void task_execute_queued_subroutine(void *regs, void *msg) {
+void task_unsnooze(task_state_t *task) {
+   if(task->paused && task->unpausable) {
+      task->paused = false;
+      task->unpausable = false;
+   }
+}
+
+void task_wake(task_state_t *task) {
+   if(task->paused && task->unpausable) {
+      task->paused = false;
+      task->unpausable = false;
+   } else {
+      task->wake_pending = true;
+   }
+}
+
+// index of the first queued event belonging to this thread, -1 if none
+// queue is shared by every thread of process
+int task_find_queued_subroutine(task_state_t *task) {
+   for(int i = 0; i < task->process->event_queue_size; i++) {
+      task_event_t *event = task->process->event_queue[i];
+      if(!event) continue;
+      if(event->task_id == task->task_id && event->task_uid == task->task_uid)
+         return i;
+   }
+   return -1;
+}
+
+void task_remove_queued_subroutine(task_state_t *task, int index) {
+   task->process->event_queue_size--;
+   // todo: circular queue is faster than memmove
+   memmove(&task->process->event_queue[index], &task->process->event_queue[index+1], (task->process->event_queue_size - index) * sizeof(task_event_t*));
+}
+
+void task_execute_queued_subroutine(void *regs, int taskid) {
    // check events queue
 
-   int taskid = (int)msg;
    task_state_t *task = &tasks[taskid];
    if(task->in_routine) {
       // do nothing - wait until task_subroutine_end to call this function
    } else {
 
-      if(task->process->event_queue_size > 0) {
+      int e = task_find_queued_subroutine(task);
+      if(e >= 0) {
          if(!switch_to_task(taskid, regs)) return;
 
-         task_event_t *first_event = task->process->event_queue[0];
+         task_event_t *event = task->process->event_queue[e];
 
-         task_execute_subroutine(regs, first_event->name, first_event->addr, first_event->args, first_event->argc);
+         task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc);
 
-         task->process->event_queue_size--;
+         task_remove_queued_subroutine(task, e);
 
-         free((uint32_t)task->process->event_queue[0], sizeof(task_event_t));
-
-         // todo: circular queue is faster than memmove
-         memmove(&task->process->event_queue[0], &task->process->event_queue[1], task->process->event_queue_size * sizeof(task_event_t*));
+         free((uint32_t)event, sizeof(task_event_t));
 
          task->routine_return_window = getSelectedWindowIndex();
-
-         /*if(get_current_task_window() != getSelectedWindowIndex())
-            setSelectedWindowIndex(get_current_task_window());*/
       }
    }
 }
 
-void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
+bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
    if(!task->enabled) {
       debug_printf("Couldn't queue routine for task %i - task is disabled\n", task->task_id);
       free((uint32_t)args, sizeof(uint32_t*)*argc);
-      return;
+      return false;
    }
 
    // coalesce scroll and hover events
    if(strequ(name, "hover") || strequ(name, "scroll")) {
       for(int i = 0; i < task->process->event_queue_size; i++) {
          task_event_t *existing = task->process->event_queue[i];
+         if(existing->task_id != task->task_id || existing->task_uid != task->task_uid) continue;
          if(existing->addr != addr) continue;
          if(!strequ(existing->name, name)) continue;
 
@@ -539,14 +590,26 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
             existing->args = args;
             existing->argc = argc;
          }
-         return;
+         return true;
+      }
+   } else if(strequ(name, "msg")) {
+      // coalesce msg events
+      for(int i = 0; i < task->process->event_queue_size; i++) {
+         task_event_t *existing = task->process->event_queue[i];
+         if(existing->task_id != task->task_id || existing->task_uid != task->task_uid) continue;
+         if(existing->addr != addr) continue;
+         if(!strequ(existing->name, name)) continue;
+         if(existing->args[2] != args[2] || existing->args[1] != args[1]) continue; // only coalesce msgs on same port & channel
+         existing->args[0] |= args[0]; // OR together flags
+         free((uint32_t)args, sizeof(uint32_t*)*argc);
+         return true;
       }
    }
 
    if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
       debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
       free((uint32_t)args, sizeof(uint32_t*)*argc);
-      return;
+      return false;
    }
    // add to event queue
    task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
@@ -554,38 +617,44 @@ void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
    event->addr = addr;
    event->args = args;
    event->argc = argc;
+   event->task_id = task->task_id;
+   event->task_uid = task->task_uid;
    task->process->event_queue[task->process->event_queue_size++] = event;
+
+   return true;
 }
 
-void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
+bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
 
    // call subroutine immediately, switching to task
    
    if(!task->enabled) {
       debug_printf("Task %i is ended, exiting subroutine", task->task_id);
       free((uint32_t)args, sizeof(uint32_t*)*argc);
-      return;
+      return false;
    }
 
    if(task->paused || task->in_routine) {
-      task_queue_subroutine(task, name, addr, args, argc);
-      return;
+      return task_queue_subroutine(task, name, addr, args, argc);
    }
 
    if(!switch_to_task(task->task_id, regs)) {
       free((uint32_t)args, sizeof(uint32_t*)*argc);
-      return;
+      return false;
    }
 
-   // if event queue is empty, launch into routine immediately
+   // if the thread has no queued events, launch into routine immediately
    // otherwise just wait for queued event
-   if(task->process->event_queue_size > 0) {
+   if(task_find_queued_subroutine(task) >= 0) {
       debug_printf("Not in routine but queue has content\n");
-      task_queue_subroutine(task, name, addr, args, argc);
-      task_execute_queued_subroutine(regs, (void*)current_task);
-   } else {
-      task_execute_subroutine(regs, name, addr, args, argc);
+      bool queued = task_queue_subroutine(task, name, addr, args, argc);
+      task_execute_queued_subroutine(regs, current_task);
+      return queued;
    }
+
+   task_execute_subroutine(regs, name, addr, args, argc);
+
+   return true;
 }
 
 void task_subroutine_end(registers_t *regs) {
@@ -602,7 +671,7 @@ void task_subroutine_end(registers_t *regs) {
 
    tasks[current_task].in_routine = false;
    // check for any other queued events and run if there are
-   task_execute_queued_subroutine(regs, (void*)current_task);
+   task_execute_queued_subroutine(regs, current_task);
 
    if(tasks[current_task].routine_return_window >= 0)
       setSelectedWindowIndex(tasks[current_task].routine_return_window);

@@ -5,7 +5,7 @@
 #include "wo.h"
 
 typedef struct label_t {
-   char label[128];
+   char label[512];
    uint16_t colour_txt;
    uint16_t colour_txt_hover;
    uint16_t colour_txt_clicked;

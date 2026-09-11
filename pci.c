@@ -108,7 +108,7 @@ uint32_t pci_map_device(process_t *process, uint16_t vendor, uint16_t device_id)
    bool tracked = false;
    for(int i = 0; i < process->device_count; i++)
       if(process->devices[i] == device) { tracked = true; break; }
-   if(!tracked && process->device_count < TASK_MAX_PCI)
+   if(!tracked && process->device_count < PROCESS_MAX_PCI)
       process->devices[process->device_count++] = device;
 
    return addr;

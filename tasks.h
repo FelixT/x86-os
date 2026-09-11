@@ -32,13 +32,17 @@ typedef struct {
    uint32_t addr; // subroutine addr
    uint32_t *args;
    int argc;
+   int task_id; // events belong to specific task (/thread)
+   uint32_t task_uid;
 } task_event_t;
 
 #define EVENT_QUEUE_SIZE 64
 
-#define TASK_MAX_FDS 64
-#define TASK_MAX_DMA 16
-#define TASK_MAX_PCI 4
+#define PROCESS_MAX_FDS 64
+#define PROCESS_MAX_DMA 16
+#define PROCESS_MAX_PCI 4
+#define PROCESS_MAX_PORTS 16
+#define TASK_MAX_CHANNELS 16
 
 // process struct - shared between threads
 typedef struct process_t {
@@ -58,15 +62,17 @@ typedef struct process_t {
    int no_allocated;
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
-   fs_file_t *file_descriptors[TASK_MAX_FDS];
+   fs_file_t *file_descriptors[PROCESS_MAX_FDS];
    int fd_count;
    task_event_t *event_queue[EVENT_QUEUE_SIZE]; // could be linked list
    int event_queue_size;
    uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
-   dma_alloc_t dma_allocs[TASK_MAX_DMA];
+   dma_alloc_t dma_allocs[PROCESS_MAX_DMA];
    int dma_count;
-   pci_device_t *devices[TASK_MAX_PCI]; // mapped pci devices
+   pci_device_t *devices[PROCESS_MAX_PCI]; // mapped pci devices
    int device_count;
+   struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
+   int port_count;
    char **launch_args;
    int launch_argc;
 
@@ -78,6 +84,7 @@ typedef struct task_state_t {
    bool enabled;
    bool paused; // thread won't be scheduled
    bool unpausable;
+   bool wake_pending;
    bool crashed;
    int task_id;
    uint32_t task_uid;
@@ -92,6 +99,10 @@ typedef struct task_state_t {
    char routine_name[32];
    bool in_syscall;
    uint16_t syscall_no;
+
+   void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags);
+   struct msg_channel_t *msg_channels[TASK_MAX_CHANNELS];
+   int msg_channel_count;
 
    process_t *process; // parent process
 } task_state_t;
@@ -109,7 +120,7 @@ void tasks_launch_binary(registers_t *regs, char *path);
 bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus);
 int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy);
 
-void pause_task(int index, registers_t *regs);
+void pause_task(int index, registers_t *regs); // freeze task after crash
 
 task_state_t *gettasks();
 
@@ -121,10 +132,14 @@ page_dir_entry_t *get_current_task_pagedir();
 int get_task_from_window(int windowIndex);
 int get_free_task_index();
 
-void task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
-void task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+int task_find_queued_subroutine(task_state_t *task);
+void task_remove_queued_subroutine(task_state_t *task, int index);
 void task_subroutine_end(registers_t *regs);
-void task_execute_queued_subroutine(void *regs, void *msg);
+void task_execute_queued_subroutine(void *regs, int taskid);
+void task_wake(task_state_t *task); // latched wake
+void task_unsnooze(task_state_t *task);
 void tss_init();
 
 void task_write_to_window(int task, char *out, bool children);

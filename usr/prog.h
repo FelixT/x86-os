@@ -1063,9 +1063,147 @@ static inline bool escalate() {
    return success;
 }
 
+// returns a port uid, or a msg_err_t - test with MSG_IS_ERROR (lib/api.h)
+static inline uint32_t create_port(char *name, bool client_reserves) {
+   uint32_t port;
+   asm volatile(
+      "int $0x30"
+      : "=b" (port)
+      : "a" (89),
+      "b" ((uint32_t)name),
+      "c" (client_reserves)
+      : "cc", "memory"
+   );
+   return port;
+}
+
+// returns a channel uid, or a msg_err_t - test with MSG_IS_ERROR (lib/api.h)
+static inline uint32_t port_connect(char *name, uint32_t *port) {
+   uint32_t port_uid;
+   uint32_t channel;
+   asm volatile(
+      "int $0x30"
+      : "=b" (channel),
+      "=c" (port_uid)
+      : "a" (90),
+      "b" ((uint32_t)name)
+      : "cc", "memory"
+   );
+   *port = port_uid;
+   return channel;
+}
+
+static inline void override_msg(void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags)) {
+   asm volatile(
+      "int $0x30"
+      :: "a" (91),
+      "b" ((uint32_t)msg_func)
+      : "cc", "memory"
+   );
+}
+
+static inline int msg_send_flags(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length, uint32_t flags) {
+   int status;
+   asm volatile(
+      "int $0x30"
+      : "=b" (status)
+      : "a" (92),
+      "b" (port_uid),
+      "c" (channel_uid),
+      "d" ((uint32_t)buffer),
+      "S" (length),
+      "D" (flags)
+      : "cc", "memory"
+   );
+   return status;
+}
+
+static inline int msg_send(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
+   return msg_send_flags(port_uid, channel_uid, buffer, length, 0);
+}
+
+// send a request the receiver is expected to reply to. client_reserves reserved a slot in the reply queue
+static inline int msg_request(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
+   return msg_send_flags(port_uid, channel_uid, buffer, length, MSG_EXPECT_REPLY);
+}
+
+static inline int msg_read(uint32_t port_uid, uint32_t channel_uid, void *buffer, int size, uint32_t *channel_flags, uint32_t *msg_flags) {
+   int status;
+   uint32_t channel_flags_val;
+   uint32_t msg_flags_val;
+   asm volatile(
+      "int $0x30"
+      : "=b" (status),
+      "=c" (channel_flags_val),
+      "=d" (msg_flags_val)
+      : "a" (93),
+      "b" (port_uid),
+      "c" (channel_uid),
+      "d" ((uint32_t)buffer),
+      "S" (size)
+      : "cc", "memory"
+   );
+   if(status < 0) {
+      channel_flags_val = 0;
+      msg_flags_val = 0;
+   }
+   *channel_flags = channel_flags_val;
+   *msg_flags = msg_flags_val;
+   return status;
+}
+
+static inline bool msg_wait_for_read(uint32_t port_uid, uint32_t channel_uid) {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (94),
+      "b" (port_uid),
+      "c" (channel_uid)
+      : "cc", "memory"
+   );
+   return success;
+}
+
+static inline bool snooze() {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (95)
+      : "cc", "memory"
+   );
+   return success;
+}
+
+static inline bool port_close(uint32_t port_uid) {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (96),
+      "b" (port_uid)
+      : "cc", "memory"
+   );
+   return success;
+}
+
+static inline bool port_disconnect(uint32_t port_uid, uint32_t channel_uid) {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (97),
+      "b" (port_uid),
+      "c" (channel_uid)
+      : "cc", "memory"
+   );
+   return success;
+}
+
 // terminal override
 
-static inline void override_term_checkcmd(void *callback) {
+static inline void override_term_checkcmd(void (*callback)(char *cmd)) {
    asm volatile (
       "int $0x30;"
       :: "a" (39),
