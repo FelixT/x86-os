@@ -62,13 +62,29 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       return -1;
    }
    page_dir_entry_t *dir = new_page();
+   if(!dir) {
+      debug_printf("elf_load: out of memory creating page dir\n");
+      return -1;
+   }
 
    uint8_t *newProg = malloc(vmem_size);
+   if(!newProg) {
+      debug_printf("elf_load: out of memory allocating prog memory size %u\n", vmem_size);
+      free_page_dir(dir);
+      return -1;
+   }
    memset(newProg, 0, vmem_size);
    debug_printf("Mapping 0x%h - 0x%h to 0x%h - 0x%h\n", (uint32_t)newProg, (uint32_t)newProg + vmem_size, vmem_start, vmem_end);
 
+   bool mapped = true;
    for(uint32_t i = 0; i < vmem_size; i+=0x1000)
-      map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1, 0);
+      mapped &= map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1, 0);
+   if(!mapped) {
+      debug_printf("elf_load: mapping program fail\n");
+      free((uint32_t)newProg, vmem_size);
+      free_page_dir(dir);
+      return -1;
+   }
 
    uint32_t heap_start = page_align_up(vmem_end);
    if(heap_start < KERNEL_END)

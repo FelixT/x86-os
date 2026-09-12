@@ -666,7 +666,6 @@ bool fat_new_file(char *path) {
       return false;
    }
    filedir->firstClusterNo = freeCluster;
-   debug_printf("Found free cluster %u\n", freeCluster);
 
    // find free entry in directory
 
@@ -708,7 +707,6 @@ bool fat_new_file(char *path) {
       }
       if(fat_dir->filename[0] == '\0') {
          // found a free entry
-         debug_printf("Found free entry %u\n", i);
          memcpy_fast(dirBuf + i * sizeof(fat_dir_t), filedir, sizeof(fat_dir_t)); // copy the new entry
          found = true;
          break;
@@ -716,12 +714,10 @@ bool fat_new_file(char *path) {
    }
 
    if(found) {
-      debug_writestr("Updating directory\n");
       if(!ata_write_exact(true, true, dirAddr, dirBuf, bufSize)) {
          debug_printf("Error writing directory entry for '%s'\n", path);
          found = false;
       } else {
-         debug_writestr("Updating FAT table\n");
          // claim the cluster and get it onto disk before reporting success
          if(!fat_table_update_cluster(freeCluster, 0xFFFF) // mark as end of chain
          || !fat_table_flush_cache(freeCluster, freeCluster))
@@ -989,7 +985,6 @@ bool fat_new_dir(char *path) {
       return false;
    }
    dir->firstClusterNo = freeCluster;
-   debug_printf("Found free cluster %u\n", freeCluster);
    // clear cluster
    uint32_t newDirSector = ((freeCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
    uint32_t newDirAddr = baseAddr + newDirSector * fat_bpb->bytesPerSector;
@@ -1069,7 +1064,6 @@ bool fat_new_dir(char *path) {
 
          if(fat_dir->filename[0] == '\0') {
             // found a free entry
-            debug_printf("Found free entry %u\n", i);
             // set it
             memcpy_fast(dirBuf + i * sizeof(fat_dir_t), dir, sizeof(fat_dir_t));
             found = true;
@@ -1078,7 +1072,6 @@ bool fat_new_dir(char *path) {
       }
 
       if(found) {
-         debug_writestr("Updating directory\n");
          if(!ata_write_exact(true, true, dirAddr, dirBuf, bufSize)) {
             debug_printf("Error writing directory entry for '%s'\n", path);
          } else {

@@ -37,7 +37,6 @@ fs_file_t *fs_open(char *path, int flags) {
    if(!entry) {
       free((uint32_t)file, sizeof(fs_file_t));
       free((uint32_t)data, sizeof(fs_file_data_t));
-      debug_printf("FS: file %s not found\n", path);
       return NULL;
    }
 
@@ -89,7 +88,7 @@ void fs_close(fs_file_t *file) {
       if(file->pipe->read_waiting_task != -1) {
          task_state_t *task = &gettasks()[file->pipe->read_waiting_task];
          if(task->enabled && task->task_uid == file->pipe->read_waiting_uid) {
-            task->paused = false;
+            task_resume(task);
             task->registers.ebx = FS_EOF;
          }
          file->pipe->read_waiting_task = -1;
@@ -97,7 +96,7 @@ void fs_close(fs_file_t *file) {
       if(file->pipe->write_waiting_task != -1) {
          task_state_t *task = &gettasks()[file->pipe->write_waiting_task];
          if(task->enabled && task->task_uid == file->pipe->write_waiting_uid) {
-            task->paused = false;
+            task_resume(task);
             task->registers.ebx = FS_EOF;
          }
          file->pipe->write_waiting_task = -1;
@@ -259,7 +258,6 @@ fs_file_t *fs_new(char *path, int flags) {
       debug_printf("FS: invalid file path\n");
       return NULL;
    }
-   debug_printf("FS: creating new file '%s'\n", path);
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry) {
       free((uint32_t)entry, sizeof(fat_dir_t));
@@ -634,7 +632,7 @@ bool fs_pipe_wake_reader(fs_pipe_t *pipe) {
    } else {
       task->registers.ebx = FS_ERROR;
    }
-   task->paused = false;
+   task_resume(task);
    pipe->read_waiting_task = -1;
    return true;
 }
@@ -656,7 +654,7 @@ bool fs_pipe_wake_writer(fs_pipe_t *pipe) {
    } else {
       task->registers.ebx = FS_ERROR;
    }
-   task->paused = false;
+   task_resume(task);
    pipe->write_waiting_task = -1;
    return true;
 }

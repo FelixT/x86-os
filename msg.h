@@ -29,7 +29,7 @@ typedef struct msg_queue_t {
 typedef struct msg_channel_t {
    uint32_t uid;
    uint32_t port_uid;
-   uint32_t client_uid; // creator/client process uid
+   uint32_t client_uid; // creator/client process uid (unused)
    uint32_t client_taskid;
    uint32_t client_taskuid;
    uint32_t server_taskid;
@@ -42,6 +42,8 @@ typedef struct msg_channel_t {
    bool server_blocked;
    uint32_t client_flags; // used to send notifications to reader, cleared on receive
    uint32_t server_flags;
+   bool client_notify_pending; // msg_func couldn't be called (recipient event queue full) - retry when a slot frees
+   bool server_notify_pending;
 } msg_channel_t; // total size <1 page
 
 // a port represents a message queue
@@ -65,7 +67,9 @@ int port_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint3
 bool msg_wait_on_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
 bool close_port(registers_t *regs, task_state_t *task, uint32_t port_uid);
 bool port_disconnect(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
+void msg_retry_notifications(task_state_t *task);
 void msg_cleanup_process(process_t *process);
 void msg_cleanup_task(task_state_t *task);
+bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
 
 #endif

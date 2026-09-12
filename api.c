@@ -68,6 +68,13 @@ static inline registers_t *api_write_regs(registers_t *regs, task_state_t *task)
    return get_current_task_state() == task ? regs : &task->registers;
 }
 
+// write to correct registers after potential task switch or entering routine
+static inline registers_t *api_return_regs(registers_t *regs, task_state_t *task, bool was_in_routine) {
+   if(!was_in_routine && task->in_routine && get_current_task_state() == task)
+      return &task->routine_return_regs;
+   return api_write_regs(regs, task);
+}
+
 // api funcs
 
 #define API_WRITESTR_MAX_LENGTH 0x2000
@@ -522,8 +529,10 @@ void api_launch_task(registers_t *regs) {
    }
 
    task->enabled = true;
-   task->paused = paused;
-   task->unpausable = paused;
+   if(paused)
+      task_pause(task, PAUSE_LAUNCH);
+   else
+      task_resume(task);
    if(paused) {
       if(get_current_task() == new_task)
          switch_task(regs); // yield
@@ -727,7 +736,7 @@ void api_read_stdin_callback(void *regs, char *buffer) {
    if(w > 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed) {
       gui_window_t *window = getWindow(w);
       strcpy(window->read_buffer, buffer);
-      task->paused = false;
+      task_resume(task);
       r->ebx = strlen(buffer);
       switch_to_task(task->task_id, regs); // wake
       task_execute_queued_subroutine(regs, task->task_id); // check for queued events while task was paused
@@ -739,7 +748,7 @@ void api_read_stdin_callback(void *regs, char *buffer) {
 
 void api_read_fd_callback(void *regs, int task, int size) {
    registers_t *r = (registers_t*)regs;
-   gettasks()[task].paused = false;
+   task_resume(&gettasks()[task]);
    switch_to_task(task, r); // wake
    r->ebx = size;
    task_execute_queued_subroutine(r, task); // check for queued events while task was paused
@@ -801,7 +810,7 @@ void api_read(registers_t *regs) {
          file->pipe->read_buf = buf;
          file->pipe->read_size = maxsize;
       }
-      task->paused = true;
+      task_pause(task, PAUSE_READ);
       switch_task(regs); // yield
    }
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
@@ -867,7 +876,7 @@ void api_write(registers_t *regs) {
    if(result == FS_WRITE_WAIT && file->type == FS_TYPE_PIPE && file->pipe) {
       file->pipe->write_buf = buffer;
       file->pipe->write_size = maxsize;
-      task->paused = true;
+      task_pause(task, PAUSE_READ);
       switch_task(regs); // yield
    }
 
@@ -1007,8 +1016,10 @@ void api_set_scrollable_height(registers_t *regs) {
    // OUT: ebx - new window width (not including scrollbar)
    gui_window_t *window = api_get_cwindow(regs->ecx);
    if(!window) return;
-   window_set_scrollable_height(regs, window, regs->ebx);
-   regs->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
+   task_state_t *task = get_current_task_state();
+   bool was_in_routine = task->in_routine;
+   window_set_scrollable_height(regs, window, regs->ebx); // fires resize callback
+   api_return_regs(regs, task, was_in_routine)->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
 }
 
 void api_scroll_to(registers_t *regs) {
@@ -1411,7 +1422,7 @@ void api_sleep_callback(void *regs, void *msg) {
    free((uint32_t)msg, sizeof(api_sleep_msg_t));
    task_state_t *task = &gettasks()[sleep_msg.task_id];
    if(!task->enabled || task->task_uid != sleep_msg.task_uid) return;
-   task->paused = false;
+   task_resume(task);
    switch_to_task(task->task_id, regs); // wake
    task_execute_queued_subroutine(regs, task->task_id); // check for queued events while task was paused
 }
@@ -1422,7 +1433,7 @@ void api_sleep(registers_t *regs) {
    uint32_t ms = regs->ebx;
    int ticks = (timer_hz * ms) / 1000;
    task_state_t *task = get_current_task_state();
-   task->paused = true;
+   task_pause(task, PAUSE_SLEEP);
    api_sleep_msg_t *msg = malloc(sizeof(api_sleep_msg_t));
    msg->task_id = task->task_id;
    msg->task_uid = task->task_uid;
@@ -1475,14 +1486,16 @@ void api_unpause(registers_t *regs) {
       return;
    }
    task_state_t *task = &gettasks()[task_id];
-   if(task->paused && !task->unpausable) {
-      debug_printf("Couldn't unpause task %i", task->task_id);
+   if(task->paused && task->pause_reason != PAUSE_LAUNCH && task->pause_reason != PAUSE_SNOOZE) {
+      debug_printf("Couldn't unpause task %i - paused for reason %i\n", task->task_id, task->pause_reason);
       return;
    }
-   bool was_paused = task->paused;
-   task_wake(task);
-   if(was_paused)
-      switch_to_task(task_id, regs);
+   if(!task->paused) {
+      task->wake_pending = true; // latch it for the next snooze
+      return;
+   }
+   task_resume(task);
+   switch_to_task(task_id, regs);
 }
 
 void api_dup(registers_t *regs) {
@@ -1567,7 +1580,7 @@ void api_futex_wait(registers_t *regs) {
    uint32_t expected = regs->ecx;
    int result = futex_wait(addr, expected);
    if(result == FUTEX_WAIT_BLOCK) {
-      get_current_task_state()->paused = true;
+      task_pause(get_current_task_state(), PAUSE_FUTEX);
       regs->ebx = 0;
       switch_task(regs);
    }
@@ -1714,7 +1727,7 @@ void api_escalate_do(void *dialog, void *regs) {
       debug_printf("Escalating process %u\n", d->process_uid);
       task->process->privileged = true;
       task->registers.ebx = 1;
-      task->paused = false;
+      task_resume(task);
       switch_to_task(task->task_id, regs);
    } else {
       debug_printf("Couldn't escalate: requesting task ended\n");
@@ -1728,7 +1741,7 @@ void api_escalate_dismiss(void *dialog) {
    if(task->enabled && task->process && task->process->uid == d->process_uid) {
       debug_printf("Escalation dismissed - denying process %u\n", d->process_uid);
       task->registers.ebx = 0;
-      task->paused = false;
+      task_resume(task);
    } else {
       debug_printf("Couldn't deny: requesting task ended\n");
    }
@@ -1743,7 +1756,7 @@ void api_escalate_cancel(void *window, void *regs) {
    task_state_t *task = &gettasks()[dialog->task_id];
    if(task->enabled && task->process && task->process->uid == dialog->process_uid) {
       task->registers.ebx = 0;
-      task->paused = false;
+      task_resume(task);
       switch_to_task(task->task_id, regs);
    } else {
       debug_printf("Couldn't escalate: requesting task ended\n");
@@ -1780,7 +1793,7 @@ void api_escalate(registers_t *regs) {
    toolbar_draw();
    window_draw_outline(getWindow(popup), false);
 
-   task->paused = true;
+   task_pause(task, PAUSE_ESCALATE);
    switch_task(regs); // yield
 }
 
@@ -1872,22 +1885,20 @@ void api_msg_send(registers_t *regs) {
 
 void api_snooze(registers_t *regs) {
    // pause + yield, wait for something to wake
-   // can be a api_unpause or a waking callback (e.g. msg)
+   // can be a api_unpause, any callback, or a msg with no msg_func (ie allow polling for msgs)
    task_state_t *task = get_current_task_state();
    if(task->in_routine) {
-      regs->ebx = -1;
+      regs->ebx = 0;
       return;
    }
-   if(task_find_queued_subroutine(task) >= 0) {
-      task_execute_queued_subroutine(regs, get_current_task());
+   regs->ebx = 1;
+   if(task_execute_queued_subroutine(regs, get_current_task()))
       return;
-   }
    if(task->wake_pending) {
       task->wake_pending = false;
       return;
    }
-   task->paused = true;
-   task->unpausable = true;
+   task_pause(task, PAUSE_SNOOZE);
    switch_task(regs); // yield
 }
 

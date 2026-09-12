@@ -77,7 +77,7 @@ void futex_wake(void *regs, void *futex_addr) {
       free((uint32_t)unlinked, sizeof(futex_waiter_t));
 
       if(!stale && match) {
-         task->paused = false;
+         task_resume(task);
          switch_to_task(task->task_id, regs);
          return; // wake only one waiter
       }

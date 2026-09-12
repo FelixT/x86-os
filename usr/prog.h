@@ -1127,6 +1127,11 @@ static inline int msg_request(uint32_t port_uid, uint32_t channel_uid, void *buf
    return msg_send_flags(port_uid, channel_uid, buffer, length, MSG_EXPECT_REPLY);
 }
 
+// answer MSG_EXPECT_REPLY (frees a reserved slot in senders queue)
+static inline int msg_reply(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
+   return msg_send_flags(port_uid, channel_uid, buffer, length, MSG_REPLY);
+}
+
 static inline int msg_read(uint32_t port_uid, uint32_t channel_uid, void *buffer, int size, uint32_t *channel_flags, uint32_t *msg_flags) {
    int status;
    uint32_t channel_flags_val;

@@ -111,7 +111,7 @@ void window_term_return(void *regs, void *window) {
             debug_printf("read: task %i not enabled or crashed\n", selected->read_task);
             return;
          }
-         readtask->paused = false; // force switch
+         task_resume(readtask); // force switch
          if(!switch_to_task(selected->read_task, regs)) {
             debug_printf("read: couldn't switch to task %i\n", selected->read_task);
          } else {
@@ -461,7 +461,7 @@ void term_cmd_taski(char *arg) {
       return;
    }
    task_state_t *task = &gettasks()[id];
-   window_term_printf("Task %i uid %u (enabled %i paused %i unpausable %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->unpausable, task->crashed, task->in_routine);
+   window_term_printf("Task %i uid %u (enabled %i paused %i reason %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->pause_reason, task->crashed, task->in_routine);
    window_term_printf("Stack top 0x%h\n", task->stack_top);
    process_t *process = task->process;
    if(process) {

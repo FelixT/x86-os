@@ -157,7 +157,7 @@ void gui_init(void) {
    font_letter = (int*)malloc(1);
 
    // reserve framebuffer memory so malloc can't assign it
-   memory_reserve(surface.buffer, (int)surface.width*(int)surface.height);
+   memory_reserve(surface.buffer, (int)surface.width*(int)surface.height*2); // 16bpp
    
    //gui_clear(gui_bg);
    font_init();

@@ -32,7 +32,7 @@ void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
 
       if(msg_flags & MSG_EXPECT_REPLY) {
          // echo back to client
-         r = msg_send(port_uid, channel_uid, buf, r);
+         r = msg_reply(port_uid, channel_uid, buf, r);
          if(r < 0)
             printf("server send failed error %i\n", r);
       }

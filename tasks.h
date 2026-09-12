@@ -38,6 +38,18 @@ typedef struct {
 
 #define EVENT_QUEUE_SIZE 64
 
+typedef enum {
+   PAUSE_NONE = 0,
+   PAUSE_SNOOZE, // api_snooze, woken by events (currently msg, unpause syscall, todo: any callback)
+   PAUSE_LAUNCH, // launched paused, needs api_unpause
+   PAUSE_READ, // read/write
+   PAUSE_SLEEP, // wait on timer
+   PAUSE_FUTEX, // wait on futex_wake
+   PAUSE_ESCALATE, // wait on privilege dialog
+   PAUSE_MSG_WRITE, // msg_wait_on_receive - wait on peer read
+   PAUSE_CRASH // frozen after a crash - nothing resumes
+} task_pause_reason_t;
+
 #define PROCESS_MAX_FDS 64
 #define PROCESS_MAX_DMA 16
 #define PROCESS_MAX_PCI 4
@@ -83,7 +95,7 @@ typedef struct process_t {
 typedef struct task_state_t {
    bool enabled;
    bool paused; // thread won't be scheduled
-   bool unpausable;
+   task_pause_reason_t pause_reason;
    bool wake_pending;
    bool crashed;
    int task_id;
@@ -103,6 +115,7 @@ typedef struct task_state_t {
    void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags);
    struct msg_channel_t *msg_channels[TASK_MAX_CHANNELS];
    int msg_channel_count;
+   bool msg_notify_pending; // msg event callback was dropped, requeue when slot opens
 
    process_t *process; // parent process
 } task_state_t;
@@ -137,9 +150,10 @@ bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
 int task_find_queued_subroutine(task_state_t *task);
 void task_remove_queued_subroutine(task_state_t *task, int index);
 void task_subroutine_end(registers_t *regs);
-void task_execute_queued_subroutine(void *regs, int taskid);
-void task_wake(task_state_t *task); // latched wake
-void task_unsnooze(task_state_t *task);
+bool task_execute_queued_subroutine(void *regs, int taskid); // returns whether a routine was launched
+void task_wake(task_state_t *task); // latched wake - only resumes a snoozing thread
+void task_pause(task_state_t *task, task_pause_reason_t reason);
+void task_resume(task_state_t *task);
 void tss_init();
 
 void task_write_to_window(int task, char *out, bool children);

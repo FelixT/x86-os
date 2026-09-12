@@ -52,7 +52,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].task_uid = task_uid_counter++;
    tasks[index].enabled = false;
    tasks[index].paused = false;
-   tasks[index].unpausable = false;
+   tasks[index].pause_reason = PAUSE_NONE;
    tasks[index].wake_pending = false;
    tasks[index].crashed = false;
    tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
@@ -61,6 +61,7 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].in_syscall = false;
    tasks[index].msg_func = NULL;
    tasks[index].msg_channel_count = 0;
+   tasks[index].msg_notify_pending = false;
    
    tasks[index].registers.esp = tasks[index].stack_top;
    tasks[index].registers.ebp = tasks[index].stack_top;
@@ -148,7 +149,7 @@ void pause_task(int index, registers_t *regs) {
 
    task_reset_windows(index);
 
-   tasks[index].paused = true;
+   task_pause(&tasks[index], PAUSE_CRASH);
    tasks[index].crashed = true;
    if(index == get_current_task() || !task_exists())
       if(regs != NULL) switch_task(regs);
@@ -262,6 +263,7 @@ void end_task(int index, registers_t *regs) {
       while((e = task_find_queued_subroutine(task)) >= 0) {
          task_event_t *event = task->process->event_queue[e];
          task_remove_queued_subroutine(task, e);
+         msg_retry_notifications(task);
          if(event->args)
             free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
          free((uint32_t)event, sizeof(task_event_t));
@@ -359,6 +361,7 @@ void switch_task(registers_t *regs) {
       return;
 
    int old_task = current_task;
+   bool relaunched_idle = false;
 
    // find next enabled task (round robin)
    do {
@@ -371,6 +374,7 @@ void switch_task(registers_t *regs) {
          // save registers
          tasks[old_task].registers = *regs;
          tasks_init(regs);
+         relaunched_idle = true;
          break;
       }
    } while(!tasks[current_task].enabled || tasks[current_task].paused);
@@ -388,6 +392,9 @@ void switch_task(registers_t *regs) {
       // restore registers
       *regs = tasks[current_task].registers;
    }
+
+   if(!relaunched_idle && !task->in_routine && task->process->event_queue_size > 0)
+      task_execute_queued_subroutine(regs, current_task); // execute events from when task was paused
 }
 
 bool switch_to_task(int index, registers_t *regs) {
@@ -504,20 +511,27 @@ void task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
    tasks[current_task].in_routine = true;
 }
 
-void task_unsnooze(task_state_t *task) {
-   if(task->paused && task->unpausable) {
-      task->paused = false;
-      task->unpausable = false;
-   }
+void task_pause(task_state_t *task, task_pause_reason_t reason) {
+   task->paused = true;
+   task->pause_reason = reason;
+}
+
+void task_resume(task_state_t *task) {
+   task->paused = false;
+   task->pause_reason = PAUSE_NONE;
+}
+
+static bool task_unsnooze(task_state_t *task) {
+   // wake from snooze
+   if(!task->paused || task->pause_reason != PAUSE_SNOOZE) return false;
+   task_resume(task);
+   return true;
 }
 
 void task_wake(task_state_t *task) {
-   if(task->paused && task->unpausable) {
-      task->paused = false;
-      task->unpausable = false;
-   } else {
+   // wake from snooze, or latch for the next snooze
+   if(!task_unsnooze(task))
       task->wake_pending = true;
-   }
 }
 
 // index of the first queued event belonging to this thread, -1 if none
@@ -538,27 +552,38 @@ void task_remove_queued_subroutine(task_state_t *task, int index) {
    memmove(&task->process->event_queue[index], &task->process->event_queue[index+1], (task->process->event_queue_size - index) * sizeof(task_event_t*));
 }
 
-void task_execute_queued_subroutine(void *regs, int taskid) {
+bool task_execute_queued_subroutine(void *regs, int taskid) {
    // check events queue
 
    task_state_t *task = &tasks[taskid];
-   if(task->in_routine) {
-      // do nothing - wait until task_subroutine_end to call this function
-   } else {
+   if(task->in_routine)
+      return false; // wait until task_subroutine_end to call this function
 
+   while(true) {
       int e = task_find_queued_subroutine(task);
-      if(e >= 0) {
-         if(!switch_to_task(taskid, regs)) return;
+      if(e < 0) return false; // queue is empty
 
-         task_event_t *event = task->process->event_queue[e];
+      task_event_t *event = task->process->event_queue[e];
 
-         task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc);
+      // skip stale msgs to avoid extra wakeups
+      // if channel flags are set the notification isn't skipped
+      bool stale = strequ(event->name, "msg") && event->args[0] == 0 && msg_notif_is_stale(task, event->args[2], event->args[1]);
 
-         task_remove_queued_subroutine(task, e);
+      if(!stale) {
+         if(!switch_to_task(taskid, regs)) return false;
+         task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc); // takes ownership of args
+      } else {
+         free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
+      }
 
-         free((uint32_t)event, sizeof(task_event_t));
+      task_remove_queued_subroutine(task, e);
+      msg_retry_notifications(task); // free'd queue entry so check for dropped messages
 
+      free((uint32_t)event, sizeof(task_event_t));
+
+      if(!stale) {
          task->routine_return_window = getSelectedWindowIndex();
+         return true;
       }
    }
 }
@@ -569,6 +594,8 @@ bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32
       free((uint32_t)args, sizeof(uint32_t*)*argc);
       return false;
    }
+
+   task_unsnooze(task);
 
    // coalesce scroll and hover events
    if(strequ(name, "hover") || strequ(name, "scroll")) {
@@ -633,6 +660,8 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
       free((uint32_t)args, sizeof(uint32_t*)*argc);
       return false;
    }
+   
+   task_unsnooze(task);
 
    if(task->paused || task->in_routine) {
       return task_queue_subroutine(task, name, addr, args, argc);
@@ -670,8 +699,12 @@ void task_subroutine_end(registers_t *regs) {
    tasks[current_task].routine_argc = 0;
 
    tasks[current_task].in_routine = false;
+
    // check for any other queued events and run if there are
    task_execute_queued_subroutine(regs, current_task);
+
+   // queue notifications that were dropped while event queue was full
+   msg_retry_notifications(&tasks[current_task]);
 
    if(tasks[current_task].routine_return_window >= 0)
       setSelectedWindowIndex(tasks[current_task].routine_return_window);

@@ -36,10 +36,10 @@ void unmap(page_dir_entry_t *dir, uint32_t vaddr) {
    }
 }
 
-void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache) {
+bool map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache) {
 
    // map 4 KiB aligned vadddr to 4 KiB aligned physical addr
-   if(!dir) return;
+   if(!dir) return false;
 
    // get page
    uint32_t index = vaddr / 0x1000; // 4096 bytes per page
@@ -48,14 +48,18 @@ void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw,
 
    if(!dir[dir_index].present || !dir[dir_index].address) {
       page_table_entry_t *page_table = malloc(sizeof(page_table_entry_t) * 1024); // dir
+      if(!page_table) {
+         debug_printf("map: out of physical memory creating page table vaddr 0x%h\n", vaddr);
+         return false;
+      }
+
+      // default everything to 0
+      memset(page_table, 0, 1024*(int)sizeof(page_table_entry_t)); // set to 2 for rw = 1, else 0
 
       dir[dir_index].address = (uint32_t)page_table >> 12;
       dir[dir_index].present = 1;
       dir[dir_index].rw = 1;
       dir[dir_index].user = 1;
-
-      // default everything to 0
-      memset(page_table, 0, 1024*(int)sizeof(page_table_entry_t)); // set to 2 for rw = 1, else 0
    }
 
    page_table_entry_t *page_table = (page_table_entry_t*) (dir[dir_index].address << 12);
@@ -66,6 +70,7 @@ void map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw,
    page_table[table_index].address = addr >> 12;
    page_table[table_index].no_cache = no_cache;
 
+   return true;
 }
 
 int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw, int no_cache) {
@@ -76,7 +81,8 @@ int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint
 
    int mapped = 0;
    for(uint32_t paddr = phys_start, vaddr = virt_start; paddr < phys_end; paddr += PAGE_SIZE, vaddr += PAGE_SIZE) {
-      map(dir, paddr, vaddr, user, rw, no_cache);
+      if(!map(dir, paddr, vaddr, user, rw, no_cache))
+         break;
       mapped++;
    }
 
@@ -90,26 +96,38 @@ page_dir_entry_t *new_page() {
    // we use malloc here as it satisfies out 4KiB alignment requirement
 
    page_dir_entry_t *dir = malloc(sizeof(page_dir_entry_t) * 1024);
+   if(!dir) {
+      debug_printf("new_page: out of physical memory for page directory\n");
+      return NULL;
+   }
    // memset 0
    uint8_t *entry = (uint8_t*)dir;
    memset(entry, 0, 1024*(int)sizeof(page_dir_entry_t));
 
+   bool ok = true;
+
    // identity map kernel binary
    for(uint32_t i = KERNEL_START/0x1000; i < KERNEL_END/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 0, 0, 0);
+      ok &= map(dir, i*0x1000, i*0x1000, 0, 0, 0);
 
    // map kernel stack
    uint32_t v_offset = (V_KSTACK_START - KSTACK_START)/0x1000;
    for(uint32_t i = KSTACK_START/0x1000; i < TOS_KERNEL/0x1000; i++)
-      map(dir, i*0x1000, (v_offset+i)*0x1000, 0, 0, 0);
+      ok &= map(dir, i*0x1000, (v_offset+i)*0x1000, 0, 0, 0);
 
    // identity map heap for kernel
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 0, 0, 0);
+      ok &= map(dir, i*0x1000, i*0x1000, 0, 0, 0);
 
    // identity map framebuffer
    for(uint32_t i = (uint32_t)gui_get_framebuffer()/0x1000; i < ((uint32_t)gui_get_framebuffer()+gui_get_framebuffer_size()+0xFFF)/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 0, 0, 0);
+      ok &= map(dir, i*0x1000, i*0x1000, 0, 0, 0);
+
+   if(!ok) {
+      debug_printf("new_page: incomplete kernel mapping, discarding page dir\n");
+      free_page_dir(dir);
+      return NULL;
+   }
 
    return dir;
 }

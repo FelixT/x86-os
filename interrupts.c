@@ -565,7 +565,7 @@ void timer_handler(registers_t *regs) {
       //   gui_showtimer(timer_i%10);
 
       if(timer_i%17 == 0) { // ~40fps
-         gui_draw();
+         gui_draw(); // blocks kernel
       }
 
       if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
@@ -694,7 +694,11 @@ bool page_fault_handler(registers_t *regs) {
       }
       memset(page, 0, 0x1000); // zero mem
       addr = addr & ~0xFFF;  // page align
-      map(dir, (uint32_t)page, addr, 1, 1, 0);
+      if(!map(dir, (uint32_t)page, addr, 1, 1, 0)) {
+         debug_printf("demand paging: couldn't map 0x%h\n", addr);
+         free((uint32_t)page, 0x1000);
+         return false;
+      }
       invlpg(addr);
       return true;
    }

@@ -56,6 +56,7 @@ typedef enum {
 // per message flags (msg_send/msg_read)
 #define MSG_EXPECT_REPLY 1 // on client_reserves, client sends with this will reserve a reply slot so the server isn't blocked responding
 #define MSG_LAST_MSG 2 // reading last message in queue (msg_read)
+#define MSG_REPLY 4 // send is reply to MSG_EXPECT_REPLY request - releases the reserved slot
 
 // channel notification flags
 #define MSG_FLAG_CLOSED 1
