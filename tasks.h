@@ -16,14 +16,14 @@
 #include "fs.h"
 #include "pci.h"
 
-#define TOTAL_STACK_SIZE 0x0020000
-#define TASK_STACK_SIZE 0x0001000
+#define TASK_STACK_SIZE 0x0004000
 
 #define TOTAL_TASKS 16
 #define MAX_TASK_THREADS 4
 
 #define USR_CODE_SEG (8*3)
 #define USR_DATA_SEG (8*4)
+#define TSU_DF_SEG   (8*6)
 
 typedef struct task_state_t task_state_t;
 
@@ -71,7 +71,7 @@ typedef struct process_t {
    char exe_path[256]; // location of executable
 
    // resources
-   int no_allocated; // kmalloc-d paged, currently only incremented via dma
+   int no_allocated; // kmallocd paged, currently only incremented via dma
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[PROCESS_MAX_FDS];
@@ -100,8 +100,9 @@ typedef struct task_state_t {
    bool crashed;
    int task_id;
    uint32_t task_uid;
-   uint32_t stack_top; // address
-   uint32_t kernel_stack_top; // address
+   uint32_t stack_base; // phys address of stack allocation (mapped above the guard to v_stack_start+0x1000)
+   uint32_t v_stack_start; // vaddr
+   uint32_t kernel_stack_top; // phys address (identity mapped)
    registers_t registers;
    registers_t routine_return_regs;
    int routine_return_window; // switch to this window after routine, potentially unneeded
@@ -120,16 +121,18 @@ typedef struct task_state_t {
    process_t *process; // parent process
 } task_state_t;
 
-void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
-void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds);
-void launch_task(int index, registers_t *regs, bool focus);
+int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
+bool task_map_stack(task_state_t *task, int thread_no);
+bool setup_task_init(int index, registers_t *regs, bool focus, bool open_fds);
+bool launch_task(int index, registers_t *regs, bool focus);
+void task_discard_entry(int index);
 void free_launch_args(char **args, int argc);
 void end_task(int index, registers_t *regs);
 void tasks_alloc();
 void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs);
 bool switch_to_task(int index, registers_t *regs);
-void tasks_launch_binary(registers_t *regs, char *path);
+bool tasks_launch_binary(registers_t *regs, char *path);
 bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus);
 int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy);
 
@@ -155,6 +158,7 @@ void task_wake(task_state_t *task); // latched wake - only resumes a snoozing th
 void task_pause(task_state_t *task, task_pause_reason_t reason);
 void task_resume(task_state_t *task);
 void tss_init();
+void tss_df_init();
 
 void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);

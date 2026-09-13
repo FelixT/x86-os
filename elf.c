@@ -105,7 +105,12 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       prog_header++;
    }
 
-   create_task_entry(task_index, elf_header->entry, vmem_size, false, NULL);
+   if(create_task_entry(task_index, elf_header->entry, vmem_size, false, NULL) == -1) {
+      debug_printf("elf_load: create task entry failed\n");
+      free((uint32_t)newProg, vmem_size);
+      free_page_dir(dir);
+      return -1;
+   }
    task_state_t *task = &gettasks()[task_index];
    task->process->vmem_start = vmem_start;
    task->process->vmem_end = vmem_end;
@@ -114,9 +119,6 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    task->process->heap_start = heap_start;
    task->process->heap_end = heap_start;
 
-   for(uint32_t i = (task->stack_top - TASK_STACK_SIZE)/0x1000; i < task->stack_top/0x1000; i++)
-      map(dir, i*0x1000, i*0x1000, 1, 1, 0);
-
    return task_index;
 }
 
@@ -124,7 +126,11 @@ bool elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
    int task_index = elf_load(prog, size);
    if(task_index < 0) return false;
 
-   launch_task(task_index, regs, focus);
+   if(!launch_task(task_index, regs, focus)) {
+      debug_printf("elf_run: launch failed\n");
+      task_discard_entry(task_index);
+      return false;
+   }
    process_t *process = gettasks()[task_index].process;
 
    // push args
@@ -148,7 +154,11 @@ int elf_setup(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **
    task_state_t *task = &gettasks()[task_index];
    uint32_t vmem_start = task->process->vmem_start;
 
-   setup_task_init(task_index, regs, focus, open_fds);
+   if(!setup_task_init(task_index, regs, focus, open_fds)) {
+      debug_printf("elf_setup: task setup failed\n");
+      task_discard_entry(task_index);
+      return -1;
+   }
 
    // switch to tasks page dir to push args to stack
    page_dir_entry_t *saved_dir = page_get_current();

@@ -85,6 +85,12 @@ void idt_init() {
 
    idt_set_descriptor(48, irq_stub_table[48-32], 0xEE); // software interrupt 0x30, can be called from ring 3
  
+   // double fault (exception 8) task gate, switch to df tss (using df kstack)
+   idt[8].isr_low = 0;
+   idt[8].isr_high = 0;
+   idt[8].kernel_cs = TSU_DF_SEG;
+   idt[8].attributes = 0x85; // task gate
+
    __asm__ volatile("lidt %0" : : "m"(idtr)); // load idt
 
    pic_remap();
@@ -782,13 +788,24 @@ void exception_handler(int int_no, registers_t *regs) {
 
 }
 
-void kernel_panic() {
+__attribute__((noreturn)) void kernel_panic(void) {
    // show debug window and panic
    setSelectedWindowIndex(0);
    gui_window_t *window = getSelectedWindow();
    window->minimised = false;
    window->needs_redraw = true;
    window_draw(window);
+   int popup = windowmgr_add();
+   if(popup < 0)
+      while(true) {};
+   gui_window_t *popup_window = getWindow(popup);
+   window_popup_dialog(popup_window, NULL, "f3sys has crashed");
+   popup_window->x = 5;
+   popup_window->y = 5;
+   strcpy(popup_window->title, "kernel panic");
+   popup_window->window_objects[1]->visible = false; // ok btn
+   popup_window->window_objects[0]->y += 14; // txt
+   gui_redrawall();
    while(true) {};
 }
 

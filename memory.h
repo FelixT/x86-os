@@ -14,11 +14,13 @@
 #define KERNEL_START 0x1000000 // loaded to here in bootloader1
 #define KERNEL_END   0x1040000 // KERNEL_START + KERNEL_SIZE
 
-#define STACKS_START 0x100000
-#define TOS_PROGRAM  0x110000 // STACKS_START + 0x10000
+// kstack used for kernel page dir (before any tasks are launched, each task has its own kstack located in heap)
+#define KSTACK_START 0x160000
+#define TOS_KERNEL   0x164000 // KSTACK_START + KSTACK_SIZE
+#define KSTACK_SIZE  0x04000
 
-#define KSTACK_START 0x110000
-#define TOS_KERNEL   0x180000 // V_STACKS_START + 0x70000 (k stack size 0x7000)
+#define KSTACK_DF_START 0x164000 // separate kstack for running double fault exception handler
+#define KSTACK_DF_TOS 0x168000
 
 #define HEAP_KERNEL     0x1040000 // unified physical heap for user & kernel
 #define HEAP_KERNEL_END 0x3040000 // HEAP_KERNEL + 0x2000000
@@ -33,14 +35,14 @@
 // physical -> virtual offset is 0 for now (V_KERNEL_START-KERNEL_START)
 #define V_KERNEL_START 0x1000000
 #define V_KERNEL_END   0x1040000 // V_KERNEL_START + 0x20000 (kernel size 0x20000)
-#define V_KSTACK_START 0x110000 // V_KERNEL_END -> V_KERNEL_START + 0x20000 (kernel size 0x20000)
-#define V_TOS_KERNEL   0x180000 // V_STACKS_START + 0x2000 (k stack size 0x2000)
 
 #define V_SHARED_START 0xA0000000
 #define V_SHARED_END   0xB0000000
 
 #define V_MMIO_START 0xB0000000 // start for each process
 #define V_MMIO_END   0xC0000000
+
+#define V_STACKS_START 0xC0000000 // program stack for each mapped to known location (V_STACKS_START+i*TASK_STACK_SIZE)
 
 typedef struct mem_segment_status_t {
    bool allocated;

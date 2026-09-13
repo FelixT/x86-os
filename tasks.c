@@ -35,6 +35,8 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
    process->no_threads = 0;
+   for(int i = 0; i < MAX_TASK_THREADS; i++)
+      process->threads[i] = NULL;
    process->event_queue_size = 0;
    process->heap_start = 0;
    process->heap_end = 0;
@@ -44,9 +46,47 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    return process;
 }
 
-void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process) {
-   //if(tasks[index].enabled) end_task(index, NULL);
-   // todo: clear stack
+// returns thread no
+int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process) {
+   // lazy allocated stacks
+   if(!tasks[index].stack_base) {
+      void *stack = malloc(TASK_STACK_SIZE - 0x1000); // don't need to allocate physical memory for page guard
+      if(!stack) {
+         debug_printf("couldn't allocate stack for task %i\n", index);
+         return -1;
+      }
+      tasks[index].stack_base = (uint32_t)stack;
+   }
+   if(!tasks[index].kernel_stack_top) {
+      void *kernel_stack = malloc(KSTACK_SIZE); // do need to allocate physical memory for page guard (currently)
+      if(!kernel_stack) {
+         debug_printf("couldn't allocate kernel stack for task %i\n", index);
+         return -1;
+      }
+      tasks[index].kernel_stack_top = (uint32_t)kernel_stack + KSTACK_SIZE;
+   }
+   memset((void*)tasks[index].stack_base, 0, TASK_STACK_SIZE - 0x1000); // clear stack
+
+   int thread_no = -1;
+   if(process == NULL) {
+      // launching new process with main thread
+      tasks[index].process = create_process(entry, size, privileged);
+      thread_no = 0;
+      tasks[index].process->threads[thread_no] = &tasks[index];
+   } else {
+      // launching new thread of existing process
+      for(int i = 0; i < MAX_TASK_THREADS; i++) {
+         if(process->threads[i] != NULL) continue;
+         thread_no = i;
+         break;
+      }
+      if(thread_no == -1) {
+         debug_printf("process %u hit maximum number of threads\n", process->uid);
+         return -1;
+      }
+      tasks[index].process = process;
+      process->threads[thread_no] = &tasks[index];
+   }
 
    tasks[index].task_id = index;
    tasks[index].task_uid = task_uid_counter++;
@@ -55,37 +95,65 @@ void create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged
    tasks[index].pause_reason = PAUSE_NONE;
    tasks[index].wake_pending = false;
    tasks[index].crashed = false;
-   tasks[index].stack_top = (uint32_t)(TOS_PROGRAM - (TASK_STACK_SIZE * index));
-   tasks[index].kernel_stack_top = (uint32_t)(TOS_KERNEL - (TASK_STACK_SIZE * index));
    tasks[index].in_routine = false;
    tasks[index].in_syscall = false;
    tasks[index].msg_func = NULL;
    tasks[index].msg_channel_count = 0;
    tasks[index].msg_notify_pending = false;
    
-   tasks[index].registers.esp = tasks[index].stack_top;
-   tasks[index].registers.ebp = tasks[index].stack_top;
    tasks[index].registers.eip = entry;
-
-   if(process == NULL) {
-      // launching new process with main thread
-      tasks[index].process = create_process(entry, size, privileged);
-      tasks[index].process->threads[0] = &tasks[index];
-      tasks[index].process->no_threads++;
-   } else {
-      // launching new thread of existing process
-      tasks[index].process = process;
-      process->threads[process->no_threads++] = &tasks[index];
-   }
+   tasks[index].process->no_threads++;
+   return thread_no;
 }
 
-void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
+// map task's user stack into its process page dir and set up the kernel stack guard
+// (kernel stack is in heap so already mapped to kernel)
+bool task_map_stack(task_state_t *task, int thread_no) {
+   page_dir_entry_t *dir = task->process->page_dir;
+   int slot = (dir == page_get_kernel_pagedir()) ? task->task_id : thread_no;
+   task->v_stack_start = V_STACKS_START + slot*TASK_STACK_SIZE;
+
+   // setup program stack, already mallocd by create_task_entry, vmap to V_STACK_START for main thread
+   for(uint32_t i = 1; i < TASK_STACK_SIZE/0x1000; i++) {
+      if(!map(dir, task->stack_base + (i-1)*0x1000, task->v_stack_start + i*0x1000, 1, 1, 0)) {
+         debug_printf("task_map_stack: couldn't map stack for task %i\n", task->task_id);
+         for(uint32_t j = 1; j < i; j++)
+            unmap(dir, task->v_stack_start + j*0x1000);
+         return false;
+      }
+   }
+
+   // kernel stack guard - unmap from heap
+   unmap(dir, task->kernel_stack_top - KSTACK_SIZE);
+
+   uint32_t v_stack_top = task->v_stack_start + TASK_STACK_SIZE;
+   task->registers.ebp = v_stack_top;
+   task->registers.useresp = v_stack_top;
+   return true;
+}
+
+static void task_unmap_stack(task_state_t *task) {
+   page_dir_entry_t *dir = task->process->page_dir;
+   for(uint32_t i = 1; i < TASK_STACK_SIZE/0x1000; i++)
+      unmap(dir, task->v_stack_start + i*0x1000);
+
+   uint32_t guard = task->kernel_stack_top - KSTACK_SIZE;
+   if(dir == page_get_kernel_pagedir())
+      map(dir, guard, guard, 1, 1, 0);
+   else
+      map(dir, guard, guard, 0, 0, 0);
+}
+
+bool setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
    task_state_t *task = &tasks[index];
+
+   // note: tasks created here are always main thread
+   if(!task_map_stack(task, 0))
+      return false;
 
    task->registers.ds = USR_DATA_SEG | 3;
    task->registers.cs = USR_CODE_SEG | 3;
    task->registers.eflags = regs->eflags;
-   task->registers.useresp = task->stack_top;
    task->registers.ss = USR_DATA_SEG | 3;
 
    int tmpwindow = getSelectedWindowIndex();
@@ -103,13 +171,17 @@ void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
 
    if(!focus)
       setSelectedWindowIndex(tmpwindow);
+   return true;
 }
 
-void launch_task(int index, registers_t *regs, bool focus) {
+bool launch_task(int index, registers_t *regs, bool focus) {
    int old_task = current_task;
    current_task = index;
 
-   setup_task_init(index, regs, focus, true);
+   if(!setup_task_init(index, regs, focus, true)) {
+      current_task = old_task;
+      return false;
+   }
 
    if(old_task >= 0 && tasks[old_task].enabled) {
       tasks[old_task].registers = *regs;
@@ -121,6 +193,20 @@ void launch_task(int index, registers_t *regs, bool focus) {
 
    extern tss_t tss_start;
    tss_start.esp0 = tasks[current_task].kernel_stack_top;
+   return true;
+}
+
+// undo create_task_entry (launch/init failed)
+void task_discard_entry(int index) {
+   process_t *process = tasks[index].process;
+   if(!process) return;
+
+   if(process->prog_size != 0)
+      free(process->prog_start, process->prog_size);
+   if(process->page_dir != page_get_kernel_pagedir())
+      free_page_dir(process->page_dir);
+   free((uint32_t)process, sizeof(process_t));
+   tasks[index].process = NULL;
 }
 
 bool task_exists() {
@@ -259,8 +345,9 @@ void end_task(int index, registers_t *regs) {
 
       // kill other threads
       debug_printf("Ending %i other threads of process\n", task->process->no_threads - 1);
-      for(int i = 1; i < task->process->no_threads; i++) {
+      for(int i = 1; i < MAX_TASK_THREADS; i++) {
          task_state_t *thread = task->process->threads[i];
+         if(!thread) continue;
          end_task(thread->task_id, NULL);
          thread->process = NULL;
       }
@@ -289,6 +376,8 @@ void end_task(int index, registers_t *regs) {
       // free page dir
       if(task->process->page_dir != page_get_kernel_pagedir())
          free_page_dir(task->process->page_dir);
+      else // binary task - page dir persists, so undo stack mapping
+         task_unmap_stack(task);
 
       // free launch args
       free_launch_args(task->process->launch_args, task->process->launch_argc);
@@ -298,6 +387,16 @@ void end_task(int index, registers_t *regs) {
       task->process = NULL;
    } else {
       free_task_events(task);
+
+      task_unmap_stack(task);
+
+      // reclaim slot from process threads
+      for(int i = 0; i < MAX_TASK_THREADS; i++) {
+         if(task->process->threads[i] != task) continue;
+         task->process->threads[i] = NULL;
+         task->process->no_threads--;
+         break;
+      }
    }
 
    if(task->routine_args) {
@@ -310,25 +409,41 @@ void end_task(int index, registers_t *regs) {
 
 void tasks_alloc() {
    tasks = malloc(sizeof(task_state_t) * TOTAL_TASKS);
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      tasks[i].enabled = false;
+      tasks[i].kernel_stack_top = 0; // stacks are lazy allocated when index is first claimed in create_task_entry and persist end_task
+      tasks[i].stack_base = 0;
+   }
 }
 
-void tasks_launch_binary(registers_t *regs, char *path) {
+bool tasks_launch_binary(registers_t *regs, char *path) {
    int index = get_free_task_index();
    if(index == -1) {
       debug_printf("No free tasks\n");
-      return;
+      return false;
    }
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Program not found\n", 0);
-      return;
+      return false;
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
    uint32_t progAddr = (uint32_t)prog;
-   create_task_entry(index, progAddr, entry->fileSize, false, NULL);
-   launch_task(index, regs, false);
+   if(create_task_entry(index, progAddr, entry->fileSize, false, NULL) == -1) {
+      debug_printf("tasks_launch_binary: create task entry failed\n");
+      free((uint32_t)prog, entry->fileSize);
+      free((uint32_t)entry, sizeof(fat_dir_t));
+      return false;
+   }
+   if(!launch_task(index, regs, false)) {
+      debug_printf("tasks_launch_binary: launch failed\n");
+      task_discard_entry(index); // frees prog
+      free((uint32_t)entry, sizeof(fat_dir_t));
+      return false;
+   }
    free((uint32_t)entry, sizeof(fat_dir_t));
    gui_redrawall();
+   return true;
 }
 
 bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus) {
@@ -363,24 +478,21 @@ int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool f
    return task_index;
 }
 
+extern __attribute__((noreturn)) void kernel_panic(void);
 void tasks_init(registers_t *regs) {
    // enable preemptive multitasking
 
    setSelectedWindowIndex(0);
 
-   for(int i = 0; i < TOTAL_TASKS; i++) {
-      tasks[i].enabled = false;
-      //tasks[i].process->window = -1; hmm
-   }
-
    // launch idle process
-   tasks_launch_binary(regs, "/sys/progidle.bin");
+   if(!tasks_launch_binary(regs, "/sys/progidle.bin")) {
+      debug_printf("tasks_init: failed to launch idle program\n");
+      kernel_panic(); // unable to init tasks at all
+   }
    
    gui_get_windows()[tasks[current_task].process->window].minimised = true;
    gui_get_windows()[tasks[current_task].process->window].draw_func = NULL;
    strcpy(gui_get_windows()[tasks[current_task].process->window].title, "Idle Process");
-   //elf_run(regs, prog, 0, 0, NULL);
-   //free((uint32_t)prog, entry->fileSize);
 
    switching = true;
 }
@@ -771,18 +883,30 @@ void task_write_to_window(int task, char *out, bool children) {
    }
 }
 
+static void double_fault_handler() {
+   window_writestr("Double fault exception, hanging kernel\n", COLOUR_RED, 0);
+   debug_printf("eip: 0x%h / esp: 0x%h / task: %i", tss_start.eip, tss_start.esp, current_task);
+   if(current_task >= 0 && current_task < TOTAL_TASKS) {
+      task_state_t *task = &gettasks()[current_task];
+      if(task->in_syscall)
+         debug_printf(" / syscall: %i", task->syscall_no);
+      debug_printf("\nTask kstack: 0x%h-0x%h\n", task->kernel_stack_top - KSTACK_SIZE + 0x1000, task->kernel_stack_top);
+      if(tss_start.esp >= task->kernel_stack_top - KSTACK_SIZE && tss_start.esp <= task->kernel_stack_top - KSTACK_SIZE + 0x1000) {
+         // inside stack guard
+         window_writestr("kernel stack overflow\n", COLOUR_RED, 0);
+      }
+   }
+   kernel_panic();
+   while(true) {}
+}
+
 void tss_init() {
    // setup tss entry in gdt
    extern gdt_entry_t gdt_tss;
    extern tss_t tss_start;
-   extern uint32_t tss_end;
-   //extern tss_t tss_start;
 
    uint32_t base = (uint32_t)&tss_start;
-   uint32_t limit = (uint32_t)&tss_end;
-   
-   //uint32_t tss_size = &tss_end - &tss_start;
-
+   uint32_t limit = sizeof(tss_t) - 1;
    uint8_t gran = 0x00;
 
    gdt_tss.base_low = (base & 0xFFFF);
@@ -792,7 +916,25 @@ void tss_init() {
    gdt_tss.limit_low = (limit & 0xFFFF);
 	gdt_tss.granularity = ((limit >> 16) & 0x0F);
    gdt_tss.granularity |= (gran & 0xF0);
+}
 
+void tss_df_init() {
+   // setup double fault tss (uses separate kstack)
+   extern tss_t df_tss_start;
+   uint32_t base = (uint32_t)&df_tss_start;
+   uint32_t limit = sizeof(tss_t) - 1;
+   uint8_t gran = 0x00;
+   extern gdt_entry_t gdt_df_tss;
+   
+   gdt_df_tss.base_low = (base & 0xFFFF);
+	gdt_df_tss.base_middle = (base >> 16) & 0xFF;
+	gdt_df_tss.base_high = (base >> 24) & 0xFF;
+
+   gdt_df_tss.limit_low = (limit & 0xFFFF);
+	gdt_df_tss.granularity = ((limit >> 16) & 0x0F);
+   gdt_df_tss.granularity |= (gran & 0xF0);
+
+   df_tss_start.eip = (uint32_t)&double_fault_handler;
 }
 
 // launch/string args are constructed by the kernel in two places: api_launch_task, endtask_debug

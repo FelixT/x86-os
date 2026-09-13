@@ -34,6 +34,9 @@ void unmap(page_dir_entry_t *dir, uint32_t vaddr) {
       }
 
    }
+
+   if(dir == current_page_dir)
+      invlpg(vaddr);
 }
 
 bool map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache) {
@@ -110,11 +113,6 @@ page_dir_entry_t *new_page() {
    for(uint32_t i = KERNEL_START/0x1000; i < KERNEL_END/0x1000; i++)
       ok &= map(dir, i*0x1000, i*0x1000, 0, 0, 0);
 
-   // map kernel stack
-   uint32_t v_offset = (V_KSTACK_START - KSTACK_START)/0x1000;
-   for(uint32_t i = KSTACK_START/0x1000; i < TOS_KERNEL/0x1000; i++)
-      ok &= map(dir, i*0x1000, (v_offset+i)*0x1000, 0, 0, 0);
-
    // identity map heap for kernel
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)
       ok &= map(dir, i*0x1000, i*0x1000, 0, 0, 0);
@@ -135,12 +133,18 @@ page_dir_entry_t *new_page() {
 void page_init() {
 
    // set up kernel page and switch to it
-
    page_dir = new_page();
 
-   // map stacks for all task slots as binaries launch in kernel page dir - hacky
-   for(uint32_t i = (TOS_PROGRAM - TASK_STACK_SIZE*TOTAL_TASKS)/0x1000; i < TOS_PROGRAM/0x1000; i++)
-      map(page_dir, i*0x1000, i*0x1000, 1, 1, 0);
+   // double fault tss uses kernel page
+   extern tss_t df_tss_start;
+   df_tss_start.cr3 = (uint32_t)page_dir;
+
+   // map kernel stack
+   for(uint32_t i = KSTACK_START/0x1000; i < TOS_KERNEL/0x1000; i++)
+      map(page_dir, i*0x1000, i*0x1000, 0, 0, 0);
+   // map double fault stack
+   for(uint32_t i = KSTACK_DF_START/0x1000; i < KSTACK_DF_TOS/0x1000; i++)
+      map(page_dir, i*0x1000, i*0x1000, 0, 0, 0);
 
    // this page is used for the idle process which needs heap to not crash
    for(uint32_t i = HEAP_KERNEL/0x1000; i < HEAP_KERNEL_END/0x1000; i++)

@@ -60,15 +60,17 @@ Kernel init sequence (cmain) sets up core kernel subsystems and enables task swi
 
 #### memory
 
-Task user stacks (identity mapped): 0x100000 – 0x110000
+Unified kernel/user heap (physical): 0x1040000 – 0x3040000 (32MB)
 
-Kernel stack (identity mapped): 0x110000 – 0x180000
+Heap is mapped to a process's page directory via demand paging.
+
+Each task has its own kernel stack that lives in the heap
 
 Kernel (identity mapped): 0x1000000 - 0x1040000 (256KB reserved)
 
-Unified kernel/user heap: 0x1040000 – 0x3040000 (32MB)
+Initial/boot kernel stack (identity mapped): 0x160000 - 0x164000
 
-Heap is mapped to a process's page directory via demand paging.
+Per task program stack (vmem): 0xC0000000 ((taskid for binaries + ) thread no)*0x4000 [size TASK_STACK_SIZE]
 
 Shared memory vmapped to each process: 0xA0000000 - 0xB0000000
 

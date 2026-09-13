@@ -101,18 +101,19 @@ static inline void redraw_pixel(int x, int y) {
 }
 
 // exit syscall
-static inline void _exit(int status) {
+static inline __attribute__((noreturn)) void _exit(int status) {
    asm volatile(
       "int $0x30"
       :: "a" (10),
       "b" (status)
       : "cc", "memory"
    );
+   __builtin_unreachable();
 }
 
 extern void fclose_all(void) __attribute__((weak));
 
-static inline void exit(int status) {
+static inline __attribute__((noreturn)) void exit(int status) {
    if(fclose_all) // if linked with stdio
       fclose_all();
    _exit(status);

@@ -29,13 +29,12 @@ static inline void api_write_to_task(char *out) {
 }
 
 void api_printf(char *format, ...) {
-   char *buffer = (char*)malloc(512);
+   char buffer[512];
    va_list args;
    va_start(args, format);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    api_write_to_task(buffer);
-   free((uint32_t)buffer, 512);
 }
 
 gui_window_t *api_get_cwindow(int cindex) {
@@ -1158,17 +1157,26 @@ void api_create_thread(registers_t *regs) {
 
    task_state_t *parent = get_current_task_state();
 
-   create_task_entry(task_index, regs->ebx, parent->process->prog_size, parent->process->privileged, parent->process);
-   task_state_t *thread = &gettasks()[task_index];
-   map_size(thread->process->page_dir, thread->stack_top - TASK_STACK_SIZE, thread->stack_top - TASK_STACK_SIZE, TASK_STACK_SIZE, 1, 1, 0);
+   int thread_i = create_task_entry(task_index, regs->ebx, parent->process->prog_size, parent->process->privileged, parent->process);
+   if(thread_i < 0) {
+      regs->ebx = -1;
+      return;
+   }
+   task_state_t *task = &gettasks()[task_index];
+   if(!task_map_stack(task, thread_i)) {
+      // release the thread slot claimed by create_task_entry
+      parent->process->threads[thread_i] = NULL;
+      parent->process->no_threads--;
+      regs->ebx = -1;
+      return;
+   }
 
    // copy over essential fields
-   thread->registers.ds = USR_DATA_SEG | 3;
-   thread->registers.cs = USR_CODE_SEG | 3; // user code segment
-   thread->registers.ss = USR_DATA_SEG | 3;
-   thread->registers.eflags = regs->eflags;
-   thread->registers.useresp = thread->stack_top;
-   thread->enabled = true;
+   task->registers.ds = USR_DATA_SEG | 3;
+   task->registers.cs = USR_CODE_SEG | 3; // user code segment
+   task->registers.ss = USR_DATA_SEG | 3;
+   task->registers.eflags = regs->eflags;
+   task->enabled = true;
 
    regs->ebx = task_index;
 }

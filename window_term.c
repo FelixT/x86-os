@@ -17,14 +17,13 @@
 // implement kernel mode terminal for debugging
 
 void window_term_printf(char *format, ...) {
-   char *buffer = malloc(512);
+   char buffer[512];
    va_list args;
    va_start(args, format);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    gui_window_t *selected = getSelectedWindow();
    gui_printf(buffer, selected->txtcolour);
-   free((uint32_t)buffer, 512);
 }
 
 uint32_t window_term_argtouint(char *str) {
@@ -286,13 +285,16 @@ void term_cmd_tasks() {
             // main thread
             window_term_printf(" main thread (%i children", tasks[i].process->no_threads-1);
 
-            for(int t = 1; t < tasks[i].process->no_threads; t++) {
-               if(t > 1)
+            int disp = 0;
+            for(int t = 1; t < MAX_TASK_THREADS; t++) {
+               if(!tasks[i].process->threads[t]) continue;
+               if(disp > 0)
                   window_term_printf(", ");
                else
                   window_term_printf(": ");
                
                window_term_printf("%i", tasks[i].process->threads[t]->task_id);
+               disp++;
             }
 
             window_term_printf(")");
@@ -302,7 +304,8 @@ void term_cmd_tasks() {
          int tmp = getSelectedWindow()->txtcolour;
          getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
          window_term_printf("\n   (eip 0x%h, allc %i/%ikb, heap 0x%h %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_start, tasks[i].process->heap_end - tasks[i].process->heap_start);
-         window_term_printf("\n   (esp 0x%h, stack 0x%h-0x%h)", tasks[i].registers.useresp, tasks[i].stack_top - TASK_STACK_SIZE, tasks[i].stack_top);
+         window_term_printf("\n   (esp 0x%h, stack 0x%h-0x%h)", tasks[i].registers.useresp, tasks[i].stack_base, tasks[i].stack_base + TASK_STACK_SIZE - 0x1000);
+         window_term_printf("\n   (k stack 0x%h-0x%h)", tasks[i].kernel_stack_top - KSTACK_SIZE, tasks[i].kernel_stack_top);
          getSelectedWindow()->txtcolour = tmp;
       } else {
          if(i == 0 || tasks[i-1].enabled) // skip consecutive disabled tasks
@@ -325,7 +328,6 @@ void term_cmd_test() {
    
    window_term_printf("\nKernel: 0x%h - 0x%h <size 0x%h>", KERNEL_START, KERNEL_END, KERNEL_END - KERNEL_START);
    window_term_printf("\nKernel stack 0x%h - 0x%h <size 0x%h>", KSTACK_START, TOS_KERNEL, TOS_KERNEL - KSTACK_START);
-   window_term_printf("\nProgram stack 0x%h - 0x%h <size 0x%h>", STACKS_START, TOS_PROGRAM, TOS_PROGRAM - STACKS_START);
    window_term_printf("\nHeap 0x%h - 0x%h <size 0x%h>", HEAP_KERNEL, HEAP_KERNEL_END, HEAP_KERNEL_END - HEAP_KERNEL);
    window_term_printf("\nFramebuffer 0x%h - 0x%h <size 0x%h>", framebuffer, framebuffer + gui_get_framebuffer_size(), gui_get_framebuffer_size());
 }
@@ -462,7 +464,7 @@ void term_cmd_taski(char *arg) {
    }
    task_state_t *task = &gettasks()[id];
    window_term_printf("Task %i uid %u (enabled %i paused %i reason %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->pause_reason, task->crashed, task->in_routine);
-   window_term_printf("Stack top 0x%h\n", task->stack_top);
+   window_term_printf("Stack base 0x%h\n", task->stack_base);
    process_t *process = task->process;
    if(process) {
       window_term_printf("Process uid %u threads %i privileged %i\n", process->uid, process->no_threads, process->privileged);

@@ -34,13 +34,12 @@ void cboot_writestr(char *c) {
 }
 
 void cboot_printf(char *format, ...) {
-   char *buffer = (char*)malloc(512);
+   char buffer[512];
    va_list args;
    va_start(args, format);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    cboot_writestr(buffer);
-   free((uint32_t)buffer, 512);
 }
 
 void debug_writestr(char *c) {
@@ -63,24 +62,22 @@ void gui_writenum(int num, uint16_t colour) {
 }
 
 void debug_printf(char *format, ...) {
-    char *buffer = (char*)malloc(512);
+   char buffer[512];
    va_list args;
    va_start(args, format);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    cboot_writestr(buffer);
-   free((uint32_t)buffer, 512);
 }
 
 void gui_printf(char *format, uint16_t colour, ...) {
    (void)colour;
-    char *buffer = (char*)malloc(512);
+   char buffer[512];
    va_list args;
    va_start(args, colour);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    cboot_writestr(buffer);
-   free((uint32_t)buffer, 512);
 }
 
 void cboot() {

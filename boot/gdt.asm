@@ -46,6 +46,16 @@ gdt_tss:
     db 0x0
     db 0x0
 
+; double fault tss
+global gdt_df_tss
+gdt_df_tss:
+    dw 0x0
+    dw 0x0
+    db 0x0
+    db 0x89
+    db 0x0
+    db 0x0
+
 gdt_end:
 
 gdt_descriptor:
@@ -59,3 +69,4 @@ DATA_SEG equ gdt_data - gdt_start
 USER_CODE_SEG equ gdt_usercode - gdt_start
 USER_DATA_SEG equ gdt_userdata - gdt_start
 TSU_SEG equ gdt_tss - gdt_start
+TSU_DF_SEG equ gdt_df_tss - gdt_start

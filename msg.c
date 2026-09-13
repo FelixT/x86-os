@@ -653,7 +653,7 @@ bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_
 
 void msg_retry_notifications(task_state_t *task) {
    process_t *process = task->process;
-   for(int i = 0; i < process->no_threads; i++) {
+   for(int i = 0; i < MAX_TASK_THREADS; i++) {
       task_state_t *thread = process->threads[i];
       if(!thread || !thread->enabled || thread->process != process) continue;
       msg_retry_task_notifications(thread);

@@ -63,13 +63,12 @@ void debug_writehex(uint32_t num) {
 }
 
 void debug_printf(char *format, ...) {
-   char *buffer = malloc(512);
+   char buffer[512];
    va_list args;
    va_start(args, format);
    vsnprintf(buffer, 512, format, args);
    va_end(args);
    debug_writestr(buffer);
-   free((uint32_t)buffer, 512);
 }
 
 int getFirstFreeIndex() {
@@ -398,6 +397,11 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
 
    // titlebar
 
+   int btnWidth = getFont()->width + getFont()->padding*4;
+   int closeX = window->x + window->width - (btnWidth + getFont()->padding*2);
+   int minimiseX = closeX - (btnWidth + getFont()->padding*2);
+   int shadingWidth = minimiseX - window->x - 8;
+
    // centered text
    int titleWidth = font_width(strlen(window->title));
    int titleX = window->x + window->width/2 - titleWidth/2;
@@ -411,7 +415,7 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
       draw_rect(&surface, wm_settings.titlebar_colour, window->x, window->y, window->width, TITLEBAR_HEIGHT);
       // shading
       for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
-         draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, window->width-26);
+         draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, shadingWidth);
       // rectangle behind title
       draw_rect(&surface, wm_settings.titlebar_colour, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
    }
@@ -425,8 +429,12 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
    }
 
    // titlebar buttons
-   draw_char(&surface, 0, 0, window->x+window->width-(getFont()->width+3), titleY);
-   draw_char(&surface, '-', 0, window->x+window->width-(getFont()->width+3)*2, titleY);
+   draw_unfilledrect(&surface, rgb16(220, 220, 220), closeX, window->y+3, btnWidth, TITLEBAR_HEIGHT - 6);
+   draw_unfilledrect(&surface, rgb16(220, 220, 220), minimiseX, window->y+3, btnWidth, TITLEBAR_HEIGHT - 6);
+   draw_rect(&surface, COLOUR_LIGHT_GREY, closeX+1, window->y+4, btnWidth-2, TITLEBAR_HEIGHT - 8);
+   draw_rect(&surface, COLOUR_LIGHT_GREY, minimiseX+1, window->y+4, btnWidth-2, TITLEBAR_HEIGHT - 8);
+   draw_char(&surface, 0, COLOUR_DARK_GREY, closeX+getFont()->padding*2, titleY);
+   draw_char(&surface, '-', COLOUR_DARK_GREY, minimiseX+getFont()->padding*2, titleY);
 
    draw_line(&surface, rgb16(170,170,170), window->x, window->y+TITLEBAR_HEIGHT-1, false, window->width);
 
@@ -942,17 +950,25 @@ bool clicked_on_window(void *regs, int index, int x, int y) {
       int relX = x - window->x;
       int relY = y - window->y;
 
-      // minimise
-      if(relY < TITLEBAR_HEIGHT && relX > window->width - (getFont()->width+3)*2 && relX < window->width - (getFont()->width+3)) {
-         window->minimised = true;
-         setSelectedWindowIndex(-1);
-         gui_redrawall();
+      int btnWidth = getFont()->width + getFont()->padding*4;
+      int closeX = window->width - (btnWidth + getFont()->padding*2);
+      int minimiseX = closeX - (btnWidth + getFont()->padding*2);
+
+      // close
+      if(relY < TITLEBAR_HEIGHT
+      && relX > closeX
+      && relX < closeX + btnWidth) {
+         window_close(regs, index);
          return true;
       }
 
-      // close
-      if(relY < TITLEBAR_HEIGHT && relX > window->width - (getFont()->width+3)) {
-         window_close(regs, index);
+      // minimise
+      if(relY < TITLEBAR_HEIGHT
+      && relX > minimiseX
+      && relX < minimiseX + btnWidth) {
+         window->minimised = true;
+         setSelectedWindowIndex(-1);
+         gui_redrawall();
          return true;
       }
 

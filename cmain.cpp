@@ -21,6 +21,7 @@ void cmain_gui_init() {
    gui_init();
    tasks_alloc();
    tss_init();
+   tss_df_init(); // handle double faults
    gdt_flush();
    tss_flush();
    pci_check_devices();
@@ -36,6 +37,11 @@ void cmain_cli_init() {
    idt_init();
    terminal_clear();
    terminal_prompt();
+   tss_init();
+   tss_df_init();
+   gdt_flush();
+   tss_flush();
+
 
    register_irq(0, timer_handler);
    register_irq(1, keyboard_handler);
