@@ -7,17 +7,18 @@
 #include "registers_t.h"
 #include "tasks.h"
 
+#define WM_SETTING_STR_LEN 256
 typedef struct windowmgr_settings_t {
    uint16_t default_window_bgcolour;
    uint16_t default_window_txtcolour;
    bool desktop_enabled;
    bool desktop_bgimg_enabled;
-   char desktop_bgimg[256]; // path
+   char desktop_bgimg[WM_SETTING_STR_LEN]; // path
    uint16_t titlebar_colour;
    int theme; // 0 = classic, 1 = gradient
    uint16_t titlebar_colour2; // used for gradient
    int titlebar_gradientstyle; // 0 = horizontal, 1 = vertical
-   char font_path[256];
+   char font_path[WM_SETTING_STR_LEN];
 } windowmgr_settings_t;
 
 #define MAX_WINDOWS 64

@@ -624,7 +624,7 @@ int dialog_filepicker_grid_click(wo_t *grid, int window, int row, int col) {
       debug_println("Couldn't find dialog for window %i\n", window);
       return 0;
    }
-   if(!dialog->dir) return 0;
+   if(!dialog->dir_entries) return 0;
    grid_t *grid_data = grid->data;
    grid_cell_t *cell = &grid_data->cells[row][col];
    if(cell->child_count > 0) {
@@ -641,8 +641,8 @@ int dialog_filepicker_grid_click(wo_t *grid, int window, int row, int col) {
       debug_println("Full path: %s", filepath);
 
       // find dir entry
-      for(int i = 0; i < dialog->dir->size; i++) {
-         fs_dir_entry_t *entry = &dialog->dir->entries[i];
+      for(int i = 0; i < dialog->dir_size; i++) {
+         fs_dir_entry_t *entry = &dialog->dir_entries[i];
          if(!strequ(entry->filename, filename)) continue;
          if(entry->type == FS_TYPE_DIR) {
             // show dir contents
@@ -680,31 +680,42 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
       canvas->child_count = 0;
    }
 
-   if(dialog->dir) {
-      kfree(dialog->dir->entries, dialog->dir->size * sizeof(fs_dir_entry_t));
-      kfree(dialog->dir, sizeof(fs_dir_content_t));
-      dialog->dir = NULL;
+   if(dialog->dir_entries) {
+      free(dialog->dir_entries);
+      dialog->dir_entries = NULL;
    }
    
-   fs_dir_content_t *content = read_dir(path);
-   if(!content) {
+   int file_count = read_dir(path, NULL, 0);
+   bool failed = file_count < 0;
+   fs_dir_entry_t *entries;
+   if(!failed) {
+      entries = malloc(file_count * sizeof(fs_dir_entry_t));
+      int read = read_dir(path, entries, file_count);
+      failed = read < 0;
+      if(failed)
+         free(entries);
+      else if(read < file_count)
+         file_count = read;
+   }
+   if(failed) {
       dialog_msg("Error", "Couldn't read directory");
       return;
    }
    
-   dialog->dir = content;
+   dialog->dir_size = file_count;
+   dialog->dir_entries = entries;
 
    int width = get_width_w(ui->window);
 
    int cols = (width - 20) / 100;
    if(!cols) cols = 1;
 
-   if(content->entries)
-      sort(content->entries, content->size, sizeof(fs_dir_entry_t), dialog_filepicker_sort);
+   if(entries)
+      sort(entries, file_count, sizeof(fs_dir_entry_t), dialog_filepicker_sort);
 
    int visible = 0;
-   for(int i = 0; i < content->size; i++) {
-      fs_dir_entry_t *entry = &content->entries[i];
+   for(int i = 0; i < file_count; i++) {
+      fs_dir_entry_t *entry = &entries[i];
       if(entry->filename[0] == '.') continue;
       if(entry->hidden) continue;
       visible++;
@@ -743,8 +754,8 @@ void dialog_filepicker_show_dir(dialog_t *dialog) {
    int row = 0;
    int col = 0;
 
-   for(int i = 0; i < content->size; i++) {
-      fs_dir_entry_t *entry = &content->entries[i];
+   for(int i = 0; i < file_count; i++) {
+      fs_dir_entry_t *entry = &entries[i];
       if(entry->filename[0] == '.') continue;
       if(entry->hidden)
          continue;
@@ -890,7 +901,7 @@ int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window
    dialog_init(dialog, create_window(width, height));
    dialog->callback = return_func;
    dialog->type = DIALOG_FILEPICKER;
-   dialog->dir = NULL;
+   dialog->dir_entries = NULL;
 
    dialog_set_title(dialog, "File Picker");
 

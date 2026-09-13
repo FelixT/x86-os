@@ -28,21 +28,16 @@ typedef struct api_task_t {
    char main_window_name[32];
 } api_task_t;
 
-typedef struct tasks_t {
-   api_task_t *tasks;
-   int size; 
-} tasks_t;
-
 typedef enum {
    SETTING_WIN_BGCOLOUR,
    SETTING_WIN_TXTCOLOUR,
    SETTING_DESKTOP_ENABLED,
    SETTING_DESKTOP_BGIMG_ENABLED,
-   SETTING_DESKTOP_BGIMG_PATH,
+   SETTING_DESKTOP_BGIMG_PATH, // str
    SETTING_WIN_TITLEBARCOLOUR,
    SETTING_THEME_TYPE,
    SETTING_WIN_TITLEBARCOLOUR2,
-   SETTING_SYS_FONT_PATH,
+   SETTING_SYS_FONT_PATH, // str
    SETTING_BGCOLOUR,
    SETTINGS_SYS_FONT_PADDING,
    SETTING_THEME_GRADIENTSTYLE

@@ -27,7 +27,8 @@ typedef struct dialog_t {
    // txtinput specific
    wo_t *input_wo;
    // filepicker specific
-   fs_dir_content_t *dir;
+   fs_dir_entry_t *dir_entries;
+   int dir_size;
    uint16_t *file_icon_data;
    uint16_t *folder_icon_data;
    // window settings specific

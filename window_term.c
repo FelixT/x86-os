@@ -130,7 +130,7 @@ void window_term_return(void *regs, void *window) {
          if(taskIndex < 0) return;
          task_state_t *task = &gettasks()[taskIndex];
 
-         char *buffer = (char*)malloc(selected->text_index+1);
+         char *buffer = (char*)malloc(TEXT_BUFFER_LENGTH);
          strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
          buffer[selected->text_index] = '\0';
          uint32_t *args = malloc(sizeof(uint32_t) * 1);

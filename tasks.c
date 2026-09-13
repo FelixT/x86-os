@@ -103,8 +103,6 @@ void setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
 
    if(!focus)
       setSelectedWindowIndex(tmpwindow);
-
-   debug_printf("Setting up task %u\n", index);
 }
 
 void launch_task(int index, registers_t *regs, bool focus) {
@@ -169,6 +167,52 @@ void task_reset_windows(int task) {
    }
 }
 
+// heap page returned back to kernel only access (set in new_page)
+static void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr) {
+   addr = page_align_down(addr);
+   map(dir, addr, addr, 0, 0, 0);
+   invlpg(addr);
+}
+
+// hacky but less hacky than having task clean this up
+static void cleanup_checkcmd_args(process_t *process, uint32_t *args) {
+   char *buffer = (char*)args[0];
+   if(process) {
+      unshare_heap_page(process->page_dir, (uint32_t)buffer);
+      unshare_heap_page(process->page_dir, (uint32_t)args);
+   }
+   free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
+}
+
+static void free_process_events(process_t *process) {
+   // free all events in queue
+   for(int i = 0; i < process->event_queue_size; i++) {
+      task_event_t *event = process->event_queue[i];
+      if(!event) continue;
+      if(strequ(event->name, "checkcmd"))
+         cleanup_checkcmd_args(process, event->args);
+      if(event->args)
+         free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
+      free((uint32_t)event, sizeof(task_event_t));
+   }
+   process->event_queue_size = 0;
+}
+
+static void free_task_events(task_state_t *task) {
+   // remove events for ended thread of still running process
+   int e;
+   while((e = task_find_queued_subroutine(task)) >= 0) {
+      task_event_t *event = task->process->event_queue[e];
+      task_remove_queued_subroutine(task, e);
+      msg_retry_notifications(task);
+      if(strequ(event->name, "checkcmd"))
+         cleanup_checkcmd_args(task->process, event->args);
+      if(event->args)
+         free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
+      free((uint32_t)event, sizeof(task_event_t));
+   }
+}
+
 void end_task(int index, registers_t *regs) {
    if(index < 0 || index >= TOTAL_TASKS) return;
 
@@ -180,8 +224,11 @@ void end_task(int index, registers_t *regs) {
 
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
-   if(task->in_routine)
+   if(task->in_routine) {
       debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : ""), task->routine_name);
+      if(strequ(task->routine_name, "checkcmd"))
+         cleanup_checkcmd_args(task->process, task->routine_args);
+   }
 
    if(task->in_syscall)
       debug_printf("Task was in syscall %i\n", task->syscall_no);
@@ -201,16 +248,8 @@ void end_task(int index, registers_t *regs) {
       if(task->process->prog_size != 0)
          free(task->process->prog_start, task->process->prog_size);
 
-      // free queued events
-      for(int i = 0; i < task->process->event_queue_size; i++) {
-         task_event_t *event = task->process->event_queue[i];
-         if(event) {
-            if(event->args)
-               free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
-            free((uint32_t)event, sizeof(task_event_t));
-         }
-      }
-      task->process->event_queue_size = 0;
+      // free process events
+      free_process_events(task->process);
 
       // free fds
       for(int i = 0; i < task->process->fd_count; i++) {
@@ -258,16 +297,7 @@ void end_task(int index, registers_t *regs) {
       free((uint32_t)task->process, sizeof(process_t));
       task->process = NULL;
    } else {
-      // remove events for ended thread of still running process
-      int e;
-      while((e = task_find_queued_subroutine(task)) >= 0) {
-         task_event_t *event = task->process->event_queue[e];
-         task_remove_queued_subroutine(task, e);
-         msg_retry_notifications(task);
-         if(event->args)
-            free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
-         free((uint32_t)event, sizeof(task_event_t));
-      }
+      free_task_events(task);
    }
 
    if(task->routine_args) {
@@ -694,6 +724,9 @@ void task_subroutine_end(registers_t *regs) {
 
    *regs = tasks[current_task].routine_return_regs;
 
+   if(strequ(tasks[current_task].routine_name, "checkcmd"))
+      cleanup_checkcmd_args(tasks[current_task].process, tasks[current_task].routine_args);
+
    free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t*));
    tasks[current_task].routine_args = NULL;
    tasks[current_task].routine_argc = 0;
@@ -789,9 +822,10 @@ int task_validate_str(task_state_t *task, char *str, int maxlen) {
    page_dir_entry_t *page_dir = task->process->page_dir;
 
    // check mapping
+   uint32_t base = vaddr & ~PAGE_MASK;
    int maxpages = (maxlen+(vaddr&PAGE_MASK)+(PAGE_SIZE-1))/PAGE_SIZE;
    for(int i = 0; i < maxpages; i++) {
-      uint32_t page_addr = vaddr + i*PAGE_SIZE;
+      uint32_t page_addr = base + i*PAGE_SIZE;
       if(page_checkmapping(page_dir, page_addr) < PAGE_USERREAD) {
          maxpages = i;
          break;
@@ -817,9 +851,10 @@ bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw) {
 
    int check = rw ? PAGE_USERRW : PAGE_USERREAD;
    // check mapping
+   uint32_t base = vaddr & ~PAGE_MASK;
    int maxpages = (len+(vaddr&PAGE_MASK)+(PAGE_SIZE-1))/PAGE_SIZE;
    for(int i = 0; i < maxpages; i++) {
-      uint32_t page_addr = vaddr + i*PAGE_SIZE;
+      uint32_t page_addr = base + i*PAGE_SIZE;
       if(page_checkmapping(page_dir, page_addr) < check
       && !(rw && task_addr_demand_paged(task, page_addr))) { // for writes allow lazy mapped mem - reads aren't allowed to allocate memory
          return false;
@@ -837,9 +872,10 @@ int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw) {
 
    int check = rw ? PAGE_USERRW : PAGE_USERREAD;
    // check mapping
+   uint32_t base = vaddr & ~PAGE_MASK;
    int maxpages = (max+(vaddr&PAGE_MASK)+(PAGE_SIZE-1))/PAGE_SIZE;
    for(int i = 0; i < maxpages; i++) {
-      uint32_t page_addr = vaddr + i*PAGE_SIZE;
+      uint32_t page_addr = base + i*PAGE_SIZE;
       if(page_checkmapping(page_dir, page_addr) < check
       && !(rw && task_addr_demand_paged(task, page_addr))) { // for writes allow lazy mapped mem - reads aren't allowed to allocate memory
          maxpages = i;

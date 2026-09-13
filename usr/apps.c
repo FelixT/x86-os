@@ -121,9 +121,24 @@ void mouseout(int window) {
 
 void _start() {
    
-   fs_dir_content_t *content = read_dir("/sys");
-   if(content->entries)
-      sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_filename);
+   char *path = "/sys";
+   int file_count = read_dir(path, NULL, 0);
+   bool read = file_count >= 0;
+   fs_dir_entry_t *entries;
+   if(read) {
+      entries = malloc(sizeof(fs_dir_entry_t)*file_count);
+      int read_count = read_dir(path, entries, file_count);
+      read = read_count >= 0;
+      if(!read) free(entries);
+      else if(read_count < file_count) file_count = read_count;
+   }
+   if(!read) {
+      printf("Couldn't read %s folder\n", path);
+      set_window_minimised(false, -1);
+      exit(1);
+      return;
+   }
+   sort(entries, file_count, sizeof(fs_dir_entry_t), sort_filename);
 
    override_draw(0, -1);
    override_click(&click, -1);
@@ -136,8 +151,8 @@ void _start() {
    items = 0;
 
    // get number of items
-   for(int i = 0; i < content->size; i++) {
-      fs_dir_entry_t *entry = &content->entries[i];
+   for(int i = 0; i < file_count; i++) {
+      fs_dir_entry_t *entry = &entries[i];
       if(strendswith(entry->filename, ".elf"))
          items++;
    }
@@ -174,8 +189,8 @@ void _start() {
    int row = 0;
 
    // add buttons for each app to grid
-   for(int i = 0; i < content->size; i++) {
-      fs_dir_entry_t *entry = &content->entries[i];
+   for(int i = 0; i < file_count; i++) {
+      fs_dir_entry_t *entry = &entries[i];
       if(strendswith(entry->filename, ".elf")) {
          char name[10];
          strsplit(name, NULL, entry->filename, '.');
@@ -196,8 +211,7 @@ void _start() {
 
    ui_draw(ui);
 
-   kfree(content->entries, sizeof(fs_dir_entry_t) * content->size);
-   kfree(content, sizeof(fs_dir_content_t));
+   free(entries);
 
    redraw();
    set_window_minimised(false, -1);

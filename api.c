@@ -337,13 +337,19 @@ void api_override_hover(registers_t *regs) {
 void api_override_close(registers_t *regs) {
    // IN: ebx = function address
    // IN: ecx = window cindex
+   // OUT: ebx - success
    if(regs->ecx == (uint32_t)-1) {
-      debug_printf("Cannot override close on main window\n");
+      // cannot override close on main window
+      regs->ebx = 0;
       return;
    }
    gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
+   if(!window) {
+      regs->ebx = 0;
+      return;
+   }
    window->close_func = (void *)(regs->ebx);
+   regs->ebx = 1;
 }
 
 void api_override_rightclick(registers_t *regs) {
@@ -366,7 +372,8 @@ void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }
 
-void api_malloc(registers_t *regs) {
+// private kernel memory api used for dma
+static void api_malloc(registers_t *regs) {
    // kmalloc
    // IN: ebx = size
    // OUT: ebx = addr
@@ -381,7 +388,7 @@ void api_malloc(registers_t *regs) {
    regs->ebx = (uint32_t)mem;
 }
 
-void api_free(registers_t *regs) {
+static void api_free(registers_t *regs) {
    // IN: ebx = addr
    // IN: ecx = size
    uint32_t mem = regs->ebx;
@@ -824,22 +831,41 @@ void api_read(registers_t *regs) {
 
 void api_read_dir(registers_t *regs) {
    // IN: ebx - char *path
-   // OUT: ebx - fs_dir_content_t *
+   // IN: ecx - count (max entries to read)
+   // IN: edx - fs_dir_entry_t *buffer
+   // OUT: ebx - total number of entries
    char *path = (char*)regs->ebx;
+   int entries = regs->ecx;
+   if(entries > 10000) { // stop size overflow
+      regs->ebx = -1;
+      return;
+   }
+   fs_dir_entry_t *out = (fs_dir_entry_t *)regs->edx;
    if(api_validate_str(path, 256) < 0) {
-      regs->ebx = 0;
+      regs->ebx = -1;
       return;
    }
    fs_dir_content_t *content = fs_read_dir(path);
    if(!content) {
-      regs->ebx = 0;
+      regs->ebx = -1;
       return;
    }
-   page_dir_entry_t *page_dir = get_current_task_pagedir();
-   map_size(page_dir, (uint32_t)content, (uint32_t)content, sizeof(fs_dir_content_t), 1, 1, 0);
-   uint32_t entries_size = sizeof(fs_dir_entry_t)*content->size;
-   map_size(page_dir, (uint32_t)content->entries, (uint32_t)content->entries, entries_size, 1, 1, 0);
-   regs->ebx = (uint32_t)content;
+   uint32_t entries_size = sizeof(fs_dir_entry_t)*entries;
+   if(!api_validate_mem(out, entries_size, true)) {
+      debug_printf("api_read_dir: mem at 0x%h needed to be >= %u\n", out, entries_size);
+      fs_dir_content_free(content);
+      regs->ebx = -1;
+      return;
+   }
+   int copy = entries;
+   if(content->size < copy)
+      copy = content->size;
+   for(int i = 0; i < copy; i++)
+      out[i] = content->entries[i];
+
+   int size = content->size;
+   fs_dir_content_free(content);
+   regs->ebx = size;
 }
 
 void api_write(registers_t *regs) {
@@ -1243,24 +1269,27 @@ void api_set_setting(registers_t *regs) {
 
 void api_get_setting(registers_t *regs) {
    // IN ebx - setting
-   // OUT ebx - value
+   // IN ecx - buffer for str reads
+   // OUT ebx - value or bool for str reads
    windowmgr_settings_t *settings = windowmgr_get_settings();
+   int setting = regs->ebx;
+   bool string_read = setting == SETTING_DESKTOP_BGIMG_PATH || setting == SETTING_SYS_FONT_PATH;
+   if(string_read) {
+      // validate str
+      char *out_str = (char*)regs->ecx;
+      if(!api_validate_mem(out_str, WM_SETTING_STR_LEN, true)) {
+         regs->ebx = 0;
+         return;
+      }
+      char *src_str = setting == SETTING_DESKTOP_BGIMG_PATH ? settings->desktop_bgimg : settings->font_path;
+      strcpy(out_str, src_str);
+      regs->ebx = 1;
+      return;
+   }
 
    switch(regs->ebx) {
-      case SETTING_DESKTOP_BGIMG_PATH:
-         char *out = malloc(sizeof(settings->desktop_bgimg));
-         strcpy(out, settings->desktop_bgimg);
-         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->desktop_bgimg), 1, 1, 0);
-         regs->ebx = (uint32_t)out;
-         break;
       case SETTING_DESKTOP_ENABLED:
          regs->ebx = (uint32_t)settings->desktop_enabled;
-         break;
-      case SETTING_SYS_FONT_PATH:
-         out = malloc(sizeof(settings->font_path));
-         strcpy(out, settings->font_path);
-         map_size(get_current_task_pagedir(), (uint32_t)out, (uint32_t)out, sizeof(settings->font_path), 1, 1, 0);
-         regs->ebx = (uint32_t)out;
          break;
       case SETTING_THEME_TYPE:
          regs->ebx = (uint32_t)settings->theme;
@@ -1372,18 +1401,33 @@ void api_set_window_minimised(registers_t *regs) {
 }
 
 void api_get_tasks(registers_t *regs) {
-   // OUT: ebx api_task_t *
-   // OUT: ecx size
-   api_task_t *tasks = malloc(sizeof(api_task_t)*TOTAL_TASKS);
-   memset(tasks, 0, sizeof(api_task_t)*TOTAL_TASKS);
+   // IN: ebx - api_task_t *buffer
+   // IN: ecx - count (max tasks to read)
+   // OUT: ebx total tasks, -1 on fail
+   api_task_t *buffer = (api_task_t*)regs->ebx;
+   int count = regs->ecx;
+   if(count > TOTAL_TASKS)
+      count = TOTAL_TASKS;
+   int size = count*sizeof(api_task_t);
+   if(!api_validate_mem(buffer, size, true)) {
+      regs->ebx = -1;
+      return;
+   }
+   int read = 0;
    for(int i = 0; i < TOTAL_TASKS; i++) {
       task_state_t *task_state = &gettasks()[i];
-      api_task_t *api_task = &tasks[i];
+      if(!task_state->enabled) continue;
+      if(read >= count) {
+         read++;
+         continue;
+      }
+      api_task_t *api_task = &buffer[read++];
+      memset(api_task, 0, sizeof(api_task_t));
       api_task->id = task_state->task_id;
       api_task->uid = task_state->task_uid;
       api_task->enabled = task_state->enabled;
       api_task->paused = task_state->paused;
-      if(!api_task->enabled || !task_state->process || task_state->process->no_threads == 0)
+      if(!task_state->process || task_state->process->no_threads == 0)
          continue;
       api_task->parentid = task_state->process->threads[0]->task_id;
       if(api_task->id != api_task->parentid)
@@ -1407,9 +1451,7 @@ void api_get_tasks(registers_t *regs) {
       else
          strcpy(api_task->main_window_name, "");
    }
-   map_size(get_current_task_pagedir(), (uint32_t)tasks, (uint32_t)tasks, sizeof(api_task_t)*TOTAL_TASKS, 1, 1, 0);
-   regs->ebx = (uint32_t)tasks;
-   regs->ecx = TOTAL_TASKS;
+   regs->ebx = read;
 }
 
 typedef struct {

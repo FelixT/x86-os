@@ -21,7 +21,8 @@ uint16_t *elf_icon;
 uint16_t *font_icon;
 uint16_t *folder_icon;
 volatile int offset;
-fs_dir_content_t *dir_content;
+fs_dir_entry_t *dir_entries;
+int dir_size;
 int shown_items;
 int scrollable_height = 0;
 
@@ -52,8 +53,8 @@ int sort_func(const void *v1, const void *v2) {
 }
 
 void sort_dir() {
-   if(!dir_content) return;
-   sort(dir_content->entries, dir_content->size, sizeof(fs_dir_entry_t), sort_func);
+   if(!dir_entries) return;
+   sort(dir_entries, dir_size, sizeof(fs_dir_entry_t), sort_func);
 }
 
 void get_abs_path(char *out, char *inpath) {
@@ -73,10 +74,11 @@ int entry_clicked(wo_t *grid, int window, int row, int col);
 
 void display_items() {
    clear();
+   if(!dir_entries) return;
    
    int shown = 0;
-   for(int i = 0; i < dir_content->size; i++) {
-      fs_dir_entry_t *entry = &dir_content->entries[i];
+   for(int i = 0; i < dir_size; i++) {
+      fs_dir_entry_t *entry = &dir_entries[i];
       bool dotentry = entry->filename[0] == '.';
       if(entry->hidden && !dotentry)
          continue;
@@ -111,8 +113,8 @@ void display_items() {
 
    int row = 0;
    int col = 0;
-   for(int i = 0; i < dir_content->size; i++) {
-      fs_dir_entry_t *entry = &dir_content->entries[i];
+   for(int i = 0; i < dir_size; i++) {
+      fs_dir_entry_t *entry = &dir_entries[i];
       bool dotentry = entry->filename[0] == '.';
       if(entry->hidden && !dotentry)
          continue;
@@ -184,6 +186,38 @@ void display_items() {
    ui_draw(ui);
 }
 
+void refresh_dir_content() {
+   if(dir_entries) {
+      free(dir_entries);
+      dir_entries = NULL;
+   }
+
+   dir_size = read_dir(cur_path, NULL, 0);
+   if(dir_size < 0) {
+      char buffer[500];
+      sprintf(buffer, "Location '%s' not found", cur_path);
+      dialog_msg("Error", buffer);
+      dir_size = 0;
+      return;
+   }
+
+   dir_entries = malloc(sizeof(fs_dir_entry_t)*dir_size);
+   int read = read_dir(cur_path, dir_entries, dir_size);
+   if(read < 0) {
+      char buffer[500];
+      sprintf(buffer, "Reading dir '%s' failed", cur_path);
+      dialog_msg("Error", buffer);
+      free(dir_entries);
+      dir_entries = NULL;
+      dir_size = 0;
+      return;
+   }
+   if(read < dir_size)
+      dir_size = read;
+
+   sort_dir();
+}
+
 void path_callback(wo_t *wo, int window) {
    (void)wo;
    (void)window;
@@ -198,23 +232,32 @@ void path_callback(wo_t *wo, int window) {
       strcat(path, "/");
    }
 
-   if(dir_content) {
-      kfree(dir_content->entries, sizeof(fs_dir_entry_t) * dir_content->size);
-      kfree(dir_content, sizeof(fs_dir_content_t));
-      dir_content = NULL;
-   }
-
-   fs_dir_content_t *content = read_dir(path);
-   if(!content) {
+   int size = read_dir(path, NULL, 0);
+   if(size < 0) {
       char buffer[500];
       sprintf(buffer, "Location '%s' not found", path);
       dialog_msg("Error", buffer);
    } else {
-      strcpy(cur_path, path_data->text);
-      dir_content = content;
-      sort_dir();
-      offset = 0;
-      display_items();
+      if(dir_entries)
+         free(dir_entries);
+      dir_size = size;
+      dir_entries = malloc(sizeof(fs_dir_entry_t)*dir_size);
+      int read = read_dir(path, dir_entries, dir_size);
+      if(read < 0) {
+         char buffer[500];
+         sprintf(buffer, "Reading dir '%s' failed", path);
+         dialog_msg("Error", buffer);
+         free(dir_entries);
+         dir_entries = NULL;
+         dir_size = 0;
+      } else {
+         if(read < dir_size)
+            dir_size = read;
+         strcpy(cur_path, path_data->text);
+         sort_dir();
+         offset = 0;
+         display_items();
+      }
    }
 
    end_subroutine();
@@ -233,16 +276,6 @@ void click(int x, int y) {
    end_subroutine();
 }
 
-void refresh_dir_content() {
-   if(dir_content) {
-      kfree(dir_content->entries, sizeof(fs_dir_entry_t) * dir_content->size);
-      kfree(dir_content, sizeof(fs_dir_content_t));
-      dir_content = NULL;
-   }
-   dir_content = read_dir(cur_path);
-   sort_dir();
-}
-
 int entry_clicked(wo_t *grid, int window, int row, int col) {
    (void)window;
    int dir_index = -1;
@@ -251,8 +284,8 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
    grid_t *grid_data = grid->data;
    int search_index = row*grid_data->cols+col;
    // get index within dir
-   for(int i = 0; i < dir_content->size; i++) {
-      fs_dir_entry_t *entry = &dir_content->entries[i];
+   for(int i = 0; i < dir_size; i++) {
+      fs_dir_entry_t *entry = &dir_entries[i];
       bool dotentry = entry->filename[0] == '.';
       if(entry->hidden && !dotentry)
          continue;
@@ -263,11 +296,11 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
       i_pos++;
    }
    
-   if(dir_index == -1 || dir_index >= dir_content->size) {
+   if(dir_index == -1 || dir_index >= dir_size) {
       return 0;
    }
 
-   fs_dir_entry_t *clicked_entry = &dir_content->entries[dir_index];
+   fs_dir_entry_t *clicked_entry = &dir_entries[dir_index];
 
    if(clicked_entry->type == FS_TYPE_DIR) {
       offset = 0;
@@ -508,12 +541,12 @@ void rightclick(int x, int y) {
       ui_hover(ui, x, y);
       int search_index = grid_data->hoveredrow*grid_data->cols+grid_data->hoveredcol;
 
-      if(dir_content == NULL) end_subroutine();
+      if(dir_entries == NULL) end_subroutine();
 
       int index = -1;
       int i_pos = 0;
-      for(int i = 0; i < dir_content->size; i++) {
-         fs_dir_entry_t *entry = &dir_content->entries[i];
+      for(int i = 0; i < dir_size; i++) {
+         fs_dir_entry_t *entry = &dir_entries[i];
          bool dotentry = entry->filename[0] == '.';
          if(entry->hidden && !dotentry)
             continue;
@@ -548,7 +581,7 @@ void mouseout() {
 }
 
 void rename_callback(char *out) {
-   fs_dir_entry_t *entry = &dir_content->entries[rightclicked_index];
+   fs_dir_entry_t *entry = &dir_entries[rightclicked_index];
    char buffer[256];
    strcpy(buffer, cur_path);
    if(!strendswith(buffer, "/"))
@@ -567,7 +600,7 @@ void rename_menuclick(wo_t *item, int index, int window) {
    (void)index;
    (void)window;
    char dialog[256];
-   fs_dir_entry_t *entry = &dir_content->entries[rightclicked_index];
+   fs_dir_entry_t *entry = &dir_entries[rightclicked_index];
    sprintf(dialog, "Rename %s '%s'", entry->type == FS_TYPE_DIR ? "folder" : "file", entry->filename);
    dialog_input(dialog, &rename_callback);
 }
@@ -669,7 +702,7 @@ void show_view_menu(wo_t *wo, int window) {
 }
 
 void get_full_path(char *out, int index) {
-   fs_dir_entry_t *entry = &dir_content->entries[index];
+   fs_dir_entry_t *entry = &dir_entries[index];
    strcpy(out, cur_path);
    if(!strequ(cur_path, "/"))
       strcat(out, "/");
@@ -677,11 +710,20 @@ void get_full_path(char *out, int index) {
 }
 
 void rmdir_recursive(char *path) {
-   fs_dir_content_t *content = read_dir(path);
-   debug_println("Recursively deleting %s with %i subitems", path, content ? content->size - 2 : 0);
-   if(!content) return;
-   for(int i = 2; i < content->size; i++) {
-      fs_dir_entry_t *subentry = &content->entries[i];
+   int size = read_dir(path, NULL, 0);
+   if(size < 0)
+      return;
+   fs_dir_entry_t *entries = malloc(size*sizeof(fs_dir_entry_t));
+   int read = read_dir(path, entries, size);
+   if(read < 0) {
+      free(entries);
+      return;
+   }
+   if(read < size)
+      size = read;
+   debug_println("Recursively deleting %s with %i items", path, size);
+   for(int i = 2; i < size; i++) {
+      fs_dir_entry_t *subentry = &entries[i];
       char *subpath = malloc(512);
       strcpy(subpath, path);
       if(!strendswith(subpath, "/"))
@@ -694,15 +736,14 @@ void rmdir_recursive(char *path) {
       }
       free(subpath);
    }
-   kfree(content->entries, sizeof(fs_dir_entry_t) * content->size);
-   kfree(content, sizeof(fs_dir_content_t));
+   free(entries);
    rmdir(path);
 }
 
 int delete_item;
 
 void delete_confirm() {
-   fs_dir_entry_t *entry = &dir_content->entries[delete_item];
+   fs_dir_entry_t *entry = &dir_entries[delete_item];
    char path[512];
    get_full_path(path, delete_item);
    debug_println("Deleting %s", path);
@@ -720,15 +761,15 @@ void delete_confirm() {
 void delete() {
    if(rightclicked_index == -1) return;
    delete_item = rightclicked_index;
-   fs_dir_entry_t *entry = &dir_content->entries[delete_item];
+   fs_dir_entry_t *entry = &dir_entries[delete_item];
    char path[512];
    get_full_path(path, delete_item);
    char buffer[256];
    if(entry->type == FS_TYPE_DIR) {
-      fs_dir_content_t *content = read_dir(path);
-      debug_println("Deleting folder %s with %i items", path, content->size - 2);
-      sprintf(buffer, "Are you sure you want to delete\nfolder '%s' and its %i subitems", entry->filename, content->size - 2);
-      kfree(content, sizeof(fs_dir_content_t));
+      int dir_size = read_dir(path, NULL, 0);
+      if(dir_size < 0) return;
+      debug_println("Deleting folder %s with %i items", path, dir_size - 2);
+      sprintf(buffer, "Are you sure you want to delete\nfolder '%s' and its %i subitems", entry->filename, dir_size - 2);
    } else {
       sprintf(buffer, "Are you sure you want to delete\nfile '%s'?", entry->filename);
    }
@@ -746,7 +787,22 @@ void _start(int argc, char **args) {
    surface = get_surface();
    ui = ui_init(&surface, -1);
 
-   dir_content = read_dir("/");
+   if(argc < 2)
+      strcpy(cur_path, "/");
+   else
+      strncpy(cur_path, args[1], sizeof(cur_path)-1);
+
+   dir_size = read_dir(cur_path, NULL, 0);
+   bool read = dir_size >= 0;
+   if(read)
+      dir_entries = malloc(dir_size*sizeof(fs_dir_entry_t));
+   int read_count = read ? read_dir(cur_path, dir_entries, dir_size) : -1;
+   if(read_count < 0) {
+      printf("Couldn't read starting dir '%s'\n", cur_path);
+      exit(1);
+   }
+   if(read_count < dir_size)
+      dir_size = read_count;
    sort_dir();
    offset = 0;
    
@@ -792,7 +848,6 @@ void _start(int argc, char **args) {
    canvas_t *menu_data = (canvas_t *)wo_menu->data;
    menu_data->bordered = false;
 
-   strcpy(cur_path, "/");
    int x = 4;
    int y = 2;
    

@@ -31,8 +31,6 @@ void api_override_keyrelease(registers_t *regs);
 void api_override_close(registers_t *regs);
 void api_override_mouseout(registers_t *regs);
 void api_end_subroutine(registers_t *regs);
-void api_malloc(registers_t *regs);
-void api_free(registers_t *regs);
 void api_read_dir(registers_t *regs);
 void api_draw_bmp(registers_t *regs);
 void api_clear_window(registers_t *regs);

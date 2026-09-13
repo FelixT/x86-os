@@ -150,8 +150,8 @@ static inline int get_width_w(int window) {
    uint32_t output;
 
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (output)
+      "int $0x30;"
+      : "=b" (output)
       : "a" (14),
       "b" (window)
       : "cc", "memory"
@@ -168,8 +168,8 @@ static inline int get_height_w(int window) {
    uint32_t output;
 
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (output)
+      "int $0x30"
+      : "=b" (output)
       : "a" (15),
       "b" (window)
       : "cc", "memory"
@@ -182,35 +182,11 @@ static inline int get_height() {
    return get_height_w(-1);
 }
 
-static inline void *kmalloc(uint32_t size) {
-   uint32_t addr;
-
-   asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
-      : "a" (16),
-      "b" (size)
-      : "cc", "memory"
-   );
-
-   return (void*)addr;
-}
-
-static inline void kfree(void *addr, uint32_t size) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (40),
-      "b" ((uint32_t)addr),
-      "c" (size)
-      : "cc", "memory"
-   );
-}
-
 static inline bool mkdir(char *path) {
    int success;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (success)
+      "int $0x30"
+      : "=b" (success)
       : "a" (50),
       "b" ((uint32_t)path)
       : "cc", "memory"
@@ -221,8 +197,8 @@ static inline bool mkdir(char *path) {
 static inline bool unlink(char *path) {
    int success;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (success)
+      "int $0x30"
+      : "=b" (success)
       : "a" (68),
       "b" ((uint32_t)path)
       : "cc", "memory"
@@ -233,8 +209,8 @@ static inline bool unlink(char *path) {
 static inline bool rmdir(char *path) {
    int success;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (success)
+      "int $0x30"
+      : "=b" (success)
       : "a" (69),
       "b" ((uint32_t)path)
       : "cc", "memory"
@@ -245,8 +221,8 @@ static inline bool rmdir(char *path) {
 static inline int seek(int fd, int offset, int type) {
    int pos;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (pos)
+      "int $0x30"
+      : "=b" (pos)
       : "a" (48),
       "b" (fd),
       "c" (offset),
@@ -314,23 +290,22 @@ typedef struct {
    bool hidden;
 } fs_dir_entry_t;
 
-typedef struct {
-   fs_dir_entry_t *entries;
-   int size;
-} fs_dir_content_t;
-
-static inline fs_dir_content_t *read_dir(char *path) {
-   uint32_t addr;
+// count = max entries to read (0 allowed)
+// returns -1 on fail, dir size otherwise
+static inline int read_dir(char *path, fs_dir_entry_t *entries, int count) {
+   int result;
 
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
+      "int $0x30"
+      : "=b" (result)
       : "a" (25),
-      "b" ((uint32_t)path)
+      "b" ((uint32_t)path),
+      "c" (count),
+      "d" ((uint32_t)entries)
       : "cc", "memory"
    );
 
-   return (fs_dir_content_t*)addr;
+   return result;
 }
 
 static inline void debug_write_str(char *str) {
@@ -392,14 +367,17 @@ static inline void override_keyrelease(void *callback, int window) {
    );
 }
 
-static inline void override_close(void *callback, int window) {
+static inline bool override_close(void *callback, int window) {
+   bool success;
    asm volatile(
       "int $0x30"
-      :: "a" (27),
+      : "=b" (success)
+      : "a" (27),
       "b" ((uint32_t)callback),
       "c" (window)
       : "cc", "memory"
    );
+   return success;
 }
 
 static inline void override_rightclick(void *callback, int window) {
@@ -502,13 +480,15 @@ static inline bool set_setting(api_setting_t setting, uint32_t value) {
    return out == 0;
 }
 
-static inline uint32_t get_setting(api_setting_t setting) {
+// for reading strings, out buffer must be >=256 bytes
+static inline uint32_t get_setting(api_setting_t setting, char *out) {
    uint32_t value;
    asm volatile (
       "int $0x30;"
       : "=b" (value)
       : "a" (33),
-      "b" ((uint32_t)setting)
+      "b" ((uint32_t)setting),
+      "c" ((uint32_t)out)
       : "cc", "memory"
    );
    return value;
@@ -588,8 +568,8 @@ static inline void getwd(char *buf) {
 static inline int open(char *path, int flag) {
    int fd;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (fd)
+      "int $0x30"
+      : "=b" (fd)
       : "a" (52),
       "b" ((uint32_t)path),
       "c" (flag)
@@ -601,8 +581,8 @@ static inline int open(char *path, int flag) {
 static inline int fsize(int fd) {
    int size;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (size)
+      "int $0x30"
+      : "=b" (size)
       : "a" (59),
       "b" ((uint32_t)fd)
       : "cc", "memory"
@@ -613,8 +593,8 @@ static inline int fsize(int fd) {
 static inline int fpsize(char *path) {
    int size;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (size)
+      "int $0x30"
+      : "=b" (size)
       : "a" (87),
       "b" ((uint32_t)path)
       : "cc", "memory"
@@ -625,8 +605,8 @@ static inline int fpsize(char *path) {
 static inline int ftruncate(int fd, int size) {
    int result;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (result)
+      "int $0x30"
+      : "=b" (result)
       : "a" (88),
       "b" ((uint32_t)fd),
       "c" ((uint32_t)size)
@@ -638,8 +618,8 @@ static inline int ftruncate(int fd, int size) {
 static inline int read(int fd, char *buf, size_t count) {
    int c;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (c)
+      "int $0x30"
+      : "=b" (c)
       : "a" (47),
       "b" ((uint32_t)fd),
       "c" ((uint32_t)buf),
@@ -652,8 +632,8 @@ static inline int read(int fd, char *buf, size_t count) {
 static inline int write(int fd, char *buf, size_t count) {
    int c;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (c)
+      "int $0x30"
+      : "=b" (c)
       : "a" (53),
       "b" ((uint32_t)fd),
       "c" ((uint32_t)buf),
@@ -666,8 +646,8 @@ static inline int write(int fd, char *buf, size_t count) {
 static inline int new_file(char *path) {
    int fd;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (fd)
+      "int $0x30"
+      : "=b" (fd)
       : "a" (41),
       "b" ((uint32_t)path)
       : "cc", "memory"
@@ -688,8 +668,8 @@ static inline int close(int fd) {
 static inline bool rename(char *path, char *newname) {
    int success;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (success)
+      "int $0x30"
+      : "=b" (success)
       : "a" (58),
       "b" ((uint32_t)path),
       "c" ((uint32_t)newname)
@@ -702,8 +682,8 @@ static inline void *sbrk(uint32_t increment) {
    uint32_t addr;
 
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
+      "int $0x30"
+      : "=b" (addr)
       : "a" (51),
       "b" ((uint32_t)increment)
       : "cc", "memory"
@@ -725,8 +705,8 @@ static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY, in
 static inline uint32_t set_content_height(uint32_t height, int window) {
    uint32_t width;
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (width)
+      "int $0x30"
+      : "=b" (width)
       : "a" (55),
       "b" (height),
       "c" (window)
@@ -851,18 +831,17 @@ static inline int create_thread(void (*func)()) {
    return id;
 }
 
-static inline tasks_t get_tasks() {
-   tasks_t t;
-   int addr;
+static inline int get_tasks(api_task_t *tasks, int count) {
+   int size;
    asm volatile (
       "int $0x30;"
-      : "=b" (addr),
-      "=c" (t.size)
-      : "a" (66)
+      : "=b" (size)
+      : "a" (66),
+      "b" ((uint32_t)tasks),
+      "c" (count)
       : "cc", "memory"
    );
-   t.tasks = (api_task_t*)addr;
-   return t;
+   return size;
 }
 
 static inline void sleep(uint32_t ms) {
@@ -1032,8 +1011,8 @@ static inline void *dma(uint32_t size) {
    uint32_t addr;
 
    asm volatile (
-      "int $0x30;movl %%ebx, %0;"
-      : "=r" (addr)
+      "int $0x30"
+      : "=b" (addr)
       : "a" (84),
       "b" (size)
       : "cc", "memory"

@@ -74,7 +74,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       return -1;
    }
    memset(newProg, 0, vmem_size);
-   debug_printf("Mapping 0x%h - 0x%h to 0x%h - 0x%h\n", (uint32_t)newProg, (uint32_t)newProg + vmem_size, vmem_start, vmem_end);
+   debug_printf("elf_load: map 0x%h-0x%h to 0x%h-0x%h\n", (uint32_t)newProg, (uint32_t)newProg + vmem_size, vmem_start, vmem_end);
 
    bool mapped = true;
    for(uint32_t i = 0; i < vmem_size; i+=0x1000)
@@ -89,7 +89,6 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    uint32_t heap_start = page_align_up(vmem_end);
    if(heap_start < KERNEL_END)
       heap_start = KERNEL_END;
-   debug_printf("Heap start 0x%h\n", heap_start);
 
    elf_prog_header_t *prog_header = (elf_prog_header_t*)(prog + elf_header->prog_header);
    for(int i = 0; i < elf_header->prog_header_entry_count; i++) {

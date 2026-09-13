@@ -20,6 +20,19 @@ void get_abs_path(char *out, char *inpath) {
    }
 }
 
+// same but uses path instead of getwd
+void argtofullpath(char *buf, char *arg) {
+   if(arg[0] == '/') {
+      strcpy(buf, arg);
+   } else {
+      buf[0] = '\0';
+      strcat(buf, path);
+      if(!strequ(buf, "/"))
+         strcat(buf, "/");
+      strcat(buf, arg);
+   }
+}
+
 void term_cmd_default(char *command) {
    printf("Command not found: %s\n", command);
 }
@@ -29,9 +42,9 @@ void term_cmd_help() {
    write_str("\n");
    printf(" CLEAR\n");
    printf(" LAUNCH<W> path, TASKS\n");
-   printf(" FILES, TEXT <path>\n");
-   printf(" FAPPEND <path> <buffer>\n");
-   printf(" FWRITE <path> <buffer>\n");
+   printf(" FILES <path>, TEXT <path>\n");
+   printf(" FAPPEND path buffer\n");
+   printf(" FWRITE path buffer\n");
    printf(" FREAD path\n");
    printf(" LS, CD path, PWD\n");
    printf(" CAT path, TOUCH path\n");
@@ -45,8 +58,19 @@ void term_cmd_clear() {
    printf("User Terminal at %s\n", path);
 }
 
-void term_cmd_files() {
-   launch_task("/sys/files.elf", 0, NULL, false, false);
+void term_cmd_files(char *arg) {
+   char *exe_path = "/sys/files.elf";
+   int launch_argc = 2;
+   char path_arg[256];
+   if(strlen(arg) > 0)
+      get_abs_path(path_arg, arg);
+   else
+      strcpy(path_arg, path);
+   char **launch_args = malloc(sizeof(char*)*launch_argc);
+   launch_args[0] = exe_path;
+   launch_args[1] = path_arg;
+   launch_task(exe_path, launch_argc, launch_args, false, false);
+   free(launch_args);
 }
 
 uint32_t argtouint(char *str) {
@@ -70,18 +94,6 @@ uint32_t argtouint(char *str) {
       }
    }
    return num;
-}
-
-void argtofullpath(char *buf, char *arg) {
-   if(arg[0] == '/') {
-      strcpy(buf, arg);
-   } else {
-      buf[0] = '\0';
-      strcat(buf, path);
-      if(!strequ(buf, "/"))
-         strcat(buf, "/");
-      strcat(buf, arg);
-   }
 }
 
 void term_cmd_font(char *arg) {
@@ -201,9 +213,16 @@ void term_cmd_launch(char *arg, bool copy) {
 }
 
 void term_cmd_text(char *arg) {
-   char **args = (char**)malloc(sizeof(char*) * 1);
-   args[0] = arg;
-   launch_task("/sys/text.elf", 1, args, false, false);
+   char *exe_path = "/sys/text.elf";
+   char **args = malloc(sizeof(char*) * 2);
+   char path_arg[256];
+   if(strlen(arg) > 0)
+      get_abs_path(path_arg, arg);
+   else
+      strcpy(path_arg, arg);
+   args[0] = exe_path;
+   args[1] = path_arg;
+   launch_task(exe_path, 2, args, false, false);
    free(args);
 }
 
@@ -232,12 +251,25 @@ void term_cmd_ls(char *arg) {
    if(strequ(p, ""))
       p = path;
 
-   fs_dir_content_t *content = read_dir(p);
-   if(content->entries)
-      sort(content->entries, content->size, sizeof(fs_dir_entry_t), sort_dir);
+   int file_count = read_dir(p, NULL, 0);
+   if(file_count < 0) {
+      printf("couldn't find dir %s\n", p);
+      return;
+   }
+   fs_dir_entry_t *entries = malloc(file_count * sizeof(fs_dir_entry_t));
+   int read = read_dir(p, entries, file_count);
+   if(read < 0) {
+      free(entries);
+      printf("couldn't read dir\n");
+      return;
+   }
+   if(read < file_count)
+      file_count = read;
+
+   sort(entries, file_count, sizeof(fs_dir_entry_t), sort_dir);
    
-   for(int i = 0; i < content->size; i++) {
-      fs_dir_entry_t *entry = &content->entries[i];
+   for(int i = 0; i < file_count; i++) {
+      fs_dir_entry_t *entry = &entries[i];
       if(entry->hidden)
          continue;
       char filename_padded[16];
@@ -264,8 +296,7 @@ void term_cmd_ls(char *arg) {
       printf("\n");
    }
 
-   kfree(content->entries, sizeof(fs_dir_entry_t) * content->size);
-   kfree(content, sizeof(fs_dir_content_t));
+   free(entries);
 }
 
 void term_cmd_cd(char *arg) {
@@ -402,9 +433,13 @@ void term_cmd_rename(char *arg) {
 }
 
 void term_cmd_tasks() {
-   tasks_t tasks = get_tasks();
-   for(int i = 0; i < tasks.size; i++) {
-      api_task_t *task = &tasks.tasks[i];
+   int tasks_count = get_tasks(NULL, 0);
+   api_task_t *tasks = malloc(tasks_count*sizeof(api_task_t));
+   int read = get_tasks(tasks, tasks_count);
+   if(read < tasks_count)
+      tasks_count = read;
+   for(int i = 0; i < tasks_count; i++) {
+      api_task_t *task = &tasks[i];
       if(!task->enabled) continue;
       printf("\nTask %i: ", task->id);
       if(task->parentid == task->id)
@@ -414,6 +449,7 @@ void term_cmd_tasks() {
       if(task->paused)
          printf("paused");
    }
+   free(tasks);
    printf("\n");
 }
 
@@ -506,7 +542,6 @@ void checkcmd(char *buffer) {
    if(pipe) {
       strsplit(command, arg, buffer, '|');
       term_pipe(command, arg);
-      kfree(buffer, 1); // should be programs responsibility to free
       end_subroutine();
       return;
    } else if(args) {
@@ -524,7 +559,7 @@ void checkcmd(char *buffer) {
    else if(strequ(command, "FREAD"))
       term_cmd_fread(arg);
    else if(strequ(command, "FILES")) 
-      term_cmd_files();
+      term_cmd_files(arg);
    else if(strequ(command, "FONT"))
       term_cmd_font(arg);
    else if(strequ(command, "VIEWBMP"))
@@ -562,7 +597,6 @@ void checkcmd(char *buffer) {
    else
       term_cmd_default(command);
 
-   kfree(buffer, 1); // should be programs responsibility to free
 
    end_subroutine();
 }

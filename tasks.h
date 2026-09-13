@@ -71,7 +71,7 @@ typedef struct process_t {
    char exe_path[256]; // location of executable
 
    // resources
-   int no_allocated;
+   int no_allocated; // kmalloc-d paged, currently only incremented via dma
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[PROCESS_MAX_FDS];

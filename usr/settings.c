@@ -191,7 +191,7 @@ void set_bgimage(wo_t *wo, int window) {
       dialog_msg("Error", "Couldn't set background image");
       return;
    }
-   uint16_t bgcolour = get_setting(SETTING_BGCOLOUR);
+   uint16_t bgcolour = get_setting(SETTING_BGCOLOUR, NULL);
    char hexbuf[8];
    strcpy(hexbuf, "0x");
    uinttohexstr(bgcolour, hexbuf+2);
@@ -339,7 +339,7 @@ void _start() {
    menu_t *menu_data = menu->data;
    add_menu_item(menu, "Classic", &set_theme);
    add_menu_item(menu, "Gradient", &set_theme);
-   menu_data->selected_index = get_setting(SETTING_THEME_TYPE);
+   menu_data->selected_index = get_setting(SETTING_THEME_TYPE, NULL);
    groupbox_add(theme_group, menu);
    label->height = 35;
    y+=40;
@@ -350,7 +350,7 @@ void _start() {
    menu_data = menu->data;
    add_menu_item(menu, "Horizontal", &set_gradientstyle);
    add_menu_item(menu, "Vertical", &set_gradientstyle);
-   menu_data->selected_index = get_setting(SETTING_THEME_GRADIENTSTYLE);
+   menu_data->selected_index = get_setting(SETTING_THEME_GRADIENTSTYLE, NULL);
    groupbox_add(theme_group, menu);
    label->height = 35;
    y+=40;
@@ -358,36 +358,36 @@ void _start() {
    // theme colour 1
    settings_create_label(theme_group, y, "Colour 1");
    strcpy(buffer, "0x");
-   uinttohexstr(get_setting(SETTING_WIN_TITLEBARCOLOUR), buffer+2);
+   uinttohexstr(get_setting(SETTING_WIN_TITLEBARCOLOUR, NULL), buffer+2);
    wo_t *input = settings_create_input(theme_group, y, buffer, &set_colour1);
    input->width-=20;
-   colour1_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_TITLEBARCOLOUR));
+   colour1_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_TITLEBARCOLOUR, NULL));
    y+=25;
 
    // theme colour 2
    settings_create_label(theme_group, y, "Colour 2");
    strcpy(buffer, "0x");
-   uinttohexstr(get_setting(SETTING_WIN_TITLEBARCOLOUR2), buffer+2);
+   uinttohexstr(get_setting(SETTING_WIN_TITLEBARCOLOUR2, NULL), buffer+2);
    input = settings_create_input(theme_group, y, buffer, &set_colour2);
-   colour2_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_TITLEBARCOLOUR2));
+   colour2_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_TITLEBARCOLOUR2, NULL));
    input->width-=20;
    y+=25;
 
    // window background colour
    settings_create_label(theme_group, y, "Window background");
    strcpy(buffer, "0x");
-   uinttohexstr(get_setting(SETTING_WIN_BGCOLOUR), buffer+2);
+   uinttohexstr(get_setting(SETTING_WIN_BGCOLOUR, NULL), buffer+2);
    input = settings_create_input(theme_group, y, buffer, &set_window_bgcolour);
-   windowbg_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_BGCOLOUR));
+   windowbg_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_BGCOLOUR, NULL));
    input->width-=20;
    y+=25;
 
    // window txt colour
    settings_create_label(theme_group, y, "Window text");
    strcpy(buffer, "0x");
-   uinttohexstr(get_setting(SETTING_WIN_TXTCOLOUR), buffer+2);
+   uinttohexstr(get_setting(SETTING_WIN_TXTCOLOUR, NULL), buffer+2);
    input = settings_create_input(theme_group, y, buffer, &set_window_txtcolour);
-   windowtxt_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_TXTCOLOUR));
+   windowtxt_colourbox = settings_create_colourbox(theme_group, y, get_setting(SETTING_WIN_TXTCOLOUR, NULL));
    input->width-=20;
    y+=25;
 
@@ -401,7 +401,7 @@ void _start() {
 
    // font
    settings_create_label(font_group, y, "Font");
-   strcpy(buffer, (char*)get_setting(SETTING_SYS_FONT_PATH));
+   get_setting(SETTING_SYS_FONT_PATH, buffer);
    fontpath_input = settings_create_input(font_group, y, buffer, &set_font);
    fontpath_input->width-=20;
    wo_t *button = dialog_create_browsebtn(260, y, 20, 20, -1, "o", "/font", &fontpath_browse_callback);
@@ -410,7 +410,7 @@ void _start() {
 
    // font padding
    settings_create_label(font_group, y, "Padding");
-   inttostr(get_setting(SETTINGS_SYS_FONT_PADDING), buffer);
+   inttostr(get_setting(SETTINGS_SYS_FONT_PADDING, NULL), buffer);
    fontpadding_input = settings_create_input(font_group, y, buffer, &set_font_padding);
    fontpadding_input->width-=20;
    fontpadding_input->keypress_func = &font_padding_keypress;
@@ -436,27 +436,27 @@ void _start() {
 
    // desktop enabled
    settings_create_label(desktop_group, y, "Desktop enabled");
-   inttostr(get_setting(SETTING_DESKTOP_ENABLED), buffer);
+   inttostr(get_setting(SETTING_DESKTOP_ENABLED, NULL), buffer);
    desktopenabled_input = settings_create_input(desktop_group, y, buffer, &set_desktop_enabled);
    desktopenabled_input->width-=20;
-   wo_t *checkbox = create_checkbox(260, y, get_setting(SETTING_DESKTOP_ENABLED));
+   wo_t *checkbox = create_checkbox(260, y, get_setting(SETTING_DESKTOP_ENABLED, NULL));
    set_checkbox_release(checkbox, &desktop_enable_checkbox_callback);
    groupbox_add(desktop_group, checkbox);
    y+=25;
 
    // desktop show bgimg
    settings_create_label(desktop_group, y, "Show bg image");
-   inttostr(get_setting(SETTING_DESKTOP_ENABLED), buffer);
+   inttostr(get_setting(SETTING_DESKTOP_ENABLED, NULL), buffer);
    desktopbgimgenabled_input = settings_create_input(desktop_group, y, buffer, &set_desktop_bgimg_enabled);
    desktopbgimgenabled_input->width-=20;
-   checkbox = create_checkbox(260, y, get_setting(SETTING_DESKTOP_BGIMG_ENABLED));
+   checkbox = create_checkbox(260, y, get_setting(SETTING_DESKTOP_BGIMG_ENABLED, NULL));
    set_checkbox_release(checkbox, &desktop_enable_bgimg_checkbox_callback);
    groupbox_add(desktop_group, checkbox);
    y+=25;
 
    // desktop bgimg
    settings_create_label(desktop_group, y, "Background image");
-   strcpy(buffer, (char*)get_setting(SETTING_DESKTOP_BGIMG_PATH));
+   get_setting(SETTING_DESKTOP_BGIMG_PATH, buffer);
    bgimg_input = settings_create_input(desktop_group, y, buffer, &set_bgimage);
    bgimg_input->width-=20;
    button = dialog_create_browsebtn(260, y, 20, 20, -1, "o", "/bmp", &bgimg_browse_callback);
@@ -466,9 +466,9 @@ void _start() {
    // desktop bg colour
    settings_create_label(desktop_group, y, "Background colour");
    strcpy(buffer, "0x");
-   uinttohexstr(get_setting(SETTING_BGCOLOUR), buffer+2);
+   uinttohexstr(get_setting(SETTING_BGCOLOUR, NULL), buffer+2);
    bgcolour_input = settings_create_input(desktop_group, y, buffer, &set_bgcolour);
-   bgcolour_colourbox = settings_create_colourbox(desktop_group, y, get_setting(SETTING_BGCOLOUR));
+   bgcolour_colourbox = settings_create_colourbox(desktop_group, y, get_setting(SETTING_BGCOLOUR, NULL));
    bgcolour_input->width-=20;
    y+=25;
 

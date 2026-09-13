@@ -5,14 +5,15 @@
 #include "lib/stdio.h"
 #include "../lib/string.h"
 
-tasks_t tasks;
+int task_count;
+api_task_t *tasks;
 dialog_t *dialog;
 
 int selected_task = -1;
 
 void task_show_info(int index) {
-   selected_task = index;
-   api_task_t *task = &tasks.tasks[index];
+   api_task_t *task = &tasks[index];
+   selected_task = task->id;
    bool main_thread = task->id == task->parentid;
    dialog_get(dialog, "info_label")->visible = false;
    dialog_get(dialog, "info_canvas")->visible = true;
@@ -41,16 +42,27 @@ void task_click(wo_t *wo, int index, int window) {
    (void)window;
    menu_t *menu = wo->data;
    int taskid = strtoint(menu->items[index].text+strlen("Task "));
-   task_show_info(taskid);
+   for(int i = 0; i < task_count; i++) {
+      if(tasks[i].id == taskid) {
+         task_show_info(i);
+         return;
+      }
+   }
 }
 
 void show_tasks() {
-   tasks = get_tasks();
+   task_count = get_tasks(NULL, 0);
+   if(tasks)
+      free(tasks);
+   tasks = malloc(task_count*sizeof(api_task_t));
+   int read = get_tasks(tasks, task_count);
+   if(read < task_count)
+      task_count = read;
    wo_t *menu_wo = dialog_get(dialog, "tasks_menu");
    menu_t *menu = menu_wo->data;
    menu->item_count = 0;
-   for(int i = 0; i < tasks.size; i++) {
-      api_task_t *task = &tasks.tasks[i];
+   for(int i = 0; i < task_count; i++) {
+      api_task_t *task = &tasks[i];
       if(!task->enabled) continue;
       char buffer[64];
       sprintf(buffer, "Task %i ", task->id);
