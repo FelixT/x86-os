@@ -98,5 +98,8 @@ void api_snooze(registers_t *regs);
 void api_wait_on_receive(registers_t *regs);
 void api_port_close(registers_t *regs);
 void api_port_disconnect(registers_t *regs);
+void api_msg_call(registers_t *regs);
+void api_msg_receive(registers_t *regs);
+void api_msg_reply(registers_t *regs);
 
 #endif

@@ -47,7 +47,9 @@ typedef enum {
    PAUSE_FUTEX, // wait on futex_wake
    PAUSE_ESCALATE, // wait on privilege dialog
    PAUSE_MSG_WRITE, // msg_wait_on_receive - wait on peer read
-   PAUSE_CRASH // frozen after a crash - nothing resumes
+   PAUSE_CRASH, // frozen after a crash - nothing resumes
+   PAUSE_MSG_CALL, // waiting after call e.g. client waiting for reply
+   PAUSE_MSG_RECEIVE // server waiting for call from client
 } task_pause_reason_t;
 
 #define PROCESS_MAX_FDS 64

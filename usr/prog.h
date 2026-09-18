@@ -1186,6 +1186,57 @@ static inline bool port_disconnect(uint32_t port_uid, uint32_t channel_uid) {
    return success;
 }
 
+static inline int msg_sync_send(uint32_t channel_uid, uint8_t *send_buffer, int send_size, uint8_t *receive_buffer, int receive_size) {
+   int read_size;
+   int sent_size;
+   asm volatile(
+      "int $0x30;"
+      : "=b" (read_size),
+      "=c" (sent_size)
+      : "a" (98),
+      "b" (channel_uid),
+      "c" ((uint32_t)send_buffer),
+      "d" (send_size),
+      "S" ((uint32_t)receive_buffer),
+      "D" (receive_size)
+      : "cc", "memory"
+   );
+   return read_size;
+}
+
+static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_id) {
+   int read_size;
+   int sent_size;
+   uint32_t call_id_in;
+   asm volatile(
+      "int $0x30;"
+      : "=b" (read_size),
+      "=c" (sent_size),
+      "=d" (call_id_in)
+      : "a" (99),
+      "b" (port_uid),
+      "c" ((uint32_t)receive_buffer),
+      "d" (receive_size)
+      : "cc", "memory"
+   );
+   *call_id = call_id_in;
+   return read_size;
+}
+
+static inline int msg_sync_reply(uint32_t call_uid, uint8_t *send_buffer, int send_size) {
+   int sent;
+   asm volatile(
+      "int $0x30;"
+      : "=b" (sent)
+      : "a" (100),
+      "b" (call_uid),
+      "c" ((uint32_t)send_buffer),
+      "d" (send_size)
+      : "cc", "memory"
+   );
+   return sent;
+}
+
 // terminal override
 
 static inline void override_term_checkcmd(void (*callback)(char *cmd)) {

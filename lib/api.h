@@ -57,6 +57,7 @@ typedef enum {
 #define MSG_FLAG_CLOSED 1
 
 typedef enum {
+   MSG_READ_EMPTY = 0,
    MSG_ERR_NO_PRIVILEGE = -1,
    MSG_ERR_DENIED = -2,
    MSG_ERR_NAME_TAKEN = -3,
@@ -74,7 +75,9 @@ typedef enum {
    MSG_ERR_INVALID_TASK = -15,
    MSG_ERR_RECEIVE_QUEUE_FULL = -16, // with client_reserves, the server has no free queue slots to send a reply,
    MSG_ERR_PEER_DISCONNECTED = -17,
-   MSG_ERR_DISCONNECTED = -18
+   MSG_ERR_DISCONNECTED = -18,
+   MSG_ERR_MSG_NOT_FOUND = -19, // msg_reply - call_uid not found
+   MSG_ERR_TIMEOUT = -20
 } msg_err_t;
 
 #define W_SETTING_BGCOLOUR 0

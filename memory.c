@@ -5,6 +5,7 @@
 
 #define MEM_DEBUG 0
 
+uint32_t head = HEAP_KERNEL; // track lowest possible allocation
 mem_segment_status_t memory_status[KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE];
 
 void memory_reserve(uint32_t offset, int bytes) {
@@ -27,13 +28,15 @@ void free(uint32_t offset, int bytes) {
    int blockStart = ((int)offset-(int)HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;
 
-
    for(int i = 0; i < noBlocks; i++) {
       int block = blockStart+i;
       if(block >= 0 && block < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE) {
          memory_status[block].allocated = false;
       }
    }
+   if(blockStart >= 0 && blockStart < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE
+   && HEAP_KERNEL + (uint32_t)blockStart*MEM_BLOCK_SIZE < head)
+     head = HEAP_KERNEL + blockStart*MEM_BLOCK_SIZE;
    
    #if MEM_DEBUG
    // fill free memory with 'FREE' in ascii
@@ -66,7 +69,7 @@ void *malloc(int bytes) {
    int noBlocks = (bytes+(MEM_BLOCK_SIZE-1))/MEM_BLOCK_SIZE;  // rounding up
 
    int blocksRemaining = noBlocks;
-   int index = 0;
+   int index = (head-HEAP_KERNEL)/MEM_BLOCK_SIZE;
    int blockStart = 0;
 
    while(blocksRemaining > 0) {
@@ -104,6 +107,8 @@ void *malloc(int bytes) {
    #endif
 
    int addr = (int)(HEAP_KERNEL) + (int)(blockStart*MEM_BLOCK_SIZE);
+   if((uint32_t)addr == head)
+      head = addr + noBlocks*MEM_BLOCK_SIZE; // update head
 
    return (void*)addr;
 }

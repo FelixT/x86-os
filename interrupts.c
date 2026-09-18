@@ -453,6 +453,15 @@ void software_handler(registers_t *regs) {
       case 97:
          api_port_disconnect(regs);
          break;
+      case 98:
+         api_msg_call(regs);
+         break;
+      case 99:
+         api_msg_receive(regs);
+         break;
+      case 100:
+         api_msg_reply(regs);
+         break;
       default:
          debug_printf("Unknown syscall %i\n", regs->eax);
          break;

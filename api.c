@@ -696,7 +696,7 @@ void api_open(registers_t *regs) {
          file = fs_new(path, flags);
       }
       if(!file) {
-         debug_printf("api_open: could not create new file\n");
+         debug_printf("api_open: could not create new file '%s'\n", path);
          regs->ebx = -1;
          return;
       }
@@ -1985,3 +1985,72 @@ void api_port_disconnect(registers_t *regs) {
    bool success = port_disconnect(regs, task, port_uid, channel_uid);
    api_write_regs(regs, task)->ebx = success;
 }
+
+// sync call into server
+void api_msg_call(registers_t *regs) {
+   // IN: ebx - channel uid
+   // IN: ecx - send_buf
+   // IN: edx - send len
+   // IN: esi - receive buf
+   // IN: edi - receive len
+   // OUT: ebx - bytes sent to server, errors negative
+   // OUT: ecx - bytes received from server (msgs may be truncated)
+   uint32_t channel_uid = regs->ebx;
+   uint8_t* send_buf = (uint8_t*)regs->ecx;
+   int send_len = regs->edx;
+   uint8_t* receive_buf = (uint8_t*)regs->esi;
+   int receive_len = regs->edi;
+   if(!api_validate_mem(send_buf, send_len, 0)) {
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+   if(!api_validate_mem(receive_buf, receive_len, 1)) {
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+   int r = msg_call(regs, get_current_task_state(), channel_uid, send_buf, send_len, receive_buf, receive_len);
+   if(r < 0)
+      regs->ebx = r;
+   // otherwise regs written on reply (and unpause)
+}
+
+void api_msg_receive(registers_t *regs) {
+   // IN: ebx - port uid
+   // IN: ecx - receive buf
+   // IN: edx - receive len
+   // OUT: ebx - bytes read, errors negative
+   // OUT: ecx - client sent bytes (msgs may be truncated)
+   // OUT: edx - call uid (unique call msg id)
+   uint32_t port_uid = regs->ebx;
+   uint8_t *receive_buf = (uint8_t*)regs->ecx;
+   int receive_len = regs->edx;
+   if(!api_validate_mem(receive_buf, receive_len, 1)) {
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+   int r = msg_receive(regs, get_current_task_state(), port_uid, receive_buf, receive_len);
+   if(r < 0)
+      regs->ebx = r;
+   // otherwise regs written on call (and unpause)
+}
+
+void api_msg_reply(registers_t *regs) {
+   // IN: ebx - call uid
+   // IN: ecx - send buf
+   // IN: edx - send len
+   // OUT: ebx - bytes written, < 0 for failure
+   uint32_t call_uid = regs->ebx;
+   uint8_t *send_buf = (uint8_t*)regs->ecx;
+   int send_len = regs->edx;
+   if(!api_validate_mem(send_buf, send_len, 0)) {
+      regs->ebx = MSG_ERR_INVALID_BUF;
+      return;
+   }
+
+   int r = msg_reply(regs, get_current_task_state(), call_uid, send_buf, send_len);
+   if(r <= 0)
+      regs->ebx = r;
+   // otherwise regs written by msg_reply
+}
+
+// todo: fast path that combines receive and reply

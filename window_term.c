@@ -12,6 +12,7 @@
 #include "windowmgr.h"
 #include "paging.h"
 #include "pci.h"
+#include "msg.h"
 
 // default terminal behaviour
 // implement kernel mode terminal for debugging
@@ -106,18 +107,26 @@ void window_term_return(void *regs, void *window) {
       // read callback i.e. reading from stdin
       if(selected->read_task > 0) {
          task_state_t *readtask = &gettasks()[selected->read_task];
+         void (*read_func)(void *regs, char *buffer) = selected->read_func;
+         int read_task = selected->read_task;
+         selected->read_func = NULL;
+         selected->read_task = -1;
          if(!readtask->enabled || readtask->task_uid != selected->read_task_uid) {
-            debug_printf("read: task %i not enabled or crashed\n", selected->read_task);
+            debug_printf("read: task %i not enabled or crashed\n", read_task);
+            return;
+         }
+         if(!readtask->paused || readtask->pause_reason != PAUSE_READ) {
+            debug_printf("read: task %i isn't waiting on read\n", read_task);
             return;
          }
          task_resume(readtask); // force switch
-         if(!switch_to_task(selected->read_task, regs)) {
-            debug_printf("read: couldn't switch to task %i\n", selected->read_task);
+         if(!switch_to_task(read_task, regs)) {
+            debug_printf("read: couldn't switch to task %i\n", read_task);
          } else {
             char *buffer = (char*)malloc(selected->text_index+1);
             strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
             buffer[selected->text_index] = '\0';
-            selected->read_func(regs, buffer);
+            read_func(regs, buffer);
          }
       } else {
          debug_printf("read: No read task\n");
@@ -280,7 +289,7 @@ void term_cmd_tasks() {
          if(tasks[i].process->privileged)
             window_term_printf(" privileged");
          if(tasks[i].paused)
-            window_term_printf(" paused");
+            window_term_printf(" paused code %u", tasks[i].pause_reason);
          if(tasks[i].process->threads[0] == &tasks[i]) {
             // main thread
             window_term_printf(" main thread (%i children", tasks[i].process->no_threads-1);
@@ -479,6 +488,20 @@ void term_cmd_taski(char *arg) {
    }
 }
 
+void term_cmd_channels() {
+   extern msg_port_t *ports;
+   msg_port_t *cur = ports;
+   while(cur) {
+      window_term_printf("Port %s uid %u (owner task %i), %i channels\n", cur->name, cur->uid, cur->owner_taskid, cur->channel_count);
+      for(int i = 0; i < cur->channel_count; i++) {
+         msg_channel_t *channel = cur->channels[i];
+         if(!channel) continue;
+         window_term_printf("Channel %u (server %i %s / client %i %s)\n", channel->uid, channel->server_taskid, channel->server_connected ? "connected" : "disconnected", channel->client_taskid, channel->client_connected ? "connected" : "disconnected");
+      }
+      cur = cur->next;
+   }
+}
+
 void term_cmd_default(char *command) {
    gui_drawchar('\'', 1);
    window_term_printf(command, 1);
@@ -531,6 +554,8 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_pci();
    else if(strequ(command, "TASKI"))
       term_cmd_taski((char*)arg);
+   else if(strequ(command, "CHANNELS"))
+      term_cmd_channels();
    else
       term_cmd_default((char*)command);
    

@@ -44,7 +44,21 @@ typedef struct msg_channel_t {
    uint32_t server_flags;
    bool client_notify_pending; // msg_func couldn't be called (recipient event queue full) - retry when a slot frees
    bool server_notify_pending;
-} msg_channel_t; // total size <1 page
+   // sync
+   uint32_t call_uid;
+   void *client_receive_buffer;
+   int client_receive_buffer_size;
+   void *client_stored_write_buf;
+   int client_stored_write_size;
+} msg_channel_t;
+
+typedef struct msg_waiter_t {
+   bool active;
+   int task_id;
+   uint32_t task_uid;
+   void *receive_buffer;
+   int receive_buffer_size;
+} msg_waiter_t;
 
 // a port represents a message queue
 typedef struct msg_port_t {
@@ -56,7 +70,9 @@ typedef struct msg_port_t {
    msg_channel_t *channels[MSG_MAX_CHANNELS];
    int channel_count;
    bool client_reserves; // clients sending MSG_EXPECT_REPLY are required to reserve a queue spot for the response (ie to stop the server being blocked)
-
+   // sync
+   msg_waiter_t waiters[MAX_TASK_THREADS];
+   
    struct msg_port_t *next;
 } msg_port_t;
 
@@ -71,5 +87,8 @@ void msg_retry_notifications(task_state_t *task);
 void msg_cleanup_process(process_t *process);
 void msg_cleanup_task(task_state_t *task);
 bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
+int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint8_t *send_buf, uint32_t send_len, uint8_t *receive_buf, uint32_t receive_len);
+int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint8_t *receive_buf, uint32_t receive_len);
+int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, uint8_t *send_buf, uint32_t send_len);
 
 #endif

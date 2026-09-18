@@ -20,7 +20,7 @@ targets i686 (FPU not required)
 - Futexes (private + cross process via shared memory)
 - Shared memory
 - PCI driver and privileged usermode network driver (RTL8139)
-- Message passing IPC with async queues
+- Message passing IPC: sync + async with queues
 
 ### build on mac/linux
 

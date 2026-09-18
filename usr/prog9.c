@@ -6,6 +6,8 @@
 #include "../lib/string.h"
 #include "../lib/api.h"
 
+static uint32_t child_channel_uid = (uint32_t)-1; // used by sender to periodically wake child process
+
 void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
    if(flags & MSG_FLAG_CLOSED) {
       printf("server: channel %u closed by client\n", channel_uid);
@@ -30,11 +32,20 @@ void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
       if(flags)
          printf("server received flags: %u\n", flags);
 
+      if(strequ(buf, "child"))
+         child_channel_uid = channel_uid;
+
       if(msg_flags & MSG_EXPECT_REPLY) {
          // echo back to client
          r = msg_reply(port_uid, channel_uid, buf, r);
          if(r < 0)
             printf("server send failed error %i\n", r);
+         // wake child
+         if(child_channel_uid != (uint32_t)-1) {
+            r = msg_send(port_uid, child_channel_uid, buf, strlen(buf));
+            if(r < 0)
+               printf("server wake child failed with code %i\n", r);
+         }
       }
 
       if(msg_flags & MSG_LAST_MSG)
@@ -108,10 +119,57 @@ void client_start() {
    }
 }
 
+void sync_thread() {
+   printf("Prog9 sync thread\n");
+
+   uint32_t port_uid;
+   uint32_t channel_uid;
+   channel_uid = port_connect("/prog9/sync", &port_uid);
+
+   char buf[64];
+   strcpy(buf, "synctest");
+   char recv_buf[64];
+   while(true) {
+      printf("Sync child msging server");
+
+      int r = msg_sync_send(channel_uid, (uint8_t*)buf, 64, (uint8_t*)recv_buf, 64);
+      printf("child send status %i\n", r);
+      if(r > 0)
+         printf("child received response '%s'\n", recv_buf);
+
+      sleep(2000);
+   }
+}
+
 void _start(int argc, char **args) {
+   if(argc > 0 && strequ(args[0], "sync")) {
+      // third, sync call testing subprog
+      printf("Prog9 sync process\n");
+      set_window_title("Prog9 Sync");
+
+      uint32_t port = create_port("/prog9/sync", false);
+      create_thread(&sync_thread);
+
+      char buf[64];
+      uint32_t call_id;
+
+      while(true) {
+         printf("receiving\n");
+         int r = msg_sync_receive(port, (uint8_t*)buf, 64, &call_id);
+         printf("server read status %i id %u\n", r, call_id);
+         if(r > 0) {
+            printf("server received msg '%s'\n", buf);
+            // reply
+            r = msg_sync_reply(call_id, (uint8_t*)buf, 64);
+            printf("server reply status %i\n", r);
+         }
+      }
+   }
+
    if(argc > 0 && strequ(args[0], "child")) {
       // child process client
       printf("Prog9 child process\n");
+      set_window_title("Prog9 Child");
 
       // wait for server - todo autowait func
       uint32_t serverport;
@@ -133,17 +191,35 @@ void _start(int argc, char **args) {
       if(r < 0)
          printf("child process send failed error %i\n", r);
 
-      while(true) { yield(); }
+      while(true) {
+         // wait to be woken by msg
+         uint32_t channel_flags;
+         uint32_t msg_flags;
+         int r = msg_read(serverport, channel, buf, 10, &channel_flags, &msg_flags);
+         if(r == MSG_READ_EMPTY)
+            printf("read: queue empty\n");
+         if(r < 0)
+            printf("read: error\n");
+         if(r > 0)
+            printf("msg: %s\n", buf);
+         snooze();
+      }
 
    }
 
    // server
+   set_window_title("Prog9 Server");
    char *childargs[1];
    childargs[0] = malloc(strlen("child")+1);
    strcpy(childargs[0], "child");
    int t = launch_task("/sys/prog9.elf", 1, childargs, false, false);
    if(t < 0) {
       printf("child process launch failed\n");
+   }
+   strcpy(childargs[0], "sync");
+   t = launch_task("/sys/prog9.elf", 1, childargs, false, false);
+   if(t < 0) {
+      printf("sync process launch failed\n");
    }
    free(childargs[0]);
 
