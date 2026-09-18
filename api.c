@@ -371,34 +371,6 @@ void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }
 
-// private kernel memory api used for dma
-static void api_malloc(registers_t *regs) {
-   // kmalloc
-   // IN: ebx = size
-   // OUT: ebx = addr
-   int size = regs->ebx;
-   uint32_t *mem = malloc(size);
-
-   task_state_t *task = get_current_task_state();
-
-   // identity map
-   task->process->no_allocated += map_size(task->process->page_dir, (uint32_t)mem, (uint32_t)mem, size, 1, 1, 0);
-
-   regs->ebx = (uint32_t)mem;
-}
-
-static void api_free(registers_t *regs) {
-   // IN: ebx = addr
-   // IN: ecx = size
-   uint32_t mem = regs->ebx;
-   uint32_t size = regs->ecx;
-   free(mem, size);
-
-   // unmap from user
-   task_state_t *task = get_current_task_state();
-   task->process->no_allocated -= map_size(task->process->page_dir, mem, mem, size, 0, 1, 0);
-}
-
 void api_draw_bmp(registers_t *regs) {
    // IN: ebx = bmp address
    // IN: ecx = x
@@ -1734,22 +1706,28 @@ void api_dma(registers_t *regs) {
       regs->ebx = 0;
       return;
    }
-   // dma requires physical address of continuous memory
-   // kmalloc identity maps and marks physical memory as used
-   uint32_t size = regs->ebx;
-   api_malloc(regs); // ebx = addr
-   if(regs->ebx == 0)
+   // dma requires physical address of continuous memory provided by kmalloc
+   int size = regs->ebx;
+   uint8_t *mem = malloc(size);
+   if(!mem) {
+      debug_printf("api_dma: ran out of physical memory\n");
+      regs->ebx = 0;
       return;
+   }
+   uint32_t paddr = (uint32_t)mem;
+   // identity map - todo: give process vaddr
+   process->no_allocated += map_size(process->page_dir, paddr, paddr, size, 1, 1, 0);
 
    // track in process
-   process->dma_allocs[process->dma_count].addr = regs->ebx;
+   process->dma_allocs[process->dma_count].addr = paddr;
    process->dma_allocs[process->dma_count].size = size;
    process->dma_count++;
+   regs->ebx = paddr;
 }
 
 void api_dma_free(registers_t *regs) {
    // IN: ebx - addr
-   // IN: ecx - size
+   uint32_t paddr = regs->ebx; // identity mapped to process in api_dma
    process_t *process = get_current_task_state()->process;
    if(!process->privileged) {
       debug_printf("api_dma_free: denied for unprivileged task\n");
@@ -1757,15 +1735,28 @@ void api_dma_free(registers_t *regs) {
       return;
    }
    // drop from the tracking table
+   uint32_t size = 0;
    for(int i = 0; i < process->dma_count; i++) {
-      if(process->dma_allocs[i].addr == regs->ebx) {
+      if(process->dma_allocs[i].addr == paddr) {
+         size = process->dma_allocs[i].size;
          process->dma_allocs[i] = process->dma_allocs[process->dma_count - 1];
          process->dma_count--;
          break;
       }
    }
-   // free physical memory and unmap from process
-   api_free(regs);
+
+   if(!size) { // not found
+      regs->ebx = 0;
+      return;
+   }
+   
+   free(paddr, size);
+
+   // unmap from user
+   task_state_t *task = get_current_task_state();
+   task->process->no_allocated -= map_size(task->process->page_dir, paddr, paddr, size, 0, 1, 0);
+   
+   regs->ebx = size;
 }
 
 void api_escalate_do(void *dialog, void *regs) {

@@ -8,6 +8,102 @@
 #include "io.h"
 #include "windowmgr.h"
 
+static uint32_t ata_base_lba = 0; // support partitions
+static uint32_t ata_partition_sectors = 0; // 0 = whole disk, otherwise the partition size in sectors
+
+bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf, uint16_t sectors, bool write);
+
+static bool ata_check_mbr(void) {
+   uint16_t mbr[256];
+   ata_base_lba = 0;
+   if(!ata_readwrite(true, true, 0, mbr, 1, false)) return false; // mbr in first sector
+
+   uint8_t *m = (uint8_t*)mbr;
+   if(m[510] != 0x55 || m[511] != 0xAA) return false; // check mbr magic bytes
+
+   bool any_entries = false;
+   for(int i = 0; i < 4; i++) {
+      uint8_t *e = m + 0x1BE + i*16; // 0x1BE is partition table entry
+      if(e[4] == 0) continue; // empty slot
+      any_entries = true;
+      if(e[4] != 0x7F) continue; // partition type - uses reserved value 0x7F
+      // note: boot0 is padded with zeros so this supports using the whole hd (boot0 must be < 446 bytes)
+      debug_printf("Found MBR partition %i\n", i);
+      uint32_t starting_lba = *(uint32_t*)(e + 0x08);
+      uint32_t sectors = *(uint32_t*)(e + 0x0C);
+      if(sectors == 0 || starting_lba + sectors > (1 << 28)) return false;
+      ata_base_lba = starting_lba;
+      ata_partition_sectors = sectors;
+      return true;
+   }
+   return !any_entries; // use entire hd for mbr if partition table is empty
+}
+
+typedef struct {
+   uint32_t d1;
+   uint16_t d2, d3;
+   uint8_t  d4[8];
+} __attribute__((packed)) guid_t;
+
+// guid partition table
+// https://wiki.osdev.org/GPT
+typedef struct {
+   guid_t type;
+   guid_t unique; // partition id
+   uint64_t starting_lba;
+   uint64_t ending_lba;
+   uint64_t attributes;
+   uint16_t name[36]; // UTF-16LE
+} __attribute__((packed)) gpt_entry_t;
+
+static const guid_t GPT_TYPE_GUID = { 0xBE59EB2E, 0x91C0, 0x4F56, {0x8F, 0xEF, 0x11, 0x9A, 0x41, 0xDA, 0x9F, 0xAA} };
+static bool ata_check_gpt(void) {
+   // read lba 1
+   uint16_t sector[256];
+   if(!ata_readwrite(true, true, 1, sector, 1, false)) return false;
+   uint8_t *s = (uint8_t*)sector;
+   if(memcmp(s, "EFI PART", 8) != 0) return false;
+
+   uint32_t start_lba = *(uint32_t*)(s + 0x48);
+   uint32_t count = *(uint32_t*)(s + 0x50);
+   uint32_t entry_size = *(uint32_t*)(s + 0x54);
+
+   if(entry_size < sizeof(gpt_entry_t) || 512 % entry_size != 0 || start_lba >= (1 << 28)) return false;
+   if((int)count > 128) return false; // too many partitions, likely corrupt
+
+   uint32_t per_sector = 512 / entry_size;
+   for(int i = 0; i < (int)count; i++) {
+      // read sectors of GPT
+      if((i % per_sector) == 0) {
+         if(!ata_readwrite(true, true, (uint32_t)start_lba + (i/per_sector), sector, 1, false))
+            return false;
+      }
+
+      gpt_entry_t *entry = (gpt_entry_t*)((uint8_t*)sector+(i%per_sector)*entry_size);
+      if(memcmp(entry, &GPT_TYPE_GUID, 16) != 0) continue;
+
+      if(entry->starting_lba > entry->ending_lba) return false; // corrupt
+      if(entry->ending_lba >= (1u << 28)) return false; // outside supported range
+      ata_base_lba = entry->starting_lba;
+      ata_partition_sectors = entry->ending_lba - entry->starting_lba + 1;
+      return true;
+   }
+   return false;
+}
+
+void ata_find_partition(void) {
+   if(ata_check_gpt()) {
+      debug_printf("GPT HDD detected\n");
+   } else if(ata_check_mbr()) {
+      debug_printf("MBR HDD detected\n");
+   } else {
+      debug_printf("HDD isn't formatted to GPT or MBR, or system partition not found\n");
+      while(true) {} // hang
+   }
+   
+   debug_printf("ATA: base lba %u / partition sectors %u\n", ata_base_lba, ata_partition_sectors);
+}
+
 void ata_delay(uint16_t ioPort) {
    // create 400ns delay through 4 alternative status queries
    for(volatile int i = 0; i < 4; i++) {
@@ -70,6 +166,7 @@ void ata_identify(bool primaryBus, bool masterDrive) {
       // doesn't exist...
    }
 
+   ata_find_partition();
 }
 
 // recover from failed rw - ensure next command doesn't read stale words
@@ -95,6 +192,9 @@ void ata_recover(uint16_t ioPort) {
 
 bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf, uint16_t sectors, bool write) {
    // read or write n sectors (512 bytes) using ATA PIO mode
+
+   if(ata_partition_sectors && lba + sectors > ata_partition_sectors) return false; // can't readwrite outside of partition size
+   lba += ata_base_lba;
 
    if(sectors == 0 || sectors > ATA_MAX_SECTORS) {
       gui_printf("ATA: bad sector count %u\n", 0, sectors);

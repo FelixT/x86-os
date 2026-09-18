@@ -98,9 +98,9 @@ void rtl_poll(netdev_t *dev) {
 
 void rtl_free(netdev_t *dev) {
    (void)dev;
-   dma_free((void*)rx, RX_SIZE);
+   dma_free((void*)rx);
    for(int i = 0; i < 4; i++) {
-      dma_free(tx_buf[i], TX_BUF_SIZE);
+      dma_free(tx_buf[i]);
    }
 }
 
@@ -122,9 +122,9 @@ netdev_t *rtl_init() {
    for(int i = 0; i < 4; i++) {
       tx_buf[i] = (uint8_t*)dma(TX_BUF_SIZE);
       if(tx_buf[i] == NULL) {
-         dma_free((void*)rx, RX_SIZE);
+         dma_free((void*)rx);
          for(int j = 0; j < i; j++)
-            dma_free(tx_buf[j], TX_BUF_SIZE);
+            dma_free(tx_buf[j]);
          return NULL;
       }
    }

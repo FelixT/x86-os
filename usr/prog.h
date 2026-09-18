@@ -1022,14 +1022,16 @@ static inline void *dma(uint32_t size) {
    return (void*)addr;
 }
 
-static inline void dma_free(void *addr, uint32_t size) {
+static inline uint32_t dma_free(void *addr) {
+   uint32_t freed;
    asm volatile (
       "int $0x30;"
-      :: "a" (85),
-      "b" ((uint32_t)addr),
-      "c" (size)
+      : "=b" (freed)
+      : "a" (85),
+      "b" ((uint32_t)addr)
       : "cc", "memory"
    );
+   return freed;
 }
 
 static inline bool escalate() {

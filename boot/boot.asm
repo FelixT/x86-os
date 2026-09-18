@@ -37,10 +37,14 @@ start:
    call print
 
    ; load straight into bootloader1 as this is limited to just 512 bytes
-   call read_kernel
-   
+   call read_kernel ; only returns if the read failed, with the BIOS error code in ah
+
+   push ax
    mov si, errormsg
    call print
+   pop ax
+   mov al, ah
+   call print_hex8
 
    jmp $ ; infinite loop
 
@@ -56,20 +60,36 @@ read_kernel:
    mov dh, 0 ; head no
    mov bx, 0 ; set es:bx
    mov es, bx ; first part of memory pointer (should be 0)
-   mov bx, 0x7e00 ; 512 after our bootloader start 
+   mov bx, 0x7e00 ; 512 after our bootloader start
    int 0x13
-
-   mov bx, 0 ; set es:bx
-   mov es, bx ; first part of memory pointer (should be 0)
-   mov bx, 0x7e00 ; 512 after our bootloader start 
-
+   jc .fail ; carry set = read failed, error code in ah
 
    jmp 0x7e00
+
+   .fail:
+      ret
+
+; print al as two hex digits
+print_hex8:
+   push ax
+   shr al, 4 ; high nibble
+   call .nibble
+   pop ax
+   ; fall through for low nibble
+   .nibble:
+      and al, 0x0F
+      add al, '0'
+      cmp al, '9'
+      jbe .out
+      add al, 7 ; skip from '9' to 'A'
+   .out:
+      jmp print_ch ; tail call, print_ch returns to our caller
 
    ; strings
    boot0msg db 'Starting bootloader0', 13, 10, 0 ; label pointing to address of message + CR + LF
    boot1loadmsg db 'Loading bootloader1 from disk', 13, 10, 0 ; label pointing to address of message + CR + LF
-   errormsg db 'Unable to load bootloader1', 13, 10, 0 
+   errormsg db 'Unable to load bootloader1, BIOS error 0x', 0
 
-   times 510-($-$$) db 0 ; fill rest of 512 bytes with 0s (-2 due to signature below)
+   times 446-($-$$) db 0 ; code must end before the partition table - nasm errors if it doesn't
+   times 64 db 0 ; partition table, left empty so ata_check_mbr treats this image as the whole disk
    dw 0xAA55 ; marker to show we're a bootloader to some BIOSes
