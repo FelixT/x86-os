@@ -92,7 +92,7 @@ void dialog_resize(uint16_t fb, int width, int height, int window) {
       dialog->ui->shown_menu->visible = false;
       dialog->ui->shown_menu = NULL;
    }
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    end_subroutine();
 }
 
@@ -229,7 +229,7 @@ bool dialog_msg(char *title, char *text) {
    btn->release_func = &dialog_close;
    ui_add(msg->ui, btn_wo);
 
-   ui_draw(msg->ui);
+   ui_redraw(msg->ui);
 
    if(title)
       dialog_set_title(msg, title);
@@ -302,7 +302,7 @@ int dialog_yesno(char *title, char *text, void *return_func) {
    btn_cancel->release_func = &dialog_close;
    ui_add(dialog->ui, btn_cancel_wo);
 
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 
    return index;
 }
@@ -358,7 +358,7 @@ int dialog_input(char *text, void *return_func) {
    btn_cancel->release_func = &dialog_close;
    ui_add(input->ui, btn_cancel_wo);
 
-   ui_draw(input->ui);
+   ui_redraw(input->ui);
 
    return index;
 }
@@ -367,24 +367,33 @@ int dialog_input(char *text, void *return_func) {
 
 void dialog_colourpicker_update(uint16_t colour, dialog_t *dialog) {
    uint16_t *fb = (uint16_t*)dialog->surface.buffer;
+   draw_context_t context = ui_get_context(dialog->ui);
 
    // calculate colour
    char buffer[9];
    sprintf(buffer, "0x%h", colour);
    set_input_text(dialog->input_wo, buffer);
+   dialog->input_wo->draw_func(dialog->input_wo, context);
+   ui_redraw_wo(dialog->ui, dialog->input_wo);
 
    // set r,g,b inputs
    inttostr(get_r16(colour), buffer);
    wo_t *input = dialog_get(dialog, "red_input");
    set_input_text(input, buffer);
+   input->draw_func(input, context);
+   ui_redraw_wo(dialog->ui, input);
+
    inttostr(get_g16(colour), buffer);
    input = dialog_get(dialog, "green_input");
    set_input_text(input, buffer);
+   input->draw_func(input, context);
+   ui_redraw_wo(dialog->ui, input);
+
    inttostr(get_b16(colour), buffer);
    input = dialog_get(dialog, "blue_input");
    set_input_text(input, buffer);
-
-   ui_draw(dialog->ui);
+   input->draw_func(input, context);
+   ui_redraw_wo(dialog->ui, input);
 
    // draw colour square
    for(int x = 0; x < 50; x++) {
@@ -392,6 +401,8 @@ void dialog_colourpicker_update(uint16_t colour, dialog_t *dialog) {
          fb[(y + 60) * dialog->surface.width + (x + 265)] = colour;
       }
    }
+
+   redraw_region(265, 60, 50, 50, dialog->window);
 }
 
 void dialog_colourpicker_click(int x, int y, int window) {
@@ -514,6 +525,7 @@ void dialog_colourpicker_resize(uint32_t fb, int width, int height, int window) 
    dialog->surface = get_surface_w(window);
    ui_draw(dialog->ui);
    dialog_colourpicker_draw(dialog);
+   ui_redraw_window(dialog->ui);
    end_subroutine();
 }
 
@@ -599,6 +611,7 @@ int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int wind
    ui_draw(dialog->ui);
 
    dialog_colourpicker_draw(dialog);
+   ui_redraw_window(dialog->ui);
 
    override_click(&dialog_colourpicker_click, dialog->window);
    override_drag(&dialog_colourpicker_drag, dialog->window);
@@ -649,8 +662,7 @@ int dialog_filepicker_grid_click(wo_t *grid, int window, int row, int col) {
             set_input_text(input, filepath);
             clear_w(dialog->window);
             dialog_filepicker_show_dir(dialog);
-            ui_draw(dialog->ui);
-            redraw_w(dialog->window);
+            ui_redraw(dialog->ui);
             return 1;
          } else {
             // call return func
@@ -804,8 +816,7 @@ void dialog_filepicker_show_parent(wo_t *wo, int window) {
    input_data->cursor_pos = strlen(text);
    clear_w(dialog->window);
    dialog_filepicker_show_dir(dialog);
-   ui_draw(dialog->ui);
-   redraw_w(dialog->window);
+   ui_redraw(dialog->ui);
 }
 
 void dialog_filepicker_input_return(wo_t *wo, int window) {
@@ -825,7 +836,7 @@ void dialog_filepicker_input_return(wo_t *wo, int window) {
    }
    clear_w(dialog->window);
    dialog_filepicker_show_dir(dialog);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
@@ -835,9 +846,7 @@ void dialog_filepicker_scroll(int deltaY, int offsetY, int window) {
       return;
    }
    ui_scroll(dialog->ui, deltaY, offsetY);
-   //clear_w(ui->window);
-   ui_draw(dialog->ui);
-   redraw_w(dialog->window);
+   ui_redraw(dialog->ui);
    
    end_subroutine();
 }
@@ -859,7 +868,7 @@ void dialog_filepicker_resize(uint32_t fb, int width, int height, int window) {
    groupbox->canvas->width = dialog->ui->wos[4]->width - 2;
    dialog_filepicker_show_dir(dialog);
    clear_w(dialog->window);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    end_subroutine();
 }
 
@@ -939,7 +948,7 @@ int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window
    override_resize(&dialog_filepicker_resize, dialog->window);
 
    dialog_filepicker_show_dir(dialog);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 
    return index;
 }
@@ -962,7 +971,7 @@ void dialog_colourbox_callback(char *out, int window) {
    wo_t *label = &colourbox->wo;
    label_t *label_data = label->data;
    label_data->colour_bg = colour;
-   ui_draw(colourbox_dialog->ui);
+   ui_redraw(colourbox_dialog->ui);
    colourbox->callback(out, colourbox->window, (wo_t*)&colourbox->wo);
 }
 
@@ -1042,12 +1051,11 @@ void dialog_window_set_bgcolour(char *out, int window, wo_t *colourbox) {
    uint16_t colour = hextouint(out+2);
    set_window_setting(W_SETTING_BGCOLOUR, colour, dialog->parentWindow);
    set_input_text(dialog_get(dialog, "bgcolour_input"), out);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
    if(!parentdialog) return;
    clear_w(dialog->parentWindow);
-   ui_draw(parentdialog->ui);
-   redraw_w(dialog->parentWindow);
+   ui_redraw(parentdialog->ui);
 }
 
 void dialog_window_set_txtcolour(char *out, int window, wo_t *colourbox) {
@@ -1056,12 +1064,11 @@ void dialog_window_set_txtcolour(char *out, int window, wo_t *colourbox) {
    uint16_t colour = hextouint(out+2);
    set_window_setting(W_SETTING_TXTCOLOUR, colour, dialog->parentWindow);
    set_input_text(dialog_get(dialog, "txtcolour_input"), out);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
    if(!parentdialog) return;
    clear_w(dialog->parentWindow);
-   ui_draw(parentdialog->ui);
-   redraw_w(dialog->parentWindow);
+   ui_redraw(parentdialog->ui);
 }
 
 void dialog_window_set_bgcolour_input(wo_t *wo, int window) {
@@ -1071,12 +1078,11 @@ void dialog_window_set_bgcolour_input(wo_t *wo, int window) {
    set_window_setting(W_SETTING_BGCOLOUR, colour, dialog->parentWindow);
    label_t *colourbox = dialog_get(dialog, "bgcolour_colourbox")->data;
    colourbox->colour_bg = colour;
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
    if(!parentdialog) return;
    clear_w(dialog->parentWindow);
-   ui_draw(parentdialog->ui);
-   redraw_w(dialog->parentWindow);
+   ui_redraw(parentdialog->ui);
 }
 
 void dialog_window_set_txtcolour_input(wo_t *wo, int window) {
@@ -1086,12 +1092,11 @@ void dialog_window_set_txtcolour_input(wo_t *wo, int window) {
    set_window_setting(W_SETTING_TXTCOLOUR, colour, dialog->parentWindow);
    label_t *colourbox = dialog_get(dialog, "txtcolour_colourbox")->data;
    colourbox->colour_bg = colour;
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    dialog_t *parentdialog = dialog_from_window(dialog->parentWindow);
    if(!parentdialog) return;
    clear_w(dialog->parentWindow);
-   ui_draw(parentdialog->ui);
-   redraw_w(dialog->parentWindow);
+   ui_redraw(parentdialog->ui);
 }
 
 int dialog_window_settings(int window, char *title) {
@@ -1144,7 +1149,7 @@ int dialog_window_settings(int window, char *title) {
    dialog_add(dialog, "txtcolour_input", input);
 
    ui_add(dialog->ui, groupbox);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 
    dialog_set_title(dialog, "Window Settings");
 

@@ -132,8 +132,7 @@ int cmd_createbtn(char *arg) {
    strcpy(state.wos[index].function, "");
    button->release_func = (void*)&generic_callback;
    ui_add(dialog->ui, button);
-   ui_draw(dialog->ui);
-   redraw_w(dialog->window);
+   ui_redraw(dialog->ui);
 
    var_set(varname, VAR_WO, (void*)index);
 
@@ -167,8 +166,7 @@ int cmd_createinput(char *arg) {
    get_input(input)->placeholder = true;
    state.wos[index].wo = input;
    ui_add(dialog->ui, input);
-   ui_draw(dialog->ui);
-   redraw_w(dialog->window);
+   ui_redraw(dialog->ui);
 
    var_set(varname, VAR_WO, (void*)index);
 
@@ -200,8 +198,7 @@ int cmd_createlabel(char *arg) {
    wo_t *txt = create_label(stoi(x), stoi(y), strlen(text)*(get_font_info().width+get_font_info().padding) + 10, 20, text);
    state.wos[index].wo = txt;
    ui_add(dialog->ui, txt);
-   ui_draw(dialog->ui);
-   redraw_w(dialog->window);
+   ui_redraw(dialog->ui);
 
    var_set(varname, VAR_WO, (void*)index);
 

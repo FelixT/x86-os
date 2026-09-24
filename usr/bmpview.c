@@ -42,6 +42,7 @@ dialog_t *dialog = NULL;
 
 int hover_x = -1;
 int hover_y = -1;
+int hover_sz = 0;
 uint16_t hover_colour;
 
 void drawbg() {
@@ -51,8 +52,7 @@ void drawbg() {
 void redraw_all() {
    drawbg();
    bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
-   ui_draw(dialog->ui);
-   redraw();
+   ui_redraw(dialog->ui);
 }
 
 bool ignore_draw = false; // don't paint until the mouse is released
@@ -69,8 +69,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_menu->width = w;
    drawbg();
    bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
-   ui_draw(dialog->ui);
-   redraw();
+   ui_redraw(dialog->ui);
    end_subroutine();
 }
 
@@ -193,7 +192,6 @@ void set(int x, int y) {
             bmpbuffer[index] = colour;
       }
    }
-   //redraw_pixel(x, y);
 }
 
 int abs(int i) {
@@ -240,6 +238,20 @@ void drawLine(int x0, int y0, int x1, int y1) {
 int prevX = -1;
 int prevY = -1;
 
+void hover_restore() {
+   // restore the pixels under hover preview
+
+   if(hover_x == -1 || hover_y == -1) return;
+   for(int py = max(0, hover_y); py < hover_y+hover_sz; py++) {
+      for(int px = hover_x; px < hover_x+hover_sz; px++) {
+         framebuffer[px + py * bufferwidth] = hover_colour;
+      }
+   }
+   redraw_region(hover_x, hover_y, hover_sz, hover_sz, -1);
+   hover_x = -1;
+   hover_y = -1;
+}
+
 void click(int x, int y) {
 
    if(dialog->ui->shown_menu) {
@@ -272,17 +284,8 @@ void click(int x, int y) {
    if(ui_click(dialog->ui, x, y))
       end_subroutine();
 
-   if(hover_x != -1 && hover_y != -1) {
-      // restore old colour
-      int sz = size*scale;
-      for(int py = hover_y; py < hover_y+sz; py++) {
-         for(int px = hover_x; px < hover_x+sz; px++) {
-            framebuffer[px + py * bufferwidth] = hover_colour;
-         }
-      }
-      hover_x = -1;
-      hover_y = -1;
-   }
+   int sz = size*scale;
+   hover_restore();
 
    set(x, y);
    if(prevX == -1) prevX = x;
@@ -293,6 +296,12 @@ void click(int x, int y) {
 
    if(deltaX >= 1 || deltaY >= 1)
       drawLine(prevX, prevY, x, y);
+
+   int redrawX = min(x, prevX) - (scale - 1);
+   int redrawY = min(y, prevY) - (scale - 1);
+   int redrawW = max(sz, deltaX + sz) + (scale - 1);
+   int redrawH = max(sz, deltaY + sz) + (scale - 1);
+   redraw_region(redrawX, redrawY, redrawW, redrawH, -1);
 
    prevX = x;
    prevY = y;
@@ -323,43 +332,30 @@ void hover(int x, int y) {
       end_subroutine();
    }
    if(x >= info->width*scale || y >= info->height*scale) {
-      if(hover_x != -1 && hover_y != -1) {
-         // restore old colour
-         for(int py = hover_y; py < hover_y+sz; py++) {
-            for(int px = hover_x; px < hover_x+sz; px++) {
-               framebuffer[px + py * bufferwidth] = hover_colour;
-            }
-         }
-         hover_x = -1;
-         hover_y = -1;
-      }
+      hover_restore();
       end_subroutine();
    }
    if(size == 1 && scale > 1 && y < height - wo_menu->height - sz - 2) {
       int img_x = x/sz;
-      int img_y = y/sz;
+      int img_y = (y + offsetY)/sz;
 
       int start_x = img_x*sz;
-      int start_y = img_y*sz;
+      int start_y = img_y*sz - offsetY;
       if(hover_x != start_x || hover_y != start_y) {
+         hover_restore();
          int end_x = start_x + sz;
          int end_y = start_y + sz;
-         if(hover_x != -1 && hover_y != -1) {
-            // restore old colour
-            for(int py = hover_y; py < hover_y+sz; py++) {
-               for(int px = hover_x; px < hover_x+sz; px++) {
-                  framebuffer[px + py * bufferwidth] = hover_colour;
-               }
-            }
-         }
+         int clip_y = max(0, start_y); // box may start above the scrolled view
          hover_x = start_x;
          hover_y = start_y;
-         hover_colour = framebuffer[start_x + start_y * bufferwidth];
-         for(int py = start_y; py < end_y; py++) {
+         hover_sz = sz;
+         hover_colour = framebuffer[start_x + clip_y * bufferwidth];
+         for(int py = clip_y; py < end_y; py++) {
             for(int px = start_x; px < end_x; px++) {
                framebuffer[px + py * bufferwidth] = colour;
             }
          }
+         redraw_region(hover_x, hover_y, sz, sz, -1);
       }
    }
 
@@ -374,7 +370,7 @@ void tool_click(wo_t *wo, int window) {
    uinttostr(size, buf);
    strcat(buf, "px");
    set_input_text(toolsizetext_wo, buf);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void toolminus_click(wo_t *wo, int window) {
@@ -386,7 +382,7 @@ void toolminus_click(wo_t *wo, int window) {
    uinttostr(size, buf);
    strcat(buf, "px");
    set_input_text(toolsizetext_wo, buf);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void zoomout_click(wo_t *wo, int window) {
@@ -394,12 +390,14 @@ void zoomout_click(wo_t *wo, int window) {
    (void)window;
    scroll_to(0, -1);
    if(scale > 1) scale--;
+   hover_x = -1;
+   hover_y = -1;
    char buf[4];
    sprintf(buf, "%i00%", scale);
    set_input_text(zoomtext_wo, buf);
    drawbg();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, transparent);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
 }
@@ -409,12 +407,14 @@ void zoomin_click(wo_t *wo, int window) {
    (void)window;
    scroll_to(0, -1);
    scale++;
+   hover_x = -1;
+   hover_y = -1;
    char buf[4];
    sprintf(buf, "%i00%", scale);
    set_input_text(zoomtext_wo, buf);
    drawbg();
    bmp_draw((uint8_t*)bmp, 0, 0, scale, transparent);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
 }
@@ -423,7 +423,7 @@ void colour_callback(char *out, int window, wo_t *wo) {
    (void)window;
    (void)wo;
    colour = hextouint(out+2);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 bool bmp_check() {
@@ -490,6 +490,7 @@ void open_file(char *p, int window) {
 
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
+   redraw();
 }
 
 void open_click(wo_t *wo, int window) {
@@ -548,9 +549,10 @@ void scroll(int deltaY, int offY, int window) {
    (void)window;
    offsetY = offY;
    dialog->ui->scrolled_y = offY;
+   hover_x = -1;
+   hover_y = -1;
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, transparent);
-   ui_draw(dialog->ui);
-   redraw();
+   ui_redraw(dialog->ui);
    end_subroutine();
 }
 
@@ -566,7 +568,7 @@ void brush_close(wo_t *wo, int window) {
    options->visible = false;
    drawbg();
    bmp_draw((uint8_t*)bmp, -offsetX, -offsetY, scale, transparent);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void brush_toggle_tile(wo_t *wo, int window) {
@@ -580,7 +582,7 @@ void brush_click(wo_t *wo, int window) {
 
    if(options != NULL) {
       options->visible = true;
-      ui_draw(dialog->ui);
+      ui_redraw(dialog->ui);
       return;
    }
 
@@ -605,13 +607,13 @@ void brush_click(wo_t *wo, int window) {
    set_button_release(close, &brush_close);
    canvas_add(options, close);
    ui_add(dialog->ui, options);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 // discard changes
 void clear_confirm() {
    load_img();
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void clear_click(wo_t *wo, int window) {
@@ -684,9 +686,9 @@ void resize_complete(wo_t *wo, int window) {
    drawbg();
    bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
    ui_draw(dialog->ui);
-   redraw();
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
+   redraw();
 }
 
 void resize_image(wo_t *wo, int index, int window) {
@@ -735,8 +737,7 @@ void resize_image(wo_t *wo, int index, int window) {
    set_button_release(button, &resize_complete);
    ui_add(popup_dialog->ui, button);
 
-   ui_draw(popup_dialog->ui);
-   redraw_w(popup_dialog->window);
+   ui_redraw(popup_dialog->ui);
 }
 
 void new_image(wo_t *wo, int index, int window) {
@@ -784,7 +785,7 @@ void toggle_transparent(wo_t *wo, int index, int window) {
    transparent = !transparent;
    drawbg();
    bmp_draw(bmp, -offsetX, -offsetY, scale, transparent);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void _start(int argc, char **args) {
@@ -899,11 +900,10 @@ void _start(int argc, char **args) {
 
    ui_draw(dialog->ui);
 
-   redraw();
-
    create_scrollbar(&scroll, -1);
    dialog->content_height = info->height*scale + 20;
    set_content_height(dialog->content_height, -1);
+   redraw();
 
    // right click menu
    strcpy(get_menu_item(dialog->ui->default_menu, 0)->text, "Quit");

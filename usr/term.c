@@ -610,6 +610,7 @@ void _start(int argc, char **args) {
    free(wd);
 
    printf("User Terminal at %s\n", path);
+   redraw();
 
    if(argc > 1) {
       checkcmd(args[1]);

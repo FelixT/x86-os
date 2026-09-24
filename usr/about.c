@@ -16,8 +16,8 @@ void _start() {
    surface_t surface = get_surface();
    ui_mgr_t *ui = ui_init(&surface, -1);
 
-   ui_add(ui, create_label(10, 10, 140, 40, "f3sys v0.5.5"));
-   ui_draw(ui);
+   ui_add(ui, create_label(10, 10, 140, 40, "f3sys v0.5.6"));
+   ui_redraw(ui);
 
    while(true) {
       yield();

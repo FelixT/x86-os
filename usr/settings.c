@@ -74,7 +74,7 @@ void settings_colourbox_callback(char *str, int w) {
                label_t *colourbox = canvas->children[j]->data;
                colourbox->colour_bg = (uint16_t)hextouint(str+2);
                set_input_text(prev_wo, str);
-               ui_draw(ui);
+               ui_redraw(ui);
                input_t *input = prev_wo->data;
                input->return_func(prev_wo, -1);
                return;
@@ -107,9 +107,7 @@ wo_t *settings_create_colourbox(wo_t *groupbox, int y, uint16_t colour) {
 void scroll(int deltaY, int offsetY, int window) {
    (void)window;
    ui_scroll(ui, deltaY, offsetY);
-   //clear_w(ui->window);
-   ui_draw(ui);
-   redraw_w(ui->window);
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -125,7 +123,7 @@ void set_colour1(wo_t *wo, int window) {
    set_setting(SETTING_WIN_TITLEBARCOLOUR, hextouint(input->text + 2));
    label_t *colourbox = colour1_colourbox->data;
    colourbox->colour_bg = (uint16_t)hextouint(input->text + 2);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_colour2(wo_t *wo, int window) {
@@ -134,7 +132,7 @@ void set_colour2(wo_t *wo, int window) {
    set_setting(SETTING_WIN_TITLEBARCOLOUR2, hextouint(input->text + 2));
    label_t *colourbox = colour2_colourbox->data;
    colourbox->colour_bg = (uint16_t)hextouint(input->text + 2);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_window_bgcolour(wo_t *wo, int window) {
@@ -143,7 +141,7 @@ void set_window_bgcolour(wo_t *wo, int window) {
    set_setting(SETTING_WIN_BGCOLOUR, hextouint(input->text + 2));
    label_t *colourbox = windowbg_colourbox->data;
    colourbox->colour_bg = (uint16_t)hextouint(input->text + 2);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_window_txtcolour(wo_t *wo, int window) {
@@ -152,7 +150,7 @@ void set_window_txtcolour(wo_t *wo, int window) {
    set_setting(SETTING_WIN_TXTCOLOUR, hextouint(input->text + 2));
    label_t *colourbox = windowtxt_colourbox->data;
    colourbox->colour_bg = (uint16_t)hextouint(input->text + 2);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_font_padding(wo_t *wo, int window) {
@@ -160,7 +158,7 @@ void set_font_padding(wo_t *wo, int window) {
    input_t *input = wo->data;
    set_setting(SETTINGS_SYS_FONT_PADDING, strtoint(input->text));
    clear_w(window);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_bgcolour(wo_t *wo, int window) {
@@ -169,7 +167,7 @@ void set_bgcolour(wo_t *wo, int window) {
    set_setting(SETTING_BGCOLOUR, hextouint(input->text + 2));
    label_t *colourbox = bgcolour_colourbox->data;
    colourbox->colour_bg = (uint16_t)hextouint(input->text + 2);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_desktop_enabled(wo_t *wo, int window) {
@@ -198,17 +196,15 @@ void set_bgimage(wo_t *wo, int window) {
    set_input_text(bgcolour_input, hexbuf);
    label_t *colourbox = bgcolour_colourbox->data;
    colourbox->colour_bg = bgcolour;
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void set_font(wo_t *wo, int window) {
-   (void)window;
    input_t *input = wo->data;
    if(!set_setting(SETTING_SYS_FONT_PATH, (uint32_t)input->text))
       dialog_msg("Error", "Couldn't set font");
    clear_w(window);
-   ui_draw(ui);
-   redraw_w(window);
+   ui_redraw(ui);
 }
 
 void bgimg_browse_callback(char *path, int window, wo_t *wo) {
@@ -238,7 +234,7 @@ void padding_increase(wo_t *wo, int window) {
    set_input_text(fontpadding_input, buffer);
    set_font_padding(fontpadding_input, window);
    clear_w(window);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void padding_decrease(wo_t *wo, int window) {
@@ -250,7 +246,7 @@ void padding_decrease(wo_t *wo, int window) {
    set_input_text(fontpadding_input, buffer);
    set_font_padding(fontpadding_input, window);
    clear_w(window);
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void desktop_enable_checkbox_callback(wo_t *wo, int window) {
@@ -297,7 +293,7 @@ void resize() {
    }
    clear();
    *ui->surface = get_surface();
-   ui_draw(ui);
+   ui_redraw(ui);
    end_subroutine();
 }
 

@@ -257,7 +257,6 @@ void task_reset_windows(int task) {
 static void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr) {
    addr = page_align_down(addr);
    map(dir, addr, addr, 0, 0, 0);
-   invlpg(addr);
 }
 
 // hacky but less hacky than having task clean this up

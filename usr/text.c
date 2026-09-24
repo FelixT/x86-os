@@ -39,8 +39,7 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    wo_status->width = wo_path->width/2;
    wo_status->x = x;
 
-   ui_draw(ui);
-   redraw();
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -56,8 +55,7 @@ void text_keypress(wo_t *wo, uint16_t c, int window) {
       textarea_get_pos_from_index(wo, get_textarea(wo)->cursor_pos, &row, &col);
       scroll_to(25 + row*(get_font_info().height + get_font_info().padding) + 6, -1);
       clear();
-      ui_draw(ui);
-      redraw();
+      ui_redraw(ui);
    }
 }
 
@@ -88,8 +86,7 @@ void load_file(char *filepath) {
    int height = textarea_get_rows(wo_text) * (get_font_info().height + get_font_info().padding) + 6;
    wo_text->height = height;
    clear();
-   ui_draw(ui);
-   redraw();
+   ui_redraw(ui);
    content_height = wo_text->height + 25;
    set_content_height(content_height, -1);
 }
@@ -169,8 +166,7 @@ void new_func(wo_t *wo, int window) {
 void scroll(int deltaY, int offsetY, int window) {
    (void)window;
    ui_scroll(ui, deltaY, offsetY);
-   ui_draw(ui);
-   redraw();
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -237,8 +233,7 @@ void _start(int argc, char **args) {
    if(argc == 2 && args[1] && *args[1] != '\0')
       load_file(args[1]);
 
-   ui_draw(ui);
-   redraw();
+   ui_redraw(ui);
 
    while(true) {
       asm volatile("nop");

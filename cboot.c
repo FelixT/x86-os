@@ -90,12 +90,15 @@ void cboot() {
       surface.buffer = vbe_info->framebuffer;
       surface.width = vbe_info->width;
       surface.height = vbe_info->height;
+      if(vbe_info->pitch >= vbe_info->width*(vbe_info->bpp/8)) // sanity check
+         surface.pitch = vbe_info->pitch / (vbe_info->bpp/8);
+      else
+         surface.pitch = vbe_info->width;
 
       // set black
-      for(int i = 0; i < vbe_info->width*vbe_info->height; i++) {
-         uint16_t *fb = (uint16_t*)vbe_info->framebuffer;
+      uint16_t *fb = (uint16_t*)vbe_info->framebuffer;
+      for(int i = 0; i < surface.pitch*surface.height; i++)
          fb[i] = 0;
-      }
 
       font_init();
       cboot_printf("Found framebuffer at 0x%h", surface.buffer);

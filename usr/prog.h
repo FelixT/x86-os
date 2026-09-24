@@ -62,6 +62,7 @@ static inline surface_t get_surface_w(int window) {
       "b" (window)
       : "cc", "memory"
    );
+   surface.pitch = surface.width; // window buffers are always tightly packed
    return surface;
 }
 
@@ -90,12 +91,15 @@ static inline void redraw() {
    redraw_w(-1);
 }
 
-static inline void redraw_pixel(int x, int y) {
+static inline void redraw_region(int x, int y, int width, int height, int window) {
    asm volatile(
       "int $0x30"
       :: "a" (37),
       "b" ((uint32_t)x),
-      "c" ((uint32_t)y)
+      "c" ((uint32_t)y),
+      "d" ((uint32_t)width),
+      "S" ((uint32_t)height),
+      "D" ((uint32_t)window)
       : "cc", "memory"
    );
 }

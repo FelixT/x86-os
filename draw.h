@@ -11,7 +11,7 @@ static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 static inline void setpixel_safe(surface_t *surface, int index, uint16_t colour) {
-   if(index < 0 || index >= surface->width*surface->height) {
+   if(index < 0 || index >= surface->pitch*surface->height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
       ((uint16_t*)surface->buffer)[index] = colour;

@@ -47,7 +47,7 @@ gui_window_t *api_get_cwindow(int cindex) {
    if(cindex < 0 || cindex >= mainwindow->child_count)
       return NULL;
 
-   return mainwindow->children[cindex];
+   return mainwindow->children[cindex]; // note: guaranteed not to be closed
 }
 
 static inline int api_validate_str(char *str, int maxlen) {
@@ -242,12 +242,17 @@ void api_redraw_window(registers_t *regs) {
    gui_draw_window(get_window_index_from_pointer(window));
 }
 
-void api_redraw_pixel(registers_t *regs) {
+void api_redraw_region(registers_t *regs) {
    // IN: ebx = x
    // IN: ecx = y
+   // IN: edx = width
+   // IN: esi = height
+   // IN: edi = window
 
-   // x, y
-   window_draw_content_region(api_get_window(), regs->ebx, regs->ecx, 1, 1);
+   gui_window_t *window = api_get_cwindow(regs->edi);
+   if(!window) return;
+
+   window_draw_content_region(window, regs->ebx, regs->ecx, regs->edx, regs->esi);
 }
 
 void api_end_task(registers_t *regs) {
@@ -378,15 +383,14 @@ void api_draw_bmp(registers_t *regs) {
    // IN: esi = scale
    if(get_current_task_window() < 0) return;
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
-   if(window->closed) return;
 
-   bmp_draw((uint8_t*)regs->ebx, window->framebuffer, window->width, window->height - TITLEBAR_HEIGHT, regs->ecx, regs->edx, regs->edi, regs->esi);
+   bmp_draw((uint8_t*)regs->ebx, &window->surface, regs->ecx, regs->edx, regs->edi, regs->esi);
 }
 
 void api_clear_window(registers_t *regs) {
    // IN: ebx = window cindex
    gui_window_t *window = api_get_cwindow(regs->ebx);
-   if(!window || window->closed) return;
+   if(!window) return;
    window_clearbuffer(window, window->bgcolour);
    window->text_index = 0;
    window->text_x = getFont()->padding;

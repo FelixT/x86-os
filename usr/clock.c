@@ -11,7 +11,7 @@ ui_mgr_t *ui;
 void resize() {
    s = get_surface();
    ui->surface = &s;
-   ui_draw(ui);
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -65,8 +65,7 @@ void _start() {
       if(leading) get_label(second_label)->label[0] = '0';
       uinttostr(seconds, get_label(second_label)->label + leading);
 
-      ui_draw(ui);
-      redraw();
+      ui_redraw(ui);
       sleep(200);
    }
 }

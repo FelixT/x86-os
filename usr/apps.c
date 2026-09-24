@@ -97,7 +97,7 @@ void resize(uint32_t fb, int w, int h, int window) {
 
    surface = get_surface();
    ui->surface = &surface;
-   ui_draw(ui);
+   ui_redraw(ui);
    end_subroutine();
 }
 

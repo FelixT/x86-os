@@ -177,13 +177,11 @@ void display_items() {
       }
    }
 
-   ui_draw(ui);
-
    input_t *path_data = (input_t *)wo_path->data;
    path_data->valign = true;
    set_input_text(wo_path, cur_path);
 
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 void refresh_dir_content() {
@@ -576,7 +574,7 @@ void rightclick(int x, int y) {
 
 void mouseout() {
    ui_hover(ui, -1, -1);
-   ui_draw(ui);
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -653,7 +651,6 @@ void show_add_menu(wo_t *wo, int window) {
       if(wo->x < menu->x)
          menu->x = wo->x;
       ui_add(ui, menu);
-      ui_draw(ui);
       addnew_menu = menu;
       ui->shown_menu = addnew_menu;
    } else {
@@ -667,8 +664,8 @@ void show_add_menu(wo_t *wo, int window) {
       }
       ((menu_t*)addnew_menu->data)->selected_index = -1;
       display_items();
-      ui_draw(ui);
    }
+   ui_redraw(ui);
 }
 
 void show_view_menu(wo_t *wo, int window) {
@@ -683,7 +680,6 @@ void show_view_menu(wo_t *wo, int window) {
       if(wo->x < menu->x)
          menu->x = wo->x;
       ui_add(ui, menu);
-      ui_draw(ui);
       view_menu = menu;
       ui->shown_menu = view_menu;
    } else {
@@ -697,8 +693,8 @@ void show_view_menu(wo_t *wo, int window) {
       }
       ((menu_t*)view_menu->data)->selected_index = -1;
       display_items();
-      ui_draw(ui);
    }
+   ui_redraw(ui);
 }
 
 void get_full_path(char *out, int index) {
@@ -870,9 +866,7 @@ void _start(int argc, char **args) {
 
    display_items();
    ui_add(ui, wo_menu);
-   ui_draw(ui);
-
-   redraw();
+   ui_redraw(ui);
 
    // setup rightclick menu
    ui->default_menu = create_menu(0, 0, 80, 90);
@@ -887,10 +881,7 @@ void _start(int argc, char **args) {
    resize_menu(ui->default_menu);
 
    // main program loop
-   while(1 == 1) {
-      //for(int i = 0; i < (int)width; i++)
-      //framebuffer[i] = 0;
-      //asm volatile("pause");
+   while(true) {
       yield();
    }
 

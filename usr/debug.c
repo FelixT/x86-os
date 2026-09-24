@@ -183,7 +183,7 @@ void browse_callback(char *path, int window, wo_t *wo) {
    menu_data->selected_index = -1;
    menu_data->offset = 0;
    load_elf(path);
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void search_callback(wo_t *input, int window) {
@@ -221,7 +221,7 @@ void search_callback(wo_t *input, int window) {
       menu_data->offset = menu_data->selected_index - menu_data->shown_items + 1;
       if(menu_data->offset < 0)
          menu_data->offset = 0;
-      ui_draw(dialog->ui);
+      ui_redraw(dialog->ui);
    }
 }
 
@@ -257,7 +257,7 @@ void _start(int argc, char **args) {
       search_callback(searchinput, -1);
    }
 
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 
    while(true) {
       yield();

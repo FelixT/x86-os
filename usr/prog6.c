@@ -66,7 +66,7 @@ void resize() {
    s = get_surface();
    ui->surface = &s;
    drawbg();
-   ui_draw(ui);
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -86,7 +86,7 @@ void toggle_menu(wo_t *wo, int window) {
    clear();
    drawbg();
    menu->visible = !menu->visible;
-   ui_draw(ui);
+   ui_redraw(ui);
 }
 
 int click_grid(wo_t *wo, int window, int row, int col) {
@@ -106,8 +106,7 @@ void scroll(int deltaY, int offsetY, int window) {
    (void)window;
    ui_scroll(ui, deltaY, offsetY);
    drawbg();
-   ui_draw(ui);
-   redraw();
+   ui_redraw(ui);
    end_subroutine();
 }
 
@@ -176,7 +175,7 @@ void _start() {
 
    // draw
    drawbg();
-   ui_draw(ui);
+   ui_redraw(ui);
 
    // setup rightclick menu
    ui->default_menu = create_menu(0, 0, 120, 75);

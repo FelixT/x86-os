@@ -49,7 +49,11 @@ cp o/font11.bin fs_root/font/11.fon
 cp o/font7.bin fs_root/font/7.fon
 cp o/font8.bin fs_root/font/8.fon
 
+if [ -n "$1" ]; then
+   bash make_hd.sh # if any arguments are provided, skip the QEMU/run step
+else
 bash make_hd.sh && bash make_run.sh
+fi
 
 # gdb:
 # set disassembly-flavor intel

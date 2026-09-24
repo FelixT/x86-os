@@ -7,6 +7,7 @@ typedef struct {
    uint32_t buffer;
    int width;
    int height;
+   int pitch; // pixels per row
 } surface_t;
 
 #endif

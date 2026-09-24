@@ -16,7 +16,7 @@ void api_return_framebuffer(registers_t *regs);
 void api_return_window_width(registers_t *regs);
 void api_return_window_height(registers_t *regs);
 void api_redraw_window(registers_t *regs);
-void api_redraw_pixel(registers_t *regs);
+void api_redraw_region(registers_t *regs);
 void api_end_task(registers_t *regs);
 void api_override_mouseclick(registers_t *regs);
 void api_override_draw(registers_t *regs);

@@ -18,8 +18,7 @@ dialog_t *dialog;
 void timer_callback() {
     //clear();
     bmp_draw((uint8_t*)image, x%400, y%250, (x%2)+1, true);
-    ui_draw(dialog->ui);
-    redraw();
+    ui_redraw(dialog->ui);
 
     queue_event(&timer_callback, 6, NULL);
 
@@ -66,7 +65,7 @@ void _start() {
     set_button_release(wo, &click_callback);
     ui_add(dialog->ui, wo);
 
-    ui_draw(dialog->ui);
+    ui_redraw(dialog->ui);
 
     // main program loop
    while(1 == 1) {

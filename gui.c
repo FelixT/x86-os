@@ -28,7 +28,7 @@ int cursor_oldy = 0;
 uint16_t *draw_buffer;
 
 static inline void set_framebuffer(int index, uint16_t colour) {
-   if(index < 0 || index >= (int)surface.width*(int)surface.height) {
+   if(index < 0 || index >= surface.pitch*surface.height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
       ((uint16_t*)surface.buffer)[index] = colour;
@@ -157,21 +157,22 @@ void gui_init(void) {
    font_letter = (int*)malloc(1);
 
    // reserve framebuffer memory so malloc can't assign it
-   memory_reserve(surface.buffer, (int)surface.width*(int)surface.height*2); // 16bpp
+   memory_reserve(surface.buffer, gui_get_framebuffer_size());
    
    //gui_clear(gui_bg);
    font_init();
    windowmgr_init();
 
-   debug_printf("Launched GUI with framebuffer at 0x%h\n", surface.buffer);
+   debug_printf("Launched GUI with %ix%i framebuffer at 0x%h\n", surface.width, surface.height, surface.buffer);
 
    events_add(1, &gui_init_meat, NULL, -1);
 }
 
 void gui_redrawall() {
    // draw to buffer
-   uint32_t framebuffer = surface.buffer;
+   surface_t screen = surface; // save old surface
    surface.buffer = (uint32_t)draw_buffer;
+   surface.pitch = surface.width; // tightly packed
 
    gui_clear(gui_bg);
    desktop_draw();
@@ -179,8 +180,14 @@ void gui_redrawall() {
    toolbar_draw();
 
    // copy to display
-   surface.buffer = framebuffer;
-   memcpy_fast((void*)surface.buffer, (void*)draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
+   surface = screen; // restore
+   uint16_t *fb = (uint16_t*)surface.buffer;
+   if(surface.pitch == surface.width) {
+      memcpy_fast(fb, draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
+   } else {
+      for(int y = 0; y < surface.height; y++)
+         memcpy_fast(&fb[y * surface.pitch], &draw_buffer[y * surface.width], sizeof(uint16_t) * surface.width);
+   }
 
    gui_cursor_shown = false;
    gui_cursor_save_bg();
@@ -273,7 +280,7 @@ void gui_cursor_save_bg() {
    for(int y = gui_mouse_y; y < gui_mouse_y + getFont()->height; y++) {
       for(int x = gui_mouse_x; x < gui_mouse_x + getFont()->width; x++) {
          if(x >= 0 && x < (int)surface.width && y >=0 && y < (int)surface.height)
-            cursor_buffer[(y-gui_mouse_y)*(getFont()->width)+(x-gui_mouse_x)] = terminal_buffer[y*(int)surface.width+x];
+            cursor_buffer[(y-gui_mouse_y)*(getFont()->width)+(x-gui_mouse_x)] = terminal_buffer[y*surface.pitch+x];
       }
    }
 
@@ -284,7 +291,7 @@ void gui_cursor_save_bg() {
 void gui_cursor_restore_bg() {
    for(int y = cursor_oldy; y < cursor_oldy + getFont()->height; y++) {
       for(int x = cursor_oldx; x < cursor_oldx + getFont()->width; x++) {
-         set_framebuffer(y*(int)surface.width+x, cursor_buffer[(y-cursor_oldy)*(getFont()->width)+(x-cursor_oldx)]);
+         set_framebuffer(y*surface.pitch+x, cursor_buffer[(y-cursor_oldy)*(getFont()->width)+(x-cursor_oldx)]);
       }
    }
    gui_cursor_shown = false;
@@ -391,7 +398,7 @@ uint16_t *gui_get_framebuffer() {
 }
 
 uint32_t gui_get_framebuffer_size() {
-   return surface.width*surface.height*2;
+   return surface.pitch*surface.height*2; // includes row padding
 }
 
 gui_window_t *gui_get_windows() {

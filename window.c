@@ -21,6 +21,7 @@ surface_t window_getsurface(int windowIndex) {
    surface_t surface;
    surface.width = window->width;
    surface.height = window->height - TITLEBAR_HEIGHT;
+   surface.pitch = window->width;
    surface.buffer = (uint32_t)window->framebuffer;
    return surface;
 }

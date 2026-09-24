@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "window_popup.h"
 #include "tasks.h"
+#include "cpu.h"
 
 extern void* isr_stub_table[];
 extern void* irq_stub_table[];
@@ -271,7 +272,7 @@ void software_handler(registers_t *regs) {
          api_override_drag(regs);
          break;
       case 37:
-         api_redraw_pixel(regs);
+         api_redraw_region(regs);
          break;
       case 38:
          api_override_release(regs);
@@ -579,7 +580,7 @@ void timer_handler(registers_t *regs) {
       //if(timer_i%1000)
       //   gui_showtimer(timer_i%10);
 
-      if(timer_i%17 == 0) { // ~40fps
+      if(timer_i%340 == 0) { // ~2fps auto redraw
          gui_draw(); // blocks kernel
       }
 
@@ -683,8 +684,7 @@ void show_endtask_dialog(int int_no, registers_t *regs, int task) {
 }
 
 bool page_fault_handler(registers_t *regs) {
-   uint32_t addr;
-   asm volatile("mov %%cr2, %0" : "=r" (addr));
+   uint32_t addr = read_cr2();
 
    extern int current_servicing_task;
 
@@ -760,6 +760,7 @@ bool page_fault_handler(registers_t *regs) {
    }
 
    debug_printf("\nHeap 0x%h - 0x%h\n", process->heap_start, process->heap_end);
+   debug_printf("Stack 0x%h - 0x%h\n", task->v_stack_start+0x1000, task->v_stack_start+TASK_STACK_SIZE);
 
    return false;
 }
@@ -858,8 +859,7 @@ void err_exception_handler(int int_no, registers_t *regs) {
    gui_drawrect(gui_rgb16(180, 0, 0), 120, 0, 8*8, 11);
    gui_writestrat(buffer, gui_rgb16(255, 200, 200), 122, 2);
 
-   uint32_t addr;
-   asm volatile("mov %%cr2, %0" : "=r" (addr));
+   uint32_t addr = read_cr2();
    if(kernel && (int_no != 14 || (addr >= KERNEL_START && addr < KERNEL_END))) {
       kernel_panic();
    } else {

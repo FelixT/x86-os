@@ -251,11 +251,11 @@ void term_cmd_help() {
    window_term_printf("  Kernel mode terminal. Built in commands are:\n\n");
    window_term_printf("  CLEAR, MOUSE, TASKS, LAUNCH path\n");
    window_term_printf("  PROG1, PROG2\n");
-   window_term_printf("  TEST, DESKTOP\n");
+   window_term_printf("  TEST, MTRR, DESKTOP\n");
    window_term_printf("  MEM <page>, DMPMEM addr <bytes>\n");
    window_term_printf("  BG colour, BGIMG path\n");
    window_term_printf("  PADDING size, REDRAWALL\n");
-   window_term_printf("  PCI, TASKI <task>\n");
+   window_term_printf("  PCI, TASKI <task>, CHANNELS\n");
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -502,6 +502,10 @@ void term_cmd_channels() {
    }
 }
 
+void term_cmd_mtrr() {
+   mtrr_print();
+}
+
 void term_cmd_default(char *command) {
    gui_drawchar('\'', 1);
    window_term_printf(command, 1);
@@ -556,6 +560,8 @@ void window_term_checkcmd(void *regs, void *window) {
       term_cmd_taski((char*)arg);
    else if(strequ(command, "CHANNELS"))
       term_cmd_channels();
+   else if(strequ(command, "MTRR"))
+      term_cmd_mtrr();
    else
       term_cmd_default((char*)command);
    

@@ -35,7 +35,7 @@ void task_show_info(int index) {
    int kb = task->no_allocated*0x1000/1000;
    snprintf(label_memory->label, sizeof(label_memory->label), "Kmalloc: %i pages (%i kb)\nHeap size: %i", task->no_allocated, kb, task->heap_end - task->heap_start);
 
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void task_click(wo_t *wo, int index, int window) {
@@ -78,7 +78,7 @@ void show_tasks() {
       add_menu_item(menu_wo, buffer, &task_click);
    }
    clear();
-   ui_draw(dialog->ui);
+   ui_redraw(dialog->ui);
 }
 
 void launch_task_return(char *out, int window) {

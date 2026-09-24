@@ -288,6 +288,7 @@ bool window_init(gui_window_t *window) {
    surface_t surface;
    surface.width = window->width;
    surface.height = window->height - TITLEBAR_HEIGHT;
+   surface.pitch = window->width;
    surface.buffer = (uint32_t)window->framebuffer;
    window->surface = surface;
 
@@ -462,13 +463,30 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
    int winH = window->height - TITLEBAR_HEIGHT;
 
    // clamp drawing to window content bounds
-   int maxY = offsetY + height;
    int maxX = offsetX + width;
-   if(maxY > winH) maxY = winH;
+   int maxY = offsetY + height;
+   if(offsetX < 0) offsetX = 0;
+   if(offsetY < 0) offsetY = 0;
    if(maxX > winW) maxX = winW;
+   if(maxY > winH) maxY = winH;
+   if(offsetX >= maxX || offsetY >= maxY) return;
+   width = maxX - offsetX;
+   height = maxY - offsetY;
 
    uint16_t *fb = gui_get_framebuffer();
    uint16_t *winfb = window->framebuffer;
+
+   extern uint16_t *draw_buffer;
+   // whether the cursor is shown and intersects the redrawn region
+   bool cursor_overlaps = gui_cursor_shown
+      && surface.buffer != (uint32_t)draw_buffer
+      && gui_mouse_x < window->x + offsetX + width
+      && gui_mouse_x + getFont()->width > window->x + offsetX
+      && gui_mouse_y < window->y + TITLEBAR_HEIGHT + offsetY + height
+      && gui_mouse_y + getFont()->height > window->y + TITLEBAR_HEIGHT + offsetY;
+
+   if(cursor_overlaps)
+      gui_cursor_restore_bg();
 
    bool occlude = false;
    for(int i = 0; i < 100 && render_order[i] != NULL; i++) {
@@ -490,7 +508,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
       // fast path: copy entire row
       for(int y = offsetY; y < maxY; y++) {
          int screenY = winY + y;
-         memcpy_fast(&fb[screenY * surface.width + winX], &winfb[y * winW], width * sizeof(uint16_t));
+         memcpy_fast(&fb[screenY * surface.pitch + winX], &winfb[y * winW], width * sizeof(uint16_t));
       }
    } else {
       // general case: copy pixel by pixel
@@ -517,7 +535,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
             if(occluded)
                continue;
 
-            int screenIndex = screenY * surface.width + screenX;
+            int screenIndex = screenY * surface.pitch + screenX;
             int winIndex = y * winW + x;
 
             fb[screenIndex] = winfb[winIndex];
@@ -525,16 +543,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
       }
    }
 
-   extern uint16_t *draw_buffer;
-   // redraw cursor if it disappeared - unless redrawing all
-   if(surface.buffer != (uint32_t)draw_buffer 
-   && width > getFont()->width 
-   && height > getFont()->height
-   && gui_mouse_x >= window->x + offsetX 
-   && gui_mouse_x + getFont()->width <= window->x + offsetX + width
-   && gui_mouse_y >= window->y + TITLEBAR_HEIGHT + offsetY 
-   && gui_mouse_y + getFont()->height <= window->y + TITLEBAR_HEIGHT + offsetY + height) {
-      gui_cursor_shown = false;
+   if(cursor_overlaps) {
       gui_cursor_save_bg();
       gui_cursor_draw();
    }
@@ -740,7 +749,7 @@ void toolbar_draw() {
       getWindow(i)->toolbar_pos = toolbarPos;
       toolbarPos++;
    }
-
+   windowobj_draw(app_button);
 }
 
 extern char scan_to_char(int scan_code, bool caps);
@@ -1254,7 +1263,6 @@ void windowmgr_draw() {
    }
 
    windowobj_draw(default_menu);
-   windowobj_draw(app_button);
 }
 
 void windowmgr_redrawall() {
@@ -1318,26 +1326,26 @@ void desktop_draw() {
       int32_t height = bmp_get_height(gui_bgimage);
       int x = (surface.width - width) / 2;
       int y = ((surface.height - TOOLBAR_HEIGHT) - height) / 2;
-      bmp_draw(gui_bgimage, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 0, 1);
+      bmp_draw(gui_bgimage, &surface,x, y, 0, 1);
    }
 
    int x = 10;
    int y = 10;
    int textw = x*2 + bmp_get_width(icon_files);
    int textx = (textw - font_width(strlen("FileMgr"))) / 2;
-   bmp_draw(icon_files, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
+   bmp_draw(icon_files, &surface,x, y, 1, 1);
    y += 6 + bmp_get_height(icon_files);
    draw_string(&surface, "FileMgr", 0, textx, y+1);
    draw_string(&surface, "FileMgr", 0xFFFF, textx, y);
    y += 14 + getFont()->height;
    textx = (textw - font_width(strlen("UsrTerm"))) / 2;
-   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
+   bmp_draw(icon_window, &surface,x, y, 1, 1);
    y += 6 + bmp_get_height(icon_window);
    draw_string(&surface, "UsrTerm", 0, textx, y+1);
    draw_string(&surface, "UsrTerm", 0xFFFF, textx, y);
    y += 14 + getFont()->height;
    textx = (textw - font_width(strlen("KTerm"))) / 2;
-   bmp_draw(icon_window, (uint16_t *)surface.buffer, surface.width, surface.height, x, y, 1, 1);
+   bmp_draw(icon_window, &surface,x, y, 1, 1);
    y += 6 + bmp_get_height(icon_window);
    draw_string(&surface, "KTerm", 0, textx, y+1);
    draw_string(&surface, "KTerm", 0xFFFF, textx, y);
@@ -1398,6 +1406,11 @@ void windowmgr_mousemove(void *regs, int x, int y) {
 
       int relX = x - selectedWindow->x;
       int relY = y - (selectedWindow->y + TITLEBAR_HEIGHT);
+
+      if(selectedWindow->dragged || selectedWindow->resized) {
+         cursor_resize = selectedWindow->resized;
+         return; // skip hover functionality
+      }
 
       if(relX > 0 && relX < selectedWindow->width
       && relY > 0 && relY < selectedWindow->height - TITLEBAR_HEIGHT) {
@@ -1528,6 +1541,7 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    window->surface.buffer = (uint32_t)window->framebuffer;
    window->surface.width = width;
    window->surface.height = height - TITLEBAR_HEIGHT;
+   window->surface.pitch = width;
 
    int scrollbarwidth = (window->scrollbar && window->scrollbar->visible) ? window->scrollbar->width : 0;
 

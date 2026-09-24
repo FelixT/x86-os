@@ -61,9 +61,17 @@ void ui_draw(ui_mgr_t *ui) {
    }
 }
 
+void ui_redraw_window(ui_mgr_t *ui) {
+   redraw_w(ui->window);
+}
+
+void ui_redraw_wo(ui_mgr_t *ui, wo_t *wo) {
+   redraw_region(wo->x, wo->y, wo->width, wo->height, ui->window);
+}
+
 void ui_redraw(ui_mgr_t *ui) {
    ui_draw(ui);
-   redraw_w(ui->window);
+   ui_redraw_window(ui);
 }
 
 bool hid_menu = false;
@@ -82,8 +90,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
       ui->shown_menu->visible = false;
       ui->shown_menu = NULL;
       clear_w(ui->window);
-      ui_draw(ui);
-      redraw_w(ui->window);
+      ui_redraw(ui);
       return menu_clicked;
    }
    hid_menu = false;
@@ -108,6 +115,9 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
             wo->click_func(wo, context, x - wo->x, y - wo->y);
          else if(wo->draw_func)
             wo->draw_func(wo, context);
+
+         if(wo->click_func || wo->draw_func)
+            ui_redraw_wo(ui, wo);
          break;
       }
    }
@@ -117,6 +127,9 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          focused->unfocus_func(focused, context);
       else if(focused->draw_func)
          focused->draw_func(focused, context);
+
+      if(focused->unfocus_func || focused->draw_func)
+         ui_redraw_wo(ui, focused);
    }
 
    return clicked;
@@ -141,10 +154,14 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
             wo->selected = true;
          }
          // call release func
-         if(wo->release_func)
+         if(wo->release_func) {
             wo->release_func(wo, context, x - wo->x, y - wo->y);
-         if(wo->focusable && !wo->release_func && wo->draw_func)
+            ui_redraw_wo(ui, wo);
+         } else if(wo->focusable && wo->draw_func) {
             wo->draw_func(wo, context);
+            ui_redraw_wo(ui, wo);
+         }
+            
          break;
       }
    }
@@ -162,6 +179,9 @@ void ui_keypress(ui_mgr_t *ui, uint16_t c) {
          wo->keypress_func(wo, c, ui->window);
       if(wo->draw_func)
          wo->draw_func(wo, context);
+
+      if(wo->keypress_func || wo->draw_func)
+         ui_redraw_wo(ui, wo);
    }
 }
 
@@ -175,6 +195,7 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
       } else {
          ui->shown_menu->hovering = false;
       }
+      ui_redraw_window(ui);
       return;
    }
 
@@ -193,15 +214,24 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
          wo->hovering = true;
          ui->hovered = wo;
 
-         if(wo->hover_func)
+         bool redraw = false;
+
+         if(wo->hover_func) {
             wo->hover_func(wo, context, x - wo->x, y - wo->y);
+            redraw = true;
+         }
          
          if(wo != hovered) {
-            if(wo->mousein_func)
+            if(wo->mousein_func) {
                wo->mousein_func(wo, context, x - wo->x, y - wo->y);
-            else if(wo->draw_func)
+               redraw = true;
+            } else if(wo->draw_func) {
                wo->draw_func(wo, context);
+               redraw = true;
+            }
          }
+
+         if(redraw) ui_redraw_wo(ui, wo);
          break; // can only hover one object at a time
       }
    }
@@ -210,8 +240,10 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
    if(hovered != ui->hovered && hovered && hovered->enabled && hovered->visible) {
       if(hovered->unhover_func) {
          hovered->unhover_func(hovered, context);
+         ui_redraw_wo(ui, hovered);
       } else if(hovered->draw_func) {
          hovered->draw_func(hovered, context);
+         ui_redraw_wo(ui, hovered);
       }
    }
 
@@ -224,7 +256,7 @@ void ui_rightclick(ui_mgr_t *ui, int x, int y) {
    if(menu->visible) {
       menu->visible = false;
       clear_w(ui->window);
-      ui_draw(ui);
+      ui_redraw(ui);
       return;
    }
    menu->visible = true;

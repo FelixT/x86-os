@@ -1,6 +1,9 @@
 #ifndef BMP_H
 #define BMP_H
 
+#include <stdbool.h>
+#include "surface_t.h"
+
 typedef struct {
    uint16_t identifier; // 'BM'
    uint32_t size; // bytes
@@ -29,7 +32,7 @@ typedef struct {
    uint8_t zero;
 } __attribute__((packed)) bmp_colour_t;
 
-void bmp_draw(uint8_t *bmp, uint16_t* framebuffer, int screenWidth, int screenHeight, int x, int y, bool whiteIsTransparent, int scale);
+void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransparent, int scale);
 uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 int32_t bmp_get_width(uint8_t *bmp);
 int32_t bmp_get_height(uint8_t *bmp);

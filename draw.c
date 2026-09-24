@@ -5,7 +5,7 @@
 int *font_letter;
 
 void setpixel_safeb(surface_t *surface, int index, int colour, int *buffer, int count, bool restore) {
-   if(index < 0 || index >= surface->width*surface->height) {
+   if(index < 0 || index >= surface->pitch*surface->height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
       if(buffer != NULL) {
@@ -22,14 +22,14 @@ void setpixelcoord_safe(surface_t *surface, int x, int y, int colour) {
    if(x < 0 || y < 0 || x >= surface->width || y >= surface->height) {
       //window_writestr("Attempted to write outside framebuffer bounds\n", 0, 0);
    } else {
-      ((uint16_t*)surface->buffer)[x+y*surface->width] = colour;
+      ((uint16_t*)surface->buffer)[x+y*surface->pitch] = colour;
    }
 }
 
 void draw_rect(surface_t *surface, uint16_t colour, int x, int y, int width, int height) {
    for(int yi = y; yi < y+height; yi++)
       for(int xi = x; xi < x+width; xi++)
-         setpixel_safe(surface, yi*(int)surface->width+xi, colour);
+         setpixel_safe(surface, yi*surface->pitch+xi, colour);
 }
 
 void draw_rect_gradient(surface_t *surface, uint16_t color1, uint16_t color2, int x, int y, int width, int height, int direction) {
@@ -51,23 +51,23 @@ void draw_rect_gradient(surface_t *surface, uint16_t color1, uint16_t color2, in
          int g = g1 + (((g2 - g1) * factor) >> 8);
          int b = b1 + (((b2 - b1) * factor) >> 8);
          uint16_t gradient_color = (r << 11) | (g << 5) | b;
-         setpixel_safe(surface, yi * (int)surface->width + xi, gradient_color);
+         setpixel_safe(surface, yi * surface->pitch + xi, gradient_color);
       }
    }
 }
 
 void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height) {
    for(int xi = x; xi < x+width; xi++) // top
-      setpixel_safe(surface, y*(int)surface->width+xi, colour);
+      setpixel_safe(surface, y*surface->pitch+xi, colour);
 
    for(int xi = x; xi < x+width; xi++) // bottom
-      setpixel_safe(surface, (y+height-1)*(int)surface->width+xi, colour);
+      setpixel_safe(surface, (y+height-1)*surface->pitch+xi, colour);
 
    for(int yi = y; yi < y+height; yi++) // left
-      setpixel_safe(surface, (yi)*(int)surface->width+x, colour);
+      setpixel_safe(surface, (yi)*surface->pitch+x, colour);
 
    for(int yi = y; yi < y+height; yi++) // right
-      setpixel_safe(surface, (yi)*(int)surface->width+x+width-1, colour);
+      setpixel_safe(surface, (yi)*surface->pitch+x+width-1, colour);
 }
 
 void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height, int *buffer, bool restore) {
@@ -75,28 +75,28 @@ void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int widt
 
    for(int xi = x; xi < x+width; xi++) // top
       if((xi%2) == 0)
-         setpixel_safeb(surface, y*(int)surface->width+xi, colour, buffer, count++, restore);
+         setpixel_safeb(surface, y*surface->pitch+xi, colour, buffer, count++, restore);
 
    for(int xi = x+1; xi < x+width-1; xi++) // bottom
       if((xi%2) == 0)
-         setpixel_safeb(surface, (y+height-1)*(int)surface->width+xi, colour, buffer, count++, restore);
+         setpixel_safeb(surface, (y+height-1)*surface->pitch+xi, colour, buffer, count++, restore);
 
    for(int yi = y+1; yi < y+height; yi++) // left
       if((yi%2) == 0)
-         setpixel_safeb(surface, (yi)*(int)surface->width+x, colour, buffer, count++, restore);
+         setpixel_safeb(surface, (yi)*surface->pitch+x, colour, buffer, count++, restore);
 
    for(int yi = y+1; yi < y+height; yi++) // right
       if((yi%2) == 0)
-         setpixel_safeb(surface, (yi)*(int)surface->width+x+width-1, colour, buffer, count++, restore);
+         setpixel_safeb(surface, (yi)*surface->pitch+x+width-1, colour, buffer, count++, restore);
 }
 
 void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length) {
    if(vertical) {
       for(int yi = y; yi < y+length; yi++)
-         setpixel_safe(surface, yi*(int)surface->width+x, colour);
+         setpixel_safe(surface, yi*surface->pitch+x, colour);
    } else {
       for(int xi = x; xi < x+length; xi++)
-         setpixel_safe(surface, y*(int)surface->width+xi, colour);
+         setpixel_safe(surface, y*surface->pitch+xi, colour);
    }
 }
 
@@ -107,7 +107,7 @@ void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y) {
    for(int yi = y; yi < y+getFont()->height; yi++) {
       for(int xi = x; xi < x+getFont()->width; xi++) {
          if(font_letter[i] == 1)
-            setpixel_safe(surface, yi*(int)surface->width+xi, colour);
+            setpixel_safe(surface, yi*surface->pitch+xi, colour);
          i++;
       }
    }

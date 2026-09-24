@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "terminal.h"
+#include "io.h"
 
 size_t terminal_index;
 
@@ -18,10 +19,6 @@ uint16_t colour(uint8_t fg, uint8_t bg) {
 
 uint16_t entry(char c, uint8_t colour) {
    return (uint16_t) c | (uint16_t) colour << 8;
-}
-
-static inline void outb(uint16_t port, uint8_t val) {
-   asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
 void terminal_setcursor(int offset) {
