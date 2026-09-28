@@ -162,8 +162,11 @@ void api_write_number_at(registers_t *regs) {
 }
 
 void api_yield(registers_t *regs) {
-   task_execute_queued_subroutine(regs, get_current_task()); // launch queued routine if any
-   switch_task(regs);
+   task_state_t *task = get_current_task_state();
+   if(!task_execute_queued_subroutine(regs, task->task_id)) { // launch queued routine if any
+      task->in_syscall = false; // set early as switch_task may not return
+      switch_task(regs, true);
+   }
 }
 
 // potentially broken
@@ -435,7 +438,6 @@ void api_launch_task(registers_t *regs) {
    }
 
    // copy args
-   // todo: handle malloc failures
    char **copied_args = NULL;
    if(argc > 0 && args != NULL) {
       if(!api_validate_mem(args, argc*sizeof(char*), false)) {
@@ -517,7 +519,7 @@ void api_launch_task(registers_t *regs) {
       task_resume(task);
    if(paused) {
       if(get_current_task() == new_task)
-         switch_task(regs); // yield
+         switch_task(regs, false); // yield
    }
    regs->ebx = new_task;
 }
@@ -721,7 +723,6 @@ void api_read_stdin_callback(void *regs, char *buffer) {
       task_resume(task);
       r->ebx = strlen(buffer);
       switch_to_task(task->task_id, regs); // wake
-      task_execute_queued_subroutine(regs, task->task_id); // check for queued events while task was paused
    } else {
       debug_printf("Couldn't find window\n");
       r->ebx = -1;
@@ -733,7 +734,6 @@ void api_read_fd_callback(void *regs, int task, int size) {
    task_resume(&gettasks()[task]);
    switch_to_task(task, r); // wake
    r->ebx = size;
-   task_execute_queued_subroutine(r, task); // check for queued events while task was paused
 }
 
 void api_read(registers_t *regs) {
@@ -793,7 +793,7 @@ void api_read(registers_t *regs) {
          file->pipe->read_size = maxsize;
       }
       task_pause(task, PAUSE_READ);
-      switch_task(regs); // yield
+      switch_task(regs, false); // yield
    }
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
       int writer_task = file->pipe->write_waiting_task;
@@ -878,7 +878,7 @@ void api_write(registers_t *regs) {
       file->pipe->write_buf = buffer;
       file->pipe->write_size = maxsize;
       task_pause(task, PAUSE_READ);
-      switch_task(regs); // yield
+      switch_task(regs, false); // yield
    }
 
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
@@ -1450,7 +1450,6 @@ void api_sleep_callback(void *regs, void *msg) {
    if(!task->enabled || task->task_uid != sleep_msg.task_uid) return;
    task_resume(task);
    switch_to_task(task->task_id, regs); // wake
-   task_execute_queued_subroutine(regs, task->task_id); // check for queued events while task was paused
 }
 
 void api_sleep(registers_t *regs) {
@@ -1464,7 +1463,7 @@ void api_sleep(registers_t *regs) {
    msg->task_id = task->task_id;
    msg->task_uid = task->task_uid;
    events_add(ticks, &api_sleep_callback, msg, -1);
-   switch_task(regs); // yield
+   switch_task(regs, false); // yield
 }
 
 void api_get_timer_tick(registers_t *regs) {
@@ -1608,7 +1607,7 @@ void api_futex_wait(registers_t *regs) {
    if(result == FUTEX_WAIT_BLOCK) {
       task_pause(get_current_task_state(), PAUSE_FUTEX);
       regs->ebx = 0;
-      switch_task(regs);
+      switch_task(regs, false);
    }
    if(result == FUTEX_WAIT_FAIL) {
       debug_printf("futex_wait: failed to read futex value\n");
@@ -1814,7 +1813,6 @@ void api_escalate(registers_t *regs) {
    // used for trusted drivers as this gives access to:
    // api_pci_map, api_pci_exists, api_dma, api_dma_free
    // OUT: ebx - bool success
-   debug_printf("api_escalate\n");
    task_state_t *task = get_current_task_state();
    if(task->process->privileged) {
       debug_printf("already privileged\n");
@@ -1839,7 +1837,7 @@ void api_escalate(registers_t *regs) {
    window_draw_outline(getWindow(popup), false);
 
    task_pause(task, PAUSE_ESCALATE);
-   switch_task(regs); // yield
+   switch_task(regs, false); // yield
 }
 
 void api_create_port(registers_t *regs) {
@@ -1895,7 +1893,7 @@ void api_msg_read(registers_t *regs) {
 
    uint32_t channel_flags;
    uint32_t msg_flags;
-   int r = port_receive(regs, task, port_uid, channel_uid, buffer, size, &channel_flags, &msg_flags);
+   int r = port_receive(task, port_uid, channel_uid, buffer, size, &channel_flags, &msg_flags);
    registers_t *write_regs = api_write_regs(regs, task);
    write_regs->ebx = r;
    write_regs->ecx = 0;
@@ -1944,7 +1942,7 @@ void api_snooze(registers_t *regs) {
       return;
    }
    task_pause(task, PAUSE_SNOOZE);
-   switch_task(regs); // yield
+   switch_task(regs, false); // yield
 }
 
 void api_wait_on_receive(registers_t *regs) {
@@ -1958,7 +1956,7 @@ void api_wait_on_receive(registers_t *regs) {
    bool success = msg_wait_on_receive(task, port_uid, channel_uid);
    regs->ebx = success;
    if(success)
-      switch_task(regs); // yield
+      switch_task(regs, false); // yield
 }
 
 void api_port_close(registers_t *regs) {

@@ -1,5 +1,5 @@
 export GCC="i686-elf-gcc"
-FLAGS="-ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra"
+FLAGS="-ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra -fno-pic -fno-PIC -no-pie"
 
 $GCC -O2 $FLAGS -c usr/lib/ui/ui_mgr.c -o o/lib/ui_mgr.o
 $GCC -O2 $FLAGS -c usr/lib/ui/wo.c -o o/lib/wo.o

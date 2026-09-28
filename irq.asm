@@ -5,7 +5,6 @@
 
 %macro isr_err_stub 1
 isr_stub_%+%1:
-   cli ; disable interrupts
    pusha
 
    mov ax, ds ; save data segment in lower 16 bits of eax
@@ -33,7 +32,6 @@ isr_stub_%+%1:
 
 %macro isr_no_err_stub 1
 isr_stub_%+%1:
-   cli ; disable interrupts
    push dword 0 ; dummy err code
    pusha
 
@@ -62,7 +60,6 @@ isr_stub_%+%1:
 
 %macro irq_stub 1
 irq_stub_%+%1:
-   cli ; disable interrupts
    push dword 0 ; dummy err code
    pusha
 
@@ -158,3 +155,55 @@ irq_stub_table:
 %assign i i+1 
 %endrep
 
+; return to user mode from kernel
+global yield_to_user ; yield_to_user(*regs, *old_esp)
+yield_to_user:
+   mov eax, [esp+4] ; regs
+   mov edx, [esp+8] ; old_esp
+
+   ; save registers required for cdecl to old tasks kstack
+   push ebp
+   push edi
+   push esi
+   push ebx
+   mov [edx], esp
+
+   mov esp, eax ; esp points at start of *regs
+
+   pop eax ; restore data segment
+   mov ds, ax
+   mov es, ax
+   mov fs, ax
+   mov gs, ax
+
+   popa
+   add esp, 4 ; extra pop for err code
+   iret
+
+global yield_to_kernel ; yield_to_kernel(new_esp, *old_esp)
+yield_to_kernel:
+   mov eax, [esp+4] ; new_esp
+   mov edx, [esp+8] ; old_esp
+   ; save registers required for cdecl to old tasks kstack
+   push ebp
+   push edi
+   push esi
+   push ebx
+   mov [edx], esp
+   mov esp, eax
+   ; restore registers from new tasks kstack
+   pop ebx
+   pop esi
+   pop edi
+   pop ebp
+   ret ; returns to kernel_yield as new task
+
+global resume_kernel ; resume_kernel(new_esp)
+resume_kernel:
+   mov esp, [esp+4]
+   ; restore registers from new tasks kstack
+   pop ebx
+   pop esi
+   pop edi
+   pop ebp
+   ret

@@ -115,6 +115,8 @@ void keypress(int c, int window) {
 
 void mouseout(int window) {
    (void)window;
+   if(!ui)
+      end_subroutine();
    ui_hover(ui, -1, -1);
    end_subroutine();
 }

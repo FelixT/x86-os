@@ -79,7 +79,7 @@ typedef struct msg_port_t {
 uint32_t create_port(task_state_t *task, char *name, bool client_reserves);
 uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid);
 int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t length, uint32_t flags);
-int port_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags);
+int port_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags);
 bool msg_wait_on_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
 bool close_port(registers_t *regs, task_state_t *task, uint32_t port_uid);
 bool port_disconnect(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid);

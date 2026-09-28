@@ -62,6 +62,12 @@ static inline uint32_t read_cr2() {
    return addr;
 }
 
+static inline uint32_t read_esp() {
+   uint32_t addr;
+   asm volatile("mov %%esp, %0" : "=r" (addr));
+   return addr;
+}
+
 // cpuid - get cpu info
 // https://en.wikipedia.org/wiki/CPUID
 // https://www.felixcloutier.com/x86/cpuid

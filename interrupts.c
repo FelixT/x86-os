@@ -17,7 +17,6 @@ extern void* irq_stub_table[];
 
 extern int videomode;
 extern bool switching; // preemptive multitasking enabled
-bool switching_paused = false;
 
 extern void mouse_update(void *regs, int relX, int relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
@@ -76,7 +75,7 @@ void idt_init() {
 
    // exceptions
    for(uint8_t vector = 0; vector < 32; vector++)
-      idt_set_descriptor(vector, isr_stub_table[vector], 0x8F);
+      idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
 
    for(uint8_t vector = 32; vector < 49; vector++)
       idt_set_descriptor(vector, irq_stub_table[vector-32], 0x8E);
@@ -573,6 +572,9 @@ void timer_set_hz(int hz) {
 }
 
 void timer_handler(registers_t *regs) {
+   timer_i++;
+   events_check(regs);
+
 
    if(videomode == 0) {
       terminal_writenumat(timer_i%10, 79);
@@ -586,18 +588,11 @@ void timer_handler(registers_t *regs) {
 
       if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
          // don't preempt when interrupting kernel
-         /*if(switching_paused) {
-            if(switching) window_writestr(" SP", 0, 0);
-         } else {
-            */switch_task(regs);
-         //}
+
+         // note: immediately swaps if new task was parked in kernel
+         switch_task(regs, true);
       }
    }
-
-   events_check(regs);
-
-   timer_i++;
-
 }
 
 uint32_t get_timer_tick() {
@@ -768,6 +763,15 @@ bool page_fault_handler(registers_t *regs) {
 void exception_handler(int int_no, registers_t *regs) {
    cur_regs = regs;
 
+   // send end of command code 0x20 to pic
+   // safe to do this here as interrupts are disabled
+   if(int_no >= 32 && int_no < 48) {
+      if(int_no >= 40) {
+         outb(0xA0, 0x20); // slave command
+      }
+      outb(0x20, 0x20); // master command
+   }
+
    if(int_no >= 32) {
       // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
 
@@ -786,16 +790,10 @@ void exception_handler(int int_no, registers_t *regs) {
       } else {
          irqs[irq_no](regs);
       }
-   }
 
-   // send end of command code 0x20 to pic
-   if(int_no >= 8) {
-      if(int_no >= 40) {
-         outb(0xA0, 0x20); // slave command
-      }
-      outb(0x20, 0x20); // master command
+      if((regs->cs & 3) && get_current_task() >= 0)
+         task_execute_queued_subroutine(regs, get_current_task());
    }
-
 }
 
 __attribute__((noreturn)) void kernel_panic(void) {
@@ -821,7 +819,6 @@ __attribute__((noreturn)) void kernel_panic(void) {
 
 void err_exception_handler(int int_no, registers_t *regs) {
    cur_regs = regs;
-   //switching_paused = true;
 
    uint32_t cpl = regs->cs & 0x3;
    bool kernel = cpl == 0;
@@ -838,7 +835,6 @@ void err_exception_handler(int int_no, registers_t *regs) {
 
    if(int_no == 14) {
       if(page_fault_handler(regs)) {
-         //switching_paused = false;
          return; // demand paging
       }
    }
@@ -887,8 +883,8 @@ void err_exception_handler(int int_no, registers_t *regs) {
       show_endtask_dialog(int_no, regs, task); // + pauses task
    }
 
-   //switching_paused = false;
-
+   if((regs->cs & 3) && get_current_task() >= 0)
+      task_execute_queued_subroutine(regs, get_current_task());
 }
 
 registers_t *get_regs() { // debugging only

@@ -6,6 +6,7 @@
 #include "fs.h"
 #include "shared.h"
 #include "msg.h"
+#include "cpu.h"
 
 task_state_t *tasks;
 int current_task = -1;
@@ -100,6 +101,7 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].msg_func = NULL;
    tasks[index].msg_channel_count = 0;
    tasks[index].msg_notify_pending = false;
+   tasks[index].kernel_esp = 0;
    
    tasks[index].registers.eip = entry;
    tasks[index].process->no_threads++;
@@ -236,7 +238,7 @@ void pause_task(int index, registers_t *regs) {
    task_pause(&tasks[index], PAUSE_CRASH);
    tasks[index].crashed = true;
    if(index == get_current_task() || !task_exists())
-      if(regs != NULL) switch_task(regs);
+      if(regs != NULL) switch_task(regs, false);
 }
 
 void task_reset_windows(int task) {
@@ -309,6 +311,11 @@ void end_task(int index, registers_t *regs) {
 
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
+   if(task->kernel_esp) {
+      debug_printf("Warning: task was parked in kernel\n");
+      // todo: wait to finish first (ie kill pending flag) or cleanup
+   }
+
    if(task->in_routine) {
       debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : ""), task->routine_name);
       if(strequ(task->routine_name, "checkcmd"))
@@ -320,7 +327,7 @@ void end_task(int index, registers_t *regs) {
 
    task->enabled = false;
    if(regs != NULL && (index == get_current_task() || !task_exists()))
-      switch_task(regs); // swap page dir before freeing
+      switch_task(regs, false); // swap page dir before freeing
 
    // free channels
    msg_cleanup_task(task);
@@ -496,30 +503,45 @@ void tasks_init(registers_t *regs) {
    switching = true;
 }
 
+static inline bool task_resumable(task_state_t *task, bool resume_kernel) {
+   return task->enabled && !task->paused && (resume_kernel || !task->kernel_esp);
+}
+
+// returns -1 for none available
+int next_task(bool resume_kernel) {
+   // find next enabled task (round robin)
+   int task = current_task;
+   do {
+      task++;
+      task%=TOTAL_TASKS;
+
+      if(task == current_task && !task_resumable(&tasks[task], resume_kernel)) {
+         // no tasks
+         return -1;
+      }
+   } while(!task_resumable(&tasks[task], resume_kernel));
+   return task;
+}
+
 extern tss_t tss_start;
-void switch_task(registers_t *regs) {
+extern void resume_kernel(uint32_t esp);
+
+void switch_task(registers_t *regs, bool resume) {
    if(!switching)
       return;
 
    int old_task = current_task;
-   bool relaunched_idle = false;
 
-   // find next enabled task (round robin)
-   do {
-      current_task++;
-      current_task%=TOTAL_TASKS;
+   current_task = next_task(resume);
+   if(current_task == -1) {
+      // no tasks, launch idle process
+      debug_printf("No tasks found\n");
+      // save registers
+      tasks[old_task].registers = *regs;
+      tasks_init(regs);
+      old_task = current_task; // launch_task already swapped regs/pagedir/esp0
+   }
 
-      if(current_task == old_task && (!tasks[current_task].enabled || tasks[current_task].paused)) {
-         // no tasks, launch idle process
-         debug_printf("No tasks found\n");
-         // save registers
-         tasks[old_task].registers = *regs;
-         tasks_init(regs);
-         relaunched_idle = true;
-         break;
-      }
-   } while(!tasks[current_task].enabled || tasks[current_task].paused);
-   
    task_state_t *task = get_current_task_state();
    if(task->process->page_dir != page_get_current())
       swap_pagedir(task->process->page_dir);
@@ -534,8 +556,12 @@ void switch_task(registers_t *regs) {
       *regs = tasks[current_task].registers;
    }
 
-   if(!relaunched_idle && !task->in_routine && task->process->event_queue_size > 0)
-      task_execute_queued_subroutine(regs, current_task); // execute events from when task was paused
+   if(tasks[current_task].kernel_esp) {
+      uint32_t esp = tasks[current_task].kernel_esp;
+      tasks[current_task].kernel_esp = 0;
+      resume_kernel(esp);
+      return; // never hit
+   }
 }
 
 bool switch_to_task(int index, registers_t *regs) {
@@ -551,6 +577,10 @@ bool switch_to_task(int index, registers_t *regs) {
    }
    if(tasks[index].paused) {
       debug_printf("Task switch failed: task %i is paused\n", index);
+      return false;
+   }
+   if(tasks[index].kernel_esp) {
+      debug_printf("Task switch failed: task %i is in kernel\n", index);
       return false;
    }
 
@@ -573,6 +603,56 @@ bool switch_to_task(int index, registers_t *regs) {
    }
 
    return true;
+}
+
+extern void yield_to_user(registers_t *regs, uint32_t *old_esp);
+extern void yield_to_kernel(uint32_t esp, uint32_t *old_esp);
+
+void kernel_yield() {
+   task_state_t *cur = get_current_task_state();
+   int next_index = next_task(true);
+   if(next_index == -1 || next_index == cur->task_id) return;
+
+   task_state_t *next = &tasks[next_index];
+
+   current_task = next_index;
+   tss_start.esp0 = next->kernel_stack_top;
+   
+   if(next->process->page_dir != page_get_current())
+      swap_pagedir(next->process->page_dir);
+
+   
+   if(!next->kernel_esp) {
+      // run any routines queued while task was parked
+      task_execute_queued_subroutine(&next->registers, next_index);
+
+      // copy next tasks registers into stack
+      registers_t *frame = (registers_t*)(next->kernel_stack_top - sizeof(registers_t));
+      *frame = next->registers;
+      // iret into it immediately
+      yield_to_user(frame, &cur->kernel_esp);
+   } else {
+      uint32_t esp = next->kernel_esp;
+      next->kernel_esp = 0;
+      yield_to_kernel(esp, &cur->kernel_esp);
+   }
+}
+
+void kernel_yield_if_blocking() {
+   if(!switching || current_task < 0 || !tasks[current_task].in_syscall)
+      return;
+   // sanity check current kstack matches current task
+   uint32_t esp = read_esp();
+   uint32_t top = tasks[current_task].kernel_stack_top;
+   if(esp <= top - KSTACK_SIZE || esp > top)
+      return;
+   
+   // check for pending interrupt
+   outb(0x20, 0x0A); // read pic irr
+   if(!(inb(0x20) & 1))
+      return;
+
+   kernel_yield();
 }
 
 task_state_t *gettasks() {
@@ -804,7 +884,7 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
    
    task_unsnooze(task);
 
-   if(task->paused || task->in_routine) {
+   if(task->paused || task->in_routine || task->kernel_esp) {
       return task_queue_subroutine(task, name, addr, args, argc);
    }
 
@@ -854,7 +934,7 @@ void task_subroutine_end(registers_t *regs) {
       setSelectedWindowIndex(tasks[current_task].routine_return_window);
 
    if(tasks[current_task].paused) {
-      switch_task(regs); // yield
+      switch_task(regs, false); // yield
    }
 }
 

@@ -475,7 +475,7 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint8_
       channel->client_stored_write_buf = send_buf;
       channel->client_stored_write_size = send_len;
       task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
-      switch_task(regs); // yield
+      switch_task(regs, false); // yield
    }
 
    return 0;
@@ -531,7 +531,7 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint8_
       return MSG_ERR_LIMIT;
    }
    task_pause(task, PAUSE_MSG_RECEIVE);
-   switch_task(regs); // yield
+   switch_task(regs, false); // yield
 
    return 0;
 }
@@ -619,7 +619,7 @@ bool msg_wait_on_receive(task_state_t *task, uint32_t port_uid, uint32_t channel
    return true;
 }
 
-int port_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags) {
+int port_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags) {
    msg_port_t *port = find_port_by_uid(port_uid);
    if(!port) {
       debug_printf("port_receive: couldn't find port %u\n", port_uid);
@@ -681,18 +681,14 @@ int port_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint3
    // see if we've unblocked the other side by reading
    if(server && channel->client_blocked) {
       task_state_t *unpause_task = &gettasks()[channel->client_taskid];
-      if(unpause_task->enabled && unpause_task->task_uid == channel->client_taskuid) {
+      if(unpause_task->enabled && unpause_task->task_uid == channel->client_taskuid)
          task_resume(unpause_task);
-         task_execute_queued_subroutine(regs, unpause_task->task_id);
-      }
       channel->client_blocked = false;
    }
    if(!server && channel->server_blocked) {
       task_state_t *unpause_task = &gettasks()[channel->server_taskid];
-      if(unpause_task->enabled && unpause_task->task_uid == channel->server_taskuid) {
+      if(unpause_task->enabled && unpause_task->task_uid == channel->server_taskuid)
          task_resume(unpause_task);
-         task_execute_queued_subroutine(regs, unpause_task->task_id);
-      }
       channel->server_blocked = false;
    }
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export GCC="i686-elf-gcc"
-export FLAGS="-ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra"
+export FLAGS="-ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -Wextra -fno-pic -fno-PIC -no-pie"
 
 # userland programs
 

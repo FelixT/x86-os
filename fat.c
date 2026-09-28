@@ -1238,7 +1238,7 @@ bool fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset,
 }
 
 // reads file contents synchronously, used by kernel
-// usermode uses chunker version above
+// usermode uses chunked version above
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    if(!fat_valid_cluster(clusterNo)) {
       debug_printf("fat_read_file: bad chain head %u\n", clusterNo);
@@ -1297,14 +1297,11 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
       free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
       if(done) break;
+      kernel_yield_if_blocking(); // todo: locking across fs code
 
       // check if theres more clusters to read
       uint16_t tableVal = ((uint16_t*)fat_table)[c];
-      if(tableVal >= 0xFFF8) {
-         // no more clusters in chain
-         break;
-      } else if(tableVal == 0xFFF7) {
-         // bad cluster
+      if(!fat_valid_cluster(tableVal)) {
          break;
       } else { 
          c = tableVal; // table value is the next cluster

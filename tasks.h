@@ -105,6 +105,7 @@ typedef struct task_state_t {
    uint32_t stack_base; // phys address of stack allocation (mapped above the guard to v_stack_start+0x1000)
    uint32_t v_stack_start; // vaddr
    uint32_t kernel_stack_top; // phys address (identity mapped)
+   uint32_t kernel_esp; // kernel stack pointer (0 if not parked in kernel)
    registers_t registers;
    registers_t routine_return_regs;
    int routine_return_window; // switch to this window after routine, potentially unneeded
@@ -132,13 +133,15 @@ void free_launch_args(char **args, int argc);
 void end_task(int index, registers_t *regs);
 void tasks_alloc();
 void tasks_init(registers_t *regs);
-void switch_task(registers_t *regs);
+void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
 bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus);
 int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy);
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
+void kernel_yield();
+void kernel_yield_if_blocking();
 
 task_state_t *gettasks();
 
