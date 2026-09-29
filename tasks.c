@@ -6,6 +6,7 @@
 #include "fs.h"
 #include "shared.h"
 #include "msg.h"
+#include "ksync.h"
 #include "cpu.h"
 
 task_state_t *tasks;
@@ -101,6 +102,9 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].msg_func = NULL;
    tasks[index].msg_channel_count = 0;
    tasks[index].msg_notify_pending = false;
+   tasks[index].mutex = NULL;
+   tasks[index].mutex_next_waiter = NULL;
+   tasks[index].owned_mutexes = NULL;
    tasks[index].kernel_esp = 0;
    
    tasks[index].registers.eip = entry;
@@ -331,6 +335,9 @@ void end_task(int index, registers_t *regs) {
 
    // free channels
    msg_cleanup_task(task);
+
+   // release held mutexes, remove task from any waiter queues
+   ksync_cleanup_task(task);
 
    if(task->process->threads[0] == task) {
       // main thread, terminate entire process
@@ -608,10 +615,10 @@ bool switch_to_task(int index, registers_t *regs) {
 extern void yield_to_user(registers_t *regs, uint32_t *old_esp);
 extern void yield_to_kernel(uint32_t esp, uint32_t *old_esp);
 
-void kernel_yield() {
+bool kernel_yield() {
    task_state_t *cur = get_current_task_state();
    int next_index = next_task(true);
-   if(next_index == -1 || next_index == cur->task_id) return;
+   if(next_index == -1 || next_index == cur->task_id) return false;
 
    task_state_t *next = &tasks[next_index];
 
@@ -620,7 +627,6 @@ void kernel_yield() {
    
    if(next->process->page_dir != page_get_current())
       swap_pagedir(next->process->page_dir);
-
    
    if(!next->kernel_esp) {
       // run any routines queued while task was parked
@@ -635,6 +641,15 @@ void kernel_yield() {
       uint32_t esp = next->kernel_esp;
       next->kernel_esp = 0;
       yield_to_kernel(esp, &cur->kernel_esp);
+   }
+
+   return true;
+}
+
+void kernel_block() {
+   if(!kernel_yield()) {
+      debug_printf("kernel_block failed\n"); // i.e. no other tasks available
+      kernel_panic();
    }
 }
 

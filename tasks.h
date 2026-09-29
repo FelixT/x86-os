@@ -49,7 +49,8 @@ typedef enum {
    PAUSE_MSG_WRITE, // msg_wait_on_receive - wait on peer read
    PAUSE_CRASH, // frozen after a crash - nothing resumes
    PAUSE_MSG_CALL, // waiting after call e.g. client waiting for reply
-   PAUSE_MSG_RECEIVE // server waiting for call from client
+   PAUSE_MSG_RECEIVE, // server waiting for call from client
+   PAUSE_KSYNC // waiting on mutex
 } task_pause_reason_t;
 
 #define PROCESS_MAX_FDS 64
@@ -121,6 +122,11 @@ typedef struct task_state_t {
    int msg_channel_count;
    bool msg_notify_pending; // msg event callback was dropped, requeue when slot opens
 
+   // sync info
+   struct kmutex_t *mutex; // mutex this task is waiting on
+   struct task_state_t *mutex_next_waiter; // next task in the mutex's waiters queue
+   struct kmutex_t *owned_mutexes; // linked list of mutexes held by this task
+
    process_t *process; // parent process
 } task_state_t;
 
@@ -140,7 +146,8 @@ bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
 int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy);
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
-void kernel_yield();
+bool kernel_yield();
+void kernel_block();
 void kernel_yield_if_blocking();
 
 task_state_t *gettasks();

@@ -288,6 +288,8 @@ void term_cmd_tasks() {
             window_term_printf(" <routine %s>", tasks[i].routine_name);
          if(tasks[i].process->privileged)
             window_term_printf(" privileged");
+         if(tasks[i].kernel_esp)
+            window_term_printf(" parked");
          if(tasks[i].paused)
             window_term_printf(" paused code %u", tasks[i].pause_reason);
          if(tasks[i].process->threads[0] == &tasks[i]) {
