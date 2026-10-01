@@ -3,83 +3,153 @@
 #include "memory.h"
 #include "windowmgr.h"
 #include "window.h"
+#include "ksync.h"
 
-// interface for interacting with fat16 fs and terminal as files from usermode
+// interface for interacting with fat16 fs and terminal as files
 
-fs_file_t *fs_open(char *path, int flags) {
-   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
-      debug_printf("FS: invalid file path\n");
-      return NULL;
-   }
-   fs_file_t *file = (fs_file_t*)malloc(sizeof(fs_file_t));
-   fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
-   file->active = true;
-   file->data = data;
-   file->pipe = NULL;
-   file->current_pos = 0;
-   file->request = NULL;
-   file->flags = 0;
-   strcpy(file->filename, path);
+kmutex_t fs_mutex = {.owner = NULL, .waiters = NULL, .waiters_tail = NULL};
 
-   // terminals
-   if(strequ(path, "/dev/stdin") || strequ(path, "/dev/stdout") || strequ(path, "/dev/stderr")) {
-      file->type = FS_TYPE_TERM;
-      file->window_index = getSelectedWindowIndex();
-      if(strequ(path, "/dev/stdin"))
-         file->flags = FS_FLAG_READONLY;
-      else
-         file->flags = FS_FLAG_WRITEONLY;
-      return file;
-   }
+extern bool switching;
 
-   // files
+// read entire file
+// todo: switch all kernel file reads to use this rather than fat_read_file (which doesn't lock)
+// currently fat_read_file is called from IRQs e.g. click->windowmgr->launch elf
+// or keypress(return)->window_term->load file (less important)
+uint8_t *fs_read_file_kernel(char *path, int *size) {
+   if(switching) // may be called before tasks are init
+      kmutex_lock(&fs_mutex);
+   
    fat_dir_t *entry = fat_parse_path(path, true);
-   if(!entry) {
-      free((uint32_t)file, sizeof(fs_file_t));
-      free((uint32_t)data, sizeof(fs_file_data_t));
-      return NULL;
+   if(entry == NULL || entry->attributes == 0x10) {
+      if(switching)
+         kmutex_unlock(&fs_mutex);
+      return NULL; // not found
    }
+   *size = entry->fileSize;
+   uint8_t *content = fat_read_file(entry->firstClusterNo, entry->fileSize);
+   free((uint32_t)entry, sizeof(fat_dir_t));
+
+   if(switching)
+      kmutex_unlock(&fs_mutex);
+
+   return content;
+}
+
+static bool fs_is_term_path(char *path) {
+   return strequ(path, "/dev/stdin") || strequ(path, "/dev/stdout") || strequ(path, "/dev/stderr");
+}
+
+static fs_file_t *fs_open_term(fs_file_t *file) {
+   file->type = FS_TYPE_TERM;
+   file->window_index = getSelectedWindowIndex();
+   if(strequ(file->filename, "/dev/stdin"))
+      file->flags = FS_FLAG_READONLY;
+   else
+      file->flags = FS_FLAG_WRITEONLY;
+   return file;
+}
+
+static bool fs_open_locked(fs_file_t *file);
+
+static bool fs_new_locked(fs_file_t *file) {
+   // assumes path already verified
+   fat_dir_t *entry = fat_parse_path(file->filename, true);
+   if(entry) {
+      free((uint32_t)entry, sizeof(fat_dir_t));
+      debug_printf("FS: file %s already exists\n", file->filename);
+      return false;
+   }
+   if(!fat_new_file(file->filename))
+      return false;
+
+   file->flags &= ~FS_FLAG_CREATE;
+   bool success = fs_open_locked(file);
+   file->flags |= FS_FLAG_CREATE;
+
+   return success;
+}
+
+static bool fs_open_locked(fs_file_t *file) { 
+   // assumes lock already claimed & path is validated
+
+   fat_dir_t *entry = fat_parse_path(file->filename, true);
+   if(!entry) {
+      if(file->flags & FS_FLAG_CREATE) {
+         debug_printf("FS: creating new file %s\n", file->filename);
+         return fs_new_locked(file);
+      } else {
+         return false;
+      }
+   }
+
+   fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
 
    if(entry->attributes & 0x10) {
       file->type = FS_TYPE_DIR;
    } else {
       file->type = FS_TYPE_FILE;
    }
-   file->flags = flags;
    data->file_size = entry->fileSize;
    data->first_cluster = entry->firstClusterNo;
    file->data = data;
    free((uint32_t)entry, sizeof(fat_dir_t));
 
    // truncate at open
-   if(file->type == FS_TYPE_FILE && (flags & FS_FLAG_TRUNCATE) && !(flags & FS_FLAG_READONLY) && data->file_size > 0) {
-      if(fat_resize_file(path, 0) < 0) {
-         debug_printf("FS: failed to truncate %s\n", path);
-         free((uint32_t)file, sizeof(fs_file_t));
-         free((uint32_t)data, sizeof(fs_file_data_t));
-         return NULL;
+   if(file->type == FS_TYPE_FILE && (file->flags & FS_FLAG_TRUNCATE) && !(file->flags & FS_FLAG_READONLY) && data->file_size > 0) {
+      if(fat_resize_file(file->filename, 0) < 0) {
+         debug_printf("FS: failed to truncate %s\n", file->filename);
+         free((uint32_t)file->data, sizeof(fs_file_data_t));
+         file->data = NULL;
+         return false;
       }
       data->file_size = 0;
    }
 
+   return true;
+}
+
+static fs_file_t *fs_file_alloc(char *path, int flags) {
+   fs_file_t *file = (fs_file_t*)malloc(sizeof(fs_file_t));
+   file->active = true;
+   file->data = NULL;
+   file->pipe = NULL;
+   file->current_pos = 0;
+   file->flags = flags;
+   strcpy(file->filename, path);
+   return file;
+}
+
+fs_file_t *fs_open(char *path, int flags) {
+   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
+      debug_printf("FS: invalid file path\n");
+      return NULL;
+   }
+
+   fs_file_t *file = fs_file_alloc(path, flags);
+   if(fs_is_term_path(path))
+      return fs_open_term(file);
+
+   kmutex_lock(&fs_mutex);
+   if(!fs_open_locked(file)) {
+      free((uint32_t)file, sizeof(fs_file_t));
+      file = NULL;
+   }
+   kmutex_unlock(&fs_mutex);
    return file;
 }
 
 bool fs_exists(char *path) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
+   kmutex_lock(&fs_mutex);
    fat_dir_t *entry = fat_parse_path(path, true);
-   if(!entry) return false;
-   free((uint32_t)entry, sizeof(fat_dir_t));
-   return true;
+   bool exists = entry != NULL;
+   if(exists)
+      free((uint32_t)entry, sizeof(fat_dir_t));
+   kmutex_unlock(&fs_mutex);
+   return exists;
 }
 
-void fs_close(fs_file_t *file) {
-   if(!file) return;
-   if(file->request) {
-      // read still in progress - mark as orphaned so callback isn't called
-      file->request->file = NULL;
-      file->request = NULL;
-   }
+void fs_close_locked(fs_file_t *file) {
    if(file->data)
       free((uint32_t)file->data, sizeof(fs_file_data_t));
    if(file->pipe) {
@@ -111,11 +181,20 @@ void fs_close(fs_file_t *file) {
    free((uint32_t)file, sizeof(fs_file_t));
 }
 
+void fs_close(fs_file_t *file) {
+   if(!file) return;
+   bool is_file = file->type == FS_TYPE_FILE;
+   if(is_file)
+      kmutex_lock(&fs_mutex);
+   fs_close_locked(file);
+   if(is_file)
+      kmutex_unlock(&fs_mutex);
+}
+
 fs_file_t *fs_dup(fs_file_t *file) {
    if(!file) return NULL;
    fs_file_t *dup = (fs_file_t*)malloc(sizeof(fs_file_t));
    *dup = *file;
-   dup->request = NULL; // in flight reads belong to the fd they were issued on
    if(file->data) {
       fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
       *data = *file->data;
@@ -152,7 +231,7 @@ fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
    return entry;
 }
 
-fs_dir_content_t *fs_read_dir(char *path) {
+static fs_dir_content_t *fs_read_dir_locked(char *path) {
    fs_dir_content_t *content = (fs_dir_content_t*)malloc(sizeof(fs_dir_content_t));
    content->entries = NULL;
    content->size = 0;
@@ -236,6 +315,13 @@ fs_dir_content_t *fs_read_dir(char *path) {
    }
 }
 
+fs_dir_content_t *fs_read_dir(char *path) {
+   kmutex_lock(&fs_mutex);
+   fs_dir_content_t *content = fs_read_dir_locked(path);
+   kmutex_unlock(&fs_mutex);
+   return content;
+}
+
 void fs_dir_content_free(fs_dir_content_t *content) {
    if(content) {
       if(content->entries)
@@ -250,7 +336,10 @@ bool fs_mkdir(char *path) {
       return false;
    }
    debug_printf("FS: creating new dir '%s'\n", path);
-   return fat_new_dir(path);
+   kmutex_lock(&fs_mutex);
+   bool success = fat_new_dir(path);
+   kmutex_unlock(&fs_mutex);
+   return success;
 }
 
 fs_file_t *fs_new(char *path, int flags) {
@@ -258,15 +347,14 @@ fs_file_t *fs_new(char *path, int flags) {
       debug_printf("FS: invalid file path\n");
       return NULL;
    }
-   fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry) {
-      free((uint32_t)entry, sizeof(fat_dir_t));
-      debug_printf("FS: file %s already exists\n", path);
-      return NULL;
+   kmutex_lock(&fs_mutex);
+   fs_file_t *file = fs_file_alloc(path, flags);
+   if(!fs_new_locked(file)) {
+      free((uint32_t)file, sizeof(fs_file_t));
+      file = NULL;
    }
-   if(!fat_new_file(path))
-      return NULL;
-   return fs_open(path, flags);
+   kmutex_unlock(&fs_mutex);
+   return file;
 }
 
 // copy up to max bytes from pipe ring buffer into task (reader)
@@ -312,6 +400,7 @@ static size_t fs_pipe_fill(fs_pipe_t *pipe, int task, void *src, size_t max) {
    return written;
 }
 
+// task -1 for kernel, e.g. in task_write_to_window
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
       int w = file->window_index;
@@ -330,15 +419,18 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
          debug_printf("FS: fs_write failed as %s was opened read only\n", file->filename);
          return FS_ERROR;
       }
+      kmutex_lock(&fs_mutex);
       uint32_t pos = file->current_pos;
       if(file->flags & FS_FLAG_APPEND)
          pos = file->data->file_size;
-      int written = fat_write_file_at(file->filename, buffer, pos, size);
+
+      int written = fat_write_file_at(file->filename, buffer, pos, size, task);
       if(written > 0) {
          file->current_pos = pos + written;
          if(file->current_pos > file->data->file_size)
             file->data->file_size = file->current_pos;
       }
+      kmutex_unlock(&fs_mutex);
 
       if(written < 0) {
          debug_printf("FS: error writing to file %s\n", file->filename);
@@ -355,6 +447,8 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
       }
 
       if(pipe->size == FS_PIPE_BUF_SIZE) {
+         if(task < 0)
+            return FS_ERROR; // kernel writes can't wait, drop write
          pipe->write_waiting_task = task;
          pipe->write_waiting_uid = gettasks()[task].task_uid;
          return FS_WRITE_WAIT;
@@ -374,32 +468,6 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
 
    debug_printf("FS: invalid file type for writing %s\n", file->filename);
    return FS_ERROR;
-}
-
-static void fs_read_done(void *regs, int task, int bytes, void *data) {
-   (void)task;
-   fs_request_t *request = (fs_request_t*)data;
-   if(!request) return;
-
-   uint32_t read = (bytes > 0) ? (uint32_t)bytes : 0;
-   if(read > request->len) read = request->len;
-
-   if(request->file) { // still open
-      request->file->current_pos = request->start + read;
-      request->file->request = NULL;
-   }
-
-   fs_read_done_t callback = request->callback;
-   int task_id = request->task;
-   uint32_t task_uid = request->task_uid;
-   free((uint32_t)request, sizeof(fs_request_t));
-
-   if(!callback || task_id < 0) return;
-   task_state_t *task_state = &gettasks()[task_id];
-   if(!task_state->enabled || task_state->crashed || !task_state->paused || task_state->task_uid != task_uid)
-      return;
-
-   callback(regs, task_id, bytes);
 }
 
 int fs_read(fs_file_t *file, void *buffer, size_t size, fs_read_callbacks_t callbacks, int task) {
@@ -448,19 +516,22 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, fs_read_callbacks_t call
       }
    }
 
+   // read from file
+   kmutex_lock(&fs_mutex);
+
    if(file->type == FS_TYPE_FILE) {
       if(file->flags & FS_FLAG_WRITEONLY) {
          debug_printf("FS: cannot read from write-only file %s\n", file->filename);
+         kmutex_unlock(&fs_mutex);
          return FS_ERROR;
       }
-      if(file->request) {
-         debug_printf("FS: %s already has a read in flight\n", file->filename);
-         return FS_ERROR;
-      }
-      if(file->current_pos >= file->data->file_size)
+      if(file->current_pos >= file->data->file_size) {
+         kmutex_unlock(&fs_mutex);
          return FS_EOF;
+      }
    } else {
       debug_printf("FS: cannot read from directory %s\n", file->filename);
+      kmutex_unlock(&fs_mutex);
       return FS_ERROR;
    }
 
@@ -468,30 +539,22 @@ int fs_read(fs_file_t *file, void *buffer, size_t size, fs_read_callbacks_t call
       size = file->data->file_size;
    if(file->current_pos + size > file->data->file_size)
       size = file->data->file_size - file->current_pos;
-   if(size == 0) return FS_EOF;
-
-   if(!fat_valid_cluster(file->data->first_cluster)) {
-      debug_printf("FS: %s has bad first cluster %u\n", file->filename, file->data->first_cluster);
-      return FS_ERROR;
+   if(size == 0) {
+      kmutex_unlock(&fs_mutex);
+      return FS_EOF;
    }
 
-   fs_request_t *request = (fs_request_t*)malloc(sizeof(fs_request_t));
-   if(!request) return FS_ERROR;
-   request->file = file;
-   request->start = file->current_pos;
-   request->len = size;
-   request->task = task;
-   request->task_uid = gettasks()[task].task_uid;
-   request->callback = callbacks.on_file;
-   file->request = request;
-
-   if(!fat_read_file_chunked(file->data->first_cluster, buffer, request->start, size, &fs_read_done, task, request)) {
-      debug_printf("FS: couldn't start read of %s\n", file->filename);
-      file->request = NULL;
-      free((uint32_t)request, sizeof(fs_request_t));
-      return FS_ERROR;
+   int read = fat_read_file_user(file->data->first_cluster, buffer, file->current_pos, size, task);
+   int r = read;
+   if(read >= 0) {
+      file->current_pos += read;
+   } else {
+      debug_printf("FS: reading %s failed\n", file->filename);
+      r = FS_ERROR;
    }
-   return FS_BLOCKING;
+   
+   kmutex_unlock(&fs_mutex);
+   return r;
 }
 
 int fs_truncate(fs_file_t *file, int size) {
@@ -507,24 +570,33 @@ int fs_truncate(fs_file_t *file, int size) {
       debug_printf("FS: cannot truncate read only file %s\n", file->filename);
       return FS_ERROR;
    }
+   kmutex_lock(&fs_mutex);
    if(fat_resize_file(file->filename, (uint32_t)size) < 0) {
       debug_printf("FS: failed to truncate %s\n", file->filename);
+      kmutex_unlock(&fs_mutex);
       return FS_ERROR;
    }
    file->data->file_size = size;
    if(file->current_pos > (uint32_t)size)
       file->current_pos = size;
+   kmutex_unlock(&fs_mutex);
    return 0;
 }
 
 bool fs_unlink(char *path) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
-   return fat_delete_file(path);
+   kmutex_lock(&fs_mutex);
+   bool success = fat_delete_file(path);
+   kmutex_unlock(&fs_mutex);
+   return success;
 }
 
 bool fs_rmdir(char *path) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
-   return fat_delete_dir(path);
+   kmutex_lock(&fs_mutex);
+   bool success = fat_delete_dir(path);
+   kmutex_unlock(&fs_mutex);
+   return success;
 }
 
 bool fs_rename(char *oldpath, char *newname) {
@@ -536,7 +608,10 @@ bool fs_rename(char *oldpath, char *newname) {
       debug_printf("FS: invalid new name '%s'\n", newname);
       return false;
    }
-   return fat_rename(oldpath, newname);
+   kmutex_lock(&fs_mutex);
+   bool success = fat_rename(oldpath, newname);
+   kmutex_unlock(&fs_mutex);
+   return success;
 }
 
 int fs_filesize(fs_file_t *file) {
@@ -544,7 +619,9 @@ int fs_filesize(fs_file_t *file) {
 }
 
 int fs_filesize_path(char *path) {
+   kmutex_lock(&fs_mutex);
    fat_dir_t *entry = fat_parse_path(path, true);
+   kmutex_unlock(&fs_mutex);
    if(!entry) return -1;
    int size = entry->fileSize;
    free((uint32_t)entry, sizeof(fat_dir_t));
@@ -593,7 +670,6 @@ void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
    read_file->filename[0] = '\0';
    read_file->window_index = -1;
    read_file->current_pos = 0;
-   read_file->request = NULL;
    read_file->data = NULL;
    read_file->active = true;
    read_file->type = FS_TYPE_PIPE;
@@ -604,7 +680,6 @@ void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
    write_file->filename[0] = '\0';
    write_file->window_index = -1;
    write_file->current_pos = 0;
-   write_file->request = NULL;
    write_file->data = NULL;
    write_file->active = true;
    write_file->type = FS_TYPE_PIPE;

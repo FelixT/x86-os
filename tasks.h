@@ -149,6 +149,7 @@ void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();
 void kernel_block();
 void kernel_yield_if_blocking();
+bool kernel_yield_to(int next_index);
 
 task_state_t *gettasks();
 

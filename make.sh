@@ -33,8 +33,8 @@ for file in $c_files; do
 done
 
 $GCC -c cmain.cpp -o o/cmain.o $CPPFLAGS
-$LD -o o/kernel.elf -T linker_kernel.ld $o_files 
-$LD -o o/boot1.bin -T linker_boot.ld $boot_o_files
+$LD -o o/kernel.elf -T linker_kernel.ld $o_files -no-pie
+$LD -o o/boot1.bin -T linker_boot.ld $boot_o_files -no-pie
 
 $OBJCOPY -O binary o/kernel.elf o/kernel.bin
 

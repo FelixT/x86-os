@@ -33,10 +33,13 @@ This command recompiles the kernel and usermode programs, creates hard drive ima
 Required packages (via brew / apt):
 
 - i686-elf-gcc
+- i686-elf-binutils
 - dosfstools
 - qemu
 - nasm
 - mtools
+
+Note: most linux distros package i686-linux-gnu-* instead of i686-elf-*.
 
 make_run.sh assumes vmnet-shared (macos specific) but this should support tap on linux etc - GATEWAY_IP & LOCAL_IP in usr/device/net/ethernet.h need to be updated manually until DHCP is added.
 
@@ -88,7 +91,7 @@ Tasks are loaded from ELF32 binaries. I/O (e.g. keypress, mouse move) is process
 
 Tasks interact with kernel subsystems via syscalls, available calls are defined in api.h.
 
-File I/O uses a kernel FAT16 driver which reads from an HDD using ATA PIO mode. User mode filesystem access is done via a VFS using UNIX style syscalls (open, read, write, close). When reads are performed, the thread is paused and woken upon completion. Reads are done in chunks to avoid blocking kernel processing.
+File I/O uses a kernel FAT16 driver which reads from an HDD using ATA PIO mode. User mode filesystem access is done via a VFS using UNIX style syscalls (open, read, write, close). Reads and writes can yield during execution to avoid blocking kernel processing.
 
 Networking drivers live in userland and support RTL8139.
 

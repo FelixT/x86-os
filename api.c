@@ -669,15 +669,10 @@ void api_open(registers_t *regs) {
 
    fs_file_t *file = fs_open(path, flags);
    if(!file) {
-      if((flags & FS_FLAG_CREATE) && !fs_exists(path)) {
-         debug_printf("api_open: creating new file %s\n", path);
-         file = fs_new(path, flags);
-      }
-      if(!file) {
+      if(flags & FS_FLAG_CREATE)
          debug_printf("api_open: could not create new file '%s'\n", path);
-         regs->ebx = -1;
-         return;
-      }
+      regs->ebx = -1;
+      return;
    }
    commit_fd(task->process, fd, file);
    regs->ebx = fd;
@@ -729,13 +724,6 @@ void api_read_stdin_callback(void *regs, char *buffer) {
    }
 }
 
-void api_read_fd_callback(void *regs, int task, int size) {
-   registers_t *r = (registers_t*)regs;
-   task_resume(&gettasks()[task]);
-   switch_to_task(task, r); // wake
-   r->ebx = size;
-}
-
 void api_read(registers_t *regs) {
    // IN: ebx - int fd
    // IN: ecx - char *buf
@@ -776,7 +764,7 @@ void api_read(registers_t *regs) {
       return;
    }
 
-   fs_read_callbacks_t callbacks = { .on_file = &api_read_fd_callback, .on_term = &api_read_stdin_callback };
+   fs_read_callbacks_t callbacks = { .on_term = &api_read_stdin_callback };
    int result = fs_read(file, buf, count, callbacks, get_current_task());
    regs->ebx = result;
    if(result == FS_BLOCKING) {
@@ -1182,16 +1170,14 @@ void api_set_setting(registers_t *regs) {
             regs->ebx = -1; // invalid path
             return;
          }
-         fat_dir_t *entry = fat_parse_path(path, true);
-         if(entry == NULL || entry->attributes == 0x10) {
+         int fsize;
+         uint8_t *img = fs_read_file_kernel(path, &fsize);
+         if(!img) {
             regs->ebx = -1; // not found
             return;
          }
          strncpy(settings->desktop_bgimg, path, sizeof(settings->desktop_bgimg));
-
-         uint8_t *img = fat_read_file(entry->firstClusterNo, entry->fileSize);
-         desktop_setbgimg(img, entry->fileSize);
-         free((uint32_t)entry, sizeof(fat_dir_t));
+         desktop_setbgimg(img, fsize);
          break;
       }
       case SETTING_DESKTOP_ENABLED:
@@ -1204,16 +1190,14 @@ void api_set_setting(registers_t *regs) {
             regs->ebx = -1; // invalid path
             return;
          }
-         fat_dir_t *entry = fat_parse_path(path, true);
-         if(entry == NULL || entry->attributes == 0x10) {
+         int fsize;
+         fontfile_t *file = (fontfile_t*)fs_read_file_kernel(path, &fsize);
+         if(!file) {
             regs->ebx = -1; // not found
             return;
          }
          strncpy(settings->font_path, path, sizeof(settings->font_path));
-         fontfile_t *file = (fontfile_t*)fat_read_file(entry->firstClusterNo, entry->fileSize);
          font_load(file);
-         free((uint32_t)entry, sizeof(fat_dir_t));
-
          // memory leak as never free prev file
          break;
       }

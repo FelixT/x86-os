@@ -315,6 +315,9 @@ void end_task(int index, registers_t *regs) {
 
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
+   if(task->process->window >= 0)
+      task_write_to_window(index, "<Task ended>\n", true);
+
    if(task->kernel_esp) {
       debug_printf("Warning: task was parked in kernel\n");
       // todo: wait to finish first (ie kill pending flag) or cleanup
@@ -353,7 +356,7 @@ void end_task(int index, registers_t *regs) {
       // free fds
       for(int i = 0; i < task->process->fd_count; i++) {
          fs_file_t *fd = task->process->file_descriptors[i];
-         if(fd) fs_close(fd);
+         if(fd) fs_close_locked(fd); // safe to call without lock as task owns fd
       }
 
       // kill other threads
@@ -364,9 +367,6 @@ void end_task(int index, registers_t *regs) {
          end_task(thread->task_id, NULL);
          thread->process = NULL;
       }
-
-      if(task->process->window >= 0)
-         task_write_to_window(index, "<Task ended>\n", true);
 
       task_reset_windows(index);
 
@@ -476,18 +476,17 @@ bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
 
 // doesn't immediately switch, caller is responsible for enabling the task
 int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy) {
-   fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry == NULL) {
+   int fsize;
+   uint8_t *prog = fs_read_file_kernel(path, &fsize);
+   if(!prog) {
       gui_writestr("Not found\n", 0);
       return -1;
    }
-   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   int task_index = elf_setup(regs, prog, entry->fileSize, argc, args, focus, !copy);
+   int task_index = elf_setup(regs, prog, fsize, argc, args, focus, !copy);
    if(task_index >= 0) {
       strcpy(gettasks()[task_index].process->exe_path, path);
    }
-   free((uint32_t)prog, entry->fileSize);
-   free((uint32_t)entry, sizeof(fat_dir_t));
+   free((uint32_t)prog, fsize);
    return task_index;
 }
 
@@ -612,13 +611,25 @@ bool switch_to_task(int index, registers_t *regs) {
    return true;
 }
 
+static bool can_park(void) {
+   // check that current_task is in syscall (ie not irq)
+   // sanity check current kstack matches current_task's kstack
+   if(!switching || current_task < 0 || !tasks[current_task].in_syscall)
+      return false;
+   uint32_t esp = read_esp();
+   uint32_t top = tasks[current_task].kernel_stack_top;
+   return esp > top - KSTACK_SIZE && esp <= top;
+}
+
 extern void yield_to_user(registers_t *regs, uint32_t *old_esp);
 extern void yield_to_kernel(uint32_t esp, uint32_t *old_esp);
 
-bool kernel_yield() {
+// yield to specific task
+bool kernel_yield_to(int next_index) {
+   if(!can_park()) return false;
    task_state_t *cur = get_current_task_state();
-   int next_index = next_task(true);
-   if(next_index == -1 || next_index == cur->task_id) return false;
+   if(next_index < 0 || next_index >= TOTAL_TASKS || next_index == cur->task_id) return false;
+   if(!task_resumable(&tasks[next_index], true)) return false;
 
    task_state_t *next = &tasks[next_index];
 
@@ -646,6 +657,10 @@ bool kernel_yield() {
    return true;
 }
 
+bool kernel_yield() {
+   return kernel_yield_to(next_task(true));
+}
+
 void kernel_block() {
    if(!kernel_yield()) {
       debug_printf("kernel_block failed\n"); // i.e. no other tasks available
@@ -654,13 +669,7 @@ void kernel_block() {
 }
 
 void kernel_yield_if_blocking() {
-   if(!switching || current_task < 0 || !tasks[current_task].in_syscall)
-      return;
-   // sanity check current kstack matches current task
-   uint32_t esp = read_esp();
-   uint32_t top = tasks[current_task].kernel_stack_top;
-   if(esp <= top - KSTACK_SIZE || esp > top)
-      return;
+   if(!can_park()) return;
    
    // check for pending interrupt
    outb(0x20, 0x0A); // read pic irr
@@ -971,7 +980,11 @@ void task_write_to_window(int task, char *out, bool children) {
          debug_printf("task_write_to_window: no fd1 or main window\n");
          return;
       }
-      int r = fs_write(fd1, (uint8_t*)out, strlen(out), task);
+      if(fd1->type == FS_TYPE_FILE && !get_current_task_state()->in_syscall) {
+         debug_printf("task_write_to_window: can't write to file from irq\n"); // write to file may block
+         return;
+      }
+      int r = fs_write(fd1, (uint8_t*)out, strlen(out), -1);
       if(r > 0 && fd1->type == FS_TYPE_PIPE && fd1->pipe)
          fs_pipe_wake_reader(fd1->pipe);
    }
@@ -1127,6 +1140,11 @@ int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw) {
 
 // copy up to size bytes to task - checks mapped size
 int copy_to_task(int task, void *dest, void *src, size_t size) {
+   if(task < 0) { // kernel owned buffer
+      memcpy(dest, src, size);
+      return size;
+   }
+   
    task_state_t *task_state = &gettasks()[task];
    int maxsize = task_validate_maxsize(task_state, dest, size, 1);
    if(maxsize < 0 || (size > 0 && maxsize == 0)) return -1; // invalid buffer/size
@@ -1145,6 +1163,11 @@ int copy_to_task(int task, void *dest, void *src, size_t size) {
 
 // copy up to size bytes from task - checks mapped size
 int copy_from_task(int task, void *dest, void *src, size_t size) {
+   if(task < 0) { // kernel owned buffer
+      memcpy(dest, src, size);
+      return size;
+   }
+
    task_state_t *task_state = &gettasks()[task];
    int maxsize = task_validate_maxsize(task_state, src, size, 0);
    if(maxsize < 0 || (size > 0 && maxsize == 0)) return -1; // invalid buffer/size

@@ -808,7 +808,7 @@ int fat_resize_file(char *path, uint32_t size) {
    return 0;
 }
 
-int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t size) {
+int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t size, int task) {
    fat_dir_t *dir = fat_parse_path(path, true);
    if(dir == NULL) {
       debug_printf("Error: file not found for path '%s'\n", path);
@@ -866,6 +866,10 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
       uint32_t consumed = clusterSize - write_offset;
       if(consumed > bytesRemaining)
          consumed = bytesRemaining;
+      if(task >= 0 && !task_validate_mem(&gettasks()[task], buffer + bytesWritten, consumed, false)) {
+         debug_printf("fat_write_file_at: task %i's buffer no longer mapped\n", task);
+         break; // partial write
+      }
       if(write_offset > 0 || bytesRemaining < clusterSize) {
          uint8_t *clusterBuf = ata_read_exact(true, true, sectorAddr, clusterSize);
          if(clusterBuf == NULL) {
@@ -897,6 +901,7 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
          break;
       }
       curCluster = next;
+      kernel_yield_if_blocking();
    }
 
    if(offset + bytesWritten > oldsize) {
@@ -1098,147 +1103,79 @@ bool fat_new_dir(char *path) {
    return success;
 }
 
-typedef struct {
-   uint16_t clusterNo;
-   uint32_t offset;
-   uint32_t size; // read/buffer size
-   uint8_t *buffer;
-   void (*callback)(void *regs, int task, int bytes, void *data);
-   void *data; // opaque "cookie" data used by fs layer
-   int currentCluster;
-   int readCount; // no clusters read
-   uint32_t readBytes; // no bytes read
-   uint8_t *clusterBuf;
-   uint32_t clusterBufSize;
-   uint8_t *fatTable;
-   int task;
-   uint32_t task_uid;
-} fat_read_file_state_t;
-
-static void fat_read_file_finish(void *regs, fat_read_file_state_t *state, int bytes) {
-   void (*callback)(void *, int, int, void *) = state->callback;
-   int task = state->task;
-   void *data = state->data;
-
-   if(state->clusterBuf)
-      free((uint32_t)state->clusterBuf, state->clusterBufSize);
-   free((uint32_t)state, sizeof(fat_read_file_state_t));
-
-   callback(regs, task, bytes, data);
-}
-
-static void fat_read_file_fail(void *regs, fat_read_file_state_t *state) {
-   fat_read_file_finish(regs, state, state->readBytes > 0 ? (int)state->readBytes : -1);
-}
-
-void fat_read_file_callback(void *regs, void *msg) {
-   fat_read_file_state_t *state = (fat_read_file_state_t*)msg;
-
-   task_state_t *task_state = &gettasks()[state->task];
-   if(!task_state->enabled || task_state->crashed || task_state->task_uid != state->task_uid) {
-      fat_read_file_finish(regs, state, -1);
-      return;
+// read file into user buffer
+int fat_read_file_user(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uint32_t size, int task) {
+   if(!fat_valid_cluster(clusterNo)) {
+      debug_printf("fat_read_file: bad chain head %u\n", clusterNo);
+      return -1;
    }
+   if(size == 0) return 0;
+
+   uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
+
+   task_state_t *task_state = &gettasks()[task];
+   uint32_t task_uid = task_state->task_uid;
+
+   uint32_t readBytes = 0;
 
    // skip clusters up to offset
-   uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
-   while(state->offset >= clusterSize) {
-      uint16_t tableVal = ((uint16_t*)state->fatTable)[state->currentCluster];
-      if(tableVal >= 0xFFF8) {
-         // no more clusters in chain
-         fat_read_file_finish(regs, state, state->readBytes);
-         return;
-      } else if(!fat_valid_cluster(tableVal)) {
-         debug_printf("FAT error: Hit bad cluster %u\n", tableVal);
-         fat_read_file_fail(regs, state);
-         return;
+   uint16_t curCluster = clusterNo;
+   while(offset >= clusterSize) {
+      uint16_t tableVal = ((uint16_t*)fat_table)[curCluster];
+      if(!fat_valid_cluster(tableVal)) {
+         debug_printf("fat_read: bad cluster or eof %u val %u\n", curCluster, tableVal);
+         return -1; // hit bad cluster or end of chain before offset
       } else {
-         state->offset -= clusterSize;
-         state->currentCluster = tableVal; // table value is the next cluster
-         state->readCount++;
+         offset -= clusterSize;
+         curCluster = tableVal; // table value is the next cluster
       }
    }
-   
-   for(int x = 0; x < 8; x++) { // do in batches of 8 clusters
-      uint32_t currentClusterSector = ((state->currentCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
-      uint32_t diskAddr = baseAddr + currentClusterSector * fat_bpb->bytesPerSector + state->offset;
-      uint32_t clusterReadSize = clusterSize - state->offset;
-      if(state->readBytes + clusterReadSize > state->size)
-         clusterReadSize = state->size - state->readBytes;
-      
-      if(!ata_read_exact_into(true, true, diskAddr, clusterReadSize, state->clusterBuf)) {
-         debug_printf("Error reading cluster %u from disk\n", state->currentCluster);
-         fat_read_file_fail(regs, state);
-         return;
-      }
-      int written = copy_to_task(state->task, state->buffer + state->readBytes, state->clusterBuf, clusterReadSize);
-      if(written < 0) {
-        debug_printf("Error writing to task memory 0x%h size %u\n", state->buffer, clusterReadSize);
-        fat_read_file_fail(regs, state);
-        return;
-      }
-      state->readBytes += written;
-      state->offset = 0;
 
-      if(state->readBytes >= state->size || (uint32_t)written < clusterReadSize) { // finished read or hit end of buffer map
-         fat_read_file_finish(regs, state, state->readBytes);
-         return;
+   // read a cluster at a time
+   uint8_t *clusterBuf = (uint8_t*)malloc(clusterSize);
+   if(!clusterBuf)
+      return -1;
+
+   while(true) {
+      uint32_t curClusterSector = ((curCluster - 2) * fat_bpb->sectorsPerCluster) + firstDataSector;
+      uint32_t diskAddr = baseAddr + curClusterSector * fat_bpb->bytesPerSector + offset;
+      uint32_t clusterReadSize = clusterSize - offset;
+      if(readBytes + clusterReadSize > size)
+         clusterReadSize = size - readBytes;
+      
+      if(!ata_read_exact_into(true, true, diskAddr, clusterReadSize, clusterBuf)) {
+         debug_printf("fat_read: error reading cluster %u\n", curCluster);
+         break; // partial read
       }
+      int written = copy_to_task(task, buffer + readBytes, clusterBuf, clusterReadSize);
+      if(written < 0) {
+        debug_printf("fat_read: error writing to task %i memory 0x%h size %u\n", task_state->task_id, buffer, clusterReadSize);
+        break;
+      }
+      readBytes += written;
+      offset = 0;
+
+      if(readBytes >= size || (uint32_t)written < clusterReadSize)
+         break; // finished read or hit end of buffer map
 
       // check if theres more clusters to read
-      uint16_t tableVal = ((uint16_t*)state->fatTable)[state->currentCluster];
-      if(tableVal >= 0xFFF8) {
-         // no more clusters in chain
-         fat_read_file_finish(regs, state, state->readBytes);
-         return;
-      } else if(!fat_valid_cluster(tableVal)) {
-         // bad/freed cluster
-         debug_printf("FAT error: Hit bad cluster %u\n", tableVal);
-         fat_read_file_fail(regs, state);
-         return;
+      uint16_t tableVal = ((uint16_t*)fat_table)[curCluster];
+      if(!fat_valid_cluster(tableVal)) {
+         // end of chain or bad/freed cluster
+         debug_printf("fat_read: bad cluster or eof %u val %u\n", curCluster, tableVal);
+         break;
       } else {
-         state->currentCluster = tableVal; // table value is the next cluster
-         state->readCount++;
+         curCluster = tableVal; // table value is the next cluster
       }
+      kernel_yield_if_blocking();
    }
 
-   events_add(1, &fat_read_file_callback, (void*)state, -1);
-   
+   free((uint32_t)clusterBuf, clusterSize);
+   return readBytes > 0 ? (int)readBytes : -1;
 }
 
-bool fat_read_file_chunked(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uint32_t size, void(*callback)(void *, int, int, void *), int task, void *data) {
-   uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
-
-   fat_read_file_state_t *state = (fat_read_file_state_t*)malloc(sizeof(fat_read_file_state_t));
-   if(!state) return false;
-
-   state->clusterBuf = (uint8_t*)malloc(clusterSize);
-   if(!state->clusterBuf) {
-      free((uint32_t)state, sizeof(fat_read_file_state_t));
-      return false;
-   }
-   state->clusterBufSize = clusterSize;
-
-   state->clusterNo = clusterNo;
-   state->offset = offset;
-   state->size = size;
-   state->callback = callback;
-   state->data = data;
-   state->task = task;
-   state->task_uid = gettasks()[task].task_uid;
-   state->fatTable = fat_table;
-   state->buffer = buffer;
-   state->currentCluster = clusterNo;
-   state->readCount = 0;
-   state->readBytes = 0;
-
-   // kick off read event chain
-   events_add(1, &fat_read_file_callback, (void*)state, -1);
-   return true;
-}
-
-// reads file contents synchronously, used by kernel
-// usermode uses chunked version above
+// reads file contents into new buffer, used by kernel
+// usermode uses version above
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    if(!fat_valid_cluster(clusterNo)) {
       debug_printf("fat_read_file: bad chain head %u\n", clusterNo);

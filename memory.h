@@ -35,7 +35,7 @@
 // physical -> virtual offset is 0 for now (V_KERNEL_START-KERNEL_START)
 #define V_KERNEL_OFFSET 0x0
 #define V_KERNEL_START 0x1000000
-#define V_KERNEL_END   0x1040000 // V_KERNEL_START + 0x20000 (kernel size 0x20000)
+#define V_KERNEL_END   0x1040000 // V_KERNEL_START + 0x40000 (kernel size 0x40000)
 
 #define V_SHARED_START 0xA0000000
 #define V_SHARED_END   0xB0000000

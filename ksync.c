@@ -27,8 +27,8 @@ static void kmutex_wait(kmutex_t *mutex) {
    }
 }
 
-static bool kmutex_wake(kmutex_t *mutex) {
-   // wake first task in queue
+static bool kmutex_wake(kmutex_t *mutex, bool wake) {
+   // wake/unblock first task in queue
    task_state_t *task = mutex->waiters;
    if(!task) return false;
 
@@ -39,11 +39,20 @@ static bool kmutex_wake(kmutex_t *mutex) {
    task->mutex = NULL;
    task->mutex_next_waiter = NULL;
    task_resume(task);
-   // todo: switch to task - currently resumed by scheduler
+
+   mutex->owner = task;
+   mutex->owned_next = task->owned_mutexes;
+   task->owned_mutexes = mutex;
+
+   if(wake) {
+      // immediately resume (yields current task)
+      kernel_yield_to(task->task_id);
+   }
+   
    return true;
 }
 
-static void kmutex_release(task_state_t *task, kmutex_t *mutex) {
+static void kmutex_release(task_state_t *task, kmutex_t *mutex, bool wake) {
    // remove from owner's owned list
    kmutex_t *prev = NULL;
    kmutex_t *cur = task->owned_mutexes;
@@ -60,7 +69,7 @@ static void kmutex_release(task_state_t *task, kmutex_t *mutex) {
    mutex->owned_next = NULL;
 
    mutex->owner = NULL;
-   kmutex_wake(mutex);
+   kmutex_wake(mutex, wake);
 }
 
 extern void kernel_panic();
@@ -69,25 +78,28 @@ void kmutex_lock(kmutex_t *mutex) {
    // claim mutex, pause if already owned
    task_state_t *task = get_current_task_state();
    if(!task->in_syscall) {
-      debug_printf("kmutex_lock: task not in syscall\n"); // attempted lock from IRQ...
+      debug_printf("kmutex_lock: task %i not in syscall\n", task->task_id); // attempted lock from IRQ...
       kernel_panic();
    }
    if(mutex->owner == task) {
       debug_printf("kmutex_lock: task can't wait on mutex it owns\n");
       kernel_panic(); // would cause deadlock
    }
-   while(mutex->owner)
-      kmutex_wait(mutex);
-   mutex->owner = task;
-   mutex->owned_next = task->owned_mutexes;
-   task->owned_mutexes = mutex;
-   debug_printf("claimed mutex\n");
+   if(!mutex->owner) {
+      // uncontended, claim immediately
+      mutex->owner = task;
+      mutex->owned_next = task->owned_mutexes;
+      task->owned_mutexes = mutex;
+      return;
+   }
+   while(mutex->owner != task)
+      kmutex_wait(mutex); // release/wake hands ownership to waiter
 }
 
 bool kmutex_unlock(kmutex_t *mutex) {
    task_state_t *task = get_current_task_state();
    if(mutex->owner != task) return false;
-   kmutex_release(task, mutex);
+   kmutex_release(task, mutex, true);
    return true;
 }
 
@@ -116,6 +128,6 @@ void ksync_cleanup_task(task_state_t *task) {
    // todo: finish kernel task (therefore free held mutexes) before ending
    while(task->owned_mutexes) {
       debug_printf("ksync: releasing mutex held by ended task %i\n", task->task_id);
-      kmutex_release(task, task->owned_mutexes);
+      kmutex_release(task, task->owned_mutexes, false); // don't yield (avoid task switch when ending task)
    }
 }
