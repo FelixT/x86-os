@@ -567,5 +567,7 @@ void window_term_checkcmd(void *regs, void *window) {
    else
       term_cmd_default((char*)command);
    
-   gui_drawchar('\n', 0);
+   if(!strequ(command, "CLEAR"))
+      gui_drawchar('\n', 0);
+   gui_draw();
 }

@@ -480,7 +480,7 @@ void api_launch_task(registers_t *regs) {
    int oldwindow = getSelectedWindowIndex();
 
    // set up the new task without switching context
-   int new_task = tasks_setup_elf(regs, pathbuf, argc, copied_args, !copy, copy);
+   int new_task = tasks_setup_elf(pathbuf, argc, copied_args, !copy, copy, false);
    if(new_task < 0) {
       free_launch_args(copied_args, argc);
       debug_printf("api_launch_task failed\n");
@@ -488,6 +488,7 @@ void api_launch_task(registers_t *regs) {
       return;
    }
 
+   regs->ebx = new_task;
    task_state_t *task = &gettasks()[new_task];
 
    if(copy) {
@@ -500,7 +501,6 @@ void api_launch_task(registers_t *regs) {
       window_close(NULL, child_win);
       task->process->window = -1;
       setSelectedWindowIndex(oldwindow);
-      gui_redrawall();
    }
 
    // map args to new task
@@ -521,7 +521,8 @@ void api_launch_task(registers_t *regs) {
       if(get_current_task() == new_task)
          switch_task(regs, false); // yield
    }
-   regs->ebx = new_task;
+   if(copy)
+      gui_redrawall();
 }
 
 void api_set_window_title(registers_t *regs) {
@@ -1092,6 +1093,7 @@ void api_close_window(registers_t *regs) {
    if(cindex == -1) {
       // close main window and all children without killing task
       window_close(regs, get_current_task_state()->process->window);
+      gui_redrawall();
       regs->ebx = 0;
       return;
    }
@@ -1107,6 +1109,7 @@ void api_close_window(registers_t *regs) {
    mainwindow->children[cindex] = NULL;
    if(getSelectedWindow() == NULL)
       setSelectedWindowIndex(get_current_task_state()->process->window);
+   gui_redrawall();
 }
 
 void api_create_thread(registers_t *regs) {
@@ -1124,6 +1127,7 @@ void api_create_thread(registers_t *regs) {
    int thread_i = create_task_entry(task_index, regs->ebx, parent->process->prog_size, parent->process->privileged, parent->process);
    if(thread_i < 0) {
       regs->ebx = -1;
+      task_unreserve(task_index);
       return;
    }
    task_state_t *task = &gettasks()[task_index];
@@ -1131,6 +1135,7 @@ void api_create_thread(registers_t *regs) {
       // release the thread slot claimed by create_task_entry
       parent->process->threads[thread_i] = NULL;
       parent->process->no_threads--;
+      task_unreserve(task_index);
       regs->ebx = -1;
       return;
    }
@@ -1790,6 +1795,7 @@ void api_escalate_cancel(void *window, void *regs) {
       debug_printf("Couldn't escalate: requesting task ended\n");
    }
    window_close(regs, getSelectedWindowIndex());
+   gui_redrawall();
 }
 
 void api_escalate(registers_t *regs) {

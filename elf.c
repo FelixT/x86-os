@@ -10,12 +10,6 @@
 
 // load and create task for elf binary
 static int elf_load(uint8_t *prog, uint32_t size) {
-   int task_index = get_free_task_index();
-   if(task_index == -1) {
-      debug_printf("No free tasks\n");
-      return -1;
-   }
-
    elf_header_t *elf_header = (elf_header_t*)prog;
    // fail if
    // elf_header->type != 2 i.e. not exec
@@ -49,8 +43,15 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       if(ph->p_vaddr + ph->p_memsz > vmem_end)
          vmem_end = ph->p_vaddr + ph->p_memsz;
    }
+
    if(vmem_start == 0xFFFFFFFF || vmem_end == 0) {
       debug_printf("No valid LOAD segments in ELF\n");
+      return -1;
+   }
+
+   int task_index = get_free_task_index();
+   if(task_index == -1) {
+      debug_printf("No free tasks\n");
       return -1;
    }
 
@@ -58,12 +59,15 @@ static int elf_load(uint8_t *prog, uint32_t size) {
 
    // create page directory
    if(vmem_start <= KERNEL_END && vmem_end >= KERNEL_START) {
+      // todo: check for other vmem overlaps
       debug_printf("ELF virtual addresses conflict with kernel space\n");
+      task_unreserve(task_index);
       return -1;
    }
    page_dir_entry_t *dir = new_page();
    if(!dir) {
       debug_printf("elf_load: out of memory creating page dir\n");
+      task_unreserve(task_index);
       return -1;
    }
 
@@ -71,6 +75,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
    if(!newProg) {
       debug_printf("elf_load: out of memory allocating prog memory size %u\n", vmem_size);
       free_page_dir(dir);
+      task_unreserve(task_index);
       return -1;
    }
    memset(newProg, 0, vmem_size);
@@ -83,6 +88,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       debug_printf("elf_load: mapping program fail\n");
       free((uint32_t)newProg, vmem_size);
       free_page_dir(dir);
+      task_unreserve(task_index);
       return -1;
    }
 
@@ -109,6 +115,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       debug_printf("elf_load: create task entry failed\n");
       free((uint32_t)newProg, vmem_size);
       free_page_dir(dir);
+      task_unreserve(task_index);
       return -1;
    }
    task_state_t *task = &gettasks()[task_index];
@@ -147,14 +154,14 @@ bool elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
 }
 
 // like elf_run but doesn't switch to new task. task is not enabled
-int elf_setup(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **args, bool focus, bool open_fds) {
+int elf_setup(uint8_t *prog, uint32_t size, int argc, char **args, bool focus, bool minimised, bool open_fds) {
    int task_index = elf_load(prog, size);
    if(task_index < 0) return -1;
 
    task_state_t *task = &gettasks()[task_index];
    uint32_t vmem_start = task->process->vmem_start;
 
-   if(!setup_task_init(task_index, regs, focus, open_fds)) {
+   if(!setup_task_init(task_index, focus, minimised, open_fds)) {
       debug_printf("elf_setup: task setup failed\n");
       task_discard_entry(task_index);
       return -1;

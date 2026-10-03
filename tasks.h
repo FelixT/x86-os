@@ -50,7 +50,8 @@ typedef enum {
    PAUSE_CRASH, // frozen after a crash - nothing resumes
    PAUSE_MSG_CALL, // waiting after call e.g. client waiting for reply
    PAUSE_MSG_RECEIVE, // server waiting for call from client
-   PAUSE_KSYNC // waiting on mutex
+   PAUSE_KSYNC, // waiting on mutex
+   PAUSE_KTHREAD // waiting for event
 } task_pause_reason_t;
 
 #define PROCESS_MAX_FDS 64
@@ -97,6 +98,7 @@ typedef struct process_t {
 
 typedef struct task_state_t {
    bool enabled;
+   bool reserved; // claimed by get_free_task_index
    bool paused; // thread won't be scheduled
    task_pause_reason_t pause_reason;
    bool wake_pending;
@@ -132,7 +134,7 @@ typedef struct task_state_t {
 
 int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
 bool task_map_stack(task_state_t *task, int thread_no);
-bool setup_task_init(int index, registers_t *regs, bool focus, bool open_fds);
+bool setup_task_init(int index, bool focus, bool minimised, bool open_fds);
 bool launch_task(int index, registers_t *regs, bool focus);
 void task_discard_entry(int index);
 void free_launch_args(char **args, int argc);
@@ -143,13 +145,16 @@ void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
 bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus);
-int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy);
+int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised);
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();
 void kernel_block();
 void kernel_yield_if_blocking();
 bool kernel_yield_to(int next_index);
+bool launch_kthread(void *func, char *name, bool run);
+#define LAUNCH_KTHREAD(func, run) launch_kthread(&(func), #func, run)
+void end_kthread(int task);
 
 task_state_t *gettasks();
 
@@ -160,6 +165,7 @@ task_state_t *get_current_task_state();
 page_dir_entry_t *get_current_task_pagedir();
 int get_task_from_window(int windowIndex);
 int get_free_task_index();
+void task_unreserve(int task);
 
 bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);

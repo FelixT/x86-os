@@ -27,6 +27,7 @@ typedef struct gui_window_t {
    bool minimised;
    bool closed;
 	bool dragged;
+   int drag_x, drag_y;
    bool resized;
    bool resizable;
    int toolbar_pos; // index in toolbar

@@ -1114,7 +1114,6 @@ int fat_read_file_user(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uin
    uint32_t clusterSize = fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector;
 
    task_state_t *task_state = &gettasks()[task];
-   uint32_t task_uid = task_state->task_uid;
 
    uint32_t readBytes = 0;
 
@@ -1234,7 +1233,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       }
       free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
       if(done) break;
-      kernel_yield_if_blocking(); // todo: locking across fs code
+      kernel_yield_if_blocking();
 
       // check if theres more clusters to read
       uint16_t tableVal = ((uint16_t*)fat_table)[c];

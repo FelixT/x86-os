@@ -56,6 +56,7 @@ void term_cmd_help() {
 void term_cmd_clear() {
    clear();
    printf("User Terminal at %s\n", path);
+   redraw();
 }
 
 void term_cmd_files(char *arg) {

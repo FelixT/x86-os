@@ -831,7 +831,7 @@ void _start(int argc, char **args) {
 
    // menu
    wo_menu = create_canvas(0, height - 18, width, 18);
-   ((canvas_t*)wo_menu->data)->bordered = false;
+   get_canvas(wo_menu)->bordered = false;
    // window objects
    int margin = 3;
    int x = margin;

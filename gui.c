@@ -19,6 +19,7 @@ bool mouse_heldright = false;
 bool cursor_resize = false;
 bool gui_cursor_shown = false;
 
+surface_t main_surface; // always main buffer, suface may be swapped during redrawall
 surface_t surface;
 
 uint16_t cursor_buffer[MAX_FONT_WIDTH*MAX_FONT_HEIGHT]; // store whats behind cursor so it can be restored
@@ -116,6 +117,18 @@ void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
 
 extern int *font_letter;
 
+extern void wm_thread_main();
+extern void wm_launch_thread_main();
+
+void gui_init_thread() {
+   // kernel thread to kick off other kernel threads
+   LAUNCH_KTHREAD(wm_thread_main, true);
+   LAUNCH_KTHREAD(wm_launch_thread_main, false);
+   gui_redrawall();
+
+   // kthread_exit
+}
+
 void gui_init_meat(void *regs, void *msg) {
    // needs to be run from interrupt routine with interrupts disabled
    (void)msg;
@@ -136,12 +149,13 @@ void gui_init_meat(void *regs, void *msg) {
    timer_set_hz(1000);
    gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
    mouse_enable();
+
+   LAUNCH_KTHREAD(gui_init_thread, false);
    gui_writestr("\nInit complete\n\n", COLOUR_CYAN);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
    setSelectedWindowIndex(-1);
-   gui_redrawall();
 }
 
 void gui_init(void) {
@@ -152,6 +166,7 @@ void gui_init(void) {
 
    extern uintptr_t surface_boot;
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
+   main_surface = surface;
 
    draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
    font_letter = (int*)malloc(1);
@@ -168,30 +183,8 @@ void gui_init(void) {
    events_add(1, &gui_init_meat, NULL, -1);
 }
 
-void gui_redrawall() {
-   // draw to buffer
-   surface_t screen = surface; // save old surface
-   surface.buffer = (uint32_t)draw_buffer;
-   surface.pitch = surface.width; // tightly packed
-
-   gui_clear(gui_bg);
-   desktop_draw();
-   windowmgr_redrawall();
-   toolbar_draw();
-
-   // copy to display
-   surface = screen; // restore
-   uint16_t *fb = (uint16_t*)surface.buffer;
-   if(surface.pitch == surface.width) {
-      memcpy_fast(fb, draw_buffer, sizeof(uint16_t) * surface.width * surface.height);
-   } else {
-      for(int y = 0; y < surface.height; y++)
-         memcpy_fast(&fb[y * surface.pitch], &draw_buffer[y * surface.width], sizeof(uint16_t) * surface.width);
-   }
-
-   gui_cursor_shown = false;
-   gui_cursor_save_bg();
-   if(mouse_enabled) gui_cursor_draw();
+void gui_redrawall() { // may yield
+   wm_redrawall();
 }
 
 extern bool switching;
@@ -274,13 +267,14 @@ void mouse_enable() {
    mouse_enabled = true;
 }
 
+// cursor always draws straight to the screen, even while the wm is compositing into draw_buffer
 void gui_cursor_save_bg() {
    if(gui_cursor_shown) return;
-   uint16_t *terminal_buffer = (uint16_t*) surface.buffer;
+   uint16_t *terminal_buffer = (uint16_t*) main_surface.buffer;
    for(int y = gui_mouse_y; y < gui_mouse_y + getFont()->height; y++) {
       for(int x = gui_mouse_x; x < gui_mouse_x + getFont()->width; x++) {
-         if(x >= 0 && x < (int)surface.width && y >=0 && y < (int)surface.height)
-            cursor_buffer[(y-gui_mouse_y)*(getFont()->width)+(x-gui_mouse_x)] = terminal_buffer[y*surface.pitch+x];
+         if(x >= 0 && x < (int)main_surface.width && y >=0 && y < (int)main_surface.height)
+            cursor_buffer[(y-gui_mouse_y)*(getFont()->width)+(x-gui_mouse_x)] = terminal_buffer[y*main_surface.pitch+x];
       }
    }
 
@@ -289,24 +283,22 @@ void gui_cursor_save_bg() {
 }
 
 void gui_cursor_restore_bg() {
+   uint16_t *terminal_buffer = (uint16_t*) main_surface.buffer;
    for(int y = cursor_oldy; y < cursor_oldy + getFont()->height; y++) {
       for(int x = cursor_oldx; x < cursor_oldx + getFont()->width; x++) {
-         set_framebuffer(y*surface.pitch+x, cursor_buffer[(y-cursor_oldy)*(getFont()->width)+(x-cursor_oldx)]);
+         if(x >= 0 && x < (int)main_surface.width && y >= 0 && y < (int)main_surface.height)
+            terminal_buffer[y*main_surface.pitch+x] = cursor_buffer[(y-cursor_oldy)*(getFont()->width)+(x-cursor_oldx)];
       }
    }
    gui_cursor_shown = false;
 }
 
 void gui_draw(void) {
-   gui_cursor_restore_bg();
-   windowmgr_draw();
-
-   gui_cursor_save_bg();
-   if(mouse_enabled) gui_cursor_draw();
+   wm_draw();
 }
 
 void gui_cursor_draw() {
-   if(gui_cursor_shown) return;
+   if(!mouse_enabled || gui_cursor_shown) return;
    char outline = 27;
    char fill = 28;
    if(cursor_resize) {
@@ -314,8 +306,8 @@ void gui_cursor_draw() {
       fill = 30;
    }
 
-   gui_drawcharat(outline, 0, gui_mouse_x, gui_mouse_y);
-   gui_drawcharat(fill, COLOUR_WHITE, gui_mouse_x, gui_mouse_y);
+   draw_char(&main_surface, outline, 0, gui_mouse_x, gui_mouse_y);
+   draw_char(&main_surface, fill, COLOUR_WHITE, gui_mouse_x, gui_mouse_y);
    gui_cursor_shown = true;
 }
 
@@ -338,7 +330,7 @@ void mouse_update(void *regs, int relX, int relY) {
    windowmgr_mousemove(regs, gui_mouse_x, gui_mouse_y);
 
    gui_cursor_save_bg();
-   if(mouse_enabled) gui_cursor_draw();
+   gui_cursor_draw();
 }
 
 void mouse_leftclick(void *regs, int relX, int relY) {
@@ -349,7 +341,7 @@ void mouse_leftclick(void *regs, int relX, int relY) {
       mouse_held = true;
 
       if(!windowmgr_click(regs, gui_mouse_x, gui_mouse_y))
-         desktop_click(regs, gui_mouse_x, gui_mouse_y);
+         desktop_click(gui_mouse_x, gui_mouse_y);
 
       //gui_draw();
    }
@@ -365,6 +357,8 @@ void mouse_release(registers_t *regs) {
          if(window->dragged) {
             redraw = true;
             window->dragged = false;
+            window->x = window->drag_x;
+            window->y = window->drag_y;
          }
          if(window->resized) {
             redraw = true;
@@ -378,10 +372,10 @@ void mouse_release(registers_t *regs) {
    //if(mouse_heldright)
    //   redraw = true;
 
-   if(redraw) gui_redrawall();
-
    mouse_held = false;
    mouse_heldright = false;
+
+   if(redraw) gui_redrawall();
 }
 
 void mouse_rightclick(void *regs) {

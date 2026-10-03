@@ -144,7 +144,7 @@ void _start() {
    wo_t *canvas = create_canvas(2, 2, 0, 0); // canvas containing grid with task info
    canvas_item_fill(groupbox_get_canvas(groupbox), canvas);
    canvas->visible = false;
-   ((canvas_t*)canvas->data)->bordered = false;
+   get_canvas(canvas)->bordered = false;
    groupbox_add(groupbox, canvas);
    dialog_add(dialog, "info_canvas", canvas);
 
@@ -181,16 +181,19 @@ void _start() {
    grid_add(grid, label, 1, 1);
    dialog_add(dialog, "info_label_memory", label);
 
+   int btns_width = (100 + 5) * 3 - 5;
+   int offset = (width - btns_width) / 2;
+
    // launch tasks btn
-   button = create_button(5, 220, 100, 20, "Launch task");
+   button = create_button(offset, 220, 100, 20, "Launch task");
    set_button_release(button, &launch_task_callback);
    ui_add(dialog->ui, button);
    // refresh btn
-   button = create_button(110, 220, 100, 20, "Refresh");
+   button = create_button(offset + 105, 220, 100, 20, "Refresh");
    set_button_release(button, &refresh_callback);
    ui_add(dialog->ui, button);
    // close btn
-   button = create_button(215, 220, 100, 20, "Close");
+   button = create_button(offset + 210, 220, 100, 20, "Close");
    set_button_release(button, &close_callback);
    ui_add(dialog->ui, button);
 

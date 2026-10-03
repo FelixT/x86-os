@@ -281,3 +281,7 @@ void canvas_item_center(wo_t *canvas, wo_t *item) {
    item->x = x;
    item->y = y;
 }
+
+canvas_t *get_canvas(wo_t *canvas) {
+   return (canvas_t*)canvas->data;
+}

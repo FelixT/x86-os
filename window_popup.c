@@ -39,6 +39,7 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
       // self destruct
       debug_printf("Closing window %i\n", index);
       window_close(NULL, index);
+      gui_redrawall();
       return;
    }
 
@@ -58,6 +59,7 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    // self destruct
    debug_printf("Closing window %i\n", index);
    window_close(NULL, index);
+   gui_redrawall();
 }
 
 window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text) {
@@ -153,6 +155,7 @@ void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y)
 
    // self destruct
    window_close(NULL, get_window_index_from_pointer(window));
+   gui_redrawall();
    
    if(getSelectedWindow() == NULL) return;
 

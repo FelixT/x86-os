@@ -26,6 +26,7 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->vmem_start = 0;
    process->vmem_end = 0;
    process->page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
+   process->window = -1;
    process->no_allocated = 0;
    process->fd_count = 0;
    for(int i = 0; i < PROCESS_MAX_FDS; i++)
@@ -150,7 +151,7 @@ static void task_unmap_stack(task_state_t *task) {
       map(dir, guard, guard, 0, 0, 0);
 }
 
-bool setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
+bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
    task_state_t *task = &tasks[index];
 
    // note: tasks created here are always main thread
@@ -159,14 +160,18 @@ bool setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
 
    task->registers.ds = USR_DATA_SEG | 3;
    task->registers.cs = USR_CODE_SEG | 3;
-   task->registers.eflags = regs->eflags;
+   task->registers.eflags = 0x202; // interrupts enabled
    task->registers.ss = USR_DATA_SEG | 3;
 
    int tmpwindow = getSelectedWindowIndex();
    task->process->window = windowmgr_add();
-   if(focus) {
+   if(focus)
       window_draw_outline(getSelectedWindow(), false);
-   }
+   else
+      setSelectedWindowIndex(tmpwindow);
+
+   if(minimised)
+      gui_get_windows()[task->process->window].minimised = true;
 
    if(open_fds) {
       task->process->file_descriptors[0] = fs_open("/dev/stdin", FS_FLAG_READONLY);
@@ -174,9 +179,6 @@ bool setup_task_init(int index, registers_t *regs, bool focus, bool open_fds) {
       task->process->file_descriptors[2] = fs_open("/dev/stderr", FS_FLAG_WRITEONLY);
       task->process->fd_count = 3;
    }
-
-   if(!focus)
-      setSelectedWindowIndex(tmpwindow);
    return true;
 }
 
@@ -184,7 +186,7 @@ bool launch_task(int index, registers_t *regs, bool focus) {
    int old_task = current_task;
    current_task = index;
 
-   if(!setup_task_init(index, regs, focus, true)) {
+   if(!setup_task_init(index, focus, false, true)) {
       current_task = old_task;
       return false;
    }
@@ -204,6 +206,7 @@ bool launch_task(int index, registers_t *regs, bool focus) {
 
 // undo create_task_entry (launch/init failed)
 void task_discard_entry(int index) {
+   tasks[index].reserved = false;
    process_t *process = tasks[index].process;
    if(!process) return;
 
@@ -224,9 +227,17 @@ bool task_exists() {
 
 int get_free_task_index() {
    for(int i = 0; i < TOTAL_TASKS; i++)
-      if(!tasks[i].enabled && i != current_task) return i;
+      if(!tasks[i].enabled && !tasks[i].reserved && i != current_task) {
+         tasks[i].reserved = true;
+         return i;
+      }
       
    return -1;
+}
+
+void task_unreserve(int task) {
+   if(task < 0 || task >= TOTAL_TASKS) return;
+   tasks[task].reserved = false;
 }
 
 void pause_task(int index, registers_t *regs) {
@@ -313,15 +324,16 @@ void end_task(int index, registers_t *regs) {
       return;
    }
 
+   if(task->kernel_esp) {
+      debug_printf("Can't end task %i - task is parked in kernel or a kthread\n", index);
+      // todo: kill_pending flag
+      return;
+   }
+
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
 
    if(task->process->window >= 0)
       task_write_to_window(index, "<Task ended>\n", true);
-
-   if(task->kernel_esp) {
-      debug_printf("Warning: task was parked in kernel\n");
-      // todo: wait to finish first (ie kill pending flag) or cleanup
-   }
 
    if(task->in_routine) {
       debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : ""), task->routine_name);
@@ -417,6 +429,8 @@ void end_task(int index, registers_t *regs) {
       task->routine_args = NULL;
       task->routine_argc = 0;
    }
+
+   task->reserved = false;
    task->in_routine = false;
 }
 
@@ -424,6 +438,7 @@ void tasks_alloc() {
    tasks = malloc(sizeof(task_state_t) * TOTAL_TASKS);
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
+      tasks[i].reserved = false;
       tasks[i].kernel_stack_top = 0; // stacks are lazy allocated when index is first claimed in create_task_entry and persist end_task
       tasks[i].stack_base = 0;
    }
@@ -438,6 +453,7 @@ bool tasks_launch_binary(registers_t *regs, char *path) {
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL) {
       gui_writestr("Program not found\n", 0);
+      task_unreserve(index);
       return false;
    }
    uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
@@ -446,6 +462,7 @@ bool tasks_launch_binary(registers_t *regs, char *path) {
       debug_printf("tasks_launch_binary: create task entry failed\n");
       free((uint32_t)prog, entry->fileSize);
       free((uint32_t)entry, sizeof(fat_dir_t));
+      task_unreserve(index);
       return false;
    }
    if(!launch_task(index, regs, false)) {
@@ -475,16 +492,17 @@ bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool
 }
 
 // doesn't immediately switch, caller is responsible for enabling the task
-int tasks_setup_elf(registers_t *regs, char *path, int argc, char **args, bool focus, bool copy) {
+int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised) {
    int fsize;
    uint8_t *prog = fs_read_file_kernel(path, &fsize);
    if(!prog) {
       gui_writestr("Not found\n", 0);
       return -1;
    }
-   int task_index = elf_setup(regs, prog, fsize, argc, args, focus, !copy);
+   int task_index = elf_setup(prog, fsize, argc, args, focus, minimised, !copy);
    if(task_index >= 0) {
-      strcpy(gettasks()[task_index].process->exe_path, path);
+      process_t *process = gettasks()[task_index].process;
+      strcpy(process->exe_path, path);
    }
    free((uint32_t)prog, fsize);
    return task_index;
@@ -677,6 +695,60 @@ void kernel_yield_if_blocking() {
       return;
 
    kernel_yield();
+}
+
+void end_kthread(int task) {
+   if(!tasks[task].in_syscall) return;
+   tasks[task].enabled = false;
+   tasks[task].reserved = false;
+   if(tasks[task].process) {
+      free((uint32_t)tasks[task].process, sizeof(process_t));
+      tasks[task].process = NULL;
+   }
+   if(task == current_task) {
+      if(!kernel_yield()) {
+         debug_printf("end_kthread failed\n");
+         kernel_panic();
+      }
+   }
+}
+
+void kthread_exit() {
+   end_kthread(current_task);
+   kernel_panic();
+}
+
+bool launch_kthread(void *func, char *name, bool run) {
+   int index = get_free_task_index();
+   if(index == -1) {
+      debug_printf("No free tasks\n");
+      return false;
+   }
+
+   // create task + process entry
+   // kthreads use kernel page dir
+   if(create_task_entry(index, 0, 0, true, NULL) < 0) {
+      task_unreserve(index);
+      return false;
+   }
+   
+   task_state_t *task = &gettasks()[index];
+   task->in_syscall = true; // kthreads are always in kernel/'syscall' (ie not in irq)
+   strcpy(task->process->exe_path, name);
+
+   // setup stack (see resume_kernel)
+   // ebx, esi, edi, ebp start at 0
+   memset((void*)(task->kernel_stack_top - sizeof(uint32_t)*6), 0, sizeof(uint32_t)*4);
+   ((uint32_t*)task->kernel_stack_top)[-2] = (uint32_t)func; // ret into this function
+   ((uint32_t*)task->kernel_stack_top)[-1] = (uint32_t)kthread_exit; // called when func rets
+
+   task->kernel_esp = task->kernel_stack_top - sizeof(uint32_t)*6;
+   task->enabled = true;
+
+   // launch into it immediately... or just let scheduler do its work
+   if(run)
+      kernel_yield_to(index);
+   return true;
 }
 
 task_state_t *gettasks() {

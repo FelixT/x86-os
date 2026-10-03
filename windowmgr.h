@@ -23,6 +23,14 @@ typedef struct windowmgr_settings_t {
 
 #define MAX_WINDOWS 64
 
+void wm_draw();
+void wm_redrawall();
+
+void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height);
+void window_draw_content(gui_window_t *window);
+void window_draw_outline(gui_window_t *window, bool occlude);
+void windowmgr_redrawall();
+
 int windowmgr_add();
 bool window_init(gui_window_t *window);
 int getSelectedWindowIndex();
@@ -38,17 +46,11 @@ gui_window_t *getSelectedWindow();
 void windowmgr_keypress(void *regs, int scan_code);
 void window_draw(gui_window_t *window);
 void toolbar_draw();
-void gui_uparrow();
-void gui_downarrow();
-void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height);
-void window_draw_content(gui_window_t *window);
 bool windowmgr_click(void *regs, int x, int y);
 void windowmgr_rightclick(void *regs, int x, int y);
-void windowmgr_draw();
-void windowmgr_redrawall();
 void windowmgr_dragged(registers_t *regs, int relX, int relY);
 void desktop_draw();
-void desktop_click(registers_t *regs, int x, int y);
+void desktop_click(int x, int y);
 void desktop_init();
 void desktop_setbgimg(uint8_t *img, int size);
 void windowmgr_mousemove(void *regs, int x, int y);
@@ -60,9 +62,7 @@ int get_window_index_from_pointer(gui_window_t *window);
 void window_resetfuncs(gui_window_t *window);
 void window_removefuncs(gui_window_t *window);
 void window_disable(gui_window_t *window);
-void window_draw_outline(gui_window_t *window, bool occlude);
 windowmgr_settings_t *windowmgr_get_settings();
-void windowmgr_launch_apps(registers_t *regs);
 int get_cindex(task_state_t *task);
 int get_cindex_from_window(task_state_t *task, gui_window_t *window);
 

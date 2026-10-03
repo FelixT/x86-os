@@ -265,10 +265,12 @@ void mem_init() {
 
 void mtrr_print() {
    // print MTRRs set by BIOS (for debugging)
+   if(!mtrr_count)
+      gui_printf("No MTRRs\n", 0);
    for(int i = 0; i < mtrr_count; i++) {
       uint32_t start = (uint32_t)mtrrs[i].base_addr;
       uint32_t end = (uint32_t)(mtrrs[i].base_addr + mtrrs[i].size);
-      debug_printf("%i: 0x%h - 0x%h type %u\n", mtrrs[i].index, start, end, mtrrs[i].type);
+      gui_printf("%i: 0x%h - 0x%h type %u\n", 0, mtrrs[i].index, start, end, mtrrs[i].type);
    }
 }
 

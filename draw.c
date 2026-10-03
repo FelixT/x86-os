@@ -70,24 +70,29 @@ void draw_unfilledrect(surface_t *surface, uint16_t colour, int x, int y, int wi
       setpixel_safe(surface, (yi)*surface->pitch+x+width-1, colour);
 }
 
+static inline void dottedrect_pixel(surface_t *surface, int x, int y, uint16_t colour, int *buffer, int *count, bool restore) {
+   if(x < 0 || y < 0 || x >= surface->width || y >= surface->height) return;
+   setpixel_safeb(surface, y*surface->pitch+x, colour, buffer, (*count)++, restore);
+}
+
 void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int width, int height, int *buffer, bool restore) {
    int count = 0;
 
    for(int xi = x; xi < x+width; xi++) // top
       if((xi%2) == 0)
-         setpixel_safeb(surface, y*surface->pitch+xi, colour, buffer, count++, restore);
+         dottedrect_pixel(surface, xi, y, colour, buffer, &count, restore);
 
    for(int xi = x+1; xi < x+width-1; xi++) // bottom
       if((xi%2) == 0)
-         setpixel_safeb(surface, (y+height-1)*surface->pitch+xi, colour, buffer, count++, restore);
+         dottedrect_pixel(surface, xi, y+height-1, colour, buffer, &count, restore);
 
    for(int yi = y+1; yi < y+height; yi++) // left
       if((yi%2) == 0)
-         setpixel_safeb(surface, (yi)*surface->pitch+x, colour, buffer, count++, restore);
+         dottedrect_pixel(surface, x, yi, colour, buffer, &count, restore);
 
    for(int yi = y+1; yi < y+height; yi++) // right
       if((yi%2) == 0)
-         setpixel_safeb(surface, (yi)*surface->pitch+x+width-1, colour, buffer, count++, restore);
+         dottedrect_pixel(surface, x+width-1, yi, colour, buffer, &count, restore);
 }
 
 void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length) {

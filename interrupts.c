@@ -601,6 +601,7 @@ uint32_t get_timer_tick() {
 
 void closewindow_event(void *regs, void *msg) {
    window_close((registers_t*)regs, (int)msg);
+   gui_redrawall();
 }
 
 void endtask_callback(void *dialog, void *regs) {
@@ -798,6 +799,7 @@ void exception_handler(int int_no, registers_t *regs) {
 
 __attribute__((noreturn)) void kernel_panic(void) {
    // show debug window and panic
+   switching = false; // prevents kernel yield
    setSelectedWindowIndex(0);
    gui_window_t *window = getSelectedWindow();
    window->minimised = false;
@@ -813,7 +815,10 @@ __attribute__((noreturn)) void kernel_panic(void) {
    strcpy(popup_window->title, "kernel panic");
    popup_window->window_objects[1]->visible = false; // ok btn
    popup_window->window_objects[0]->y += 14; // txt
-   gui_redrawall();
+   extern surface_t surface;
+   extern surface_t main_surface;
+   surface = main_surface;
+   windowmgr_redrawall();
    while(true) {};
 }
 
