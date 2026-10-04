@@ -125,3 +125,16 @@ void draw_string(surface_t *surface, char* c, uint16_t colour, int x, int y) {
       x+=getFont()->width+getFont()->padding;
    }
 }
+
+uint16_t rgb16_lighten(uint16_t color, uint8_t amount) {
+   // amount: 0-255 (0 = no change, 255 = full white)
+   uint8_t r = (color >> 11) & 0x1F;
+   uint8_t g = (color >> 5) & 0x3F;
+   uint8_t b = color & 0x1F;
+   
+   r = r + (((31 - r) * amount) >> 8);
+   g = g + (((63 - g) * amount) >> 8);
+   b = b + (((31 - b) * amount) >> 8);
+   
+   return (r << 11) | (g << 5) | b;
+}

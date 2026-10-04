@@ -74,7 +74,7 @@ static inline uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
 #define COLOUR_TOOLBAR_ENTRY gui_rgb16(140, 140, 140)
 #define COLOUR_TOOLBAR_BORDER gui_rgb16(20, 20, 20)
 #define COLOUR_TOOLBAR gui_rgb16(182, 182, 182)
-#define COLOUR_TITLEBAR_CLASSIC 0xD6BA
+#define COLOUR_TITLEBAR_CLASSIC 0xDEFB
 #define COLOUR_TITLEBAR_COLOUR1 0xDF1B
 #define COLOUR_TITLEBAR_COLOUR2 0xB5B6
 #define COLOUR_WHITE gui_rgb16(255, 255, 255)
@@ -121,5 +121,6 @@ surface_t *gui_get_surface();
 void gui_showtimer(int number);
 
 void mouse_enable();
+void mouse_update(void *regs, int *relX, int *relY);
 
 #endif

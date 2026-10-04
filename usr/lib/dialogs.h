@@ -52,7 +52,7 @@ dialog_t *dialog_from_window(int window);
 int dialog_filepicker(char *startdir, void (*return_func)(char *out, int window));
 void dialog_init_overrides(int window);
 int get_free_dialog();
-void dialog_init(dialog_t *dialog, int window);
+bool dialog_init(dialog_t *dialog, int window);
 int dialog_window_settings(int window, char *title);
 wo_t *dialog_create_colourbox(int x, int y, int width, int height, uint16_t colour, int window, void (*callback)(char *out, int window, wo_t *colourbox));
 void dialog_set_title(dialog_t *dialog, char *title);
@@ -60,6 +60,7 @@ int dialog_yesno(char *title, char *text, void *return_func);
 void dialog_add(dialog_t *dialog, char *key, wo_t *wo);
 wo_t *dialog_get(dialog_t *dialog, char *key);
 wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, char *text, char *startpath, void (*callback)(char *out, int window, wo_t *browsebtn));
+wo_t *dialog_create_numeric(int x, int y, int width, int height, int start, void (*change_func)(int value));
 uint16_t *dialog_load_icon(char *path, int *width, int *height);
 void dialog_close(wo_t *wo, int window);
 

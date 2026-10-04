@@ -22,5 +22,6 @@ void canvas_add(wo_t *canvas, wo_t *child);
 void canvas_item_fill(wo_t *canvas, wo_t *item);
 void canvas_item_center(wo_t *canvas, wo_t *item);
 canvas_t *get_canvas(wo_t *canvas);
+void canvas_release(wo_t *canvas, draw_context_t context, int x, int y);
 
 #endif

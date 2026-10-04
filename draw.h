@@ -25,5 +25,6 @@ void draw_dottedrect(surface_t *surface, uint16_t colour, int x, int y, int widt
 void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical, int length);
 void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y);
 void draw_string(surface_t *surface, char *c, uint16_t colour, int x, int y);
+uint16_t rgb16_lighten(uint16_t color, uint8_t amount);
 
 #endif

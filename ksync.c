@@ -1,5 +1,6 @@
 #include "ksync.h"
 #include "windowmgr.h"
+#include "interrupts.h"
 
 // kernel sync primitives
 
@@ -71,8 +72,6 @@ static void kmutex_release(task_state_t *task, kmutex_t *mutex, bool wake) {
    mutex->owner = NULL;
    kmutex_wake(mutex, wake);
 }
-
-extern void kernel_panic();
 
 void kmutex_lock(kmutex_t *mutex) {
    // claim mutex, pause if already owned

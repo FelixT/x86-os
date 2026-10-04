@@ -138,7 +138,7 @@ bool setup_task_init(int index, bool focus, bool minimised, bool open_fds);
 bool launch_task(int index, registers_t *regs, bool focus);
 void task_discard_entry(int index);
 void free_launch_args(char **args, int argc);
-void end_task(int index, registers_t *regs);
+bool end_task(int index, registers_t *regs);
 void tasks_alloc();
 void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs, bool resume);
@@ -153,7 +153,7 @@ void kernel_block();
 void kernel_yield_if_blocking();
 bool kernel_yield_to(int next_index);
 bool launch_kthread(void *func, char *name, bool run);
-#define LAUNCH_KTHREAD(func, run) launch_kthread(&(func), #func, run)
+#define LAUNCH_KTHREAD(func, run) launch_kthread(func, #func, run)
 void end_kthread(int task);
 
 task_state_t *gettasks();
@@ -185,6 +185,7 @@ void task_reset_windows(int task);
 int task_validate_str(task_state_t *task, char *str, int maxlen);
 bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw);
 int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw);
+bool task_demand_map(process_t *process, uint32_t addr);
 
 int copy_to_task(int task, void *dest, void *src, size_t size);
 int copy_from_task(int task, void *dest, void *src, size_t size);

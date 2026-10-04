@@ -40,7 +40,7 @@ void term_cmd_default(char *command) {
 void term_cmd_help() {
    // todo: mouse, tasks, prog1, prog2, files, viewbmp, test, desktop, mem, bg, bgimg, padding, redrawall, windowbg, windowtxt
    write_str("\n");
-   printf(" CLEAR\n");
+   printf(" CLEAR, EXIT\n");
    printf(" LAUNCH<W> path, TASKS\n");
    printf(" FILES <path>, TEXT <path>\n");
    printf(" FAPPEND path buffer\n");
@@ -454,6 +454,10 @@ void term_cmd_tasks() {
    printf("\n");
 }
 
+void term_cmd_exit() {
+   exit(0);
+}
+
 void term_pipe(char *arg1, char *arg2) {
    bool arg1_args = strchr(arg1, ' ') != NULL;
    bool arg2_args = strchr(arg2, ' ') != NULL;
@@ -595,6 +599,8 @@ void checkcmd(char *buffer) {
       term_cmd_rename(arg);
    else if(strequ(command, "TASKS"))
       term_cmd_tasks();
+   else if(strequ(command, "EXIT"))
+      term_cmd_exit();
    else
       term_cmd_default(command);
 

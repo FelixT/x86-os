@@ -38,6 +38,7 @@ typedef struct wo_t {
    bool selected; // focused
    bool needs_redraw;
    void *data; // actual object e.g. button_t, label_t, etc.
+   void *user_data;
    
    void (*draw_func)(struct wo_t *wo, draw_context_t draw_context);
    void (*click_func)(struct wo_t *wo, draw_context_t draw_context, int x, int y);

@@ -47,6 +47,7 @@ void windowmgr_keypress(void *regs, int scan_code);
 void window_draw(gui_window_t *window);
 void toolbar_draw();
 bool windowmgr_click(void *regs, int x, int y);
+void windowmgr_release(int x, int y);
 void windowmgr_rightclick(void *regs, int x, int y);
 void windowmgr_dragged(registers_t *regs, int relX, int relY);
 void desktop_draw();

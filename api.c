@@ -21,7 +21,9 @@
 
 static inline gui_window_t *api_get_window() {
    if(get_current_task_window() < 0) return NULL;
-   return &gui_get_windows()[get_current_task_window()];
+   gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   if(window->closed) return NULL;
+   return window;
 }
 
 static inline void api_write_to_task(char *out) {
@@ -1058,30 +1060,37 @@ void api_get_font_info(registers_t *regs) {
 void api_create_window(registers_t *regs) {
    // IN ebx: width
    // IN ecx: height
-   // OUT ebx: child index
+   // OUT ebx: child index (-1 for main, -2 on failure)
    int width = regs->ebx;
    int height = regs->ecx;
    if(width < 50) width = 50;
    if(height < 50) height = 50;
 
    gui_window_t *parent = api_get_window();
-   if(parent->child_count == W_CHILDCOUNT) {
-      regs->ebx = -1;
+   // todo: reuse slots
+   if(parent && parent->child_count == W_CHILDCOUNT) {
+      regs->ebx = -2;
       return;
    }
    int i = windowmgr_add();
    if(i <= 0) {
-      regs->ebx = -1;
+      regs->ebx = -2;
       return;
    }
    gui_window_t *newwindow = getWindow(i);
    window_removefuncs(newwindow);
-   int c = parent->child_count;
-   parent->children[c] = newwindow;
-   parent->child_count++;
-   newwindow->parent = parent;
+   int r;
+   if(parent) {
+      r = parent->child_count;
+      parent->children[r] = newwindow;
+      parent->child_count++;
+      newwindow->parent = parent;
+   } else {
+      get_current_task_state()->process->window = i;
+      r = -1;
+   }
    window_resize(regs, newwindow, width, height);
-   regs->ebx = c;
+   regs->ebx = r;
 }
 
 void api_close_window(registers_t *regs) {
@@ -1092,9 +1101,9 @@ void api_close_window(registers_t *regs) {
    if(!mainwindow) return;
    if(cindex == -1) {
       // close main window and all children without killing task
-      window_close(regs, get_current_task_state()->process->window);
+      window_close(NULL, get_current_task_state()->process->window);
       gui_redrawall();
-      regs->ebx = 0;
+      regs->ebx = 1;
       return;
    }
    // close child window
@@ -1110,6 +1119,7 @@ void api_close_window(registers_t *regs) {
    if(getSelectedWindow() == NULL)
       setSelectedWindowIndex(get_current_task_state()->process->window);
    gui_redrawall();
+   regs->ebx = 1;
 }
 
 void api_create_thread(registers_t *regs) {
@@ -1169,7 +1179,7 @@ void api_set_setting(registers_t *regs) {
          settings->desktop_bgimg_enabled = (bool)regs->ecx;
          gui_redrawall();
          break;
-      case SETTING_DESKTOP_BGIMG_PATH : {
+      case SETTING_DESKTOP_BGIMG_PATH: {
          char *path = (char*)regs->ecx;
          if(api_validate_str(path, 256) < 0) {
             regs->ebx = -1; // invalid path
@@ -1208,6 +1218,7 @@ void api_set_setting(registers_t *regs) {
       }
       case SETTING_THEME_TYPE:
          settings->theme = (int)regs->ecx;
+         gui_redrawall();
          break;
       case SETTING_WIN_BGCOLOUR:
          settings->default_window_bgcolour = (uint16_t)regs->ecx;
@@ -1226,11 +1237,23 @@ void api_set_setting(registers_t *regs) {
          gui_bg = (uint16_t)regs->ecx;
          gui_redrawall();
          break;
-      case SETTINGS_SYS_FONT_PADDING:
+      case SETTING_SYS_FONT_PADDING:
          getFont()->padding = (int)regs->ecx;
          break;
       case SETTING_THEME_GRADIENTSTYLE:
          settings->titlebar_gradientstyle = (int)regs->ecx;
+         break;
+      case SETTING_MOUSE_SPEED:
+         extern int gui_mouse_speed;
+         gui_mouse_speed = (int)regs->ecx;
+         if(gui_mouse_speed < 1)
+            gui_mouse_speed = 1;
+         if(gui_mouse_speed > 200)
+            gui_mouse_speed = 200;
+         break;
+      case SETTING_MOUSE_WRAP:
+         extern bool gui_mouse_wrap;
+         gui_mouse_wrap = (int)regs->ecx;
          break;
       default:
          regs->ebx = -1;
@@ -1283,11 +1306,19 @@ void api_get_setting(registers_t *regs) {
          extern uint16_t gui_bg;
          regs->ebx = (uint32_t)gui_bg;
          break;
-      case SETTINGS_SYS_FONT_PADDING:
+      case SETTING_SYS_FONT_PADDING:
          regs->ebx = (uint32_t)getFont()->padding;
          break;
       case SETTING_THEME_GRADIENTSTYLE:
          regs->ebx = (uint32_t)settings->titlebar_gradientstyle;
+         break;
+      case SETTING_MOUSE_SPEED:
+         extern int gui_mouse_speed;
+         regs->ebx = (uint32_t)gui_mouse_speed;
+         break;
+      case SETTING_MOUSE_WRAP:
+         extern bool gui_mouse_wrap;
+         regs->ebx = (uint32_t)gui_mouse_wrap;
          break;
       default:
          regs->ebx = -1;
@@ -1768,7 +1799,8 @@ void api_escalate_do(void *dialog, void *regs) {
 }
 
 // escalate close action - deny request by default
-void api_escalate_dismiss(void *dialog) {
+void api_escalate_dismiss(void *dialog, void *regs) {
+   (void)regs;
    window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
    task_state_t *task = &gettasks()[d->task_id];
    if(task->enabled && task->process && task->process->uid == d->process_uid) {
@@ -1927,6 +1959,10 @@ void api_snooze(registers_t *regs) {
    regs->ebx = 1;
    if(task_execute_queued_subroutine(regs, get_current_task()))
       return;
+   if(task->crashed) {
+      switch_task(regs, false);
+      return; // task crashed executing subroutine
+   }
    if(task->wake_pending) {
       task->wake_pending = false;
       return;

@@ -18,7 +18,6 @@ extern void* irq_stub_table[];
 extern int videomode;
 extern bool switching; // preemptive multitasking enabled
 
-extern void mouse_update(void *regs, int relX, int relY);
 extern void mouse_leftclick(registers_t *regs, int relX, int relY);
 extern void mouse_rightclick(registers_t *regs);
 extern void mouse_release(registers_t *regs);
@@ -30,8 +29,6 @@ static idtr_t idtr;
 
 #define IRQ_SIZE 32
 void (*irqs[IRQ_SIZE])(registers_t *regs);
-
-registers_t *cur_regs = NULL;
 
 void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
    idt_entry_t* descriptor = &idt[vector];
@@ -517,7 +514,7 @@ void mouse_handler(registers_t *regs) {
       if(mouse_data[0] & 0x10) relX -= 256;
       if(mouse_data[0] & 0x20) relY -= 256;
 
-      mouse_update(regs, relX, relY);
+      mouse_update(regs, &relX, &relY); // applies scaling
 
       if(mouse_scrolling_enabled) {
          int scroll = (int8_t)mouse_data[3];
@@ -583,7 +580,7 @@ void timer_handler(registers_t *regs) {
       //   gui_showtimer(timer_i%10);
 
       if(timer_i%340 == 0) { // ~2fps auto redraw
-         gui_draw(); // blocks kernel
+         gui_draw();
       }
 
       if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
@@ -600,6 +597,7 @@ uint32_t get_timer_tick() {
 }
 
 void closewindow_event(void *regs, void *msg) {
+   if((int)msg < 0) return;
    window_close((registers_t*)regs, (int)msg);
    gui_redrawall();
 }
@@ -617,7 +615,7 @@ void endtask_callback(void *dialog, void *regs) {
 }
 
 // ends task if dialog is closed
-void endtask_dismiss(void *dialog) {
+void endtask_dismiss(void *dialog, void *regs) {
    window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
    task_state_t *task = &gettasks()[d->task_id];
    if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
@@ -625,7 +623,7 @@ void endtask_dismiss(void *dialog) {
       return;
    }
    events_add(35, &closewindow_event, (void*)get_task_window(d->task_id), -1);
-   end_task(d->task_id, NULL);
+   end_task(d->task_id, regs);
 }
 
 void endtask_debug(void *window, void *regs) {
@@ -671,7 +669,8 @@ void show_endtask_dialog(int int_no, registers_t *regs, int task) {
    dialog->process_uid = gettasks()[task].process->uid;
    dialog->task_id = task;
    window_create_button(getWindow(popup), 135, 45, "Debug", &endtask_debug);
-   window_disable(getWindow(get_task_window(task)));
+   if(get_task_window(task) >= 0)
+      window_disable(getWindow(get_task_window(task)));
    strcpy(getWindow(popup)->title, "Error");
    strcpy(dialog->wo_okbtn->text, "Exit");
    pause_task(task, regs);
@@ -679,10 +678,10 @@ void show_endtask_dialog(int int_no, registers_t *regs, int task) {
    window_draw_outline(getWindow(popup), false);
 }
 
+extern int current_servicing_task;
+
 bool page_fault_handler(registers_t *regs) {
    uint32_t addr = read_cr2();
-
-   extern int current_servicing_task;
 
    // page error
    task_state_t *task = get_current_task_state();
@@ -690,6 +689,7 @@ bool page_fault_handler(registers_t *regs) {
       task = &gettasks()[current_servicing_task];
    }
    process_t *process = task->process;
+   if(!process) return false;
    page_dir_entry_t *dir = task->process->page_dir;
 
    // demand paging/lazy allocation: check if within heap
@@ -697,22 +697,8 @@ bool page_fault_handler(registers_t *regs) {
       debug_printf("int 14 - task page directory isn't current...\n");
    }
 
-   if(addr >= process->heap_start && addr < process->heap_end) { // task_addr_demand_paged()
-      uint8_t *page = malloc(0x1000); // returns physical addr
-      if(!page) {
-         debug_printf("demand paging: system ran out of physical memory\n");
-         return false;
-      }
-      memset(page, 0, 0x1000); // zero mem
-      addr = addr & ~0xFFF;  // page align
-      if(!map(dir, (uint32_t)page, addr, 1, 1, 0)) {
-         debug_printf("demand paging: couldn't map 0x%h\n", addr);
-         free((uint32_t)page, 0x1000);
-         return false;
-      }
-      invlpg(addr);
-      return true;
-   }
+   if(addr >= process->heap_start && addr < process->heap_end) // task_addr_demand_paged()
+      return task_demand_map(process, addr);
 
    // not within heap, show error and pause task
 
@@ -761,44 +747,96 @@ bool page_fault_handler(registers_t *regs) {
    return false;
 }
 
+typedef enum {
+   FAULT_USER,
+   FAULT_SYSCALL,
+   FAULT_KTHREAD, // includes binaries as these run with kernel pagedir
+   FAULT_SWITCHING, // kernel code after task switch
+   FAULT_KERNEL // i.e. irq
+} fault_type_t;
+
+fault_type_t identify_fault_type(registers_t *regs) {
+   if(regs->cs & 3)
+      return FAULT_USER;
+   task_state_t *task = get_current_task_state();
+   bool own_kstack = (uint32_t)regs > task->kernel_stack_top - KSTACK_SIZE && (uint32_t)regs <= task->kernel_stack_top;
+   if(!own_kstack) return FAULT_SWITCHING;
+   if(task->in_syscall && !task->process)
+      return FAULT_KERNEL;
+   if(task->in_syscall && task->process->page_dir == page_get_kernel_pagedir())
+      return FAULT_KTHREAD;
+   if(task->in_syscall)
+      return FAULT_SYSCALL;
+   return FAULT_KERNEL;
+}
+
+void err_exception_handler(int int_no, registers_t *regs);
+
 void exception_handler(int int_no, registers_t *regs) {
-   cur_regs = regs;
+   int irq_no = int_no - 32;
+   if(irq_no < 0) {
+      err_exception_handler(int_no, regs);
+      return;
+   }
+
+   // check for spurious irqs
+   if(irq_no == 7) {
+      outb(0x20, 0x0B); // read master isr
+      uint8_t isr = inb(0x20);
+      if(!((isr>>7)&0x1)) {
+         debug_printf("spurious irq 7\n");
+         return; // no handling
+      }
+   } else if(irq_no == 15) {
+      outb(0xA0, 0x0B); // read slave isr
+      uint8_t isr = inb(0xA0);
+      if(!((isr>>7)&0x1)) {
+         debug_printf("spurious irq 15\n");
+         outb(0x20, 0x20); // send eoi to master
+         return;
+      }
+   }
 
    // send end of command code 0x20 to pic
    // safe to do this here as interrupts are disabled
-   if(int_no >= 32 && int_no < 48) {
+   if(int_no < 48) {
       if(int_no >= 40) {
          outb(0xA0, 0x20); // slave command
       }
       outb(0x20, 0x20); // master command
    }
 
-   if(int_no >= 32) {
-      // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
+   // IRQ numbers: https://www.computerhope.com/jargon/i/irq.htm
 
-      int irq_no = int_no - 32;
-      if(irq_no >= IRQ_SIZE || irqs[irq_no] == NULL) {
-         // unhandled interrupt, print it
-         char buffer[256];
-         sprintf(buffer, "Unhandled interrupt %i\n", irq_no);
-         if(videomode == 0) {
-            terminal_write(buffer);
-         } else {
-            gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
-            gui_writenumat(int_no, 0, 0, 0);
-            debug_writestr(buffer);
-         }
+   if(irq_no >= IRQ_SIZE || irqs[irq_no] == NULL) {
+      // unhandled interrupt, print it
+      char buffer[256];
+      sprintf(buffer, "Unhandled interrupt %i\n", irq_no);
+      if(videomode == 0) {
+         terminal_write(buffer);
       } else {
-         irqs[irq_no](regs);
+         gui_drawrect(COLOUR_CYAN, 0, 0, 7*2, 7);
+         gui_writenumat(int_no, 0, 0, 0);
+         debug_writestr(buffer);
       }
+   } else {
+      irqs[irq_no](regs);
+   }
 
-      if((regs->cs & 3) && get_current_task() >= 0)
-         task_execute_queued_subroutine(regs, get_current_task());
+   if((regs->cs & 3) && get_current_task() >= 0) {
+      if(!task_execute_queued_subroutine(regs, get_current_task()) && get_current_task_state()->crashed)
+         switch_task(regs, false);
    }
 }
 
+bool panic = false;
 __attribute__((noreturn)) void kernel_panic(void) {
    // show debug window and panic
+   if(panic) {
+      while(true)
+         asm("cli; hlt");
+   }
+   panic = true;
    switching = false; // prevents kernel yield
    setSelectedWindowIndex(0);
    gui_window_t *window = getSelectedWindow();
@@ -819,19 +857,14 @@ __attribute__((noreturn)) void kernel_panic(void) {
    extern surface_t main_surface;
    surface = main_surface;
    windowmgr_redrawall();
-   while(true) {};
+   while(true)
+      asm("cli; hlt");
 }
 
 void err_exception_handler(int int_no, registers_t *regs) {
-   cur_regs = regs;
-
-   uint32_t cpl = regs->cs & 0x3;
-   bool kernel = cpl == 0;
-
-   extern int current_servicing_task;
-
-   if(get_current_task() < 0) {
+   if(get_current_task() < 0) { // early in boot
       debug_printf("Exception %i with task %i\n", int_no, get_current_task());
+      kernel_panic();
       return;
    }
    if(videomode == 0) return; // cli
@@ -860,38 +893,37 @@ void err_exception_handler(int int_no, registers_t *regs) {
    gui_drawrect(gui_rgb16(180, 0, 0), 120, 0, 8*8, 11);
    gui_writestrat(buffer, gui_rgb16(255, 200, 200), 122, 2);
 
-   uint32_t addr = read_cr2();
-   if(kernel && (int_no != 14 || (addr >= KERNEL_START && addr < KERNEL_END))) {
-      kernel_panic();
-   } else {
+   if(int_no == 14)
+      debug_printf("Page fault at address 0x%h\n", read_cr2());
+
+   fault_type_t fault_type = identify_fault_type(regs);
+   if(fault_type == FAULT_USER) {
       int task = get_current_task();
       task_state_t *task_state = get_current_task_state();
-      if(current_servicing_task != -1) {
-         debug_printf("Exception occurred while servicing task %i\n", current_servicing_task);
-         task = current_servicing_task;
-         task_state = &gettasks()[task];
-      }
-
       window_writestr("Task ", gui_rgb16(255, 100, 100), 0);
       window_writenum(task, 0, 0);
       window_writestr(" paused due to exception ", gui_rgb16(255, 100, 100), 0);
       window_writenum(int_no, 0, 0);
       window_writestr("\n", 0, 0);
       
-      if(kernel)
-         debug_printf("System was in kernel mode\n");
       if(task_state->in_routine)
          debug_printf("Task was in routine %s\n", task_state->routine_name);
-      if(task_state->in_syscall)
-         debug_printf("Task was in syscall %i\n", task_state->syscall_no);
 
       show_endtask_dialog(int_no, regs, task); // + pauses task
+   } else {
+      window_writestr("Fault type ", gui_rgb16(255, 100, 100), 0);
+      window_writenum(fault_type, 0, 0);
+      window_writestr(" (FATAL)\n", gui_rgb16(255, 100, 100), 0);
+
+      debug_printf("current_task: %i\n", get_current_task());
+      if(current_servicing_task != -1)
+         debug_printf("Exception occurred while servicing task %i\n", current_servicing_task);
+
+      kernel_panic(); // any exception in the kernel panics
    }
 
-   if((regs->cs & 3) && get_current_task() >= 0)
-      task_execute_queued_subroutine(regs, get_current_task());
-}
-
-registers_t *get_regs() { // debugging only
-   return cur_regs;
+   if((regs->cs & 3) && get_current_task() >= 0) {
+      if(!task_execute_queued_subroutine(regs, get_current_task()) && get_current_task_state()->crashed)
+         switch_task(regs, false);
+   }
 }

@@ -9,6 +9,10 @@ extern int videomode;
 
 int gui_mouse_x = 0;
 int gui_mouse_y = 0;
+int gui_mouse_speed = 10;
+int gui_mouse_remainder_x = 0;
+int gui_mouse_remainder_y = 0;
+bool gui_mouse_wrap = false;
 
 uint16_t gui_bg;
 
@@ -122,8 +126,8 @@ extern void wm_launch_thread_main();
 
 void gui_init_thread() {
    // kernel thread to kick off other kernel threads
-   LAUNCH_KTHREAD(wm_thread_main, true);
-   LAUNCH_KTHREAD(wm_launch_thread_main, false);
+   LAUNCH_KTHREAD(&wm_thread_main, true);
+   LAUNCH_KTHREAD(&wm_launch_thread_main, false);
    gui_redrawall();
 
    // kthread_exit
@@ -150,7 +154,7 @@ void gui_init_meat(void *regs, void *msg) {
    gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
    mouse_enable();
 
-   LAUNCH_KTHREAD(gui_init_thread, false);
+   LAUNCH_KTHREAD(&gui_init_thread, false);
    gui_writestr("\nInit complete\n\n", COLOUR_CYAN);
 
    getSelectedWindow()->minimised = true;
@@ -311,20 +315,33 @@ void gui_cursor_draw() {
    gui_cursor_shown = true;
 }
 
-void mouse_update(void *regs, int relX, int relY) {
-   if(relX == 0 && relY == 0) return;
+void mouse_update(void *regs, int *relX, int *relY) {
+   // scale
+   *relX *= gui_mouse_speed;
+   *relX += gui_mouse_remainder_x;
+   gui_mouse_remainder_x = *relX%10;
+   *relX /= 10;
+   *relY *= gui_mouse_speed;
+   *relY += gui_mouse_remainder_y;
+   gui_mouse_remainder_y = *relY%10;
+   *relY /= 10;
 
-   gui_mouse_x += relX;
-   gui_mouse_y -= relY;
+   if(*relX == 0 && *relY == 0) return;
 
-   // wrap around
-   /*gui_mouse_x = (gui_mouse_x + surface.width) % surface.width;
-   gui_mouse_y = (gui_mouse_y + surface.height) % surface.height;*/
-   // clamp
-   if(gui_mouse_x < 0) gui_mouse_x = 0;
-   if(gui_mouse_y < 0) gui_mouse_y = 0;
-   if(gui_mouse_x >= surface.width - 4) gui_mouse_x = surface.width - 5;
-   if(gui_mouse_y >= surface.height) gui_mouse_y = surface.height - 1;
+   gui_mouse_x += *relX;
+   gui_mouse_y -= *relY;
+
+   if(gui_mouse_wrap) {
+      // wrap around
+      gui_mouse_x = (gui_mouse_x % surface.width + surface.width) % surface.width;
+      gui_mouse_y = (gui_mouse_y % surface.height + surface.height) % surface.height;
+   } else {
+      // clamp
+      if(gui_mouse_x < 0) gui_mouse_x = 0;
+      if(gui_mouse_y < 0) gui_mouse_y = 0;
+      if(gui_mouse_x >= surface.width - 4) gui_mouse_x = surface.width - 5;
+      if(gui_mouse_y >= surface.height) gui_mouse_y = surface.height - 1;
+   }
 
    gui_cursor_restore_bg();
    windowmgr_mousemove(regs, gui_mouse_x, gui_mouse_y);
@@ -352,6 +369,8 @@ void mouse_release(registers_t *regs) {
    bool redraw = false;
 
    if(mouse_held) {
+      windowmgr_release(gui_mouse_x, gui_mouse_y);
+
       gui_window_t *window = getSelectedWindow();
       if(window) {
          if(window->dragged) {

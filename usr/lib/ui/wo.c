@@ -30,6 +30,7 @@ wo_t *create_wo(int x, int y, int width, int height) {
    wo->focusable = false;
 
    wo->data = NULL;
+   wo->user_data = NULL;
    wo_reset_funcs(wo);
    return wo;
 }

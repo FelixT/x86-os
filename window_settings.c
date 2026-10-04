@@ -160,19 +160,6 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
       // window settings
       window_resize(NULL, window, 370, 180);
 
-      settings->d_bgcolour_wo = NULL;
-      settings->d_bgcolourpick_wo = NULL;
-      settings->d_bgimg_wo = NULL;
-      settings->d_bgimgpick_wo = NULL;
-      settings->theme_wo = NULL;
-      settings->theme_gradientstyle_wo = NULL;
-      settings->theme_colour_wo = NULL;
-      settings->theme_colourpick_wo = NULL;
-      settings->theme_colour2_wo = NULL;
-      settings->theme_colour2pick_wo = NULL;
-      settings->theme_txtpadding_wo = NULL;
-      settings->theme_fontpath_wo = NULL;
-
       int y = 35;
       char text[256];
 

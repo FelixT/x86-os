@@ -90,6 +90,7 @@ void settings_colourbox_release(wo_t *wo, int window) {
    (void)window;
    label_t *label_data = wo->data;
    int d = dialog_colourpicker(label_data->colour_bg, &settings_colourbox_callback);
+   if(d < 0) return;
    colourpicker_wos[get_dialog(d)->window] = wo;
    debug_println("Dialog w %i", get_dialog(d)->window);
 }
@@ -153,11 +154,9 @@ void set_window_txtcolour(wo_t *wo, int window) {
    ui_redraw(ui);
 }
 
-void set_font_padding(wo_t *wo, int window) {
-   (void)window;
-   input_t *input = wo->data;
-   set_setting(SETTINGS_SYS_FONT_PADDING, strtoint(input->text));
-   clear_w(window);
+void set_font_padding(int value) {
+   set_setting(SETTING_SYS_FONT_PADDING, value);
+   clear_w(-1);
    ui_redraw(ui);
 }
 
@@ -225,30 +224,6 @@ void set_gradientstyle(wo_t *wo, int index, int window) {
    set_setting(SETTING_THEME_GRADIENTSTYLE, index);
 }
 
-void padding_increase(wo_t *wo, int window) {
-   (void)wo;
-   int padding = strtoint(((input_t*)fontpadding_input->data)->text);
-   padding++;
-   char buffer[4];
-   inttostr(padding, buffer);
-   set_input_text(fontpadding_input, buffer);
-   set_font_padding(fontpadding_input, window);
-   clear_w(window);
-   ui_redraw(ui);
-}
-
-void padding_decrease(wo_t *wo, int window) {
-   (void)wo;
-   int padding = strtoint(((input_t*)fontpadding_input->data)->text);
-   padding--;
-   char buffer[4];
-   inttostr(padding, buffer);
-   set_input_text(fontpadding_input, buffer);
-   set_font_padding(fontpadding_input, window);
-   clear_w(window);
-   ui_redraw(ui);
-}
-
 void desktop_enable_checkbox_callback(wo_t *wo, int window) {
    checkbox_t *check_data = wo->data;
    char buffer[4];
@@ -265,24 +240,14 @@ void desktop_enable_bgimg_checkbox_callback(wo_t *wo, int window) {
    set_desktop_bgimg_enabled(desktopbgimgenabled_input, window);
 }
 
-void font_padding_keypress(wo_t *wo, uint16_t c, int window) {
-   if(c == 0x100) { 
-      // uparrow
-      input_t *input = wo->data;
-      char buf[4];
-      inttostr(strtoint(input->text)+1, buf);
-      set_input_text(wo, buf);
-      set_font_padding(wo, window);
-   } else if(c == 0x101) {
-      // downarrow
-      input_t *input = wo->data;
-      char buf[4];
-      inttostr(strtoint(input->text)-1, buf);
-      set_input_text(wo, buf);
-      set_font_padding(wo, window);
-   } else {
-      keypress_input(wo, c, window);
-   }
+void set_mouse_speed(int value) {
+   set_setting(SETTING_MOUSE_SPEED, value);
+}
+
+void set_mouse_wrap(wo_t *wo, int window) {
+   (void)window;
+   input_t *input = wo->data;
+   set_setting(SETTING_MOUSE_WRAP, strtoint(input->text));
 }
 
 void resize() {
@@ -307,7 +272,8 @@ void _start() {
    // register as dialog
    int index = get_free_dialog();
    dialog_t *dialog = get_dialog(index);
-   dialog_init(dialog, -1);
+   if(!dialog_init(dialog, -1))
+      exit(1);
    ui = dialog->ui;
 
    override_resize(&resize, -1);
@@ -406,20 +372,7 @@ void _start() {
 
    // font padding
    settings_create_label(font_group, y, "Padding");
-   inttostr(get_setting(SETTINGS_SYS_FONT_PADDING, NULL), buffer);
-   fontpadding_input = settings_create_input(font_group, y, buffer, &set_font_padding);
-   fontpadding_input->width-=20;
-   fontpadding_input->keypress_func = &font_padding_keypress;
-   char btnbuf[2];
-   btnbuf[0] = 0x80; // uparrow
-   btnbuf[1] = '\0';
-   button = create_button(260, y, 20, 10, btnbuf);
-   set_button_release(button, &padding_increase);
-   groupbox_add(font_group, button);
-   btnbuf[0] = 0x81; // downarrow
-   button = create_button(260, y+10, 20, 10, btnbuf);
-   set_button_release(button, &padding_decrease);
-   groupbox_add(font_group, button);
+   groupbox_add(font_group, dialog_create_numeric(140, y, 140, 20, get_setting(SETTING_SYS_FONT_PADDING, NULL), &set_font_padding));
    y+=25;
 
    groupbox_resize(font_group, box_width, y + 12);
@@ -469,6 +422,25 @@ void _start() {
    y+=25;
 
    groupbox_resize(desktop_group, box_width, y + 12);
+   box_y += y + 20;
+
+   // mouse settings
+   wo_t *mouse_group = create_groupbox(box_x, box_y, box_width, 100, "Mouse settings");
+   ui_add(ui, mouse_group);
+   y = 5;
+
+   // speed
+   settings_create_label(mouse_group, y, "Mouse speed");
+   groupbox_add(mouse_group, dialog_create_numeric(140, y, 140, 20, get_setting(SETTING_MOUSE_SPEED, NULL), &set_mouse_speed));
+   y+=25;
+
+   // wrap
+   settings_create_label(mouse_group, y, "Mouse wrap");
+   inttostr(get_setting(SETTING_MOUSE_WRAP, NULL), buffer);
+   input = settings_create_input(mouse_group, y, buffer, &set_mouse_wrap);
+   y+=25;
+
+   groupbox_resize(mouse_group, box_width, y + 12);
    box_y += y + 20;
 
    for(int i = 0; i < 8; i++)

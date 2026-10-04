@@ -593,7 +593,8 @@ void _start() {
 
    // output window
    dialog = get_dialog(get_free_dialog());
-   dialog_init(dialog, create_window(340, 240));
+   if(!dialog_init(dialog, create_window(340, 240)))
+      exit(1);
    dialog_set_title(dialog, "f3BASIC output");
    set_window_minimised(false, -1);
    

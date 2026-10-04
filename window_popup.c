@@ -18,12 +18,12 @@ void window_popup_init(gui_window_t *window, gui_window_t *parent) {
 
 // define default popups - common mini-progs
 
-void window_popup_dialog_state_free(void *windowp) {
+void window_popup_dialog_state_free(void *windowp, void *regs) {
    gui_window_t *window = (gui_window_t*)windowp;
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    if(dialog == NULL) return;
    if(!dialog->answered && dialog->dismiss_func != NULL)
-      dialog->dismiss_func(dialog); // if window is closed
+      dialog->dismiss_func(dialog, regs); // if window is closed
    free((uint32_t)dialog, window->state_size);
    window->state = NULL;
 }

@@ -118,7 +118,8 @@ void close_callback(wo_t *wo, int window) {
 void _start() {
    int index = get_free_dialog();
    dialog = get_dialog(index);
-   dialog_init(dialog, -1);
+   if(!dialog_init(dialog, -1))
+      exit(1);
    dialog_set_title(dialog, "Task Manager");
    int width = get_width();
 

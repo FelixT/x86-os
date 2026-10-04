@@ -257,6 +257,7 @@ gui_window_t *getSelectedWindow() {
 }
 
 void window_close(void *regs, int windowIndex) {
+   if(windowIndex < 0 || windowIndex >= getWindowCount()) return;
    gui_window_t *window = getWindow(windowIndex);
    if(window->closed) return;
 
@@ -275,9 +276,9 @@ void window_close(void *regs, int windowIndex) {
    task_state_t *task_state = task > -1 ? &gettasks()[task] : NULL;
    if(regs) {
       if(task_state && task_state->process->window == windowIndex) {
-         end_task(task, regs); // don't kill task if closing child window
-         // re-establish pointer as gui_windows may have been resized in end_task
-         window = getWindow(windowIndex);
+         // don't kill task if closing child window
+         if(!end_task(task, regs))
+            return; // keep window open so the task can be closed
       } else {
          // call close func if set
          debug_printf("Calling close func for window %i\n", windowIndex);
@@ -325,7 +326,7 @@ void window_close(void *regs, int windowIndex) {
    // free state
    if(window->state != NULL) {
       if(window->state_free != NULL) {
-         window->state_free(window);
+         window->state_free(window, regs);
       } else {
          free((uint32_t)window->state, window->state_size);
          window->state = NULL;
@@ -521,25 +522,39 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
    int titleX = window->x + window->width/2 - titleWidth/2;
    int titleY = window->y + (TITLEBAR_HEIGHT - getFont()->height)/2;
 
+   uint16_t c1;
+   uint16_t c2;
    if(wm_settings.theme == 1) {
       // gradient titlebar
-      draw_rect_gradient(&surface, wm_settings.titlebar_colour, wm_settings.titlebar_colour2, window->x, window->y, window->width, TITLEBAR_HEIGHT, wm_settings.titlebar_gradientstyle);
+      c1 = wm_settings.titlebar_colour;
+      c2 = wm_settings.titlebar_colour2;
+      if(!window->active) {
+         c1 = rgb16_lighten(c1, 100);
+         c2 = rgb16_lighten(c2, 100);
+      }
+      draw_rect_gradient(&surface, c1, c2, window->x, window->y, window->width, TITLEBAR_HEIGHT, wm_settings.titlebar_gradientstyle);
    } else {
       // classic titlebar
-      draw_rect(&surface, wm_settings.titlebar_colour, window->x, window->y, window->width, TITLEBAR_HEIGHT);
+      c1 = wm_settings.titlebar_colour;
+      if(!window->active)
+         c1 = rgb16_lighten(c1, 120);
+      draw_rect(&surface, c1, window->x, window->y, window->width, TITLEBAR_HEIGHT);
       // shading
-      for(int i = 0; i < (TITLEBAR_HEIGHT-6)/2; i++)
-         draw_line(&surface, COLOUR_LIGHT_GREY, window->x+4, window->y+4+(i*2), false, shadingWidth);
+      c2 = COLOUR_LIGHT_GREY;
+      if(!window->active)
+         c2 = rgb16_lighten(c2, 80);
+      for(int i = 0; i < TITLEBAR_HEIGHT-7; i++)
+         draw_line(&surface, (i%2)==0?c2 : rgb16_lighten(c1, 50), window->x+4, window->y+4+i, false, shadingWidth);
       // rectangle behind title
-      draw_rect(&surface, wm_settings.titlebar_colour, titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
+      draw_rect(&surface, rgb16_lighten(c1, 50), titleX-6, window->y+3, titleWidth+12, getFont()->height+getFont()->padding*2+2);
    }
    // draw text
    draw_string(&surface, window->title, rgb16(210,210,210), titleX, titleY+1); // shadow
    draw_string(&surface, window->title, 0, titleX, titleY);
    if(window->active) {
       // draw underline
-      draw_line(&surface, rgb16(180,180,180), titleX, titleY+getFont()->height+1, false, titleWidth);
-      draw_line(&surface, rgb16(220,220,220), titleX, titleY+getFont()->height+2, false, titleWidth);
+      draw_line(&surface, c2, titleX, titleY+getFont()->height+1, false, titleWidth);
+      draw_line(&surface, rgb16_lighten(c1, 50), titleX, titleY+getFont()->height+2, false, titleWidth);
    }
 
    // titlebar buttons
@@ -685,7 +700,6 @@ void window_draw(gui_window_t *window) {
    }
 
    if(window->needs_redraw || window == selectedWindow) {
-      window_draw_outline(window, true);
       // call window objects draw funcs
       for(int i = 0; i < window->window_object_count; i++) {
          windowobj_t *wo = window->window_objects[i];
@@ -775,6 +789,7 @@ void windowmgr_init() {
    setSelectedWindowIndex(0);
    windowCount++;
    render_order[0] = &gui_windows[0];
+   window_draw_outline(&gui_windows[0], false);
    window_draw(&gui_windows[0]);
 
    // set up default menu
@@ -902,6 +917,8 @@ void windowmgr_swap_window() {
 
    if(selectedWindow)
       selectedWindow->minimised = false;
+
+   gui_redrawall();
 }
 
 static void windowmgr_launch_apps();
@@ -929,6 +946,27 @@ void windowmgr_keypress(void *regs, int scan_code) {
       // alt+w
       if(scan_to_char(scan_code, false) == 'w') {
          window_close(regs, gui_selected_window);
+         gui_redrawall();
+         keyboard_alt = false;
+         return;
+      }
+      // alt+up
+      if(scan_code == 72) {
+         gui_window_t *first = render_order[0];
+         if(first && !first->active && first->minimised) {
+            first->minimised = false;
+            setSelectedWindowIndex(get_window_index_from_pointer(first));
+            gui_redrawall();
+         }
+         keyboard_alt = false;
+         return;
+      }
+      // alt+down
+      if(scan_code == 80) {
+         if(selectedWindow) {
+            selectedWindow->minimised = true;
+            setSelectedWindowIndex(-1);
+         }
          gui_redrawall();
          keyboard_alt = false;
          return;
@@ -963,6 +1001,12 @@ void windowmgr_keypress(void *regs, int scan_code) {
       // alt+esc
       if(scan_code == 0x01) {
          vm_queue_launch("/sys/taskmgr.elf", true, false);
+         keyboard_alt = false;
+         return;
+      }
+      // alt+t
+      if(scan_to_char(scan_code, false) == 't') {
+         vm_queue_launch("/sys/term.elf", true, false);
          keyboard_alt = false;
          return;
       }
@@ -1298,7 +1342,8 @@ bool windowmgr_click(void *regs, int x, int y) {
    // clicked app btn
    if(x >= app_button->x && x <= app_button->x + app_button->width
       && y >= app_button->y && y <= app_button->y + app_button->height) {
-      windowmgr_launch_apps();
+      app_button->clicked = true;
+      wm_draw();
       return true;
    }
 
@@ -1350,6 +1395,19 @@ bool windowmgr_click(void *regs, int x, int y) {
    return true;
 }
 
+void windowmgr_release(int x, int y) {
+   if(app_button->clicked) {
+      app_button->clicked = false;
+      if(x >= app_button->x && x <= app_button->x + app_button->width
+      && y >= app_button->y && y <= app_button->y + app_button->height) {
+         windowmgr_launch_apps();
+         return;
+      }
+      wm_draw();
+      return;
+   }
+}
+
 void windowmgr_rightclick(void *regs, int x, int y) {
    (void)(regs);
    if(selectedWindow == NULL || !(x - selectedWindow->x >= 0 && x - selectedWindow->x < selectedWindow->width
@@ -1394,6 +1452,7 @@ void windowmgr_draw() {
    }
 
    windowobj_draw(default_menu);
+   toolbar_draw();
 
    gui_cursor_save_bg();
    gui_cursor_draw();
@@ -1665,6 +1724,7 @@ void windowmgr_scroll(void *regs, bool up) {
    window_scroll_to(regs, offsetY);
 }
 
+// just store index in struct lol(!) or at least do pointer maths
 int get_window_index_from_pointer(gui_window_t *window) {
    for(int i = 0; i < windowCount; i++) {
       if(window == &gui_windows[i]) return i;

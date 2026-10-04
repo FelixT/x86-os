@@ -37,7 +37,8 @@ void click_callback(wo_t *wo, int window) {
 
 void _start() {
     dialog = get_dialog(get_free_dialog());
-    dialog_init(dialog, -1);
+    if(!dialog_init(dialog, -1))
+        exit(1);
     dialog_set_title(dialog, "Prog4");
 
     FILE *f = fopen("/bmp/file20.bmp", "r");

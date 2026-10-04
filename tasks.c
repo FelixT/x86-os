@@ -262,10 +262,14 @@ void task_reset_windows(int task) {
    if(taskw >= 0 && taskw < getWindowCount() && !getWindow(taskw)->closed) {
       gui_window_t *window = getWindow(taskw);
       window_resetfuncs(window);
+      strcpy(window->title, "KTerm");
+      window_draw_outline(window, true);
       for(int i = 0; i < window->child_count; i++) {
          gui_window_t *child = (gui_window_t*)window->children[i];
          if(!child || child->closed) continue;
          window_resetfuncs(child);
+         strcpy(child->title, "KTerm");
+         window_draw_outline(child, true);
       }
    }
 }
@@ -315,19 +319,19 @@ static void free_task_events(task_state_t *task) {
    }
 }
 
-void end_task(int index, registers_t *regs) {
-   if(index < 0 || index >= TOTAL_TASKS) return;
+bool end_task(int index, registers_t *regs) {
+   if(index < 0 || index >= TOTAL_TASKS) return false;
 
    task_state_t *task = &tasks[index];
    if(!task->enabled) {
       debug_printf("Task %u already ended\n", index);
-      return;
+      return true;
    }
 
    if(task->kernel_esp) {
       debug_printf("Can't end task %i - task is parked in kernel or a kthread\n", index);
       // todo: kill_pending flag
-      return;
+      return false;
    }
 
    debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
@@ -345,8 +349,6 @@ void end_task(int index, registers_t *regs) {
       debug_printf("Task was in syscall %i\n", task->syscall_no);
 
    task->enabled = false;
-   if(regs != NULL && (index == get_current_task() || !task_exists()))
-      switch_task(regs, false); // swap page dir before freeing
 
    // free channels
    msg_cleanup_task(task);
@@ -358,57 +360,74 @@ void end_task(int index, registers_t *regs) {
       // main thread, terminate entire process
       debug_printf("Ending task process\n");
 
-      // free task memory
-      if(task->process->prog_size != 0)
-         free(task->process->prog_start, task->process->prog_size);
-
-      // free process events
-      free_process_events(task->process);
-
-      // free fds
-      for(int i = 0; i < task->process->fd_count; i++) {
-         fs_file_t *fd = task->process->file_descriptors[i];
-         if(fd) fs_close_locked(fd); // safe to call without lock as task owns fd
-      }
-
       // kill other threads
+      int remaining_threads = 0;
       debug_printf("Ending %i other threads of process\n", task->process->no_threads - 1);
       for(int i = 1; i < MAX_TASK_THREADS; i++) {
          task_state_t *thread = task->process->threads[i];
          if(!thread) continue;
-         end_task(thread->task_id, NULL);
-         thread->process = NULL;
-      }
-
-      task_reset_windows(index);
-
-      // free heap
-      if(task->process->heap_end > task->process->heap_start) {
-         for(uint32_t addr = task->process->heap_start; addr < task->process->heap_end; addr+=PAGE_SIZE) {
-            free(page_getphysical(task->process->page_dir, addr), PAGE_SIZE);
+         if(!end_task(thread->task_id, NULL)) {
+            task->process->threads[i] = NULL;
+            task->process->threads[remaining_threads++] = thread;
          }
+         else
+            thread->process = NULL;
       }
 
-      // close shared memory
-      shared_cleanup(task->process);
+      if(!remaining_threads) {
+         // free task memory
+         if(task->process->prog_size != 0)
+            free(task->process->prog_start, task->process->prog_size);
 
-      // silence mapped devices + reclaim DMA buffers
-      dma_cleanup(task->process);
+         // free process events
+         free_process_events(task->process);
 
-      // free ports
-      msg_cleanup_process(task->process);
+         // free fds
+         for(int i = 0; i < task->process->fd_count; i++) {
+            fs_file_t *fd = task->process->file_descriptors[i];
+            if(fd) fs_close_locked(fd); // safe to call without lock as task owns fd
+         }
 
-      // free page dir
-      if(task->process->page_dir != page_get_kernel_pagedir())
-         free_page_dir(task->process->page_dir);
-      else // binary task - page dir persists, so undo stack mapping
-         task_unmap_stack(task);
+         task_reset_windows(index);
 
-      // free launch args
-      free_launch_args(task->process->launch_args, task->process->launch_argc);
+         // free heap
+         if(task->process->heap_end > task->process->heap_start) {
+            for(uint32_t addr = task->process->heap_start; addr < task->process->heap_end; addr+=PAGE_SIZE) {
+               free(page_getphysical(task->process->page_dir, addr), PAGE_SIZE);
+            }
+         }
 
-      // free process
-      free((uint32_t)task->process, sizeof(process_t));
+         // close shared memory
+         shared_cleanup(task->process);
+
+         // silence mapped devices + reclaim DMA buffers
+         dma_cleanup(task->process);
+
+         // free ports
+         msg_cleanup_process(task->process);
+
+         // switch pagedir before freeing
+         if(task->process->page_dir == page_get_current()) {
+            if(regs)
+               switch_task(regs, false); // all process threads are ended
+            else
+               swap_pagedir(page_get_kernel_pagedir());
+         }
+
+         // free page dir
+         if(task->process->page_dir != page_get_kernel_pagedir())
+            free_page_dir(task->process->page_dir);
+         else // binary task - page dir persists, so undo stack mapping
+            task_unmap_stack(task);
+
+         // free launch args
+         free_launch_args(task->process->launch_args, task->process->launch_argc);
+
+         // free process
+         free((uint32_t)task->process, sizeof(process_t));
+      } else {
+         debug_printf("%i threads couldn't be ended\n", remaining_threads);
+      }
       task->process = NULL;
    } else {
       free_task_events(task);
@@ -432,6 +451,11 @@ void end_task(int index, registers_t *regs) {
 
    task->reserved = false;
    task->in_routine = false;
+
+   if(regs && !get_current_task_state()->enabled)
+      switch_task(regs, false);
+
+   return true;
 }
 
 void tasks_alloc() {
@@ -508,7 +532,6 @@ int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bo
    return task_index;
 }
 
-extern __attribute__((noreturn)) void kernel_panic(void);
 void tasks_init(registers_t *regs) {
    // enable preemptive multitasking
 
@@ -660,6 +683,14 @@ bool kernel_yield_to(int next_index) {
    if(!next->kernel_esp) {
       // run any routines queued while task was parked
       task_execute_queued_subroutine(&next->registers, next_index);
+      if(next->crashed) { // execute_subroutine failed, task crashed
+         // undo swap
+         current_task = cur->task_id;
+         tss_start.esp0 = cur->kernel_stack_top;
+         if(cur->process->page_dir != page_get_current())
+            swap_pagedir(cur->process->page_dir);
+         return false; // no yield
+      }
 
       // copy next tasks registers into stack
       registers_t *frame = (registers_t*)(next->kernel_stack_top - sizeof(registers_t));
@@ -676,7 +707,17 @@ bool kernel_yield_to(int next_index) {
 }
 
 bool kernel_yield() {
-   return kernel_yield_to(next_task(true));
+   int next = next_task(true);
+   while(next >= 0) {
+      if(!kernel_yield_to(next)) {
+         int next2 = next_task(true);
+         if(next == next2) return false;
+         next = next2;
+         continue; // may have crashed while attempting to resume/execute queued routine
+      }
+      return true;
+   }
+   return false;
 }
 
 void kernel_block() {
@@ -776,11 +817,12 @@ page_dir_entry_t *get_current_task_pagedir() {
 }
 
 int get_task_from_window(int windowIndex) {
+   if(windowIndex < 0) return -1;
    for(int i = 0; i < TOTAL_TASKS; i++) {
       task_state_t *task = &tasks[i];
       if(!task->enabled) continue;
       if(task->process->window == windowIndex) {
-         return i;
+         return task->process->threads[0] ? task->process->threads[0]->task_id : i; // main thread
       } else {
          if(task->process->window < 0) continue;
          gui_window_t *searchWindow = getWindow(windowIndex);
@@ -792,14 +834,35 @@ int get_task_from_window(int windowIndex) {
             if(child != NULL && child->state != NULL) // dialog
                continue;
             if(child == searchWindow)
-               return i;
+               return task->process->threads[0] ? task->process->threads[0]->task_id : i; // main thread
          }
       }
    }
    return -1;
 }
 
-void task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
+bool task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
+   if(argc > 10) {
+      debug_printf("task_execute_subroutine called with too many args\n");
+      kernel_panic();
+   }
+
+   // construct stack frame
+   uint32_t frame[11];
+
+   // push unused return address to stack
+   frame[0] = regs->eip;
+
+   // push arguments to stack
+   for(int i = 0; i < argc; i++)
+      frame[argc-i] = args[i];
+
+   int size = 4*(argc+1);
+   if(copy_to_task(current_task, (void*)(regs->useresp - size), (void*)frame, size) != size) {
+      debug_printf("task_execute_subroutine: copying args failed\n");
+      return false;
+   }
+   
    strcpy(tasks[current_task].routine_name, name);
 
    // save registers
@@ -810,15 +873,7 @@ void task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
    tasks[current_task].routine_args = args;
    tasks[current_task].routine_argc = argc;
 
-   // push arguments to stack
-   for(int i = 0; i < argc; i++) {
-      regs->useresp -= 4;
-      ((uint32_t*)regs->useresp)[0] = args[i];
-   }
-
-   // push unused return address to stack
-   regs->useresp -= 4;
-   ((uint32_t*)regs->useresp)[0] = regs->eip;
+   regs->useresp -= size;
 
    // simulate JMP
 
@@ -826,6 +881,8 @@ void task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
    regs->eip = addr;
 
    tasks[current_task].in_routine = true;
+
+   return true;
 }
 
 void task_pause(task_state_t *task, task_pause_reason_t reason) {
@@ -873,8 +930,9 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
    // check events queue
 
    task_state_t *task = &tasks[taskid];
-   if(task->in_routine)
-      return false; // wait until task_subroutine_end to call this function
+   // wait until task_subroutine_end to call this function if in routine
+   if(task->in_routine || task->crashed)
+      return false;
 
    while(true) {
       int e = task_find_queued_subroutine(task);
@@ -888,7 +946,10 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
 
       if(!stale) {
          if(!switch_to_task(taskid, regs)) return false;
-         task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc); // takes ownership of args
+         if(!task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc)) { // takes ownership of args
+            show_endtask_dialog(14, NULL, taskid);
+            return false;
+         }
       } else {
          free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
       }
@@ -994,11 +1055,16 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
    if(task_find_queued_subroutine(task) >= 0) {
       debug_printf("Not in routine but queue has content\n");
       bool queued = task_queue_subroutine(task, name, addr, args, argc);
-      task_execute_queued_subroutine(regs, current_task);
+      if(!task_execute_queued_subroutine(regs, current_task) && task->crashed)
+         switch_task(regs, false);
       return queued;
    }
 
-   task_execute_subroutine(regs, name, addr, args, argc);
+   if(!task_execute_subroutine(regs, name, addr, args, argc)) {
+      free((uint32_t)args, sizeof(uint32_t*)*argc);
+      show_endtask_dialog(14, regs, task->task_id);
+      return false;
+   }
 
    return true;
 }
@@ -1043,6 +1109,8 @@ void task_write_to_window(int task, char *out, bool children) {
       window_writestr(out, window->txtcolour, w);
       if(children) {
          for(int i = 0; i < window->child_count; i++) {
+            if(!window->children[i] || ((gui_window_t*)window->children[i])->closed)
+               continue;
             window_writestr(out, window->txtcolour, get_window_index_from_pointer(window->children[i]));
          }
       }
@@ -1134,6 +1202,42 @@ static bool task_addr_demand_paged(task_state_t *task, uint32_t addr) {
    return addr >= process->heap_start && addr < process->heap_end;
 }
 
+bool task_demand_map(process_t *process, uint32_t addr) {
+   // allocate and map a zeroed page for a demand paged addr
+   uint8_t *page = malloc(PAGE_SIZE); // returns physical addr
+   if(!page) {
+      debug_printf("demand paging: system ran out of physical memory\n");
+      return false;
+   }
+   memset(page, 0, PAGE_SIZE); // zero mem
+   addr = addr & ~PAGE_MASK;  // page align
+   if(!map(process->page_dir, (uint32_t)page, addr, 1, 1, 0)) {
+      debug_printf("demand paging: couldn't map 0x%h\n", addr);
+      free((uint32_t)page, PAGE_SIZE);
+      return false;
+   }
+   invlpg(addr);
+   return true;
+}
+
+static int task_prefault(task_state_t *task, void *mem, int size) {
+   // map lazy allocated pages to avoid fauling mid operation
+   uint32_t vaddr = (uint32_t)mem;
+   page_dir_entry_t *page_dir = task->process->page_dir;
+
+   uint32_t base = vaddr & ~PAGE_MASK;
+   int pages = (size+(vaddr&PAGE_MASK)+(PAGE_SIZE-1))/PAGE_SIZE;
+   for(int i = 0; i < pages; i++) {
+      uint32_t page_addr = base + i*PAGE_SIZE;
+      int mapping = page_checkmapping(page_dir, page_addr);
+      if(mapping == PAGE_USERRW) continue;
+      if(mapping != PAGE_NOTPRESENT || !task_addr_demand_paged(task, page_addr)
+      || !task_demand_map(task->process, page_addr))
+         return i == 0 ? 0 : (int)(page_addr - vaddr);
+   }
+   return size;
+}
+
 int task_validate_str(task_state_t *task, char *str, int maxlen) {
    // validate str provided by user before kernel uses/reads it
    // out: len on success, -1 on invalid
@@ -1220,6 +1324,8 @@ int copy_to_task(int task, void *dest, void *src, size_t size) {
    task_state_t *task_state = &gettasks()[task];
    int maxsize = task_validate_maxsize(task_state, dest, size, 1);
    if(maxsize < 0 || (size > 0 && maxsize == 0)) return -1; // invalid buffer/size
+   maxsize = task_prefault(task_state, dest, maxsize);
+   if(size > 0 && maxsize == 0) return -1; // out of memory
 
    int prev = current_servicing_task;
    current_servicing_task = task;

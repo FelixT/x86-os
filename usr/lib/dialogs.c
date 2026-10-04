@@ -178,7 +178,8 @@ void dialog_defaultmenu_minimise(wo_t *menu, int item, int window) {
    set_window_minimised(true, window);
 }
 
-void dialog_init(dialog_t *dialog, int window) {
+bool dialog_init(dialog_t *dialog, int window) {
+   if(window < -1) return false;
    dialog->window = window;
    dialog->surface = get_surface_w(window);
    dialog->ui = ui_init(&dialog->surface, window);
@@ -200,6 +201,7 @@ void dialog_init(dialog_t *dialog, int window) {
    add_menu_item(dialog->ui->default_menu, "Minimise", &dialog_defaultmenu_minimise);
    add_menu_item(dialog->ui->default_menu, "Settings", &dialog_defaultmenu_settings);
    ui_add(dialog->ui, dialog->ui->default_menu);
+   return true;
 }
 
 void dialog_add(dialog_t *dialog, char *key, wo_t *wo) {
@@ -216,7 +218,8 @@ bool dialog_msg(char *title, char *text) {
    if(index < 0) return false;
    dialog_t *msg = dialogs[index];
 
-   dialog_init(msg, create_window(260, 100));
+   if(!dialog_init(msg, create_window(260, 100)))
+      return false;
    msg->type = DIALOG_MSG;
 
    wo_t *label_wo = create_label(15, y, 260 - 30, 20, text);
@@ -268,9 +271,10 @@ int dialog_yesno(char *title, char *text, void *return_func) {
       return -1;
    }
    int index = get_free_dialog();
-   if(index < 0) return false;
+   if(index < 0) return -1;
    dialog_t *dialog = dialogs[index];
-   dialog_init(dialog, create_window(260, 100));
+   if(!dialog_init(dialog, create_window(260, 100)))
+      return -1;
    dialog->callback = return_func;
    dialog->type = DIALOG_YESNO;
    dialog->input_wo = NULL;
@@ -313,9 +317,10 @@ int dialog_input(char *text, void *return_func) {
       return -1;
    }
    int index = get_free_dialog();
-   if(index < 0) return false;
+   if(index < 0) return -1;
    dialog_t *input = dialogs[index];
-   dialog_init(input, create_window(260, 100));
+   if(!dialog_init(input, create_window(260, 100)))
+      return -1;
    input->callback = return_func;
    input->type = DIALOG_INPUT;
 
@@ -544,9 +549,10 @@ void dialog_colourpicker_rgbinput_return(wo_t *input, int window) {
 
 int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int window)) {
    int index = get_free_dialog();
-   if(index < 0) return false;
+   if(index < 0) return -1;
    dialog_t *dialog = dialogs[index];
-   dialog_init(dialog, create_window(320, 340));
+   if(!dialog_init(dialog, create_window(320, 340)))
+      return -1;
    dialog->callback = return_func;
    dialog->type = DIALOG_COLOURPICKER;
 
@@ -651,7 +657,6 @@ int dialog_filepicker_grid_click(wo_t *grid, int window, int row, int col) {
       if(strlen(filepath) > 1)
          strcat(filepath, "/");
       strcat(filepath, filename);
-      debug_println("Full path: %s", filepath);
 
       // find dir entry
       for(int i = 0; i < dialog->dir_size; i++) {
@@ -903,11 +908,12 @@ uint16_t *dialog_load_icon(char *path, int *width, int *height) {
 
 int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window)) {
    int index = get_free_dialog();
-   if(index < 0) return false;
+   if(index < 0) return -1;
    dialog_t *dialog = dialogs[index];
    int width = 335;
    int height = 280;
-   dialog_init(dialog, create_window(width, height));
+   if(!dialog_init(dialog, create_window(width, height)))
+      return -1;
    dialog->callback = return_func;
    dialog->type = DIALOG_FILEPICKER;
    dialog->dir_entries = NULL;
@@ -983,6 +989,7 @@ void dialog_colourbox_release(wo_t *wo, int window) {
    }
    label_t *label_data = wo->data;
    int d = dialog_colourpicker(label_data->colour_bg, &dialog_colourbox_callback);
+   if(d < 0) return;
    get_dialog(d)->state = wo;
 }
 
@@ -1027,6 +1034,7 @@ void dialog_browsebtn_release(wo_t *wo, int window) {
    dialog_wo_t *browsebtn = (dialog_wo_t *)wo;
    char *startdir = (char*)browsebtn->state;
    int d = dialog_filepicker(startdir, &dialog_browsebtn_callback);
+   if(d < 0) return;
    get_dialog(d)->state = wo;
 }
 
@@ -1041,6 +1049,103 @@ wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, c
    browsebtn->callback = callback;
    browsebtn->state = startpath;
    return &browsebtn->wo;
+}
+
+// number picker control
+
+typedef struct dialog_numeric_t {
+   wo_t *input;
+   void (*change_func)(int value);
+   int value;
+} dialog_numeric_t;
+
+void dialog_numeric_increase(wo_t *wo, int w) {
+   (void)w;
+   dialog_numeric_t *numeric = (dialog_numeric_t*)wo->user_data;
+   numeric->value++;
+   inttostr(numeric->value, get_input(numeric->input)->text);
+   get_input(numeric->input)->cursor_pos = strlen(get_input(numeric->input)->text);
+   numeric->change_func(numeric->value);
+}
+
+void dialog_numeric_decrease(wo_t *wo, int w) {
+   (void)w;
+   dialog_numeric_t *numeric = (dialog_numeric_t*)wo->user_data;
+   numeric->value--;
+   inttostr(numeric->value, get_input(numeric->input)->text);
+   get_input(numeric->input)->cursor_pos = strlen(get_input(numeric->input)->text);
+   numeric->change_func(numeric->value);
+}
+
+void dialog_numeric_release(wo_t *wo, draw_context_t draw_context, int x, int y) {
+   canvas_release(wo, draw_context, x, y);
+   wo->draw_func(wo, draw_context);
+}
+
+void dialog_numeric_keypress(wo_t *wo, uint16_t c, int w) {
+   dialog_numeric_t *numeric = (dialog_numeric_t*)wo->user_data;
+
+   if(c == 0x100) { 
+      // uparrow
+      numeric->value++;
+      inttostr(numeric->value, get_input(wo)->text);
+      get_input(wo)->cursor_pos = strlen(get_input(wo)->text);
+      numeric->change_func(numeric->value);
+   } else if(c == 0x101) {
+      // downarrow
+      numeric->value--;
+      inttostr(numeric->value, get_input(wo)->text);
+      get_input(wo)->cursor_pos = strlen(get_input(wo)->text);
+      numeric->change_func(numeric->value);
+   } else {
+      keypress_input(wo, c, w);
+   }
+}
+
+void dialog_numeric_return(wo_t *wo, int w) {
+   (void)w;
+   dialog_numeric_t *numeric = (dialog_numeric_t*)wo->user_data;
+   numeric->value = strtoint(get_input(wo)->text);
+   numeric->change_func(numeric->value);
+}
+
+wo_t *dialog_create_numeric(int x, int y, int width, int height, int start, void (*change_func)(int value)) {
+   dialog_numeric_t *numeric = (dialog_numeric_t*)malloc(sizeof(dialog_numeric_t));
+   numeric->value = start;
+   numeric->change_func = change_func;
+
+   wo_t *canvas = create_canvas(x, y, width, height);
+   get_canvas(canvas)->bordered = false;
+   get_canvas(canvas)->filled = false;
+   canvas->user_data = numeric;
+   canvas->release_func = &dialog_numeric_release;
+
+   wo_t *input = create_input(0, 0, width - 20, height);
+   input->user_data = numeric;
+   input->keypress_func = &dialog_numeric_keypress;
+   numeric->input = input;
+   get_input(input)->return_func = &dialog_numeric_return;
+   get_input(input)->valign = true;
+   get_input(input)->padding_left = 5;
+   inttostr(start, get_input(input)->text);
+   get_input(input)->cursor_pos = strlen(get_input(input)->text);
+   canvas_add(canvas, input);
+   int btn_height = height/2;
+   int btn_pad = height - btn_height*2;
+   int btn_x = width - 20;
+   char btnbuf[2];
+   btnbuf[0] = 0x80; // uparrow
+   btnbuf[1] = '\0';
+   wo_t *btn = create_button(btn_x, 0, 20, btn_height, btnbuf);
+   set_button_release(btn, &dialog_numeric_increase);
+   btn->user_data = numeric;
+   canvas_add(canvas, btn);
+   btnbuf[0] = 0x81; // downarrow
+   btn = create_button(btn_x, btn_height + btn_pad, 20, btn_height, btnbuf);
+   set_button_release(btn, &dialog_numeric_decrease);
+   btn->user_data = numeric;
+   canvas_add(canvas, btn);
+   return canvas;
 }
 
 // window settings dialog
@@ -1105,7 +1210,8 @@ int dialog_window_settings(int window, char *title) {
    if(index < 0) return -1;
    dialog_t *dialog = dialogs[index];
 
-   dialog_init(dialog, create_window(280, 100));
+   if(!dialog_init(dialog, create_window(280, 100)))
+      return -1;
    dialog->type = DIALOG_SETTINGS;
    dialog->parentWindow = window;
 

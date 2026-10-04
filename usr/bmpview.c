@@ -696,7 +696,8 @@ void resize_image(wo_t *wo, int index, int window) {
    (void)index;
    (void)window;
    dialog_t *popup_dialog = get_dialog(get_free_dialog());
-   dialog_init(popup_dialog, create_window(220, 120));
+   if(!dialog_init(popup_dialog, create_window(220, 120)))
+      return;
    dialog_set_title(popup_dialog, "Info");
 
    bool editable = info->bpp == 16;
@@ -817,7 +818,8 @@ void _start(int argc, char **args) {
 
    int index = get_free_dialog();
    dialog = get_dialog(index);
-   dialog_init(dialog, -1);
+   if(!dialog_init(dialog, -1))
+      exit(1);
    dialog_set_title(dialog, "BMP Viewer");
 
    override_click(&click, -1);
