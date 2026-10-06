@@ -61,13 +61,15 @@ void show_tasks() {
    wo_t *menu_wo = dialog_get(dialog, "tasks_menu");
    menu_t *menu = menu_wo->data;
    menu->item_count = 0;
+   char buffer[512];
    for(int i = 0; i < task_count; i++) {
       api_task_t *task = &tasks[i];
       if(!task->enabled) continue;
-      char buffer[64];
       sprintf(buffer, "Task %i ", task->id);
       if(task->parentid == task->id) {
          strcat(buffer, task->main_window_name);
+         if(strlen(task->main_window_name) == 0)
+            strcat(buffer, task->exe_path);
       } else {
          char buf2[16];
          sprintf(buf2, "(parent %i)", task->parentid);
@@ -201,7 +203,7 @@ void _start() {
    show_tasks();
 
    while(true) {
-      yield();
+      snooze();
    }
 
 }

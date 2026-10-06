@@ -18,10 +18,6 @@ extern void* irq_stub_table[];
 extern int videomode;
 extern bool switching; // preemptive multitasking enabled
 
-extern void mouse_leftclick(registers_t *regs, int relX, int relY);
-extern void mouse_rightclick(registers_t *regs);
-extern void mouse_release(registers_t *regs);
-
 __attribute__((aligned(0x10))) 
 static idt_entry_t idt[256];
 
@@ -29,6 +25,8 @@ static idtr_t idtr;
 
 #define IRQ_SIZE 32
 void (*irqs[IRQ_SIZE])(registers_t *regs);
+
+#define DEBUG_DELAYS 0
 
 void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
    idt_entry_t* descriptor = &idt[vector];
@@ -480,7 +478,8 @@ void keyboard_handler(registers_t *regs) {
          terminal_keypress(scan_to_char(scan_code, true));
 
    } else {
-      gui_keypress(regs, scan_code);
+      gui_keypress(scan_code);
+      wm_event_thread_exit_resume(regs);
    }
 
 }
@@ -490,6 +489,7 @@ uint8_t mouse_data[4];
 
 extern bool mouse_enabled;
 extern bool mouse_scrolling_enabled;
+
 void mouse_handler(registers_t *regs) {
    if(!mouse_enabled) return;
 
@@ -514,27 +514,25 @@ void mouse_handler(registers_t *regs) {
       if(mouse_data[0] & 0x10) relX -= 256;
       if(mouse_data[0] & 0x20) relY -= 256;
 
-      mouse_update(regs, &relX, &relY); // applies scaling
+      mouse_update(&relX, &relY); // applies scaling
 
       if(mouse_scrolling_enabled) {
          int scroll = (int8_t)mouse_data[3];
          if(scroll == -1) {
             // scroll up
-            windowmgr_scroll(regs, true);
+            wm_event(MOUSE_SCROLL, -SCROLL_AMOUNT, -1, 0);
          } else if(scroll == 1) {
             // scroll down
-            windowmgr_scroll(regs, false);
+            wm_event(MOUSE_SCROLL, SCROLL_AMOUNT, -1, 0);
          }
       }
 
-      if(regs) {
-         if(mouse_data[0] & 0x2)
-            mouse_rightclick(regs);
-         else if(mouse_data[0] & 0x1)
-            mouse_leftclick(regs, relX, relY);
-         else
-            mouse_release(regs);
-      }
+      if(mouse_data[0] & 0x2)
+         mouse_rightclick();
+      else if(mouse_data[0] & 0x1)
+         mouse_leftclick(relX, relY);
+      else
+         mouse_release();
       
       if(relX != 0 || relY != 0) {
          gui_cursor_save_bg();
@@ -542,6 +540,8 @@ void mouse_handler(registers_t *regs) {
       }
 
       mouse_cycle = 0;
+
+      wm_event_thread_exit_resume(regs);
    }
 }
 
@@ -568,17 +568,28 @@ void timer_set_hz(int hz) {
    );
 }
 
+#if DEBUG_DELAYS
+uint32_t delayed_ticks = 0;
+#endif
+
 void timer_handler(registers_t *regs) {
    timer_i++;
    events_check(regs);
 
+#if DEBUG_DELAYS
+   outb(0x20, 0x0A); // check pic irr bit 0 for unresolved
+   if(inb(0x20) & 1)
+      delayed_ticks++;
+
+   if(timer_i % 1000 == 0 && delayed_ticks) {
+      debug_printf("missed %u/1000 ticks\n", delayed_ticks);
+      delayed_ticks = 0;
+   }
+#endif
 
    if(videomode == 0) {
       terminal_writenumat(timer_i%10, 79);
    } else {
-      //if(timer_i%1000)
-      //   gui_showtimer(timer_i%10);
-
       if(timer_i%340 == 0) { // ~2fps auto redraw
          gui_draw();
       }
@@ -596,13 +607,7 @@ uint32_t get_timer_tick() {
    return timer_i;
 }
 
-void closewindow_event(void *regs, void *msg) {
-   if((int)msg < 0) return;
-   window_close((registers_t*)regs, (int)msg);
-   gui_redrawall();
-}
-
-void endtask_callback(void *dialog, void *regs) {
+void endtask_callback(void *dialog) {
    // callback for close window dialog
    window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
    task_state_t *task = &gettasks()[d->task_id];
@@ -610,8 +615,12 @@ void endtask_callback(void *dialog, void *regs) {
       debug_printf("Task %i no longer paused\n", task->task_id);
       return;
    }
-   events_add(35, &closewindow_event, (void*)get_task_window(task->task_id), -1);
-   end_task(task->task_id, regs);
+   int t = task->task_id;
+   int w = get_task_window(t);
+   if(end_task(t, NULL)) {
+      window_close(w, false);
+      gui_redrawall();
+   }
 }
 
 // ends task if dialog is closed
@@ -622,12 +631,16 @@ void endtask_dismiss(void *dialog, void *regs) {
       debug_printf("Task %i no longer paused\n", task->task_id);
       return;
    }
-   events_add(35, &closewindow_event, (void*)get_task_window(d->task_id), -1);
+   int w = get_task_window(d->task_id);
    end_task(d->task_id, regs);
+   if(w < 0) return;
+   wm_event(WINDOW_CLOSE, w, 0, 0);
 }
 
-void endtask_debug(void *window, void *regs) {
-   (void)window;
+void endtask_debug(void *windowobj, int x, int y) {
+   (void)windowobj;
+   (void)x;
+   (void)y;
    window_popup_dialog_t *dialog = getSelectedWindow()->state;
    dialog->answered = true;
    task_state_t *task = &gettasks()[dialog->task_id];
@@ -649,13 +662,16 @@ void endtask_debug(void *window, void *regs) {
    args[0] = malloc(strlen(debug_path)+1);
    args[argc] = NULL;
    strcpy(args[0], debug_path);
-   if(!tasks_launch_elf(regs, debug_path, argc, args, true)) {
+   int t = tasks_setup_elf(debug_path, argc, args, true, false, false);
+   if(t < 0) {
       free_launch_args(args, argc);
       return;
    }
-   map_size(get_current_task_pagedir(), (uint32_t)args, (uint32_t)args, sizeof(char*)*(argc+1), 1, 1, 0);
+   gettasks()[t].enabled = true;
+   page_dir_entry_t *dir = gettasks()[t].process->page_dir;
+   map_size(dir, (uint32_t)args, (uint32_t)args, sizeof(char*)*(argc+1), 1, 1, 0);
    for(int i = 0; i < argc; i++)
-      map_size(get_current_task_pagedir(), (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1, 0);
+      map_size(dir, (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1, 0);
 }
 
 void show_endtask_dialog(int int_no, registers_t *regs, int task) {
@@ -697,7 +713,7 @@ bool page_fault_handler(registers_t *regs) {
       debug_printf("int 14 - task page directory isn't current...\n");
    }
 
-   if(addr >= process->heap_start && addr < process->heap_end) // task_addr_demand_paged()
+   if(task_addr_demand_paged(task, addr)) // task_addr_demand_paged()
       return task_demand_map(process, addr);
 
    // not within heap, show error and pause task
@@ -913,6 +929,14 @@ void err_exception_handler(int int_no, registers_t *regs) {
    } else {
       window_writestr("Fault type ", gui_rgb16(255, 100, 100), 0);
       window_writenum(fault_type, 0, 0);
+      if(fault_type == FAULT_SYSCALL)
+         debug_printf(" - syscall");
+      if(fault_type == FAULT_KERNEL)
+         debug_printf(" - kernel");
+      if(fault_type == FAULT_SWITCHING)
+         debug_printf(" - switching");
+      if(fault_type == FAULT_KTHREAD)
+         debug_printf(" - kthread [%s]", get_current_task_state()->process->exe_path);
       window_writestr(" (FATAL)\n", gui_rgb16(255, 100, 100), 0);
 
       debug_printf("current_task: %i\n", get_current_task());

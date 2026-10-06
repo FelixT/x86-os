@@ -882,7 +882,7 @@ void _start(int argc, char **args) {
 
    // main program loop
    while(true) {
-      yield();
+      snooze();
    }
 
    exit(0);

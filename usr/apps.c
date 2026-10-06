@@ -219,7 +219,7 @@ void _start() {
    set_window_minimised(false, -1);
    
    while(true) {
-      yield();
+      snooze();
    }
 
    exit(0);

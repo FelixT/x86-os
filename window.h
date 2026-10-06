@@ -22,11 +22,12 @@ void window_drawchar(char c, uint16_t colour, int windowIndex);
 void window_writenum(int num, uint16_t colour, int windowIndex);
 void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
 void window_newline(gui_window_t* window);
-windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text, void (*func)(void *window, void *regs));
+windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text, void (*func)(void *windowobj, int x, int y));
 windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text);
 windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_menu_t *menuitems, int menuitem_count);
 windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int deltaY, int offsetY));
 void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int height);
-void window_scroll_to(void *regs, int y);
+void window_scroll_to(void *regs, gui_window_t *window, int y);
+void window_scroll_update(windowobj_t *scroller);
 
 #endif

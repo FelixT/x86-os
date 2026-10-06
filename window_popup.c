@@ -28,8 +28,10 @@ void window_popup_dialog_state_free(void *windowp, void *regs) {
    window->state = NULL;
 }
 
-void window_popup_dialog_close(void *windowobj, void *regs) {
+void window_popup_dialog_close(void *windowobj, int x, int y) {
    (void)windowobj;
+   (void)x;
+   (void)y;
    gui_window_t *window = getSelectedWindow();
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    int index = get_window_index_from_pointer(window);
@@ -38,7 +40,7 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
    if(dialog->callback_func == NULL) {
       // self destruct
       debug_printf("Closing window %i\n", index);
-      window_close(NULL, index);
+      window_close(index, false);
       gui_redrawall();
       return;
    }
@@ -47,7 +49,7 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
       // call as kernel
       if(dialog->callback_func) {
          dialog->answered = true; // explicit resolution - suppress dismiss default
-         dialog->callback_func(dialog, regs);
+         dialog->callback_func(dialog);
       }
       if(getSelectedWindow()) {
          getSelectedWindow()->needs_redraw = true;
@@ -58,7 +60,7 @@ void window_popup_dialog_close(void *windowobj, void *regs) {
 
    // self destruct
    debug_printf("Closing window %i\n", index);
-   window_close(NULL, index);
+   window_close(index, false);
    gui_redrawall();
 }
 
@@ -70,7 +72,7 @@ window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *p
    
    int height = 95;
    
-   window_resize(NULL, window, 260, height);
+   window_resize(NULL, window, 260, height, false);
 
    window_popup_init(window, parent);
    // add default window objects
@@ -137,24 +139,24 @@ void window_popup_colourpicker_click(int x, int y) {
             window->framebuffer[(y + 30) * window->width + (x + 265)] = colour;
          }
       }
+      gui_draw();
    }
 }
 
-void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y) {
-   (void)regs;
+void window_popup_colourpicker_return(void *windowobj, int x, int y) {
    (void)windowobj;
    (void)x;
    (void)y;
    //windowobj_t *wo = (windowobj_t*)windowobj;
    gui_window_t *window = getSelectedWindow();
    window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
-   uint16_t colour = (uint16_t)hextouint(window->window_objects[0]->text);
+   uint16_t colour = (uint16_t)hextouint(window->window_objects[0]->text);   
    void (*callback)(uint16_t) = cp->callback_func;
 
    setSelectedWindowIndex(get_window_index_from_pointer(cp->parent));
 
    // self destruct
-   window_close(NULL, get_window_index_from_pointer(window));
+   window_close(get_window_index_from_pointer(window), false);
    gui_redrawall();
    
    if(getSelectedWindow() == NULL) return;
@@ -175,11 +177,11 @@ void window_popup_colourpicker_return(void *windowobj, void *regs, int x, int y)
 }
 
 // init
-window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void *callback, uint16_t colour) {
+window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void (*callback)(uint16_t colour), uint16_t colour) {
    parent->children[parent->child_count++] = window;
    window->parent = parent;
 
-   window_resize(NULL, window, 320, 340);
+   window_resize(NULL, window, 320, 340, false);
    window_popup_init(window, parent);
    strcpy(window->title, "Colour Picker");
 

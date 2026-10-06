@@ -453,6 +453,6 @@ void _start() {
    set_content_height(box_y, -1);
 
    while(true) {
-      yield();
+      snooze();
    }
 }

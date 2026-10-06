@@ -230,6 +230,7 @@ void _start(int argc, char **args) {
    wo_text = create_textarea(2, 22, width - 4, get_font_info().height + get_font_info().padding + 6);
    wo_text->keypress_func = &text_keypress;
    ui_add(ui, wo_text);
+   ui_focus(ui, wo_text);
 
    if(argc == 2 && args[1] && *args[1] != '\0')
       load_file(args[1]);

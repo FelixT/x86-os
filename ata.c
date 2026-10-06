@@ -7,6 +7,9 @@
 #include "ata.h"
 #include "io.h"
 #include "windowmgr.h"
+#include "tasks.h"
+
+int paused_task = -1;
 
 static uint32_t ata_base_lba = 0; // support partitions
 static uint32_t ata_partition_sectors = 0; // 0 = whole disk, otherwise the partition size in sectors
@@ -190,6 +193,22 @@ void ata_recover(uint16_t ioPort) {
       asm volatile("pause" ::: "memory");
 }
 
+void ata_yield() {
+   int prev = paused_task;
+   int cur = get_current_task();
+   if(prev != -1)
+      debug_printf("ata: %i was paused, now %i\n", prev, cur);
+   paused_task = cur;
+   if(!kernel_yield_if_blocking()) {
+      paused_task = prev;
+   } else {
+      if(paused_task != get_current_task())
+         debug_printf("ata: %i was paused after yield of %i\n", paused_task, cur);
+      else
+         paused_task = -1;
+   }
+}
+
 bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf, uint16_t sectors, bool write) {
    // read or write n sectors (512 bytes) using ATA PIO mode
 
@@ -231,6 +250,7 @@ bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
       do {
          status = inb(ioPort + ATA_REG_STATUS);
          asm volatile("pause" ::: "memory");
+         ata_yield();
       } while((status & ATA_STATUS_BIT_BSY) && spins++ < ATA_POLL_SPINS);
       if(status & ATA_STATUS_BIT_BSY) {
          gui_printf("ATA: drive stuck busy, LBA 0x%h\n", 0, lba);
@@ -242,6 +262,7 @@ bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
       do {
          status = inb(ioPort + ATA_REG_STATUS);
          asm volatile("pause" ::: "memory");
+         ata_yield();
       } while(!(status & ATA_STATUS_BIT_DRQ) && !(status & ATA_STATUS_BIT_ERR) && spins++ < ATA_POLL_SPINS);
       
       if(status & (ATA_STATUS_BIT_ERR | ATA_STATUS_BIT_DF)) {
@@ -266,6 +287,7 @@ bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
       }
 
       ata_delay(ioPort);
+      kernel_yield_if_blocking();
    }
 
    if(write) {
@@ -275,6 +297,7 @@ bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
       do {
          status = inb(ioPort + ATA_REG_STATUS);
          asm volatile("pause" ::: "memory");
+         ata_yield();
       } while((status & ATA_STATUS_BIT_BSY) && spins++ < ATA_POLL_SPINS);
 
       if(status & (ATA_STATUS_BIT_BSY | ATA_STATUS_BIT_ERR | ATA_STATUS_BIT_DF)) {
@@ -366,10 +389,11 @@ bool ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *
 }
 
 void ata_interrupt(registers_t *regs) {
-   (void)regs;
    // read status
    uint16_t ioPort;
    ioPort = ATA_PORT_PRIMARY;
 
    inb(ioPort + ATA_REG_STATUS);
+   if(paused_task != -1 && get_current_task() != paused_task)
+      kernel_exit_resume(regs, paused_task); // ends irq
 }

@@ -42,7 +42,6 @@ void cmain_cli_init() {
    gdt_flush();
    tss_flush();
 
-
    register_irq(0, timer_handler);
    register_irq(1, keyboard_handler);
 }

@@ -404,11 +404,11 @@ static size_t fs_pipe_fill(fs_pipe_t *pipe, int task, void *src, size_t max) {
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
       int w = file->window_index;
-      if(w > 0 && w < getWindowCount() && !getWindow(w)->closed) {
+      if(w >= 0 && w < getWindowCount() && !getWindow(w)->closed) {
          window_writestrn((char*)buffer, size, 0, file->window_index);
          return size;
       } else {
-         debug_printf("FS: error writing to window %s\n", file->window_index);
+         debug_printf("FS: error writing to window %i\n", file->window_index);
          return FS_ERROR;
       }
    }
@@ -470,21 +470,56 @@ int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    return FS_ERROR;
 }
 
-int fs_read(fs_file_t *file, void *buffer, size_t size, fs_read_callbacks_t callbacks, int task) {
+// notify window->read_task of read
+void fs_read_window_callback(gui_window_t *window, bool eof) {
+   char *user_buffer = window->read_buffer;
+   int read_task = window->read_task;
+   window->read_task = -1;
+
+   task_state_t *task = &gettasks()[read_task];
+   if(!task->enabled || task->task_uid != window->read_task_uid) {
+      debug_printf("read: task %i not enabled or crashed\n", read_task);
+      return;
+   }
+   if(!task->paused || task->pause_reason != PAUSE_READ) {
+      debug_printf("read: task %i isn't waiting on read\n", read_task);
+      return;
+   }
+   if(eof) {
+      task->registers.ebx = FS_EOF;
+   } else {
+      int buf_size = window->text_index+1;
+      char *buffer = (char*)malloc(buf_size);
+      strcpy_fixed(buffer, window->text_buffer, buf_size-1);
+      buffer[buf_size-1] = '\0';
+      int copy = buf_size;
+      if(window->read_size < copy)
+         copy = window->read_size;
+      copy = copy_to_task(task->task_id, user_buffer, buffer, copy);
+      free((uint32_t)buffer, buf_size);
+
+      task->registers.ebx = copy==buf_size?buf_size-1:copy;
+   }
+   task_resume(task);
+   wm_event_defer_yield(task->task_id);
+}
+
+int fs_read(fs_file_t *file, void *buffer, size_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
-      gui_window_t *window = getWindow(file->window_index);
-      if(window->closed) {
+      int w = file->window_index;
+      if(w < 0 || w >= getWindowCount() || getWindow(w)->closed) {
          debug_printf("FS: error reading from window %i\n", file->window_index);
          return FS_ERROR;
       }
+      gui_window_t *window = getWindow(w);
 
       if(file->flags & FS_FLAG_WRITEONLY) {
          debug_printf("FS: cannot read from write-only file %s\n", file->filename);
          return FS_ERROR;
       }
       // note: only one task can read from a windows stdin at a time as these get overwritten
-      window->read_func = callbacks.on_term;
       window->read_buffer = buffer;
+      window->read_size = size;
       window->read_task = task;
       window->read_task_uid = gettasks()[task].task_uid;
       return FS_BLOCKING;

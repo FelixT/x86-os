@@ -135,6 +135,18 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
    return clicked;
 }
 
+void ui_focus(ui_mgr_t *ui, wo_t *focus) {
+   // simulate click/focus to wo (doesn't draw)
+   if(!focus->focusable) return;
+
+   if(ui->focused) {
+      ui->focused->selected = false;
+      ui->focused = NULL;
+   }
+   focus->selected = true;
+   ui->focused = focus;
+}
+
 void ui_release(ui_mgr_t *ui, int x, int y) {
    if(hid_menu) {
       hid_menu = false;

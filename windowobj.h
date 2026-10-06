@@ -16,7 +16,7 @@ enum windowobj_type {
 
 typedef struct windowobj_menu_t {
    char text[20];
-   void (*func)(void *regs);
+   void (*func)();
    bool disabled;
 } windowobj_menu_t;
 
@@ -26,10 +26,10 @@ typedef struct windowobj_t {
    enum windowobj_type type;
 
    void (*draw_func)(void *windowobj);
-   void (*click_func)(void *windowobj, void *regs); // user progs passed dummy NULL 2nd arg
+   void (*click_func)(void *windowobj); // user progs passed dummy NULL 2nd arg
    void (*hover_func)(void *windowobj, int x, int y);
    void (*return_func)(void *windowobj);
-   void (*release_func)(void *windowobj, void *regs, int x, int y);
+   void (*release_func)(void *windowobj, int x, int y);
    void (*drag_func)(void *windowobj, int x, int y);
    surface_t *window_surface;
 
@@ -71,10 +71,10 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface);
 
 void windowobj_draw(void *windowobj);
 void windowobj_redraw(void *window, void *windowobj);
-void windowobj_click(void *regs, void *windowobj, int relX, int relY);
-bool windowobj_release(void *regs, void *windowobj, int relX, int relY);
+void windowobj_click(void *windowobj, int relX, int relY);
+bool windowobj_release(void *windowobj, int relX, int relY);
 void windowobj_hover(void *windowobj, int x, int y);
-void windowobj_keydown(void *regs, void *windowobj, int scan_code);
+void windowobj_keydown(void *windowobj, int scan_code);
 void windowobj_free(windowobj_t *wo);
 void windowobj_dragged(void *windowobj, int x, int y, int relX, int relY);
 

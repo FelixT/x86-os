@@ -123,13 +123,16 @@ extern int *font_letter;
 
 extern void wm_thread_main();
 extern void wm_launch_thread_main();
+extern void wm_event_thread_main();
 
 void gui_init_thread() {
    // kernel thread to kick off other kernel threads
    LAUNCH_KTHREAD(&wm_thread_main, true);
    LAUNCH_KTHREAD(&wm_launch_thread_main, false);
+   LAUNCH_KTHREAD(&wm_event_thread_main, false);
    gui_redrawall();
 
+   debug_printf("GUI launch thread completed\n");
    // kthread_exit
 }
 
@@ -155,7 +158,7 @@ void gui_init_meat(void *regs, void *msg) {
    mouse_enable();
 
    LAUNCH_KTHREAD(&gui_init_thread, false);
-   gui_writestr("\nInit complete\n\n", COLOUR_CYAN);
+   gui_writestr("\nInit complete\n", COLOUR_CYAN);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
@@ -191,26 +194,8 @@ void gui_redrawall() { // may yield
    wm_redrawall();
 }
 
-extern bool switching;
-bool gui_interrupt_switchtask(void *regs) {
-   // switch to task of selected window to handle interrupt
-   if(!switching) return false; // in case we end up here before tasks are enabled
-
-   int newtask = get_task_from_window(getSelectedWindowIndex());
-   if(newtask == -1) return false;
-
-   if(newtask == get_current_task()) return true;
-
-   if(!switch_to_task(newtask, regs)) {
-      debug_printf("Task %u for window %u is stopped\n", newtask, getSelectedWindowIndex());
-      return false;
-   }
-
-   return true;
-}
-
-void gui_keypress(void *regs, char scan_code) {
-   windowmgr_keypress(regs, scan_code);
+void gui_keypress(char scan_code) {
+   wm_event(KEY_PRESS, 0, 0, (uint16_t)scan_code);
 }
 
 void gui_draw_window(int windowIndex) {
@@ -287,6 +272,7 @@ void gui_cursor_save_bg() {
 }
 
 void gui_cursor_restore_bg() {
+   if(!gui_cursor_shown) return;
    uint16_t *terminal_buffer = (uint16_t*) main_surface.buffer;
    for(int y = cursor_oldy; y < cursor_oldy + getFont()->height; y++) {
       for(int x = cursor_oldx; x < cursor_oldx + getFont()->width; x++) {
@@ -315,7 +301,7 @@ void gui_cursor_draw() {
    gui_cursor_shown = true;
 }
 
-void mouse_update(void *regs, int *relX, int *relY) {
+void mouse_update(int *relX, int *relY) {
    // scale
    *relX *= gui_mouse_speed;
    *relX += gui_mouse_remainder_x;
@@ -344,64 +330,35 @@ void mouse_update(void *regs, int *relX, int *relY) {
    }
 
    gui_cursor_restore_bg();
-   windowmgr_mousemove(regs, gui_mouse_x, gui_mouse_y);
-
    gui_cursor_save_bg();
    gui_cursor_draw();
+
+   wm_event(MOUSE_HOVER, gui_mouse_x, gui_mouse_y, 0);
 }
 
-void mouse_leftclick(void *regs, int relX, int relY) {
+void mouse_leftclick(int relX, int relY) {
    // dragging windows
    if(mouse_held) {
-      windowmgr_dragged(regs, relX, relY);
+      wm_event(MOUSE_DRAG, relX, relY, 0);
    } else {
       mouse_held = true;
-
-      if(!windowmgr_click(regs, gui_mouse_x, gui_mouse_y))
-         desktop_click(gui_mouse_x, gui_mouse_y);
-
-      //gui_draw();
+      wm_event(MOUSE_CLICK, gui_mouse_x, gui_mouse_y, 0);
    }
-
 }
 
-void mouse_release(registers_t *regs) {
-   bool redraw = false;
-
-   if(mouse_held) {
-      windowmgr_release(gui_mouse_x, gui_mouse_y);
-
-      gui_window_t *window = getSelectedWindow();
-      if(window) {
-         if(window->dragged) {
-            redraw = true;
-            window->dragged = false;
-            window->x = window->drag_x;
-            window->y = window->drag_y;
-         }
-         if(window->resized) {
-            redraw = true;
-            window_resize(regs, window, window->width, window->height);
-            window->resized = false;
-         } else {
-            window_release(regs, window);
-         }
-      }
-   }
-   //if(mouse_heldright)
-   //   redraw = true;
+void mouse_release() {
+   if(mouse_held)
+      wm_event(MOUSE_RELEASE, gui_mouse_x, gui_mouse_y, 0);
 
    mouse_held = false;
    mouse_heldright = false;
-
-   if(redraw) gui_redrawall();
 }
 
-void mouse_rightclick(void *regs) {
+void mouse_rightclick() {
    if(mouse_heldright) {
-
+      // nothing
    } else {
-      windowmgr_rightclick(regs, gui_mouse_x, gui_mouse_y);
+      wm_event(MOUSE_RIGHTCLICK, gui_mouse_x, gui_mouse_y, 0);
       mouse_heldright = true;
    }
 }

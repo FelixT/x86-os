@@ -108,9 +108,10 @@ void window_settings_set_window_txtcolour_callback(uint16_t colour) {
    window_settings_update(settings);
 }
 
-void window_settings_pickbgcolour(void *w, void *regs) {
-   (void)regs;
-   (void)w;
+void window_settings_pickbgcolour(void *wo, int x, int y) {
+   (void)wo;
+   (void)x;
+   (void)y;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_settings_t *settings = (window_settings_t*)parent->state;
@@ -119,9 +120,10 @@ void window_settings_pickbgcolour(void *w, void *regs) {
    window_draw_outline(getWindow(popup), false);
 }
 
-void window_settings_picktxtcolour(void *w, void *regs) {
-   (void)regs;
-   (void)w;
+void window_settings_picktxtcolour(void *wo, int x, int y) {
+   (void)wo;
+   (void)x;
+   (void)y;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
    window_settings_t *settings = (window_settings_t*)parent->state;
@@ -158,7 +160,7 @@ window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *sele
 
    } else {
       // window settings
-      window_resize(NULL, window, 370, 180);
+      window_resize(NULL, window, 370, 180, false);
 
       int y = 35;
       char text[256];

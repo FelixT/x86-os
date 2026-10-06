@@ -111,7 +111,6 @@ typedef struct task_state_t {
    uint32_t kernel_esp; // kernel stack pointer (0 if not parked in kernel)
    registers_t registers;
    registers_t routine_return_regs;
-   int routine_return_window; // switch to this window after routine, potentially unneeded
    uint32_t *routine_args;
    int routine_argc;
    bool in_routine;
@@ -144,17 +143,18 @@ void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
-bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus);
 int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised);
+int task_post_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();
 void kernel_block();
-void kernel_yield_if_blocking();
+bool kernel_yield_if_blocking();
 bool kernel_yield_to(int next_index);
 bool launch_kthread(void *func, char *name, bool run);
 #define LAUNCH_KTHREAD(func, run) launch_kthread(func, #func, run)
 void end_kthread(int task);
+bool kernel_exit_resume(registers_t *regs, int task);
 
 task_state_t *gettasks();
 
@@ -182,6 +182,7 @@ void tss_df_init();
 void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);
 
+bool task_addr_demand_paged(task_state_t *task, uint32_t addr);
 int task_validate_str(task_state_t *task, char *str, int maxlen);
 bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw);
 int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw);

@@ -23,8 +23,31 @@ typedef struct windowmgr_settings_t {
 
 #define MAX_WINDOWS 64
 
+typedef enum {
+   MOUSE_CLICK,
+   MOUSE_RIGHTCLICK,
+   MOUSE_RELEASE,
+   MOUSE_HOVER,
+   MOUSE_DRAG,
+   MOUSE_SCROLL,
+   KEY_PRESS,
+   WINDOW_CLOSE
+} wm_event_type_t;
+
+#define SCROLL_UP 1
+#define SCROLL_DOWN 0
+#define SCROLL_AMOUNT 20
+
 void wm_draw();
 void wm_redrawall();
+void wm_event(wm_event_type_t type, int x, int y, uint16_t c);
+void wm_event_thread_exit_resume(registers_t *regs);
+void wm_queue_launch(char *path, bool focus, bool minimised);
+void wm_call_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+void wm_event_defer_yield(int task);
+
+bool cursor_hide_region(int x, int y, int width, int height);
+void cursor_show(bool hidden);
 
 void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height);
 void window_draw_content(gui_window_t *window);
@@ -43,22 +66,21 @@ void debug_writehex(uint32_t num);
 void debug_printf(char *format, ...);
 gui_window_t *getWindow(int index);
 gui_window_t *getSelectedWindow();
-void windowmgr_keypress(void *regs, int scan_code);
+void windowmgr_keypress(int scan_code);
 void window_draw(gui_window_t *window);
 void toolbar_draw();
-bool windowmgr_click(void *regs, int x, int y);
-void windowmgr_release(int x, int y);
-void windowmgr_rightclick(void *regs, int x, int y);
-void windowmgr_dragged(registers_t *regs, int relX, int relY);
+bool windowmgr_click(int x, int y);
+void windowmgr_rightclick(int x, int y);
+void windowmgr_dragged(int relX, int relY);
 void desktop_draw();
 void desktop_click(int x, int y);
 void desktop_init();
 void desktop_setbgimg(uint8_t *img, int size);
-void windowmgr_mousemove(void *regs, int x, int y);
-void windowmgr_scroll(void *regs, bool up);
-void window_resize(registers_t *regs, gui_window_t *window, int width, int height);
-void window_close(void *regs, int windowIndex);
-void window_release(registers_t *regs, gui_window_t *window);
+void windowmgr_mousemove(int x, int y);
+void windowmgr_scroll(int y, int w);
+void window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback);
+void window_close(int windowIndex, bool end);
+void window_release(gui_window_t *window);
 int get_window_index_from_pointer(gui_window_t *window);
 void window_resetfuncs(gui_window_t *window);
 void window_removefuncs(gui_window_t *window);

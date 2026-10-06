@@ -103,9 +103,7 @@ void gui_cursor_draw();
 void gui_cursor_save_bg();
 void gui_cursor_restore_bg();
 
-bool gui_interrupt_switchtask(void *regs);
-void gui_keypress(void *regs, char scan_code);
-void gui_return(void *regs);
+void gui_keypress(char scan_code);
 void gui_backspace();
 
 void gui_draw_window(int windowIndex);
@@ -121,6 +119,9 @@ surface_t *gui_get_surface();
 void gui_showtimer(int number);
 
 void mouse_enable();
-void mouse_update(void *regs, int *relX, int *relY);
+void mouse_update(int *relX, int *relY);
+void mouse_release();
+void mouse_leftclick(int relX, int relY);
+void mouse_rightclick();
 
 #endif

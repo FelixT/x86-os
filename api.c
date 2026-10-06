@@ -500,7 +500,7 @@ void api_launch_task(registers_t *regs) {
       task->process->fd_count = parenttask->process->fd_count;
       strcpy(task->process->working_dir, parenttask->process->working_dir);
       int child_win = task->process->window;
-      window_close(NULL, child_win);
+      window_close(child_win, false);
       task->process->window = -1;
       setSelectedWindowIndex(oldwindow);
    }
@@ -627,7 +627,7 @@ void api_sbrk(registers_t *regs) {
                free(physical_addrs[i], 0x1000);
             }
          }
-         free((uint32_t)physical_addrs, 0x1000);
+         free((uint32_t)physical_addrs, delta_pages * sizeof(uint32_t));
       }
    }
 
@@ -711,22 +711,6 @@ void api_truncate(registers_t *regs) {
    regs->ebx = result;
 }
 
-void api_read_stdin_callback(void *regs, char *buffer) {
-   task_state_t *task = get_current_task_state();
-   int w = task->process->file_descriptors[0]->window_index;
-   registers_t *r = (registers_t*)regs;
-   if(w > 0 && w < getWindowCount() && getWindow(w) && !getWindow(w)->closed) {
-      gui_window_t *window = getWindow(w);
-      strcpy(window->read_buffer, buffer);
-      task_resume(task);
-      r->ebx = strlen(buffer);
-      switch_to_task(task->task_id, regs); // wake
-   } else {
-      debug_printf("Couldn't find window\n");
-      r->ebx = -1;
-   }
-}
-
 void api_read(registers_t *regs) {
    // IN: ebx - int fd
    // IN: ecx - char *buf
@@ -767,8 +751,7 @@ void api_read(registers_t *regs) {
       return;
    }
 
-   fs_read_callbacks_t callbacks = { .on_term = &api_read_stdin_callback };
-   int result = fs_read(file, buf, count, callbacks, get_current_task());
+   int result = fs_read(file, buf, count, get_current_task());
    regs->ebx = result;
    if(result == FS_BLOCKING) {
       if(file->type == FS_TYPE_PIPE && file->pipe) {
@@ -1017,10 +1000,7 @@ void api_set_scrollable_height(registers_t *regs) {
 void api_scroll_to(registers_t *regs) {
    // IN: ebx - y
    // IN: ecx - window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   setSelectedWindowIndex(get_window_index_from_pointer(window));
-   window_scroll_to(regs, regs->ebx);
+   window_scroll_to(regs, api_get_cwindow(regs->ecx), regs->ebx);
 }
 
 void api_set_window_size(registers_t *regs) {
@@ -1044,7 +1024,7 @@ void api_set_window_size(registers_t *regs) {
       window->x = 0;
    if(window->y + height > maxheight)
       window->y = 0;
-   window_resize(NULL, window, width, height);
+   window_resize(regs, window, width, height, false);
    gui_redrawall();
 }
 
@@ -1089,7 +1069,7 @@ void api_create_window(registers_t *regs) {
       get_current_task_state()->process->window = i;
       r = -1;
    }
-   window_resize(regs, newwindow, width, height);
+   window_resize(regs, newwindow, width, height, true);
    regs->ebx = r;
 }
 
@@ -1101,7 +1081,7 @@ void api_close_window(registers_t *regs) {
    if(!mainwindow) return;
    if(cindex == -1) {
       // close main window and all children without killing task
-      window_close(NULL, get_current_task_state()->process->window);
+      window_close(get_current_task_state()->process->window, false);
       gui_redrawall();
       regs->ebx = 1;
       return;
@@ -1114,7 +1094,7 @@ void api_close_window(registers_t *regs) {
    gui_window_t *window = mainwindow->children[cindex];
    int index = get_window_index_from_pointer(window);
    debug_printf("Closing window %i\n", index);
-   window_close(NULL, index);
+   window_close(index, false);
    mainwindow->children[cindex] = NULL;
    if(getSelectedWindow() == NULL)
       setSelectedWindowIndex(get_current_task_state()->process->window);
@@ -1782,7 +1762,7 @@ void api_dma_free(registers_t *regs) {
    regs->ebx = size;
 }
 
-void api_escalate_do(void *dialog, void *regs) {
+void api_escalate_do(void *dialog) {
    // OUT: ebx - bool success
    window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
 
@@ -1792,7 +1772,6 @@ void api_escalate_do(void *dialog, void *regs) {
       task->process->privileged = true;
       task->registers.ebx = 1;
       task_resume(task);
-      switch_to_task(task->task_id, regs);
    } else {
       debug_printf("Couldn't escalate: requesting task ended\n");
    }
@@ -1812,8 +1791,10 @@ void api_escalate_dismiss(void *dialog, void *regs) {
    }
 }
 
-void api_escalate_cancel(void *window, void *regs) {
-   (void)window;
+void api_escalate_cancel(void *windowobj, int x, int y) {
+   (void)windowobj;
+   (void)x;
+   (void)y;
    window_popup_dialog_t *dialog = getSelectedWindow()->state;
    debug_printf("Denied escalating process %u\n", dialog->process_uid);
    dialog->answered = true;
@@ -1822,11 +1803,10 @@ void api_escalate_cancel(void *window, void *regs) {
    if(task->enabled && task->process && task->process->uid == dialog->process_uid) {
       task->registers.ebx = 0;
       task_resume(task);
-      switch_to_task(task->task_id, regs);
    } else {
       debug_printf("Couldn't escalate: requesting task ended\n");
    }
-   window_close(regs, getSelectedWindowIndex());
+   window_close(getSelectedWindowIndex(), false); // dialog free'
    gui_redrawall();
 }
 

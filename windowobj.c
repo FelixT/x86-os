@@ -6,6 +6,7 @@
 #include "tasks.h"
 #include "events.h"
 #include "lib/string.h"
+#include "window.h"
 
 // window widgets/objects
 
@@ -130,7 +131,11 @@ void windowobj_draw(void *windowobj) {
       wo->x += parent->x;
       wo->y += parent->y;
    }
-   
+
+   extern surface_t surface;
+   bool cursor_hidden = wo->window_surface == &surface
+      && cursor_hide_region(wo->x, wo->y, wo->width, wo->height);
+
    uint16_t bg = wo->colour_bg;
    uint16_t border = wo->colour_border;
    uint16_t text = wo->colour_text;
@@ -255,6 +260,8 @@ void windowobj_draw(void *windowobj) {
       windowobj_draw(child);
    }
 
+   cursor_show(cursor_hidden);
+
    if(wo->parent != NULL) {
       wo->x -= ((windowobj_t*)wo->parent)->x;
       wo->y -= ((windowobj_t*)wo->parent)->y;
@@ -272,7 +279,7 @@ extern int gui_mouse_x;
 extern int gui_mouse_y;
 extern bool gui_cursor_shown;
 
-bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
+bool windowobj_release(void *windowobj, int relX, int relY) {
    // unclick
    windowobj_t *wo = (windowobj_t*)windowobj;
    if(!wo->visible || (wo->parent != NULL && !((windowobj_t*)wo->parent)->visible)) return false;
@@ -287,7 +294,7 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
    for(int i = 0; i < wo->child_count; i++) {
       windowobj_t *child = (windowobj_t*)wo->children[i];
       if(child->clicked) {
-         windowobj_release(regs, (void*)child, relX - child->x, relY - child->y);
+         windowobj_release((void*)child, relX - child->x, relY - child->y);
          return true; // stop at first clicked
       }
    }
@@ -300,14 +307,14 @@ bool windowobj_release(void *regs, void *windowobj, int relX, int relY) {
       int task = get_task_from_window(getSelectedWindowIndex());
       if(task == -1 || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
          // kernel
-         wo->release_func(windowobj, regs, relX, relY);
+         wo->release_func(windowobj, relX, relY);
       }
    }
    return true;
 }
 
 extern windowobj_t *default_menu;
-void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
+void windowobj_click(void *windowobj, int relX, int relY) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
    if(wo->disabled) return;
@@ -325,7 +332,7 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
 
             if(wo == default_menu || task == -1) {
                // kernel
-               item->func(regs);
+               item->func();
             }
          }
       }
@@ -338,7 +345,7 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
       if(relX >= child->x && relX < child->x + child->width
       && relY >= child->y && relY < child->y + child->height
       && child->visible) {
-         windowobj_click(regs, (void*)child, relX - child->x, relY - child->y);
+         windowobj_click((void*)child, relX - child->x, relY - child->y);
          clicked_child = i;
          break; // stop at first child clicked
       }
@@ -354,8 +361,7 @@ void windowobj_click(void *regs, void *windowobj, int relX, int relY) {
       int task = get_task_from_window(getSelectedWindowIndex());
       if(task == -1 || (wo->parent != NULL && ((windowobj_t*)wo->parent)->type == WO_SCROLLBAR)) {
          // kernel
-         // supply with regs so we can switch task
-         ((void (*)(void*, void*))wo->click_func)(windowobj, regs);
+         wo->click_func(windowobj);
       }
    }
 }
@@ -453,7 +459,7 @@ void windowobj_move_cursor_vertical(windowobj_t *wo, int direction) {
    windowobj_draw(wo);
 }
 
-void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
+void windowobj_keydown(void *windowobj, int scan_code) {
    windowobj_t *wo = (windowobj_t*)windowobj;
 
    if(wo->disabled || wo->isstatic) return;
@@ -463,7 +469,7 @@ void windowobj_keydown(void *regs, void *windowobj, int scan_code) {
       windowobj_t *child = wo->children[i];
       if(!child->clicked) continue;
 
-      windowobj_keydown(regs, child, scan_code);
+      windowobj_keydown(child, scan_code);
    }
 
    if(wo->type == WO_MENU) {
@@ -583,6 +589,7 @@ void windowobj_dragged(void *windowobj, int x, int y, int relX, int relY) {
          wo->y = 14;
       if(wo->y + wo->height > ((windowobj_t*)wo->parent)->height - 14)
          wo->y = ((windowobj_t*)wo->parent)->height - 14 - wo->height;
+      window_scroll_update(wo);
    }
 
    // check children

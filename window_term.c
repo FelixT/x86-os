@@ -13,6 +13,7 @@
 #include "paging.h"
 #include "pci.h"
 #include "msg.h"
+#include "fs.h"
 
 // default terminal behaviour
 // implement kernel mode terminal for debugging
@@ -50,12 +51,12 @@ uint32_t window_term_argtouint(char *str) {
    return num;
 }
 
-void window_term_keypress(void *regs, uint16_t key, void *window) {
+void window_term_keypress(uint16_t key, void *window) {
    if(key == 8) {
       window_term_backspace(window);
       return;
    } else if(key == 0x0D) {
-      window_term_return(regs, window);
+      window_term_return(window);
       return;
    } else if(key == 0x100) {
       window_term_uparrow(window);
@@ -83,7 +84,7 @@ void window_term_keypress(void *regs, uint16_t key, void *window) {
    }
 }
 
-void window_term_return(void *regs, void *window) {
+void window_term_return(void *window) {
    void *windowBuffer = (void *)getWindow(0);
 
    gui_window_t *selected = (gui_window_t*)window;
@@ -103,34 +104,9 @@ void window_term_return(void *regs, void *window) {
 
    window_newline(selected);
 
-   if(selected->read_func != NULL) {
-      // read callback i.e. reading from stdin
-      if(selected->read_task > 0) {
-         task_state_t *readtask = &gettasks()[selected->read_task];
-         void (*read_func)(void *regs, char *buffer) = selected->read_func;
-         int read_task = selected->read_task;
-         selected->read_func = NULL;
-         selected->read_task = -1;
-         if(!readtask->enabled || readtask->task_uid != selected->read_task_uid) {
-            debug_printf("read: task %i not enabled or crashed\n", read_task);
-            return;
-         }
-         if(!readtask->paused || readtask->pause_reason != PAUSE_READ) {
-            debug_printf("read: task %i isn't waiting on read\n", read_task);
-            return;
-         }
-         task_resume(readtask); // force switch
-         if(!switch_to_task(read_task, regs)) {
-            debug_printf("read: couldn't switch to task %i\n", read_task);
-         } else {
-            char *buffer = (char*)malloc(selected->text_index+1);
-            strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
-            buffer[selected->text_index] = '\0';
-            read_func(regs, buffer);
-         }
-      } else {
-         debug_printf("read: No read task\n");
-      }
+   // read callback i.e. reading from stdin
+   if(selected->read_task > 0) {
+      fs_read_window_callback(selected, false);
    } else if(selected->checkcmd_func != &window_term_checkcmd) {
       // "checkcmd" override
       if(selected->checkcmd_func != NULL) {
@@ -147,10 +123,10 @@ void window_term_return(void *regs, void *window) {
          map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1, 0);
          map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1, 0);
 
-         task_call_subroutine(regs, task, "checkcmd", (uint32_t)selected->checkcmd_func, args, 1);
+         wm_call_subroutine(task, "checkcmd", (uint32_t)selected->checkcmd_func, args, 1);
       }
    } else {
-      window_term_checkcmd(regs, selected); // default term behaviour
+      window_term_checkcmd(selected); // default term behaviour
    }
 
    // windowbuffer has changed (i.e. resized)
@@ -326,12 +302,12 @@ void term_cmd_tasks() {
    window_term_printf("\nCurrent task is %i\n", get_current_task());
 }
 
-void term_cmd_prog1(void *regs) {
-   tasks_launch_binary(regs, "/sys/prog1.bin");
+void term_cmd_prog1() {
+   tasks_launch_binary(NULL, "/sys/prog1.bin");
 }
 
-void term_cmd_prog2(void *regs) {
-   tasks_launch_binary(regs, "/sys/prog2.bin");
+void term_cmd_prog2() {
+   tasks_launch_binary(NULL, "/sys/prog2.bin");
 }
 
 void term_cmd_test() {
@@ -357,8 +333,8 @@ void term_cmd_desktop() {
       desktop_init();
 }
 
-void term_cmd_launch(registers_t *regs, char *arg) {
-   tasks_launch_elf(regs, arg, 0, NULL, true);
+void term_cmd_launch(char *arg) {
+   wm_queue_launch(arg, true, false);
 }
 
 void term_cmd_bg(char *arg) {
@@ -370,15 +346,13 @@ void term_cmd_bg(char *arg) {
 }
 
 void term_cmd_bgimg(char *arg) {
-
-   fat_dir_t *entry = fat_parse_path(arg, true);
-   if(entry == NULL) {
-      debug_writestr("Image not found\n");
+   int fsize;
+   uint8_t *bgimg = fs_read_file_kernel(arg, &fsize);
+   if(!bgimg) {
+      debug_printf("Image not found\n");
       return;
    }
-
-   uint8_t *gui_bgimage = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   desktop_setbgimg(gui_bgimage, entry->fileSize);
+   desktop_setbgimg(bgimg, fsize);
 
    gui_redrawall();
 }
@@ -515,7 +489,7 @@ void term_cmd_default(char *command) {
    window_term_printf(": UNRECOGNISED", 4);
 }
 
-void window_term_checkcmd(void *regs, void *window) {
+void window_term_checkcmd(void *window) {
    gui_window_t *selected = (gui_window_t*)window;
    //char *command = selected->text_buffer;
    selected->text_buffer[selected->text_index] = '\0';
@@ -535,9 +509,9 @@ void window_term_checkcmd(void *regs, void *window) {
    else if(strequ(command, "TASKS"))
       term_cmd_tasks();
    else if(strequ(command, "PROG1"))
-      term_cmd_prog1(regs);
+      term_cmd_prog1();
    else if(strequ(command, "PROG2"))
-      term_cmd_prog2(regs);
+      term_cmd_prog2();
    else if(strequ(command, "TEST"))
       term_cmd_test();
    else if(strequ(command, "DESKTOP"))
@@ -547,7 +521,7 @@ void window_term_checkcmd(void *regs, void *window) {
    else if(strequ(command, "PADDING"))
       term_cmd_padding((char*)arg);
    else if(strequ(command, "LAUNCH"))
-      term_cmd_launch(regs, (char*)arg);
+      term_cmd_launch((char*)arg);
    else if(strequ(command, "BGIMG"))
       term_cmd_bgimg((char*)arg);
    else if(strequ(command, "BG"))

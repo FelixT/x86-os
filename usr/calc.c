@@ -26,6 +26,10 @@ void _start() {
       int r = read(0, buf, size);
       if(r <= 0) break;
       buf[r] = '\0';
+      if(strequ(buf, "exit")) {
+         printf("Exiting\n");
+         exit(0);
+      }
       printf("Read string: %s\n", buf);
       int number;
       if(strstartswith(buf, "0x")) {

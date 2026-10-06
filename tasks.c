@@ -261,12 +261,17 @@ void task_reset_windows(int task) {
    int taskw = tasks[task].process->window;
    if(taskw >= 0 && taskw < getWindowCount() && !getWindow(taskw)->closed) {
       gui_window_t *window = getWindow(taskw);
+
+      if(window->read_task >= 0) // notify window read_task of eof (mirrors window_close)
+         fs_read_window_callback(window, true);
       window_resetfuncs(window);
       strcpy(window->title, "KTerm");
       window_draw_outline(window, true);
       for(int i = 0; i < window->child_count; i++) {
          gui_window_t *child = (gui_window_t*)window->children[i];
          if(!child || child->closed) continue;
+         if(child->read_task >= 0)
+            fs_read_window_callback(child, true);
          window_resetfuncs(child);
          strcpy(child->title, "KTerm");
          window_draw_outline(child, true);
@@ -319,13 +324,23 @@ static void free_task_events(task_state_t *task) {
    }
 }
 
-bool end_task(int index, registers_t *regs) {
+static bool end_task_helper(int index, registers_t *regs, bool child) {
    if(index < 0 || index >= TOTAL_TASKS) return false;
-
+   if(index == 0) {
+      debug_printf("Can't kill idle process\n");
+      return false;
+   }
+ 
    task_state_t *task = &tasks[index];
    if(!task->enabled) {
       debug_printf("Task %u already ended\n", index);
       return true;
+   }
+
+   if(!regs && !child && get_current_task() == index) {
+      // note: freeing child tasks/threads doesn't pass regs
+      debug_printf("end_task called without regs on current task\n");
+      kernel_panic();
    }
 
    if(task->kernel_esp) {
@@ -340,7 +355,7 @@ bool end_task(int index, registers_t *regs) {
       task_write_to_window(index, "<Task ended>\n", true);
 
    if(task->in_routine) {
-      debug_printf("Task was in %sroutine %s\n", (task->routine_return_window>=0 ? "queued " : ""), task->routine_name);
+      debug_printf("Task was in routine %s\n", task->routine_name);
       if(strequ(task->routine_name, "checkcmd"))
          cleanup_checkcmd_args(task->process, task->routine_args);
    }
@@ -366,7 +381,7 @@ bool end_task(int index, registers_t *regs) {
       for(int i = 1; i < MAX_TASK_THREADS; i++) {
          task_state_t *thread = task->process->threads[i];
          if(!thread) continue;
-         if(!end_task(thread->task_id, NULL)) {
+         if(!end_task_helper(thread->task_id, NULL, true)) {
             task->process->threads[i] = NULL;
             task->process->threads[remaining_threads++] = thread;
          }
@@ -458,6 +473,10 @@ bool end_task(int index, registers_t *regs) {
    return true;
 }
 
+bool end_task(int index, registers_t *regs) {
+   return end_task_helper(index, regs, false);
+}
+
 void tasks_alloc() {
    tasks = malloc(sizeof(task_state_t) * TOTAL_TASKS);
    for(int i = 0; i < TOTAL_TASKS; i++) {
@@ -474,45 +493,34 @@ bool tasks_launch_binary(registers_t *regs, char *path) {
       debug_printf("No free tasks\n");
       return false;
    }
-   fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry == NULL) {
+   int fsize;
+   uint8_t *prog = fs_read_file_kernel(path, &fsize);
+   if(!prog) {
       gui_writestr("Program not found\n", 0);
       task_unreserve(index);
       return false;
    }
-   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   uint32_t progAddr = (uint32_t)prog;
-   if(create_task_entry(index, progAddr, entry->fileSize, false, NULL) == -1) {
+   if(create_task_entry(index, (uint32_t)prog, fsize, false, NULL) == -1) {
       debug_printf("tasks_launch_binary: create task entry failed\n");
-      free((uint32_t)prog, entry->fileSize);
-      free((uint32_t)entry, sizeof(fat_dir_t));
+      free((uint32_t)prog, fsize);
       task_unreserve(index);
       return false;
    }
-   if(!launch_task(index, regs, false)) {
+   if(regs && !launch_task(index, regs, false)) {
       debug_printf("tasks_launch_binary: launch failed\n");
       task_discard_entry(index); // frees prog
-      free((uint32_t)entry, sizeof(fat_dir_t));
       return false;
+   } else if(!regs) {
+      // setup but don't launch
+      if(!setup_task_init(index, true, false, true)) {
+         debug_printf("tasks_launch_binary: setup failed\n");
+         task_discard_entry(index);
+         return false;
+      }
+      tasks[index].enabled = true;
    }
-   free((uint32_t)entry, sizeof(fat_dir_t));
    gui_redrawall();
    return true;
-}
-
-bool tasks_launch_elf(registers_t *regs, char *path, int argc, char **args, bool focus) {
-   fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry == NULL) {
-      gui_writestr("Not found\n", 0);
-      return false;
-   }
-   uint8_t *prog = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   bool launched = elf_run(regs, prog, entry->fileSize, argc, args, focus);
-   if(launched)
-      strcpy(get_current_task_state()->process->exe_path, path);
-   free((uint32_t)prog, entry->fileSize);
-   free((uint32_t)entry, sizeof(fat_dir_t));
-   return launched;
 }
 
 // doesn't immediately switch, caller is responsible for enabling the task
@@ -606,7 +614,7 @@ void switch_task(registers_t *regs, bool resume) {
    if(tasks[current_task].kernel_esp) {
       uint32_t esp = tasks[current_task].kernel_esp;
       tasks[current_task].kernel_esp = 0;
-      resume_kernel(esp);
+      resume_kernel(esp); // yield to instead? (allow resume)
       return; // never hit
    }
 }
@@ -727,15 +735,39 @@ void kernel_block() {
    }
 }
 
-void kernel_yield_if_blocking() {
-   if(!can_park()) return;
+bool kernel_yield_if_blocking() {
+   if(!can_park()) return false;
    
    // check for pending interrupt
    outb(0x20, 0x0A); // read pic irr
    if(!(inb(0x20) & 1))
-      return;
+      return false;
 
-   kernel_yield();
+   return kernel_yield();
+}
+
+bool kernel_exit_resume(registers_t *regs, int task) {
+   // used to exit an irq and run a kthread
+   // eoi must already be sent
+   if(!(regs->cs & 3) || current_task < 0) return false;
+   if(!tasks[task].enabled || tasks[task].paused || !tasks[task].kernel_esp)
+      return false;
+      
+   if(current_task >= 0) {
+      // save registers
+      tasks[current_task].registers = *regs;
+   }
+
+   current_task = task;
+   if(tasks[task].process->page_dir != page_get_current())
+      swap_pagedir(tasks[task].process->page_dir);
+
+   tss_start.esp0 = tasks[task].kernel_stack_top;
+
+   uint32_t esp = tasks[task].kernel_esp;
+   tasks[task].kernel_esp = 0;
+   resume_kernel(esp);
+   return true; // rever hit
 }
 
 void end_kthread(int task) {
@@ -868,7 +900,6 @@ bool task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
    // save registers
 
    tasks[current_task].routine_return_regs = *regs;
-   tasks[current_task].routine_return_window = -1;
 
    tasks[current_task].routine_args = args;
    tasks[current_task].routine_argc = argc;
@@ -959,10 +990,7 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
 
       free((uint32_t)event, sizeof(task_event_t));
 
-      if(!stale) {
-         task->routine_return_window = getSelectedWindowIndex();
-         return true;
-      }
+      if(!stale) return true;
    }
 }
 
@@ -1092,9 +1120,6 @@ void task_subroutine_end(registers_t *regs) {
    // queue notifications that were dropped while event queue was full
    msg_retry_notifications(&tasks[current_task]);
 
-   if(tasks[current_task].routine_return_window >= 0)
-      setSelectedWindowIndex(tasks[current_task].routine_return_window);
-
    if(tasks[current_task].paused) {
       switch_task(regs, false); // yield
    }
@@ -1196,7 +1221,7 @@ void free_launch_args(char **args, int argc) {
 
 int current_servicing_task = -1;
 
-static bool task_addr_demand_paged(task_state_t *task, uint32_t addr) {
+bool task_addr_demand_paged(task_state_t *task, uint32_t addr) {
    // check if addr is within demand paged regions (currently heap only)
    process_t *process = task->process;
    return addr >= process->heap_start && addr < process->heap_end;
@@ -1204,13 +1229,20 @@ static bool task_addr_demand_paged(task_state_t *task, uint32_t addr) {
 
 bool task_demand_map(process_t *process, uint32_t addr) {
    // allocate and map a zeroed page for a demand paged addr
+   addr = addr & ~PAGE_MASK;  // page align
+   int mapping = page_checkmapping(process->page_dir, addr);
+   if(mapping == PAGE_USERRW) return true; // already mapped
+   if(mapping != PAGE_NOTPRESENT) { // avoid overwriting mappings
+      debug_printf("task_demand_map failed: 0x%h mapped type %i\n", addr, mapping);
+      return false;
+   }
    uint8_t *page = malloc(PAGE_SIZE); // returns physical addr
    if(!page) {
       debug_printf("demand paging: system ran out of physical memory\n");
       return false;
    }
    memset(page, 0, PAGE_SIZE); // zero mem
-   addr = addr & ~PAGE_MASK;  // page align
+
    if(!map(process->page_dir, (uint32_t)page, addr, 1, 1, 0)) {
       debug_printf("demand paging: couldn't map 0x%h\n", addr);
       free((uint32_t)page, PAGE_SIZE);
@@ -1231,7 +1263,7 @@ static int task_prefault(task_state_t *task, void *mem, int size) {
       uint32_t page_addr = base + i*PAGE_SIZE;
       int mapping = page_checkmapping(page_dir, page_addr);
       if(mapping == PAGE_USERRW) continue;
-      if(mapping != PAGE_NOTPRESENT || !task_addr_demand_paged(task, page_addr)
+      if(!task_addr_demand_paged(task, page_addr)
       || !task_demand_map(task->process, page_addr))
          return i == 0 ? 0 : (int)(page_addr - vaddr);
    }

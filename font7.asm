@@ -3,7 +3,7 @@ global font7
 font7:
 
 ; size
-db 92
+db 97
 ; width
 db 5
 ; height
@@ -25,6 +25,7 @@ db ':'
 db ';'
 db '='
 db 39 ; apostrophe
+db '`'
 db '.'
 db '>'
 db '<'
@@ -39,6 +40,10 @@ db '"'
 db '_'
 db ','
 db '%'
+db '&'
+db '?'
+db '!'
+db '*'
 db 27 ; cursor outline
 db 28 ; cursor fill
 db 29 ; cursor resize outline
@@ -111,6 +116,18 @@ db 124 ; pipe
 
 global font_null
 font_null:
+%if 0
+db 00000b
+db 10001b
+db 01010b
+db 00100b
+db 01010b
+db 10001b
+db 00000b
+%endif
+
+; old null
+%if 1
    db 00000b
    db 00000b
    db 01010b
@@ -118,6 +135,7 @@ font_null:
    db 01010b
    db 00000b
    db 00000b
+%endif
 
 global font_space
 font_space:
@@ -142,22 +160,22 @@ font_minus:
 global font_plus
 font_plus:
    db 00000b
-   db 00000b
    db 00100b
-   db 01110b
    db 00100b
-   db 00000b
+   db 11111b
+   db 00100b
+   db 00100b
    db 00000b
 
 global font_fwdslash
 font_fwdslash:
+   db 00000b
    db 00001b
    db 00010b
    db 00100b
-   db 00100b
-   db 00100b
    db 01000b
    db 10000b
+   db 00000b
 
 global font_colon
 font_colon:
@@ -187,15 +205,25 @@ font_colon:
    db 00000b
    db 00000b
 
+; '
 global font_apostrophe
 font_apostrophe:
-   db 00000b
-   db 01000b
+   db 00100b
    db 00100b
    db 00000b
    db 00000b
    db 00000b
    db 00000b
+   db 00000b
+
+; `
+db 01000b
+db 00100b
+db 00000b
+db 00000b
+db 00000b
+db 00000b
+db 00000b
 
 global font_fullstop
 font_fullstop:
@@ -293,7 +321,7 @@ font_lessthan:
 ;"
    db 01010b
    db 01010b
-   db 00000b
+   db 01010b
    db 00000b
    db 00000b
    db 00000b
@@ -324,9 +352,45 @@ db 11001b
 db 11010b
 db 00100b
 db 01000b
-db 10000b
-db 01011b
 db 10011b
+db 00011b
+db 00000b
+
+; &
+db 00110b
+db 01001b
+db 10000b
+db 01000b
+db 10101b
+db 10010b
+db 01101b
+
+; ?
+db 01110b
+db 10001b
+db 10001b
+db 00010b
+db 00100b
+db 00000b
+db 00100b
+
+; !
+db 00100b
+db 00100b
+db 00100b
+db 00100b
+db 00100b
+db 00000b
+db 00100b
+
+; *
+db 01010b
+db 00100b
+db 01110b
+db 00100b
+db 01010b
+db 00000b
+db 00000b
 
 global font_cursor_outline
 font_cursor_outline:
@@ -609,13 +673,13 @@ font_N:
 
 global font_O
 font_O:
-   db 00100b
-   db 01010b
+   db 01110b
    db 10001b
    db 10001b
    db 10001b
-   db 01010b
-   db 00100b
+   db 10001b
+   db 10001b
+   db 01110b
 
 global font_P
 font_P:
@@ -972,10 +1036,10 @@ font_y:
    db 00000b
    db 10001b
    db 10001b
+   db 10001b
    db 01111b
    db 00001b
-   db 10001b
-   db 01110b
+   db 11110b
 
 global font_z
 font_z:

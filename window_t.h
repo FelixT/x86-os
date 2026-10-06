@@ -47,7 +47,7 @@ typedef struct gui_window_t {
    int window_object_count;
 
 	// function pointers, window is type *gui_window_t
-	void (*keypress_func)(void *regs, uint16_t key, void *window);
+	void (*keypress_func)(uint16_t key, void *window);
 	void (*keyrelease_func)(uint16_t key, void *window);
    void (*click_func)(int x, int y);
    void (*drag_func)(int x, int y);
@@ -58,11 +58,12 @@ typedef struct gui_window_t {
    void (*close_func)(void *window);
    void (*rightclick_func)(int x, int y);
    void (*mouseout_func)();
-   void (*checkcmd_func)(void *regs, void *window); // override terminal behaviour
-   void (*read_func)(void *regs, char *buffer); // kernel override terminal behaviour
+   void (*checkcmd_func)(void *window); // override terminal behaviour
+
    int read_task; // task to switch on read
    uint32_t read_task_uid;
    char *read_buffer; // buffer for read_func, used by terminal
+   int read_size; // buffer size
 
    void *state;
    int state_size;
