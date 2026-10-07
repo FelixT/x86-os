@@ -266,6 +266,8 @@ void term_cmd_tasks() {
             window_term_printf(" privileged");
          if(tasks[i].kernel_esp)
             window_term_printf(" parked");
+         if(tasks[i].kill_pending)
+            window_term_printf(" killpending");
          if(tasks[i].paused)
             window_term_printf(" paused code %u", tasks[i].pause_reason);
          if(tasks[i].process->threads[0] == &tasks[i]) {
@@ -303,11 +305,11 @@ void term_cmd_tasks() {
 }
 
 void term_cmd_prog1() {
-   tasks_launch_binary(NULL, "/sys/prog1.bin");
+   wm_queue_launch("/sys/prog1.bin", false, NULL, 0, true, false);
 }
 
 void term_cmd_prog2() {
-   tasks_launch_binary(NULL, "/sys/prog2.bin");
+   wm_queue_launch("/sys/prog2.bin", false, NULL, 0, true, false);
 }
 
 void term_cmd_test() {
@@ -334,7 +336,7 @@ void term_cmd_desktop() {
 }
 
 void term_cmd_launch(char *arg) {
-   wm_queue_launch(arg, true, false);
+   wm_queue_launch(arg, true, NULL, 0, true, false);
 }
 
 void term_cmd_bg(char *arg) {
@@ -460,7 +462,7 @@ void term_cmd_taski(char *arg) {
       window_term_printf("Exe path %s\n", process->exe_path);
       window_term_printf("Window %i\n", process->window);
       window_term_printf("Event queue size %i\n", process->event_queue_size);
-      window_term_printf("DMAs %i mapped devices %i fds %i\n", process->dma_count, process->device_count, process->fd_count);
+      window_term_printf("KObjs %i mapped devices %i fds %i\n", process->kobj_count, process->device_count, process->fd_count);
    }
 }
 

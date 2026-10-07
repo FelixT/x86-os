@@ -87,7 +87,7 @@ void api_shared_close(registers_t *regs);
 void api_pci_map(registers_t *regs);
 void api_pci_exists(registers_t *regs);
 void api_dma(registers_t *regs);
-void api_dma_free(registers_t *regs);
+void api_close_handle(registers_t *regs);
 void api_escalate(registers_t *regs);
 void api_create_port(registers_t *regs);
 void api_port_connect(registers_t *regs);

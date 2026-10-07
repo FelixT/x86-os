@@ -74,6 +74,8 @@ void dialog_close(wo_t *wo, int window) {
    }
    dialog->active = false;
    close_window(window);
+   if(window == -1)
+      exit(0);
 }
 
 void dialog_resize(uint16_t fb, int width, int height, int window) {

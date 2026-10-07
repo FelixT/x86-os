@@ -287,7 +287,7 @@ bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *bu
       }
 
       ata_delay(ioPort);
-      kernel_yield_if_blocking();
+      ata_yield();
    }
 
    if(write) {

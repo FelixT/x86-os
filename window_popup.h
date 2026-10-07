@@ -21,5 +21,6 @@ typedef struct window_popup_colourpicker_t {
 
 window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text);
 window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui_window_t *parent, void (*callback)(uint16_t colour), uint16_t colour);
+void show_endtask_dialog(int task_id, uint32_t process_uid, uint16_t int_no);
 
 #endif

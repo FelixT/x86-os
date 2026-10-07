@@ -26,8 +26,10 @@ extern surface_t main_surface; // screen, even while surface is swapped to draw_
 static int *outline_buffer;
 static bool outline_saved = false;
 
+static gui_window_t *dragged_window = NULL;
+
 windowmgr_settings_t wm_settings = {
-   .default_window_bgcolour = 0xF7BE, // 0xFFFF
+   .default_window_bgcolour = 0xFFBE, // 0xFFFF
    .default_window_txtcolour = 0x0000,
    .desktop_enabled = false,
    .desktop_bgimg_enabled = true,
@@ -63,6 +65,9 @@ typedef struct wm_thread_t {
 
 typedef struct wm_launch_event_t {
    char path[256];
+   bool elf; // false for binary
+   char **args;
+   int argc;
    bool focus;
    bool minimised;
 } wm_launch_event_t;
@@ -90,7 +95,7 @@ typedef struct wm_event_thread_t {
    wm_event_t queue[WM_EVENT_QUEUE_SIZE];
    int queue_head, queue_tail, queue_size;
    int paused_task;
-   int yielding_to; // task_post_subroutine queued until end of event
+   int yielding_to; // queued until end of event
 } wm_event_thread_t;
 
 static wm_thread_t wm_thread = {.task=NULL, .draw_pending = false, .redrawall_pending = false, .paused_task = -1};
@@ -151,11 +156,25 @@ void wm_launch_thread_main() {
          continue;
       }
       wm_launch_event_t *launch = &wm_launch_thread.queue[wm_launch_thread.queue_head];
-      int new_task = tasks_setup_elf(launch->path, 0, NULL, launch->focus, false, launch->minimised);
-      if(new_task < 0) {
-         debug_printf("wm_launch %s failed\n", launch->path);
+      if(!launch->elf) {
+         // binary
+         tasks_launch_binary(NULL, launch->path);
       } else {
-         gettasks()[new_task].enabled = true;
+         // elf
+         int new_task = tasks_setup_elf(launch->path, launch->argc, launch->args, launch->focus, false, launch->minimised);
+         if(new_task < 0) {
+            debug_printf("wm_launch %s failed\n", launch->path);
+            free_launch_args(launch->args, launch->argc);
+         } else {
+            gettasks()[new_task].enabled = true;
+            // map args
+            if(launch->args) {
+               page_dir_entry_t *dir = gettasks()[new_task].process->page_dir;
+               map_size(dir, (uint32_t)launch->args, (uint32_t)launch->args, sizeof(char*)*(launch->argc+1), 1, 1, 0);
+               for(int i = 0; i < launch->argc; i++)
+                  map_size(dir, (uint32_t)launch->args[i], (uint32_t)launch->args[i], strlen(launch->args[i])+1, 1, 1, 0);
+            }
+         }
       }
       // remove from queue
       wm_launch_thread.queue_size--;
@@ -166,15 +185,19 @@ void wm_launch_thread_main() {
    }
 }
 
-void wm_queue_launch(char *path, bool focus, bool minimised) {
+void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bool minimised) {
    if(wm_launch_thread.queue_size == WM_LAUNCH_QUEUE_SIZE) {
       debug_printf("WM: launch %s failed, queue is full\n", path);
+      free_launch_args(args, argc);
       return;
    }
    wm_launch_event_t *launch = &wm_launch_thread.queue[wm_launch_thread.queue_tail];
    strcpy(launch->path, path);
    launch->focus = focus;
    launch->minimised = minimised;
+   launch->elf = elf;
+   launch->args = args;
+   launch->argc = argc;
    wm_launch_thread.queue_tail++;
    wm_launch_thread.queue_tail%=WM_LAUNCH_QUEUE_SIZE;
    wm_launch_thread.queue_size++;
@@ -194,7 +217,7 @@ void wm_event_defer_yield(int task) {
    wm_event_thread.yielding_to = task;
 }
 
-// replaces using task_post_subroutine / yielding midway through wm code
+// deferred yield to avoid yielding midway through wm code
 void wm_call_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
    if(!wm_event_thread.task || get_current_task() != wm_event_thread.task->task_id) {
       debug_printf("wm_call_subroutine called from outside wm event thread\n");
@@ -254,6 +277,12 @@ void wm_event_thread_main() {
             if(t != -1) break; // window already closed+reassigned
             window_close(w, true);
             gui_redrawall();
+            break;
+         case TASK_CRASH:
+            int task_id = event.x;
+            uint32_t process_uid = event.y;
+            uint16_t int_no = event.c;
+            show_endtask_dialog(task_id, process_uid, int_no);
             break;
          default:
             //
@@ -909,7 +938,7 @@ void windowmgr_about() {
    default_menu->menuselected = -1;
    default_menu->menuhovered = -1;
 
-   wm_queue_launch("/sys/about.elf", false, true);
+   wm_queue_launch("/sys/about.elf", true, NULL, 0, false, true);
 }
 
 void windowmgr_getproperties() {
@@ -920,14 +949,15 @@ void windowmgr_getproperties() {
    gui_window_t *selected = getSelectedWindow();
    if(!selected) {
       // get system settings
-      wm_queue_launch("/sys/settings.elf", true, false);
+      wm_queue_launch("/sys/settings.elf", true, NULL, 0, true, false);
       return;
    }
    int new = windowmgr_add();
-   gui_window_t *window = getWindow(new);
-   window_draw_outline(window, false);
-   window->state = (void*)window_settings_init(window, selected);
-   window->state_size = sizeof(window_settings_t);
+   if(new < 0 || !window_settings_init(getWindow(new), selected)) {
+      debug_printf("Settings init failed\n");
+      if(new >= 0) window_close(new, false);
+      return;
+   }
 }
 
 void windowmgr_closeselected() {
@@ -945,7 +975,7 @@ void windowmgr_taskmanager() {
    default_menu->menuselected = -1;
    default_menu->menuhovered = -1;
 
-   wm_queue_launch("/sys/taskmgr.elf", true, false);
+   wm_queue_launch("/sys/taskmgr.elf", true, NULL, 0, true, false);
 }
 
 void windowmgr_init() {
@@ -1183,13 +1213,13 @@ void windowmgr_keypress(int scan_code) {
       }
       // alt+esc
       if(scan_code == 0x01) {
-         wm_queue_launch("/sys/taskmgr.elf", true, false);
+         wm_queue_launch("/sys/taskmgr.elf", true, NULL, 0, true, false);
          keyboard_alt = false;
          return;
       }
       // alt+t
       if(scan_to_char(scan_code, false) == 't') {
-         wm_queue_launch("/sys/term.elf", true, false);
+         wm_queue_launch("/sys/term.elf", true, NULL, 0, true, false);
          keyboard_alt = false;
          return;
       }
@@ -1339,6 +1369,7 @@ bool clicked_on_window(int index, int x, int y) {
          window->drag_x = window->x;
          window->drag_y = window->y;
          outline_saved = false;
+         dragged_window = window;
          return true;
       }
 
@@ -1492,7 +1523,7 @@ static void windowmgr_launch_apps() {
          return;
       }
    }
-   wm_queue_launch("/sys/apps.elf", false, true);
+   wm_queue_launch("/sys/apps.elf", true, NULL, 0, false, true);
 }
 
 bool windowmgr_click(int x, int y) {
@@ -1543,6 +1574,7 @@ bool windowmgr_click(int x, int y) {
          selectedWindow->dragged = true;
          selectedWindow->drag_x = selectedWindow->x;
          selectedWindow->drag_y = selectedWindow->y;
+         dragged_window = selectedWindow;
       }
       gui_redrawall();
    }
@@ -1590,7 +1622,8 @@ void windowmgr_release(int x, int y) {
       return;
    }
 
-   gui_window_t *window = getSelectedWindow();
+   gui_window_t *window = dragged_window ? dragged_window : getSelectedWindow();
+   dragged_window = NULL;
    bool redraw = false;
    if(!window) return;
    if(window->dragged) {
@@ -1698,14 +1731,14 @@ void desktop_init() {
    // load add window icon
    int size;
    if(!icon_window) {
-      icon_window = fs_read_file_kernel("/bmp/window.bmp", &size);
+      icon_window = fs_read_file_kernel("/bmp/window16.bmp", &size);
       if(!icon_window) {
          debug_writestr("Window icon not found\n");
          return;
       }
    }
    if(!icon_files) {
-      icon_files = fs_read_file_kernel("/bmp/files.bmp", &size);
+      icon_files = fs_read_file_kernel("/bmp/files16.bmp", &size);
       if(!icon_files) {
          debug_writestr("Files icon not found\n");
          return;
@@ -1747,20 +1780,19 @@ void desktop_draw() {
 
    int x = 10;
    int y = 10;
-   int textw = x*2 + bmp_get_width(icon_files);
-   int textx = (textw - font_width(strlen("FileMgr"))) / 2;
+   int textx = x + (bmp_get_width(icon_files) - font_width(strlen("FileMgr"))) / 2;
    bmp_draw(icon_files, &surface,x, y, 1, 1);
    y += 6 + bmp_get_height(icon_files);
    draw_string(&surface, "FileMgr", 0, textx, y+1);
    draw_string(&surface, "FileMgr", 0xFFFF, textx, y);
    y += 14 + getFont()->height;
-   textx = (textw - font_width(strlen("UsrTerm"))) / 2;
+   textx = x + (bmp_get_width(icon_window) - font_width(strlen("UsrTerm"))) / 2;
    bmp_draw(icon_window, &surface,x, y, 1, 1);
    y += 6 + bmp_get_height(icon_window);
    draw_string(&surface, "UsrTerm", 0, textx, y+1);
    draw_string(&surface, "UsrTerm", 0xFFFF, textx, y);
    y += 14 + getFont()->height;
-   textx = (textw - font_width(strlen("KTerm"))) / 2;
+   textx = x + (bmp_get_width(icon_window) - font_width(strlen("KTerm"))) / 2;
    bmp_draw(icon_window, &surface,x, y, 1, 1);
    y += 6 + bmp_get_height(icon_window);
    draw_string(&surface, "KTerm", 0, textx, y+1);
@@ -1775,7 +1807,7 @@ void desktop_click(int x, int y) {
 
    // filemgr
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
-      wm_queue_launch("/sys/files.elf", true, false);
+      wm_queue_launch("/sys/files.elf", true, NULL, 0, true, false);
    }
 
    icony += 6+14 + iconheight + getFont()->height;
@@ -1783,7 +1815,7 @@ void desktop_click(int x, int y) {
 
    // usr terminal
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
-      wm_queue_launch("/sys/term.elf", true, false);
+      wm_queue_launch("/sys/term.elf", true, NULL, 0, true, false);
    }
 
    icony += 6+14 + iconheight + getFont()->height;

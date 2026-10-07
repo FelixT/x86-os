@@ -168,6 +168,22 @@ bool make_scratch(void) {
    return ok;
 }
 
+// dma/kobj test
+
+int test_dma(void) {
+   if(!escalate()) {
+      printf("Need to be privileged for DMA\n");
+      exit(1);
+   }
+   dma_t test_dma = dma(0x1000);
+   if(!test_dma.mem) return -1;
+   memset((void*)test_dma.mem, 0, 0x1000);
+   int freed = hrelease(test_dma.h);
+   printf("Freed %i\nExpected fault:\n", freed);
+   memset((void*)test_dma.mem, 0, 0x1000); // expected fault
+   return 0;
+}
+
 void _start() {
 
    int tmpfd = open("/tmp", FS_FLAG_READONLY);
@@ -191,6 +207,8 @@ void _start() {
    test_func(&test_fnew_file, "fnew_file");
 
    unlink(SCRATCH_FILE);
+
+   test_func(&test_dma, "dma");
 
    while(true) { yield(); }
 

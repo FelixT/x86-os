@@ -1012,30 +1012,41 @@ static inline bool pci_exists(uint16_t vendor, uint16_t device_id) {
    return exists;
 }
 
-static inline void *dma(uint32_t size) {
+typedef int handle_t;
+
+typedef struct dma_t {
+   volatile uint8_t *mem; // NULL on fail
+   handle_t h;
+} dma_t;
+
+static inline dma_t dma(uint32_t size) {
+   dma_t dma;
    uint32_t addr;
 
    asm volatile (
       "int $0x30"
-      : "=b" (addr)
+      : "=b" (addr),
+      "=c" (dma.h)
       : "a" (84),
       "b" (size)
       : "cc", "memory"
    );
 
-   return (void*)addr;
+   dma.mem = (uint8_t*)addr;
+   return dma;
 }
 
-static inline uint32_t dma_free(void *addr) {
-   uint32_t freed;
+// generic handle release
+static inline uint32_t hrelease(handle_t handle) {
+   bool success;
    asm volatile (
       "int $0x30;"
-      : "=b" (freed)
+      : "=b" (success)
       : "a" (85),
-      "b" ((uint32_t)addr)
+      "b" (handle)
       : "cc", "memory"
    );
-   return freed;
+   return success;
 }
 
 static inline bool escalate() {

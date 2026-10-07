@@ -19,6 +19,6 @@ uint32_t pci_map_device(struct process_t *process, uint16_t vendor, uint16_t dev
 pci_device_t *get_pci_devices(int *count);
 pci_device_t *pci_find_device(uint16_t vendor, uint16_t device_id);
 void pci_disable_device(pci_device_t *device); // clear MMIO decode + bus mastering
-void dma_cleanup(struct process_t *process); // free tracked DMA + silence devices on task death
+void pci_cleanup(struct process_t *process); // silence devices on task death
 
 #endif

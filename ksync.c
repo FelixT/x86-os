@@ -98,6 +98,13 @@ void kmutex_lock(kmutex_t *mutex) {
 bool kmutex_unlock(kmutex_t *mutex) {
    task_state_t *task = get_current_task_state();
    if(mutex->owner != task) return false;
+   kmutex_release(task, mutex, false);
+   return true;
+}
+
+bool kmutex_unlock_yield(kmutex_t *mutex) {
+   task_state_t *task = get_current_task_state();
+   if(mutex->owner != task) return false;
    kmutex_release(task, mutex, true);
    return true;
 }

@@ -410,7 +410,7 @@ void software_handler(registers_t *regs) {
          api_dma(regs);
          break;
       case 85:
-         api_dma_free(regs);
+         api_close_handle(regs);
          break;
       case 86:
          api_escalate(regs);
@@ -463,6 +463,10 @@ void software_handler(registers_t *regs) {
    }
 
    task->in_syscall = false;
+   if(task->kill_pending) {
+      debug_printf("Killed after syscall %i\n", task->syscall_no);
+      end_task(task->task_id, regs);
+   }
 }
 
 void keyboard_handler(registers_t *regs) {
@@ -607,91 +611,10 @@ uint32_t get_timer_tick() {
    return timer_i;
 }
 
-void endtask_callback(void *dialog) {
-   // callback for close window dialog
-   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
-   task_state_t *task = &gettasks()[d->task_id];
-   if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
-      debug_printf("Task %i no longer paused\n", task->task_id);
-      return;
-   }
-   int t = task->task_id;
-   int w = get_task_window(t);
-   if(end_task(t, NULL)) {
-      window_close(w, false);
-      gui_redrawall();
-   }
-}
-
-// ends task if dialog is closed
-void endtask_dismiss(void *dialog, void *regs) {
-   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
-   task_state_t *task = &gettasks()[d->task_id];
-   if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
-      debug_printf("Task %i no longer paused\n", task->task_id);
-      return;
-   }
-   int w = get_task_window(d->task_id);
-   end_task(d->task_id, regs);
-   if(w < 0) return;
-   wm_event(WINDOW_CLOSE, w, 0, 0);
-}
-
-void endtask_debug(void *windowobj, int x, int y) {
-   (void)windowobj;
-   (void)x;
-   (void)y;
-   window_popup_dialog_t *dialog = getSelectedWindow()->state;
-   dialog->answered = true;
-   task_state_t *task = &gettasks()[dialog->task_id];
-   if(!task->paused || !task->enabled || !task->process || task->process->uid != dialog->process_uid) {
-      debug_printf("Task %i no longer paused\n", task->task_id);
-      return;
-   }
-   uint32_t eip = task->registers.eip;
-   char *exe_path = task->process->exe_path;
-   char addrbuffer[10];
-   uinttohexstr(eip, addrbuffer);
-   int argc = 3;
-   char **args = malloc(sizeof(char*)*(argc+1));  // args includes trailing null str
-   char *debug_path = "/sys/debug.elf";
-   args[2] = malloc(strlen(addrbuffer)+1);
-   strcpy(args[2], addrbuffer);
-   args[1] = malloc(strlen(exe_path)+1);
-   strcpy(args[1], exe_path);
-   args[0] = malloc(strlen(debug_path)+1);
-   args[argc] = NULL;
-   strcpy(args[0], debug_path);
-   int t = tasks_setup_elf(debug_path, argc, args, true, false, false);
-   if(t < 0) {
-      free_launch_args(args, argc);
-      return;
-   }
-   gettasks()[t].enabled = true;
-   page_dir_entry_t *dir = gettasks()[t].process->page_dir;
-   map_size(dir, (uint32_t)args, (uint32_t)args, sizeof(char*)*(argc+1), 1, 1, 0);
-   for(int i = 0; i < argc; i++)
-      map_size(dir, (uint32_t)args[i], (uint32_t)args[i], strlen(args[i])+1, 1, 1, 0);
-}
-
-void show_endtask_dialog(int int_no, registers_t *regs, int task) {
-   int popup = windowmgr_add();
-   char buffer[50];
-   sprintf(buffer, "Task %i paused due to exception %i", task, int_no);
-   window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
-   dialog->callback_func = &endtask_callback;
-   dialog->dismiss_func = &endtask_dismiss; // closing dialog ends task
-   dialog->wo_okbtn->x = 75;
-   dialog->process_uid = gettasks()[task].process->uid;
-   dialog->task_id = task;
-   window_create_button(getWindow(popup), 135, 45, "Debug", &endtask_debug);
-   if(get_task_window(task) >= 0)
-      window_disable(getWindow(get_task_window(task)));
-   strcpy(getWindow(popup)->title, "Error");
-   strcpy(dialog->wo_okbtn->text, "Exit");
-   pause_task(task, regs);
-   toolbar_draw();
-   window_draw_outline(getWindow(popup), false);
+void crash_task(int int_no, registers_t *regs, int task) {
+   pause_task(task, regs); // pauses and marks and crashed
+   uint32_t process_uid = gettasks()[task].process->uid;
+   wm_event(TASK_CRASH, task, process_uid, (uint16_t)int_no);
 }
 
 extern int current_servicing_task;
@@ -925,7 +848,7 @@ void err_exception_handler(int int_no, registers_t *regs) {
       if(task_state->in_routine)
          debug_printf("Task was in routine %s\n", task_state->routine_name);
 
-      show_endtask_dialog(int_no, regs, task); // + pauses task
+      crash_task(int_no, regs, task);
    } else {
       window_writestr("Fault type ", gui_rgb16(255, 100, 100), 0);
       window_writenum(fault_type, 0, 0);

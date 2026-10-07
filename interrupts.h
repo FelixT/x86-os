@@ -64,7 +64,7 @@ uint32_t get_timer_tick();
 void keyboard_handler(registers_t *regs);
 void mouse_handler(registers_t *regs);
 void software_handler(registers_t *regs);
-void show_endtask_dialog(int int_no, registers_t *regs, int task);
+void crash_task(int int_no, registers_t *regs, int task);
 __attribute__((noreturn)) void kernel_panic(void);
 
 #endif

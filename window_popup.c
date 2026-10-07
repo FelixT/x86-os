@@ -51,10 +51,6 @@ void window_popup_dialog_close(void *windowobj, int x, int y) {
          dialog->answered = true; // explicit resolution - suppress dismiss default
          dialog->callback_func(dialog);
       }
-      if(getSelectedWindow()) {
-         getSelectedWindow()->needs_redraw = true;
-         window_draw(getSelectedWindow());
-      }
    }
    setSelectedWindowIndex(parent_index);
 
@@ -276,4 +272,84 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
 
    return cp;
 
+}
+
+// end task popup dialog
+// uses window_popup_dialog_t
+
+void endtask_callback(void *dialog) {
+   // callback for close window dialog
+   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
+   task_state_t *task = &gettasks()[d->task_id];
+   if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
+      debug_printf("Task %i no longer paused\n", task->task_id);
+      return;
+   }
+   int t = task->task_id;
+   int w = get_task_window(t);
+   if(end_task(t, NULL)) {
+      window_close(w, false);
+      wm_redrawall();
+   }
+}
+
+// ends task if dialog is closed
+void endtask_dismiss(void *dialog, void *regs) {
+   window_popup_dialog_t *d = (window_popup_dialog_t*)dialog;
+   task_state_t *task = &gettasks()[d->task_id];
+   if(!task->paused || !task->enabled || !task->process || task->process->uid != d->process_uid) {
+      debug_printf("Task %i no longer paused\n", task->task_id);
+      return;
+   }
+   int w = get_task_window(d->task_id);
+   end_task(d->task_id, regs);
+   if(w < 0) return;
+   wm_event(WINDOW_CLOSE, w, 0, 0);
+}
+
+void endtask_debug(void *windowobj, int x, int y) {
+   (void)windowobj;
+   (void)x;
+   (void)y;
+   window_popup_dialog_t *dialog = getSelectedWindow()->state;
+   dialog->answered = true;
+   task_state_t *task = &gettasks()[dialog->task_id];
+   if(!task->paused || !task->enabled || !task->process || task->process->uid != dialog->process_uid) {
+      debug_printf("Task %i no longer paused\n", task->task_id);
+      return;
+   }
+   uint32_t eip = task->registers.eip;
+   char *exe_path = task->process->exe_path;
+   char addrbuffer[10];
+   uinttohexstr(eip, addrbuffer);
+   int argc = 3;
+   char **args = malloc(sizeof(char*)*(argc+1));  // args includes trailing null str
+   char *debug_path = "/sys/debug.elf";
+   args[2] = malloc(strlen(addrbuffer)+1);
+   strcpy(args[2], addrbuffer);
+   args[1] = malloc(strlen(exe_path)+1);
+   strcpy(args[1], exe_path);
+   args[0] = malloc(strlen(debug_path)+1);
+   args[argc] = NULL;
+   strcpy(args[0], debug_path);
+   wm_queue_launch(debug_path, true, args, argc, true, false);
+}
+
+void show_endtask_dialog(int task_id, uint32_t process_uid, uint16_t int_no) {
+   int popup = windowmgr_add();
+   char buffer[50];
+   sprintf(buffer, "Task %i paused due to exception %i", task_id, int_no);
+   window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
+   dialog->callback_func = &endtask_callback;
+   dialog->dismiss_func = &endtask_dismiss; // closing dialog ends task
+   dialog->wo_okbtn->x = 75;
+   dialog->process_uid = process_uid;
+   dialog->task_id = task_id;
+   window_create_button(getWindow(popup), 135, 45, "Debug", &endtask_debug);
+   if(get_task_window(task_id) >= 0 && gettasks()[task_id].process->uid == process_uid)
+      window_disable(getWindow(get_task_window(task_id)));
+   strcpy(getWindow(popup)->title, "Error");
+   strcpy(dialog->wo_okbtn->text, "Exit");
+   window_draw_outline(getWindow(popup), false);
+   windowmgr_draw();
 }

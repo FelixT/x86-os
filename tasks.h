@@ -15,6 +15,7 @@
 #include "paging.h"
 #include "fs.h"
 #include "pci.h"
+#include "kobj.h"
 
 #define TASK_STACK_SIZE 0x0004000
 
@@ -54,8 +55,8 @@ typedef enum {
    PAUSE_KTHREAD // waiting for event
 } task_pause_reason_t;
 
+#define PROCESS_MAX_KOBJ 64
 #define PROCESS_MAX_FDS 64
-#define PROCESS_MAX_DMA 16
 #define PROCESS_MAX_PCI 4
 #define PROCESS_MAX_PORTS 16
 #define TASK_MAX_CHANNELS 16
@@ -75,6 +76,9 @@ typedef struct process_t {
    char exe_path[256]; // location of executable
 
    // resources
+   kobj_ref_t *kobj[PROCESS_MAX_KOBJ];
+   int kobj_count; // live refs (handles are slot indices, reused)
+
    int no_allocated; // kmallocd paged, currently only incremented via dma
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
@@ -83,8 +87,6 @@ typedef struct process_t {
    task_event_t *event_queue[EVENT_QUEUE_SIZE]; // could be linked list
    int event_queue_size;
    uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
-   dma_alloc_t dma_allocs[PROCESS_MAX_DMA];
-   int dma_count;
    pci_device_t *devices[PROCESS_MAX_PCI]; // mapped pci devices
    int device_count;
    struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
@@ -103,6 +105,7 @@ typedef struct task_state_t {
    task_pause_reason_t pause_reason;
    bool wake_pending;
    bool crashed;
+   bool kill_pending;
    int task_id;
    uint32_t task_uid;
    uint32_t stack_base; // phys address of stack allocation (mapped above the guard to v_stack_start+0x1000)
@@ -144,7 +147,6 @@ void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
 int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised);
-int task_post_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();
@@ -190,5 +192,10 @@ bool task_demand_map(process_t *process, uint32_t addr);
 
 int copy_to_task(int task, void *dest, void *src, size_t size);
 int copy_from_task(int task, void *dest, void *src, size_t size);
+
+kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst);
+kobj_ref_t *process_get_kobj(process_t *process, kobj_handle_t h);
+bool process_release_kobj(process_t *process, kobj_handle_t h);
+void process_release_kobjs(process_t *process);
 
 #endif

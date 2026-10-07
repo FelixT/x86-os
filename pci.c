@@ -121,15 +121,11 @@ void pci_disable_device(pci_device_t *device) {
    pci_config_write32(device->bus, device->slot, device->func, 0x04, cmd);
 }
 
-// stop all pci devices and reclaim dma memory
-void dma_cleanup(process_t *process) {
+// stop all pci devices
+void pci_cleanup(process_t *process) {
    for(int i = 0; i < process->device_count; i++)
       pci_disable_device(process->devices[i]);
    process->device_count = 0;
-
-   for(int i = 0; i < process->dma_count; i++)
-      free(process->dma_allocs[i].addr, process->dma_allocs[i].size);
-   process->dma_count = 0;
 }
 
 pci_device_t *get_pci_devices(int *count) {

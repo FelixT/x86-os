@@ -18,8 +18,7 @@ static uint8_t mac_addr[6];
 #define RX_BUF_LEN 8192
 #define RX_SIZE (RX_BUF_LEN + 16 + 1536) // includes extra padding
 
-static volatile uint8_t *rx; // read/rx dma buffer
-
+static dma_t rx_dma; // read/rx dma buffer
 static uint16_t rx_offset = 0;
 
 static netdev_t device;
@@ -38,7 +37,7 @@ static netdev_t device;
 
 #define TX_BUF_SIZE 2048 
 
-static uint8_t *tx_buf[4];
+static dma_t tx_dma[4];
 
 static int tx_buf_i = 0;
 
@@ -51,9 +50,9 @@ int rtl_send(netdev_t *dev, uint8_t *data, uint16_t len) {
    int i = tx_buf_i;
    tx_buf_i = (tx_buf_i + 1) & 3;
 
-   memcpy(tx_buf[i], data, len);
+   memcpy((void*)tx_dma[i].mem, data, len);
    if(len < 60) {
-      memset(tx_buf[i] + len, 0, 60 - len); // zero-pad, don't leak stale bytes
+      memset((void*)tx_dma[i].mem + len, 0, 60 - len); // zero-pad, don't leak stale bytes
       len = 60; // minimum ethernet frame
    }
 
@@ -73,8 +72,8 @@ int rtl_send(netdev_t *dev, uint8_t *data, uint16_t len) {
 void rtl_poll(netdev_t *dev) {
    // poll for packets waiting (bit 0 => 0)
    while(!(io[RTL_CMD] & 0x01)) {
-      uint16_t status = *(volatile uint16_t*)(rx + rx_offset);
-      uint16_t len = *(volatile uint16_t*)(rx + rx_offset + 2);
+      uint16_t status = *(volatile uint16_t*)(rx_dma.mem + rx_offset);
+      uint16_t len = *(volatile uint16_t*)(rx_dma.mem + rx_offset + 2);
       if(len < 4 || len > ETHERNET_MAX) { // received bad length
          // skip bad headers, set read position rx_offset (fix desync by reading from device counter)
          uint16_t cbr = *(volatile uint16_t*)(io + RTL_CBR);
@@ -82,7 +81,7 @@ void rtl_poll(netdev_t *dev) {
          *(volatile uint16_t*)(io + RTL_CAPR) = rx_offset - 0x10;
          break;
       }
-      uint8_t *frame = (uint8_t*)(rx + rx_offset + 4);
+      uint8_t *frame = (uint8_t*)(rx_dma.mem + rx_offset + 4);
       uint16_t frame_len = len - 4; // strip crc at end of frame (already validated by device)
 
       if((status & 0x01) && dev->rx) // rok - receive ok
@@ -98,9 +97,9 @@ void rtl_poll(netdev_t *dev) {
 
 void rtl_free(netdev_t *dev) {
    (void)dev;
-   dma_free((void*)rx);
+   hrelease(rx_dma.h);
    for(int i = 0; i < 4; i++) {
-      dma_free(tx_buf[i]);
+      hrelease(tx_dma[i].h);
    }
 }
 
@@ -111,20 +110,19 @@ netdev_t *rtl_init() {
       printf("PCI map failed\n");
       exit(1);
    }
-   // get continuous physical memory for rx dma buffer (note must be free'd or leaks)
-   uint32_t rx_phys = (uint32_t)dma(RX_SIZE);
-   if(rx_phys == 0) {
+   // get continuous physical memory for rx dma buffer
+   rx_dma = dma(RX_SIZE);
+   if(rx_dma.mem == 0) {
       return NULL;
    }
-   rx = (volatile uint8_t*)rx_phys;
 
    // allocate tx buffers
    for(int i = 0; i < 4; i++) {
-      tx_buf[i] = (uint8_t*)dma(TX_BUF_SIZE);
-      if(tx_buf[i] == NULL) {
-         dma_free((void*)rx);
+      tx_dma[i] = dma(TX_BUF_SIZE);
+      if(tx_dma[i].mem == NULL) {
+         hrelease(rx_dma.h);
          for(int j = 0; j < i; j++)
-            dma_free(tx_buf[j]);
+            hrelease(tx_dma[j].h);
          return NULL;
       }
    }
@@ -139,11 +137,11 @@ netdev_t *rtl_init() {
    memcpy(device.mac, mac_addr, 6);
    printf("MAC %h:%h:%h:%h:%h:%h\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 
-   *(volatile uint32_t*)(io+RTL_RBSTART) = rx_phys;
+   *(volatile uint32_t*)(io+RTL_RBSTART) = (uint32_t)rx_dma.mem;
 
    // set tx buffer physical addresses
    for(int i = 0; i < 4; i++)
-      *(volatile uint32_t*)(io + RTL_TSAD0 + i*4) = (uint32_t)tx_buf[i];
+      *(volatile uint32_t*)(io + RTL_TSAD0 + i*4) = (uint32_t)tx_dma[i].mem;
 
    *(volatile uint16_t*)(io+RTL_IMR) = 0; // disable interrupts (use polling)
 

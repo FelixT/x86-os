@@ -21,6 +21,8 @@ uint8_t *fs_read_file_kernel(char *path, int *size) {
    
    fat_dir_t *entry = fat_parse_path(path, true);
    if(entry == NULL || entry->attributes == 0x10) {
+      if(entry)
+         free((uint32_t)entry, sizeof(fat_dir_t));
       if(switching)
          kmutex_unlock(&fs_mutex);
       return NULL; // not found

@@ -31,7 +31,8 @@ typedef enum {
    MOUSE_DRAG,
    MOUSE_SCROLL,
    KEY_PRESS,
-   WINDOW_CLOSE
+   WINDOW_CLOSE,
+   TASK_CRASH // event to display 'task crashed' dialog
 } wm_event_type_t;
 
 #define SCROLL_UP 1
@@ -42,7 +43,7 @@ void wm_draw();
 void wm_redrawall();
 void wm_event(wm_event_type_t type, int x, int y, uint16_t c);
 void wm_event_thread_exit_resume(registers_t *regs);
-void wm_queue_launch(char *path, bool focus, bool minimised);
+void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bool minimised);
 void wm_call_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 void wm_event_defer_yield(int task);
 
@@ -53,6 +54,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
 void window_draw_content(gui_window_t *window);
 void window_draw_outline(gui_window_t *window, bool occlude);
 void windowmgr_redrawall();
+void windowmgr_draw();
 
 int windowmgr_add();
 bool window_init(gui_window_t *window);

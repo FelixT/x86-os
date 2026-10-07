@@ -33,7 +33,9 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
       process->file_descriptors[i] = NULL;
    process->mmio_end = V_MMIO_START;
    process->device_count = 0;
-   process->dma_count = 0;
+   for(int i = 0; i < PROCESS_MAX_KOBJ; i++)
+      process->kobj[i] = NULL;
+   process->kobj_count = 0;
    process->port_count = 0;
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
@@ -98,6 +100,7 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].pause_reason = PAUSE_NONE;
    tasks[index].wake_pending = false;
    tasks[index].crashed = false;
+   tasks[index].kill_pending = false;
    tasks[index].in_routine = false;
    tasks[index].in_syscall = false;
    tasks[index].msg_func = NULL;
@@ -344,8 +347,10 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
    }
 
    if(task->kernel_esp) {
-      debug_printf("Can't end task %i - task is parked in kernel or a kthread\n", index);
-      // todo: kill_pending flag
+      if(task->process->page_dir == page_get_kernel_pagedir())
+         debug_printf("Can't end kthread %i\n", index);
+      else
+         task->kill_pending = true; // usermode parked in kernel, wait until end of syscall
       return false;
    }
 
@@ -415,8 +420,11 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
          // close shared memory
          shared_cleanup(task->process);
 
-         // silence mapped devices + reclaim DMA buffers
-         dma_cleanup(task->process);
+         // silence mapped devices
+         pci_cleanup(task->process);
+
+         // free kernel objs
+         process_release_kobjs(task->process);
 
          // free ports
          msg_cleanup_process(task->process);
@@ -767,7 +775,7 @@ bool kernel_exit_resume(registers_t *regs, int task) {
    uint32_t esp = tasks[task].kernel_esp;
    tasks[task].kernel_esp = 0;
    resume_kernel(esp);
-   return true; // rever hit
+   return true; // never hit
 }
 
 void end_kthread(int task) {
@@ -978,7 +986,7 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
       if(!stale) {
          if(!switch_to_task(taskid, regs)) return false;
          if(!task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc)) { // takes ownership of args
-            show_endtask_dialog(14, NULL, taskid);
+            crash_task(14, NULL, taskid);
             return false;
          }
       } else {
@@ -1090,7 +1098,7 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
 
    if(!task_execute_subroutine(regs, name, addr, args, argc)) {
       free((uint32_t)args, sizeof(uint32_t*)*argc);
-      show_endtask_dialog(14, regs, task->task_id);
+      crash_task(14, regs, task->task_id);
       return false;
    }
 
@@ -1392,4 +1400,50 @@ int copy_from_task(int task, void *dest, void *src, size_t size) {
    if(swapped) swap_pagedir(old_dir);
    current_servicing_task = prev;
    return maxsize;
+}
+
+kobj_ref_t *process_get_kobj(process_t *process, kobj_handle_t h) {
+   if(!process || h < 0 || h >= PROCESS_MAX_KOBJ)
+      return NULL;
+
+   kobj_ref_t *ref = process->kobj[h];
+   if(!ref || !ref->inst)
+      return NULL;
+   return ref;
+}
+
+kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst) {
+   // take first free slot
+   kobj_handle_t h = 0;
+   while(h < PROCESS_MAX_KOBJ && process->kobj[h])
+      h++;
+   if(h == PROCESS_MAX_KOBJ) {
+      debug_printf("Process %u hit max kobj limit\n", process->uid);
+      return -1;
+   }
+   kobj_ref_t *ref = create_kobj_ref(kobj_inst);
+   if(!ref) return -1;
+   process->kobj[h] = ref;
+   process->kobj_count++;
+   return h;
+}
+
+bool process_release_kobj(process_t *process, kobj_handle_t h) {
+   kobj_ref_t *ref = process_get_kobj(process, h);
+   if(!ref) return false;
+   if(!kobj_release(ref, process, false)) return false;
+   process->kobj[h] = NULL;
+   process->kobj_count--;
+   return true;
+}
+
+void process_release_kobjs(process_t *process) {
+   // when ending process
+   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
+      kobj_ref_t *ref = process->kobj[i];
+      if(!ref) continue;
+      if(!kobj_release(ref, process, true)) continue;
+      process->kobj[i] = NULL;
+      process->kobj_count--;
+   }
 }

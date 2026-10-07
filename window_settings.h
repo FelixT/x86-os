@@ -12,6 +12,6 @@ typedef struct window_settings_t {
    windowobj_t *w_txtcolourpick_wo;
 } window_settings_t;
 
-window_settings_t *window_settings_init(gui_window_t *window, gui_window_t *selected);
+bool window_settings_init(gui_window_t *window, gui_window_t *selected);
 
 #endif

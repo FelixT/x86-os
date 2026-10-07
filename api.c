@@ -16,6 +16,7 @@
 #include "shared.h"
 #include "pci.h"
 #include "msg.h"
+#include "dma.h"
 
 // helper funcs
 
@@ -1694,72 +1695,37 @@ void api_pci_exists(registers_t *regs) {
    regs->ebx = (pci_find_device(regs->ebx, regs->ecx) != NULL);
 }
 
+
 void api_dma(registers_t *regs) {
    // IN: ebx - size
    // OUT: ebx - physical addr (0 on failure)
+   // OUT: ecx - (kobj) handle
    // todo: on newer processors use iommu
    process_t *process = get_current_task_state()->process;
+   int size = regs->ebx;
+   regs->ebx = 0;
+   regs->ecx = -1;
+   if(size < 0)
+      return;
    if(!process->privileged) {
       debug_printf("api_dma: denied for unprivileged task\n");
-      regs->ebx = 0;
-      return;
-   }
-   if(process->dma_count >= PROCESS_MAX_DMA) {
-      debug_printf("api_dma: dma table full\n");
-      regs->ebx = 0;
       return;
    }
    // dma requires physical address of continuous memory provided by kmalloc
-   int size = regs->ebx;
-   uint8_t *mem = malloc(size);
-   if(!mem) {
-      debug_printf("api_dma: ran out of physical memory\n");
-      regs->ebx = 0;
+   uint32_t addr;
+   kobj_handle_t h = dma_create(size, process, &addr);
+   if(h < 0)
       return;
-   }
-   uint32_t paddr = (uint32_t)mem;
-   // identity map - todo: give process vaddr
-   process->no_allocated += map_size(process->page_dir, paddr, paddr, size, 1, 1, 0);
-
-   // track in process
-   process->dma_allocs[process->dma_count].addr = paddr;
-   process->dma_allocs[process->dma_count].size = size;
-   process->dma_count++;
-   regs->ebx = paddr;
+   regs->ebx = addr;
+   regs->ecx = h;
 }
 
-void api_dma_free(registers_t *regs) {
-   // IN: ebx - addr
-   uint32_t paddr = regs->ebx; // identity mapped to process in api_dma
+void api_close_handle(registers_t *regs) {
+   // IN: ebx - kobj_handle
+   // OUT: ebx - success
+   kobj_handle_t h = regs->ebx;
    process_t *process = get_current_task_state()->process;
-   if(!process->privileged) {
-      debug_printf("api_dma_free: denied for unprivileged task\n");
-      regs->ebx = 0;
-      return;
-   }
-   // drop from the tracking table
-   uint32_t size = 0;
-   for(int i = 0; i < process->dma_count; i++) {
-      if(process->dma_allocs[i].addr == paddr) {
-         size = process->dma_allocs[i].size;
-         process->dma_allocs[i] = process->dma_allocs[process->dma_count - 1];
-         process->dma_count--;
-         break;
-      }
-   }
-
-   if(!size) { // not found
-      regs->ebx = 0;
-      return;
-   }
-   
-   free(paddr, size);
-
-   // unmap from user
-   task_state_t *task = get_current_task_state();
-   task->process->no_allocated -= map_size(task->process->page_dir, paddr, paddr, size, 0, 1, 0);
-   
-   regs->ebx = size;
+   regs->ebx = process_release_kobj(process, h);
 }
 
 void api_escalate_do(void *dialog) {
@@ -1772,6 +1738,7 @@ void api_escalate_do(void *dialog) {
       task->process->privileged = true;
       task->registers.ebx = 1;
       task_resume(task);
+      wm_event_defer_yield(task->task_id);
    } else {
       debug_printf("Couldn't escalate: requesting task ended\n");
    }
@@ -1786,6 +1753,7 @@ void api_escalate_dismiss(void *dialog, void *regs) {
       debug_printf("Escalation dismissed - denying process %u\n", d->process_uid);
       task->registers.ebx = 0;
       task_resume(task);
+      wm_event_defer_yield(task->task_id);
    } else {
       debug_printf("Couldn't deny: requesting task ended\n");
    }
