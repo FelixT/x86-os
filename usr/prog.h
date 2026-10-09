@@ -8,8 +8,6 @@
 #include "../surface_t.h"
 #include "../lib/api.h"
 
-typedef int handle_t;
-
 static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
@@ -937,7 +935,7 @@ static inline void futex_wake(void *addr) {
 }
 
 typedef struct shared_t {
-   uint32_t uid;
+   handle_t h;
    void *mem;
 } shared_t;
 
@@ -946,7 +944,7 @@ static inline shared_t shared_create(int size) {
    asm volatile(
       "int $0x30"
       : "=b" (shared.mem),
-      "=c" (shared.uid)
+      "=c" (shared.h)
       : "a" (78),
       "b" ((uint32_t)size)
       : "cc", "memory"
@@ -954,38 +952,16 @@ static inline shared_t shared_create(int size) {
    return shared;
 }
 
-static inline void shared_grant(int task_id, uint32_t block_uid) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (79),
-      "b" ((uint32_t)task_id),
-      "c" (block_uid)
-      : "cc", "memory"
-   );
-}
-
-static inline void *shared_map(uint32_t block_uid) {
+static inline void *shared_map(handle_t handle) {
    uint32_t addr;
    asm volatile(
       "int $0x30"
       : "=b" (addr)
       : "a" (80),
-      "b" ((uint32_t)block_uid)
+      "b" ((uint32_t)handle)
       : "cc", "memory"
    );
    return (void*)addr;
-}
-
-static inline bool shared_close(uint32_t block_uid) {
-   bool success;
-   asm volatile(
-      "int $0x30"
-      : "=b" (success)
-      : "a" (81),
-      "b" ((uint32_t)block_uid)
-      : "cc", "memory"
-   );
-   return success;
 }
 
 static inline uint8_t *pci_map(uint16_t vendor, uint16_t device_id, handle_t *handle) {
@@ -1102,7 +1078,8 @@ static inline void override_msg(void (*msg_func)(uint32_t port_uid, uint32_t cha
    );
 }
 
-static inline int msg_send_flags(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length, uint32_t flags) {
+// send msg_t obj (currently doesn't support handles)
+static inline int msg_send_obj(uint32_t port_uid, uint32_t channel_uid, msg_send_t *msg, uint32_t flags) {
    int status;
    asm volatile(
       "int $0x30"
@@ -1110,12 +1087,16 @@ static inline int msg_send_flags(uint32_t port_uid, uint32_t channel_uid, void *
       : "a" (92),
       "b" (port_uid),
       "c" (channel_uid),
-      "d" ((uint32_t)buffer),
-      "S" (length),
-      "D" (flags)
+      "d" ((uint32_t)msg),
+      "S" (flags)
       : "cc", "memory"
    );
    return status;
+}
+
+static inline int msg_send_flags(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length, uint32_t flags) {
+   msg_send_t msg = {.buffer = buffer, .size = length, .handle_count = 0};
+   return msg_send_obj(port_uid, channel_uid, &msg, flags);
 }
 
 static inline int msg_send(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
@@ -1206,55 +1187,85 @@ static inline bool port_disconnect(uint32_t port_uid, uint32_t channel_uid) {
    return success;
 }
 
-static inline int msg_sync_send(uint32_t channel_uid, uint8_t *send_buffer, int send_size, uint8_t *receive_buffer, int receive_size) {
+static inline int msg_sync_send_obj(uint32_t channel_uid, msg_send_t *send_msg, msg_recv_t *recv_msg) {
    int read_size;
+   int handles_received;
+   int handles_sent;
    int sent_size;
    asm volatile(
       "int $0x30;"
       : "=b" (read_size),
-      "=c" (sent_size)
+      "=c" (handles_received),
+      "=d" (handles_sent),
+      "=S" (sent_size)
       : "a" (98),
       "b" (channel_uid),
-      "c" ((uint32_t)send_buffer),
-      "d" (send_size),
-      "S" ((uint32_t)receive_buffer),
-      "D" (receive_size)
+      "c" ((uint32_t)send_msg),
+      "d" ((uint32_t)recv_msg)
       : "cc", "memory"
    );
+   if(read_size >= 0) {
+      recv_msg->sent_size = sent_size;
+      recv_msg->handles_received = handles_received;
+      recv_msg->handles_sent = handles_sent;
+   }
    return read_size;
 }
 
-static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_id) {
-   int read_size;
+static inline int msg_sync_send(uint32_t channel_uid, uint8_t *send_buffer, int send_size, uint8_t *receive_buffer, int receive_size) {
+   msg_send_t send_msg = {.buffer = send_buffer, .size = send_size, .handle_count = 0};
+   msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
+   return msg_sync_send_obj(channel_uid, &send_msg, &recv_msg);
+}
+
+static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg, uint32_t *call_id) {
+   int bytes_read;
    int sent_size;
+   int handles_received;
+   int handles_sent;
    uint32_t call_id_in;
    asm volatile(
       "int $0x30;"
-      : "=b" (read_size),
-      "=c" (sent_size),
-      "=d" (call_id_in)
+      : "=b" (bytes_read),
+      "=c" (call_id_in),
+      "=d" (sent_size),
+      "=S" (handles_sent),
+      "=D" (handles_received)
       : "a" (99),
       "b" (port_uid),
-      "c" ((uint32_t)receive_buffer),
-      "d" (receive_size)
+      "c" ((uint32_t)recv_msg)
       : "cc", "memory"
    );
-   *call_id = call_id_in;
-   return read_size;
+   if(bytes_read >= 0) {
+      *call_id = call_id_in;
+      recv_msg->sent_size = sent_size;
+      recv_msg->handles_received = handles_received;
+      recv_msg->handles_sent = handles_sent;
+   }
+   return bytes_read;
+}
+
+static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_id) {
+   msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
+   return msg_sync_receive_obj(port_uid, &recv_msg, call_id);
+}
+
+static inline int msg_sync_reply_obj(uint32_t call_uid, msg_send_t *send_msg) {
+   int sent_bytes;
+   asm volatile(
+      "int $0x30;"
+      : "=b" (sent_bytes)
+      : "a" (100),
+      "b" (call_uid),
+      "c" ((uint32_t)send_msg)
+      : "cc", "memory"
+   );
+   return sent_bytes;
 }
 
 static inline int msg_sync_reply(uint32_t call_uid, uint8_t *send_buffer, int send_size) {
-   int sent;
-   asm volatile(
-      "int $0x30;"
-      : "=b" (sent)
-      : "a" (100),
-      "b" (call_uid),
-      "c" ((uint32_t)send_buffer),
-      "d" (send_size)
-      : "cc", "memory"
-   );
-   return sent;
+   msg_send_t send_msg = {.buffer = send_buffer, .size = send_size, .handle_count = 0};
+   return msg_sync_reply_obj(call_uid, &send_msg);
 }
 
 // terminal override

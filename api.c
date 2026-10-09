@@ -1628,43 +1628,29 @@ void api_futex_wake(registers_t *regs) {
 void api_shared_create(registers_t *regs) {
    // IN: ebx - size
    // OUT: ebx - addr, NULL on fail
-   // OUT: ecx - block uid
-   shared_block_t *block = shared_create(get_current_task_state()->process, regs->ebx);
-   if(!block) {
-      regs->ebx = 0;
-   } else {
-      regs->ebx = block->vaddr;
-      regs->ecx = block->uid;
-   }
-}
-
-void api_shared_grant(registers_t *regs) {
-   // IN: ebx - task id
-   // IN: ecx - block uid
-   int task_id = regs->ebx;
-   if(task_id < 0 || task_id >= TOTAL_TASKS) {
-      debug_printf("api_shared_grant: invalid task id\n");
-      return;
-   }
-   task_state_t *task = &gettasks()[task_id];
-   if(!task->enabled || !task->process) {
-      debug_printf("api_shared_grant: task disabled\n");
-      return;
-   }
-   uint32_t target_uid = task->process->uid;
-   shared_grant_access(get_current_task_state()->process, regs->ecx, target_uid);
+   // OUT: ecx - handle
+   uint32_t vaddr;
+   int size = regs->ebx;
+   regs->ebx = 0;
+   regs->ecx = -1;
+   kobj_handle_t h = shared_create(get_current_task_state()->process, size, &vaddr);
+   if(h < 0) return;
+   regs->ebx = vaddr;
+   regs->ecx = h;
 }
 
 void api_shared_map(registers_t *regs) {
-   // IN: ebx - block uid
+   // IN: ebx - handle
    // OUT: ebx - addr or NULL
-   regs->ebx = shared_map_uid(get_current_task_state()->process, regs->ebx);
-}
-
-void api_shared_close(registers_t *regs) {
-   // IN: ebx - block uid
-   // OUT: ebx 1 success 0 fail
-   regs->ebx = shared_close(get_current_task_state()->process, regs->ebx);
+   int handle = regs->ebx;
+   regs->ebx = 0;
+   process_t *process = get_current_task_state()->process;
+   kobj_ref_t *ref = process_get_kobj_type(process, handle, KOBJ_SHARED);
+   if(!ref) {
+      debug_printf("api_shared_map: handle not found\n");
+      return;
+   }
+   regs->ebx = shared_map_instance(process, ref->inst->data);
 }
 
 void api_pci_map(registers_t *regs) {
@@ -1891,22 +1877,18 @@ void api_msg_read(registers_t *regs) {
 void api_msg_send(registers_t *regs) {
    // IN: ebx - port uid
    // IN: ecx - channel uid
-   // IN: edx - source buffer
-   // IN: esi - source length
-   // IN: edi - flags (MSG_EXPECT_REPLY)
+   // IN: edx - msg_send_t *msg
+   // IN: esi - flags (MSG_EXPECT_REPLY)
    // OUT: ebx - return (0 success)
    uint32_t port_uid = regs->ebx;
    uint32_t channel_uid = regs->ecx;
-   uint8_t *buffer = (uint8_t*)regs->edx;
-   uint32_t length = regs->esi;
-   uint32_t flags = regs->edi;
-   task_state_t *task = get_current_task_state();
-   if(!api_validate_mem(buffer, length, false)) {
-      debug_printf("api_msg_send: validation failed\n");
-      regs->ebx = MSG_ERR_INVALID_BUF;
+   msg_send_t *msg = (msg_send_t*)regs->edx;
+   regs->ebx = msg_validate_send(msg);
+   if((int)regs->ebx < 0)
       return;
-   }
-   int r = port_send(regs, task, port_uid, channel_uid, buffer, length, flags);
+   uint32_t flags = regs->esi;
+   task_state_t *task = get_current_task_state();
+   int r = port_send(regs, task, port_uid, channel_uid, msg, flags);
    api_write_regs(regs, task)->ebx = r;
 }
 
@@ -1970,26 +1952,23 @@ void api_port_disconnect(registers_t *regs) {
 // sync call into server
 void api_msg_call(registers_t *regs) {
    // IN: ebx - channel uid
-   // IN: ecx - send_buf
-   // IN: edx - send len
-   // IN: esi - receive buf
-   // IN: edi - receive len
-   // OUT: ebx - bytes sent to server, errors negative
-   // OUT: ecx - bytes received from server (msgs may be truncated)
+   // IN: ecx - msg_send_t *send_msg
+   // IN: edx - msg_recv_t *recv_msg
+   // OUT: ebx - read size (< 0 - error)
+   // OUT: ecx - handles received from server
+   // OUT: edx - handles sent by server
+   // OUT: esi - sent size
    uint32_t channel_uid = regs->ebx;
-   uint8_t* send_buf = (uint8_t*)regs->ecx;
-   int send_len = regs->edx;
-   uint8_t* receive_buf = (uint8_t*)regs->esi;
-   int receive_len = regs->edi;
-   if(!api_validate_mem(send_buf, send_len, 0)) {
-      regs->ebx = MSG_ERR_INVALID_BUF;
+   msg_send_t *send_msg = (msg_send_t*)regs->ecx;
+   msg_recv_t *recv_msg = (msg_recv_t*)regs->edx;
+   regs->ebx = msg_validate_send(send_msg);
+   if((int)regs->ebx < 0)
       return;
-   }
-   if(!api_validate_mem(receive_buf, receive_len, 1)) {
-      regs->ebx = MSG_ERR_INVALID_BUF;
+   regs->ebx = msg_validate_recv(recv_msg);
+   if((int)regs->ebx < 0)
       return;
-   }
-   int r = msg_call(regs, get_current_task_state(), channel_uid, send_buf, send_len, receive_buf, receive_len);
+   task_state_t *task = get_current_task_state();
+   int r = msg_call(regs, task, channel_uid, send_msg, recv_msg);
    if(r < 0)
       regs->ebx = r;
    // otherwise regs written on reply (and unpause)
@@ -1997,19 +1976,19 @@ void api_msg_call(registers_t *regs) {
 
 void api_msg_receive(registers_t *regs) {
    // IN: ebx - port uid
-   // IN: ecx - receive buf
-   // IN: edx - receive len
+   // IN: ecx - msg_recv_t *recv_msg
    // OUT: ebx - bytes read, errors negative
-   // OUT: ecx - client sent bytes (msgs may be truncated)
-   // OUT: edx - call uid (unique call msg id)
+   // OUT: ecx - call uid (unique call msg id)
+   // OUT: edx - bytes sent by client (msgs may be truncated)
+   // OUT: esi - handles sent by client
+   // OUT: edi - handles recieved
    uint32_t port_uid = regs->ebx;
-   uint8_t *receive_buf = (uint8_t*)regs->ecx;
-   int receive_len = regs->edx;
-   if(!api_validate_mem(receive_buf, receive_len, 1)) {
-      regs->ebx = MSG_ERR_INVALID_BUF;
+   msg_recv_t *recv_msg = (msg_recv_t*)regs->ecx;
+   regs->ebx = msg_validate_recv(recv_msg);
+   if((int)regs->ebx < 0)
       return;
-   }
-   int r = msg_receive(regs, get_current_task_state(), port_uid, receive_buf, receive_len);
+   task_state_t *task = get_current_task_state();
+   int r = msg_receive(regs, task, port_uid, recv_msg);
    if(r < 0)
       regs->ebx = r;
    // otherwise regs written on call (and unpause)
@@ -2017,19 +1996,16 @@ void api_msg_receive(registers_t *regs) {
 
 void api_msg_reply(registers_t *regs) {
    // IN: ebx - call uid
-   // IN: ecx - send buf
-   // IN: edx - send len
+   // IN: ecx - msg_send_t *send_msg
    // OUT: ebx - bytes written, < 0 for failure
    uint32_t call_uid = regs->ebx;
-   uint8_t *send_buf = (uint8_t*)regs->ecx;
-   int send_len = regs->edx;
-   if(!api_validate_mem(send_buf, send_len, 0)) {
-      regs->ebx = MSG_ERR_INVALID_BUF;
+   msg_send_t *send_msg = (msg_send_t*)regs->ecx;
+   regs->ebx = msg_validate_send(send_msg);
+   if((int)regs->ebx < 0)
       return;
-   }
-
-   int r = msg_reply(regs, get_current_task_state(), call_uid, send_buf, send_len);
-   if(r <= 0)
+   task_state_t *task = get_current_task_state();
+   int r = msg_reply(regs, task, call_uid, send_msg);
+   if(r < 0)
       regs->ebx = r;
    // otherwise regs written by msg_reply
 }

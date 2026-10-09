@@ -4,6 +4,7 @@
 #include "tasks.h"
 #include "draw.h"
 #include "lib/string.h"
+#include "lib/maths.h"
 #include "bmp.h"
 #include "windowobj.h"
 #include "events.h"
@@ -357,7 +358,7 @@ void wm_event(wm_event_type_t type, int x, int y, uint16_t c) {
 }
 
 // would be much better as a linked link
-gui_window_t *render_order[100];
+gui_window_t *render_order[MAX_WINDOWS];
 
 void debug_writestr(char *str) {
    if(windowCount == 0) return;
@@ -412,7 +413,7 @@ void update_render_order() {
    }
 
    if(found == -1) {
-      for(int i = windowCount; i > 0; i--) {
+      for(int i = windowCount - 1; i > 0; i--) {
          render_order[i] = render_order[i-1];
       }
       render_order[0] = selectedWindow;
@@ -540,6 +541,7 @@ void window_close(int windowIndex, bool end) {
 
    // remove from render order
    for(int i = 0; i < windowCount; i++) {
+      if(!render_order[i]) break;
       if(render_order[i] == window) {
          for(int j = i; j < windowCount-1; j++) {
             render_order[j] = render_order[j+1];
@@ -725,7 +727,7 @@ void cursor_show(bool hidden) {
 }
 
 void window_draw_outline(gui_window_t *window, bool occlude) {
-   if(window->minimised) return;
+   if(window->closed || window->minimised) return;
 
    if(occlude) {
       for(int i = 0; i < getWindowCount(); i++) {
@@ -821,6 +823,7 @@ void window_draw_outline(gui_window_t *window, bool occlude) {
 
 void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height) {
    if(window->framebuffer == NULL) return;
+   if(window->closed || window->minimised) return;
 
    int winX = window->x;
    int winY = window->y + TITLEBAR_HEIGHT;
@@ -844,7 +847,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
    bool cursor_hidden = cursor_hide_region(winX + offsetX, winY + offsetY, width, height);
 
    bool occlude = false;
-   for(int i = 0; i < 100 && render_order[i] != NULL; i++) {
+   for(int i = 0; i < MAX_WINDOWS && render_order[i] != NULL; i++) {
       if(render_order[i] == window)
          break;
       
@@ -873,7 +876,7 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
             int screenX = winX + x;
 
             bool occluded = false;
-            for(int i = 0; i < 100 && render_order[i] != NULL; i++) {
+            for(int i = 0; i < MAX_WINDOWS && render_order[i] != NULL; i++) {
                if(render_order[i] == window) {
                   break;
                }
@@ -995,7 +998,7 @@ void windowmgr_init() {
    gui_windows = malloc(sizeof(gui_window_t) * MAX_WINDOWS);
    outline_buffer = malloc(sizeof(int) * (surface.width + surface.height + 4));
    memset(gui_windows, 0, sizeof(gui_window_t) * MAX_WINDOWS);
-   for(int i = 0; i < 100; i++)
+   for(int i = 0; i < MAX_WINDOWS; i++)
       render_order[i] = NULL;
    // Init with one (debug) window
    window_init(&gui_windows[0]);
@@ -1710,11 +1713,14 @@ void windowmgr_redrawall() {
    gui_clear(gui_bg);
    desktop_draw();
    // draw all windows
+   // save render order
+   gui_window_t *saved_order[MAX_WINDOWS];
+   memcpy(saved_order, render_order, sizeof(gui_window_t*)*MAX_WINDOWS);
    for(int i = getWindowCount()-1; i >= 0; i--) {
-      if(render_order[i] == NULL) continue;
-      render_order[i]->needs_redraw = true;
-      window_draw_outline(render_order[i], false);
-      window_draw(render_order[i]);
+      if(saved_order[i] == NULL) continue;
+      saved_order[i]->needs_redraw = true;
+      window_draw_outline(saved_order[i], false);
+      window_draw(saved_order[i]);
       kernel_yield_if_blocking();
    }
    toolbar_draw();
@@ -1981,7 +1987,6 @@ int get_window_index_from_pointer(gui_window_t *window) {
    return -1;
 }
 
-static inline int min(int a, int b) { return (a < b) ? a : b; }
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback) {
    int maxheight = surface.height - TOOLBAR_HEIGHT - 5;
    if(height > maxheight) height = maxheight;

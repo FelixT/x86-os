@@ -2,13 +2,15 @@
 #include "tasks.h"
 #include "windowmgr.h"
 #include "dma.h"
+#include "shared.h"
 
 static uint32_t kobj_uid_counter = 1;
 static uint32_t kobj_ref_uid_counter = 1;
 
 const kobj_t kobjs[KOBJ_NONE+1] = {
-   [KOBJ_DMA] = {.type = KOBJ_DMA, .free_func = &dma_cleanup, .close_func = &dma_close, .stop_func = NULL},
-   [KOBJ_PCI] = {.type = KOBJ_PCI, .free_func = &pci_free_inst, .close_func = &pci_close, .stop_func = &pci_stop}
+   [KOBJ_DMA] = {.type = KOBJ_DMA, .free_func = &dma_cleanup, .close_func = &dma_close, .stop_func = NULL, .connect_func = NULL},
+   [KOBJ_PCI] = {.type = KOBJ_PCI, .free_func = &pci_free_inst, .close_func = &pci_close, .stop_func = &pci_stop, .connect_func = NULL},
+   [KOBJ_SHARED] = {.type = KOBJ_SHARED, .free_func = &shared_free_inst, .close_func = &shared_close, .stop_func = NULL, .connect_func = &shared_connect}
 };
 
 kobj_inst_t *create_kobj_inst(int type, void *data) {

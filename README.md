@@ -20,7 +20,8 @@ targets i686 (FPU not required)
 - Futexes (private + cross process via shared memory)
 - Shared memory
 - PCI driver and privileged usermode network driver (RTL8139)
-- Message passing IPC: sync + async with queues
+- Kernel objects & handles, kernel threads
+- Message passing IPC: sync + async with queues, handle passing on sync calls
 
 ### build on mac/linux
 
@@ -63,17 +64,15 @@ Kernel init sequence (cmain) sets up core kernel subsystems and enables task swi
 
 #### memory
 
-Unified kernel/user heap (physical): 0x1040000 – 0x3040000 (32MB)
+Kernel (identity mapped): 0x1000000 - 0x1060000
 
-Heap is mapped to a process's page directory via demand paging.
+Unified kernel/user heap (physical, identity mapped): 0x1060000 - 0x3060000 (32MB)
 
-Each task has its own kernel stack that lives in the heap
-
-Kernel (identity mapped): 0x1000000 - 0x1040000 (256KB reserved)
+Heap is mapped to a process's page directory via demand paging. Each task has its own kernel stack that lives in the heap.
 
 Initial/boot kernel stack (identity mapped): 0x160000 - 0x164000
 
-Per task program stack (vmem): 0xC0000000 ((taskid for binaries + ) thread no)*0x4000 [size TASK_STACK_SIZE]
+Per task program stack (vmem): 0xC0000000 + slot * 0x4000, slot is the thread number within a process (or the task id for binaries)
 
 Shared memory vmapped to each process: 0xA0000000 - 0xB0000000
 

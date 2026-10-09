@@ -422,9 +422,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
             }
          }
 
-         // close shared memory
-         shared_cleanup(task->process);
-
          // free kernel objs
          process_release_kobjs(task->process);
 
@@ -1414,6 +1411,16 @@ kobj_ref_t *process_get_kobj(process_t *process, kobj_handle_t h) {
    return ref;
 }
 
+kobj_ref_t *process_get_kobj_type(process_t *process, kobj_handle_t h, kobj_type_t type) { // validates type
+   if(!process || h < 0 || h >= PROCESS_MAX_KOBJ)
+      return NULL;
+
+   kobj_ref_t *ref = process->kobj[h];
+   if(!ref || !ref->inst || ref->inst->obj->type != type)
+      return NULL;
+   return ref;
+}
+
 kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst) {
    // take first free slot
    kobj_handle_t h = 0;
@@ -1439,6 +1446,30 @@ bool process_release_kobj(process_t *process, kobj_handle_t h) {
    return true;
 }
 
+bool process_has_another_ref(process_t *process, kobj_ref_t *ref) {
+   if(ref->inst->ref_count == 0) return false;
+   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
+      kobj_ref_t *r = process->kobj[i];
+      if(!r || r == ref) continue;
+      if(r->inst == ref->inst) return true;
+   }
+   return false;
+}
+
+// if all refs of an instance are owned by a process
+bool process_sole_kobj_owner(process_t *process, kobj_inst_t *inst) {
+   int count = inst->ref_count;
+   if(count == 1) return true;
+
+   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
+      kobj_ref_t *ref = process->kobj[i];
+      if(!ref) continue;
+      if(ref->inst == inst) count--;
+      if(count == 0) return true;
+   }
+   return false;
+}
+
 void process_release_kobjs(process_t *process) {
    // when ending process
 
@@ -1446,7 +1477,7 @@ void process_release_kobjs(process_t *process) {
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
       kobj_ref_t *ref = process->kobj[i];
       if(!ref) continue;
-      if(!ref->inst->stopped && ref->inst->obj->stop_func) {
+      if(!ref->inst->stopped && ref->inst->obj->stop_func && process_sole_kobj_owner(process, ref->inst)) {
          ref->inst->obj->stop_func(ref->inst);
          ref->inst->stopped = true;
       }
@@ -1459,4 +1490,23 @@ void process_release_kobjs(process_t *process) {
       process->kobj[i] = NULL;
       process->kobj_count--;
    }
+}
+
+// duplicate handle into receive_process's kobjs
+kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle) {
+   kobj_ref_t *ref = process_get_kobj(send_process, handle);
+   if(!ref) return -1;
+   kobj_inst_t *inst = ref->inst;
+   if(!inst->obj->connect_func)
+      return -1;
+   kobj_handle_t h = process_acquire_kobj(receive_process, inst); // new handle
+   if(h < 0)
+      return -2;
+   kobj_ref_t *new_ref = process_get_kobj(receive_process, h);
+   bool success = inst->obj->connect_func(new_ref, receive_process);
+   if(!success) {
+      process_release_kobj(receive_process, h);
+      return -1;
+   }
+   return h;
 }

@@ -1,10 +1,12 @@
 #include "msg.h"
 
-#include "stdbool.h"
-#include "stdint.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include "lib/maths.h"
 #include "windowmgr.h" // for debug
 
 #include "fs.h"
+#include "api.h"
 
 // message passing
 
@@ -188,10 +190,10 @@ uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid) {
    channel->client_connected = true;
    // sync
    channel->call_uid = 0;
-   channel->client_receive_buffer = NULL;
-   channel->client_receive_buffer_size = 0;
-   channel->client_stored_write_buf = 0;
-   channel->client_stored_write_size = 0;
+   channel->client_recv_msg.buffer = NULL;
+   channel->client_recv_msg.handle_count = 0;
+   channel->client_send_msg.buffer = NULL;
+   channel->client_send_msg.handle_count = 0;
    return channel->uid;
 }
 
@@ -236,7 +238,10 @@ static task_state_t *msg_get_task(int task_id, uint32_t task_uid) {
    return task;
 }
 
-int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t length, uint32_t flags) {
+int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, msg_send_t *send_msg, uint32_t flags) {
+   if(send_msg->handle_count > 0)
+      return MSG_ERR_INVALID_MSG; // async handle passing currently unsupported
+
    process_t *process = task->process;
    msg_port_t *port = find_port_by_uid(port_uid);
    if(!port) {
@@ -249,14 +254,14 @@ int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t
       return MSG_ERR_CHANNEL_NOT_FOUND;
    }
 
-   if(length > MSG_MAX_LEN) {
-      debug_printf("port_send: msg length %i too long (max %i)\n", length, MSG_MAX_LEN);
+   if(send_msg->size > (int)MSG_MAX_LEN) {
+      debug_printf("port_send: msg length %i too long (max %i)\n", send_msg->size, MSG_MAX_LEN);
       return MSG_ERR_TOO_LONG; // fail instead of truncate
    }
 
-   if(length == 0) {
+   if(send_msg->size == 0) {
       debug_printf("port_send: empty messages are invalid\n");
-      return MSG_ERR_INVALID_MSG;
+      return MSG_ERR_EMPTY_MSG;
    }
 
    msg_channel_t *channel = port->channels[c];
@@ -327,8 +332,8 @@ int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t
    }
 
    msg_obj_t *obj = &queue->slots[i];
-   memcpy(obj->data, buffer, length);
-   obj->length = length;
+   memcpy(obj->data, send_msg->buffer, send_msg->size);
+   obj->length = send_msg->size;
    obj->flags = flags & (MSG_EXPECT_REPLY | MSG_REPLY);
 
    msg_notify_status_t notified = call_msg_func(regs, recipient_task, port_uid, channel_uid, server_to_client ? channel->client_flags : channel->server_flags);
@@ -346,7 +351,7 @@ int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t
 }
 
 
-bool msg_add_waiter(msg_port_t *port, task_state_t *task, uint8_t *receive_buf, int receive_len) {
+bool msg_add_waiter(msg_port_t *port, task_state_t *task, msg_recv_t *recv_msg) {
    // add to waiter list
    msg_waiter_t *slot = NULL;
    for(int i = 0; i < MAX_TASK_THREADS; i++) {
@@ -360,8 +365,7 @@ bool msg_add_waiter(msg_port_t *port, task_state_t *task, uint8_t *receive_buf, 
    }
    if(!slot) return false;
 
-   slot->receive_buffer = receive_buf;
-   slot->receive_buffer_size = receive_len;
+   slot->recv_msg = *recv_msg;
    slot->task_id = task->task_id;
    slot->task_uid = task->task_uid;
    slot->active = true;
@@ -392,20 +396,124 @@ msg_waiter_t *msg_find_waiter(msg_port_t *port) {
    return NULL;
 }
 
-int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint8_t *send_buf, uint32_t send_len, uint8_t *receive_buf, uint32_t receive_len) {
-   if(send_len > MSG_MAX_LEN) {
-      debug_printf("msg_call: msg length %i too long (max %i)\n", send_len, MSG_MAX_LEN);
+void msg_free_handles(process_t *process, handle_t *handles, int count) {
+   for(int i = 0; i < count; i++)
+      process_release_kobj(process, handles[i]);
+}
+
+static bool msg_do_copy(bool sending, task_state_t *send_task, task_state_t *receive_task, msg_send_t *send_msg, msg_recv_t *recv_msg, int *send_return, int *receive_return, int *copied_bytes, int *copied_handles) {
+   // copy from send_msg -> recv_msg
+   // sending  -> current task is sending to receive_task (msg_call, msg_reply)
+   // !sending -> current task is receiving from send_task (msg_receive)
+
+   *send_return = 0;
+   *receive_return = 0;
+
+   *copied_bytes = 0;
+   *copied_handles = 0;
+
+   // copy message (buffer)
+
+   void *send_buffer = send_msg->buffer;
+   if(send_buffer) {
+      // use tmp buffer (fast for small msg size)
+      uint8_t tmp[MSG_MAX_LEN];
+      int write_len = min(recv_msg->buffer_size, send_msg->size); // truncate
+      if(sending) {
+         // send_buffer validated in api
+         memcpy(tmp, send_buffer, write_len);
+         if(copy_to_task(receive_task->task_id, recv_msg->buffer, tmp, write_len) != write_len) {
+            *send_return = MSG_ERR_PEER_INVALID_BUF;
+            *receive_return = MSG_ERR_INVALID_BUF;
+            return false;
+         }
+      } else {
+         if(copy_from_task(send_task->task_id, tmp, send_buffer, write_len) != write_len) {
+            *send_return = MSG_ERR_INVALID_BUF;
+            return false;
+         }
+         // recv_msg->buffer validated in api
+         memcpy(recv_msg->buffer, tmp, write_len); 
+      }
+      // success
+      *copied_bytes = write_len;
+   }
+   
+   // copy handles
+   int copy_handles = min(send_msg->handle_count, recv_msg->handle_count);
+   if(copy_handles > 0) {
+      handle_t tmp[MSG_MAX_HANDLES];
+      int sz = copy_handles*sizeof(handle_t);
+      
+      if(sending) {
+         // send_msg->handles is mapped
+         for(int i = 0; i < copy_handles; i++) {
+            handle_t h = process_copy_kobj(send_task->process, receive_task->process, send_msg->handles[i]);
+            if(h < 0) {
+               msg_free_handles(receive_task->process, tmp, i);
+               if(h == -2) { // receiver had too many handles
+                  *send_return = MSG_ERR_PEER_INVALID_HANDLES;
+                  *receive_return = MSG_ERR_LIMIT; // too many handles
+               } else { // receiver couldn't connect
+                  *send_return = MSG_ERR_INVALID_HANDLES;
+                  *receive_return = MSG_ERR_PEER_INVALID_HANDLES;
+               }
+               return false;
+            }
+            tmp[i] = h;
+         }
+         if(copy_to_task(receive_task->task_id, recv_msg->handles, tmp, sz) != sz) {
+            msg_free_handles(receive_task->process, tmp, copy_handles);
+            *send_return = MSG_ERR_PEER_INVALID_HANDLES;
+            *receive_return = MSG_ERR_INVALID_HANDLES;
+            return false;
+         }
+      } else {
+         // recv_msg->handles is mapped
+         if(copy_from_task(send_task->task_id, tmp, send_msg->handles, sz) != sz) {
+            *send_return = MSG_ERR_INVALID_HANDLES;
+            return false;
+         }
+         for(int i = 0; i < copy_handles; i++) {
+            handle_t h = process_copy_kobj(send_task->process, receive_task->process, tmp[i]);
+            if(h < 0) {
+               msg_free_handles(receive_task->process, tmp, i);
+               if(h == -2) { // receiver had too many handles
+                  *send_return = MSG_ERR_PEER_INVALID_HANDLES;
+                  *receive_return = MSG_ERR_LIMIT; // too many handles
+               } else { // receiver couldn't connect
+                  *send_return = MSG_ERR_INVALID_HANDLES;
+                  *receive_return = MSG_ERR_PEER_INVALID_HANDLES;
+               }
+               return false;
+            }
+            tmp[i] = h;
+         }
+         memcpy(recv_msg->handles, tmp, sz);
+      }
+      *copied_handles = copy_handles;
+   }
+
+   return true;
+}
+
+static bool msg_check_handles(process_t *process, handle_t *handles, int size) {
+   for(int i = 0; i < size; i++) {
+      kobj_ref_t *ref = process_get_kobj(process, handles[i]);
+      if(!ref || !ref->inst->obj->connect_func) return false;
+   }
+   return true;
+}
+
+int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_send_t *send_msg, msg_recv_t *recv_msg) {
+   if(send_msg->size > (int)MSG_MAX_LEN) {
+      debug_printf("msg_call: msg length %i too long (max %i)\n", send_msg->size, MSG_MAX_LEN);
       return MSG_ERR_TOO_LONG; // fail instead of truncate
    }
 
-   if(send_len == 0) {
+   if(send_msg->size == 0 && send_msg->handle_count == 0) {
       debug_printf("msg_call: empty messages are invalid\n");
-      return MSG_ERR_INVALID_MSG;
-   }
-
-   if(receive_len == 0) {
-      debug_printf("msg_call: empty receive length is invalid\n");
-      return MSG_ERR_INVALID_BUF;
+      return MSG_ERR_EMPTY_MSG;
    }
 
    // find channel
@@ -444,89 +552,141 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint8_
       return MSG_ERR_PEER_DISCONNECTED;
    }
 
-   channel->client_receive_buffer = receive_buf;
-   channel->client_receive_buffer_size = receive_len;
+   if(!msg_check_handles(task->process, send_msg->handles, send_msg->handle_count)) {
+      debug_printf("msg_call: invalid handle\n");
+      return MSG_ERR_INVALID_HANDLES;
+   }
+
+   channel->client_recv_msg = *recv_msg;
 
    // find waiting server thread
    msg_waiter_t *waiter = msg_find_waiter(port);
-   if(waiter) {
-      task_state_t *server_task = &gettasks()[waiter->task_id];
-      // copy into server thread buffer via intermediate buffer (fast for small msg size)
-      // for larger reads, use a copy window - virtual pages which are pointed at physical location of receive buffer
-      uint8_t tmp[MSG_MAX_LEN];
-      int write_len = waiter->receive_buffer_size;
-      if((int)send_len < write_len)
-         write_len = send_len;
-      memcpy(tmp, send_buf, write_len);
-      if(copy_to_task(waiter->task_id, waiter->receive_buffer, tmp, write_len) < 0) {
-         server_task->registers.ebx = MSG_ERR_INVALID_BUF;
-         task_resume(server_task);
-         return MSG_ERR_INVALID_BUF;
-      }
-      channel->call_uid = call_uid_counter++;
-      server_task->registers.ebx = write_len;
-      server_task->registers.ecx = send_len;
-      server_task->registers.edx = channel->call_uid;
-      task_resume(server_task);
-      task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
-      switch_to_task(waiter->task_id, regs); // immediately wake
-   } else {
+   if(!waiter) {
       // server isn't waiting yet, store write until it does
-      channel->client_stored_write_buf = send_buf;
-      channel->client_stored_write_size = send_len;
+      channel->client_send_msg = *send_msg;
       task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
       switch_task(regs, false); // yield
+      return 0;
    }
 
+   // found waiter, do copy
+   task_state_t *server_task = &gettasks()[waiter->task_id];
+   msg_recv_t *server_recv_msg = &waiter->recv_msg;
+   int send_return, recv_return;
+   int copied_bytes, copied_handles;
+   if(!msg_do_copy(true, task, server_task, send_msg, server_recv_msg, &send_return, &recv_return, &copied_bytes, &copied_handles)) {
+      // copy failed 
+      server_task->registers.ebx = recv_return;
+      task_resume(server_task);
+      // return error code to api
+      return send_return;
+   }
+
+   // send success
+   channel->call_uid = call_uid_counter++;
+
+   // set server task's regs (matching api_msg_receive)
+
+   server_task->registers.ebx = copied_bytes; // bytes read/copied to server
+   server_task->registers.ecx = channel->call_uid;
+   server_task->registers.edx = send_msg->size; // bytes sent by client
+   server_task->registers.esi = send_msg->handle_count; // handles sent by client
+   server_task->registers.edi = copied_handles; // handles received
+   task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
+   task_resume(server_task);
+   switch_to_task(server_task->task_id, regs); // immediately wake server
+
+   return 0;
+}
+
+bool channel_has_waiting_send(msg_channel_t *channel) {
+   return channel->client_send_msg.buffer || channel->client_send_msg.handle_count > 0;
+}
+
+// validate usermode msg_send_t*
+int msg_validate_send(msg_send_t *msg) {
+   task_state_t *task = get_current_task_state();
+   if(!task_validate_mem(task, msg, sizeof(msg_send_t), 0))
+      return MSG_ERR_INVALID_MSG;
+   if(!task_validate_mem(task, msg->buffer, msg->size, 0))
+      return MSG_ERR_INVALID_BUF;
+   if(msg->handle_count > MSG_MAX_HANDLES)
+      return MSG_ERR_TOO_MANY_HANDLES;
+   if(msg->handle_count < 0)
+      return MSG_ERR_INVALID_MSG;
+   if(!task_validate_mem(task, msg->handles, sizeof(handle_t)*msg->handle_count, 0))
+      return MSG_ERR_INVALID_HANDLES;
+   return 0;
+}
+
+int msg_validate_recv(msg_recv_t *msg) {
+   task_state_t *task = get_current_task_state();
+   if(!task_validate_mem(task, msg, sizeof(msg_recv_t), 0))
+      return MSG_ERR_INVALID_MSG;
+   if(!task_validate_mem(task, msg->buffer, msg->buffer_size, 1))
+      return MSG_ERR_INVALID_BUF;
+   if(msg->handle_count > MSG_MAX_HANDLES)
+      return MSG_ERR_TOO_MANY_HANDLES;
+   if(msg->handle_count < 0)
+      return MSG_ERR_INVALID_MSG;
+   if(!task_validate_mem(task, msg->handles, sizeof(handle_t)*msg->handle_count, 1))
+      return MSG_ERR_INVALID_HANDLES;
    return 0;
 }
 
 // todo: properly handle mixing this with async, for now: servers can still send async notifs to clients
 // receive on all channels in port
-int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint8_t *receive_buf, uint32_t receive_len) {
+int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_recv_t *recv_msg) {
    msg_port_t *port = find_port_by_uid(port_uid);
    if(!port) {
       debug_printf("msg_receive: couldn't find port %u\n", port_uid);
       return MSG_ERR_PORT_NOT_FOUND;
    }
 
-   if(receive_len == 0) {
-      debug_printf("msg_receive: empty receive length is invalid\n");
-      return MSG_ERR_INVALID_BUF;
-   }
-
    if(task->process->uid != port->owner_uid)
       return MSG_ERR_DENIED; // any thread of server process can receive
 
+   // check for stored send
    for(int i = 0; i < port->channel_count; i++) {
       msg_channel_t *channel = port->channels[i];
-      if(!channel || !channel->server_connected || !channel->client_stored_write_buf)
+      if(!channel || !channel->server_connected || !channel_has_waiting_send(channel))
          continue;
 
       task_state_t *client_task = msg_get_task(channel->client_taskid, channel->client_taskuid);
       if(!client_task)
          continue;
 
-      // there is a stored call
-      uint8_t tmp[MSG_MAX_LEN];
-      int write_len = channel->client_stored_write_size;
-      if((int)receive_len < write_len)
-         write_len = receive_len;
+      // check for stored call
+      msg_send_t *client_send_msg = &channel->client_send_msg;
+      msg_send_t send_msg = *client_send_msg; // local copy
+      // clear stored call
+      client_send_msg->buffer = NULL;
+      client_send_msg->handle_count = 0;
 
-      if(copy_from_task(channel->client_taskid, tmp, channel->client_stored_write_buf, write_len) < 0)
-         return MSG_ERR_INVALID_BUF;
-      memcpy(receive_buf, tmp, write_len);
-      regs->ebx = write_len;
-      regs->ecx = channel->client_stored_write_size;
+      int send_return, recv_return;
+      int copied_bytes, copied_handles;
+      if(!msg_do_copy(false, client_task, task, &send_msg, recv_msg, &send_return, &recv_return, &copied_bytes, &copied_handles)) {
+         // copy failed - wake client/sender with error
+         client_task->registers.ebx = send_return;
+         task_resume(client_task);
+         if(recv_return)
+            return recv_return;
+         continue; // check for next send (server stays waiting)
+      }
+
+      // success (match api_msg_receive expected regs)
       channel->call_uid = call_uid_counter++;
-      regs->edx = channel->call_uid;
-      channel->client_stored_write_buf = NULL;
-      channel->client_stored_write_size = 0;
+      regs->ebx = copied_bytes;
+      regs->ecx = channel->call_uid;
+      regs->edx = send_msg.size;
+      regs->esi = send_msg.handle_count;
+      regs->edi = copied_handles;
+
       return 0;
    }
 
    // nothing to receive yet, wait until call
-   if(!msg_add_waiter(port, task, receive_buf, receive_len)) {
+   if(!msg_add_waiter(port, task, recv_msg)) {
       debug_printf("msg_receive: no free waiter slot on port %u\n", port_uid);
       return MSG_ERR_LIMIT;
    }
@@ -536,11 +696,11 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint8_
    return 0;
 }
 
-int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, uint8_t *send_buf, uint32_t send_len) {
+int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send_t *send_msg) {
    if(call_uid == 0)
       return MSG_ERR_MSG_NOT_FOUND;
    
-   if(send_len > MSG_MAX_LEN)
+   if(send_msg->size > (int)MSG_MAX_LEN)
       return MSG_ERR_TOO_LONG;
 
    msg_channel_t *channel = NULL;
@@ -561,33 +721,37 @@ int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, uint8_t 
    if(!channel)
       return MSG_ERR_MSG_NOT_FOUND;
 
+   if(!msg_check_handles(task->process, send_msg->handles, send_msg->handle_count)) {
+      debug_printf("msg_reply: invalid handle\n");
+      return MSG_ERR_INVALID_HANDLES;
+   }
+
    channel->call_uid = 0;
 
    task_state_t *client_task = msg_get_task(channel->client_taskid, channel->client_taskuid);
    if(!client_task || client_task->pause_reason !=  PAUSE_MSG_CALL)
       return MSG_ERR_PEER_DISCONNECTED;
 
-   uint8_t tmp[MSG_MAX_LEN];
-   int write_len = channel->client_receive_buffer_size;
-   if((int)send_len < write_len)
-      write_len = send_len;
-   memcpy(tmp, send_buf, write_len);
-   int r = copy_to_task(client_task->task_id, channel->client_receive_buffer, tmp, write_len);
-   if(r < 0)
-      debug_printf("msg_reply: copy_to_task failed, task %i will hang\n", client_task->task_id);
 
-   int ret = r < 0 ? MSG_ERR_INVALID_BUF : write_len;
+   msg_recv_t *recv_msg = &channel->client_recv_msg;
+   int send_return, recv_return;
+   int copied_bytes, copied_handles;
+   if(!msg_do_copy(true, task, client_task, send_msg, recv_msg, &send_return, &recv_return, &copied_bytes, &copied_handles)) {
+      client_task->registers.ebx = recv_return;
+      task_resume(client_task);
+      return send_return;
+   }
 
-   // set regs before task switch
-   regs->ebx = ret;
-
-   // resume task
-   client_task->registers.ebx = ret;
-   client_task->registers.ecx = send_len;
+   // success - resume client (matches api_msg_call expected regs)
+   client_task->registers.ebx = copied_bytes;
+   client_task->registers.ecx = copied_handles;
+   client_task->registers.edx = send_msg->handle_count;
+   client_task->registers.esi = send_msg->size;
    task_resume(client_task);
+   regs->ebx = copied_bytes;
    switch_to_task(client_task->task_id, regs);
 
-   return write_len;
+   return 0;
 }
 
 // wait until recipient has read msg, i.e. when there's space to send another msg in queue
@@ -761,7 +925,7 @@ bool port_close_connection(registers_t *regs, task_state_t *task, uint32_t port_
 
          // fail a sync call that is stored or awaiting reply
          if(client_task->paused && client_task->pause_reason == PAUSE_MSG_CALL
-         && (channel->client_stored_write_buf || channel->call_uid)) {
+         && (channel_has_waiting_send(channel) || channel->call_uid)) {
             client_task->registers.ebx = MSG_ERR_PEER_DISCONNECTED;
             task_resume(client_task);
          }
@@ -772,8 +936,8 @@ bool port_close_connection(registers_t *regs, task_state_t *task, uint32_t port_
             channel->client_flags = 0; // reset
       }
       channel->server_connected = false;
-      channel->client_stored_write_buf = NULL;
-      channel->client_stored_write_size = 0;
+      channel->client_send_msg.buffer = NULL;
+      channel->client_send_msg.handle_count = 0;
       channel->call_uid = 0;
    } else {
       // client closed, notify server
@@ -792,10 +956,10 @@ bool port_close_connection(registers_t *regs, task_state_t *task, uint32_t port_
       }
       channel->client_connected = false;
       // drop any sync call
-      channel->client_stored_write_buf = NULL;
-      channel->client_stored_write_size = 0;
-      channel->client_receive_buffer = NULL;
-      channel->client_receive_buffer_size = 0;
+      channel->client_send_msg.buffer = NULL;
+      channel->client_send_msg.handle_count = 0;
+      channel->client_recv_msg.buffer = NULL;
+      channel->client_recv_msg.handle_count = 0;
       channel->call_uid = 0; //  stale reply fails
    }
 

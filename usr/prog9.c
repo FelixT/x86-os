@@ -130,7 +130,7 @@ void sync_thread() {
    strcpy(buf, "synctest");
    char recv_buf[64];
    while(true) {
-      printf("Sync child msging server");
+      printf("Sync child msging server\n");
 
       int r = msg_sync_send(channel_uid, (uint8_t*)buf, 64, (uint8_t*)recv_buf, 64);
       printf("child send status %i\n", r);

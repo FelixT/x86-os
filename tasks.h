@@ -192,7 +192,11 @@ int copy_from_task(int task, void *dest, void *src, size_t size);
 
 kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst);
 kobj_ref_t *process_get_kobj(process_t *process, kobj_handle_t h);
+kobj_ref_t *process_get_kobj_type(process_t *process, kobj_handle_t h, kobj_type_t type);
 bool process_release_kobj(process_t *process, kobj_handle_t h);
 void process_release_kobjs(process_t *process);
+kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle);
+bool process_sole_kobj_owner(process_t *process, kobj_inst_t *inst);
+bool process_has_another_ref(process_t *process, kobj_ref_t *ref);
 
 #endif

@@ -13,6 +13,7 @@ typedef int kobj_handle_t; // index into process->kobj[]
 typedef enum {
     KOBJ_DMA,
     KOBJ_PCI, // pci device
+    KOBJ_SHARED,
     KOBJ_NONE // must be at end
 } kobj_type_t;
 
@@ -23,6 +24,7 @@ typedef struct process_t process_t;
 typedef struct kobj_t {
     kobj_type_t type;
     
+    bool (*connect_func)(kobj_ref_t *ref, process_t *process); // called when duplicating handle, NULL if only one ref possible
     void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd)
     void (*close_func)(kobj_ref_t *ref, process_t *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
     void (*free_func)(kobj_inst_t *inst); // called when last ref is closed

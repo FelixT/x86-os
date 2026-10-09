@@ -46,18 +46,15 @@ typedef struct msg_channel_t {
    bool server_notify_pending;
    // sync
    uint32_t call_uid;
-   void *client_receive_buffer;
-   int client_receive_buffer_size;
-   void *client_stored_write_buf;
-   int client_stored_write_size;
+   msg_send_t client_send_msg; // store sent msg until server receives
+   msg_recv_t client_recv_msg; // stored reply msg until server replies
 } msg_channel_t;
 
 typedef struct msg_waiter_t {
    bool active;
    int task_id;
    uint32_t task_uid;
-   void *receive_buffer;
-   int receive_buffer_size;
+   msg_recv_t recv_msg;
 } msg_waiter_t;
 
 // a port represents a message queue
@@ -78,7 +75,7 @@ typedef struct msg_port_t {
 
 uint32_t create_port(task_state_t *task, char *name, bool client_reserves);
 uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid);
-int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t length, uint32_t flags);
+int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, msg_send_t *send_msg, uint32_t flags);
 int port_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags);
 bool msg_wait_on_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
 bool close_port(registers_t *regs, task_state_t *task, uint32_t port_uid);
@@ -87,8 +84,10 @@ void msg_retry_notifications(task_state_t *task);
 void msg_cleanup_process(process_t *process);
 void msg_cleanup_task(task_state_t *task);
 bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
-int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint8_t *send_buf, uint32_t send_len, uint8_t *receive_buf, uint32_t receive_len);
-int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, uint8_t *receive_buf, uint32_t receive_len);
-int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, uint8_t *send_buf, uint32_t send_len);
+int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_send_t *send_msg, msg_recv_t *recv_msg);
+int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_recv_t *recv_msg);
+int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send_t *send_msg);
+int msg_validate_send(msg_send_t *msg);
+int msg_validate_recv(msg_recv_t *msg);
 
 #endif

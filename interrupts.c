@@ -391,15 +391,15 @@ void software_handler(registers_t *regs) {
       case 78:
          api_shared_create(regs);
          break;
-      case 79:
-         api_shared_grant(regs);
-         break;
+      //case 79:
+      //   api_shared_grant(regs);
+      //   break;
       case 80:
          api_shared_map(regs);
          break;
-      case 81:
-         api_shared_close(regs);
-         break;
+      //case 81:
+      //   api_shared_close(regs);
+      //   break;
       case 82:
          api_pci_map(regs);
          break;

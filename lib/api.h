@@ -49,6 +49,7 @@ typedef enum {
 #define MSG_IS_ERROR(x) ((uint32_t)(x) >= MSG_ERR_BASE)
 
 #define MSG_PORT_NAME_LEN 32
+#define MSG_MAX_HANDLES 4
 
 // per message flags (msg_send/msg_read)
 #define MSG_EXPECT_REPLY 1 // on client_reserves, client sends with this will reserve a reply slot so the server isn't blocked responding
@@ -73,14 +74,38 @@ typedef enum {
    MSG_ERR_QUEUE_FULL = -11,
    MSG_ERR_INVALID_BUF = -12,
    MSG_ERR_TOO_LONG = -13,
-   MSG_ERR_INVALID_MSG = -14,
+   MSG_ERR_EMPTY_MSG = -14,
    MSG_ERR_INVALID_TASK = -15,
    MSG_ERR_RECEIVE_QUEUE_FULL = -16, // with client_reserves, the server has no free queue slots to send a reply,
    MSG_ERR_PEER_DISCONNECTED = -17,
    MSG_ERR_DISCONNECTED = -18,
    MSG_ERR_MSG_NOT_FOUND = -19, // msg_reply - call_uid not found
-   MSG_ERR_TIMEOUT = -20
+   MSG_ERR_TIMEOUT = -20,
+   MSG_ERR_INVALID_MSG = -21, // invalid msg_t* or buffer
+   MSG_ERR_TOO_MANY_HANDLES = -22,
+   MSG_ERR_PEER_INVALID_BUF = -23,
+   MSG_ERR_INVALID_HANDLES = -24,
+   MSG_ERR_PEER_INVALID_HANDLES = -25
 } msg_err_t;
+
+typedef int handle_t;
+
+typedef struct msg_send_t {
+   void *buffer;
+   int size;
+   handle_t *handles;
+   int handle_count;
+} msg_send_t;
+
+typedef struct msg_recv_t {
+   void *buffer;
+   int buffer_size;
+   int sent_size; // msg size as sent
+   handle_t *handles;
+   int handle_count; // max handles to receive
+   int handles_sent;
+   int handles_received;
+} msg_recv_t;
 
 #define W_SETTING_BGCOLOUR 0
 #define W_SETTING_TXTCOLOUR 1
