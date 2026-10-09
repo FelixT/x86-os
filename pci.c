@@ -29,7 +29,7 @@ void pci_config_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset,
    outl(CONFIG_DATA, value);
 }
 
-// refresh pci_devices
+// refresh pci_devices at boot
 void pci_check_devices() {
    pci_device_count = 0;
    for(uint16_t bus = 0; bus < PCI_BUS_COUNT; bus++) {
@@ -39,12 +39,14 @@ void pci_check_devices() {
             uint32_t id = pci_config_read32(bus, slot, func, 0x00);
             uint16_t vendor = id & 0xFFFF;
             if(vendor == 0xFFFF) break;
+            pci_device_t *device = &pci_devices[pci_device_count];
             uint16_t device_id = id >> 16;
-            pci_devices[pci_device_count].bus = bus;
-            pci_devices[pci_device_count].slot = slot;
-            pci_devices[pci_device_count].func = func;
-            pci_devices[pci_device_count].vendor = vendor;
-            pci_devices[pci_device_count].device = device_id;
+            device->bus = bus;
+            device->slot = slot;
+            device->func = func;
+            device->vendor = vendor;
+            device->device = device_id;
+            device->inst = NULL;
             uint32_t dw3 = pci_config_read32(bus, slot, func, 0x0C);
             uint8_t header_type = (dw3 >> 16) & 0xFF;
             pci_device_count++;
@@ -66,13 +68,18 @@ pci_device_t *pci_find_device(uint16_t vendor, uint16_t device_id) {
 #define PCI_CMD_MMIO (1 << 1)
 #define PCI_CMD_DMA (1 << 2) // bus mastering
 
-uint32_t pci_map_device(process_t *process, uint16_t vendor, uint16_t device_id) {
+kobj_handle_t pci_map_device(process_t *process, uint16_t vendor, uint16_t device_id, uint32_t *vaddr) {
    // setup
    pci_device_t *device = pci_find_device(vendor, device_id);
    if(!device) {
       debug_printf("PCI map failed: couldn't find device to map\n");
-      return 0;
+      return -1;
    }
+   if(device->inst) {
+      debug_printf("PCI map failed: device is already mapped\n");
+      return -1;
+   }
+
    // get bar1 - todo: get arbitrary bar to support hardware beyond rtl
    uint32_t bar1 = pci_config_read32(device->bus, device->slot, device->func, 0x14) & ~0xF; // clear flag bits
 
@@ -86,46 +93,67 @@ uint32_t pci_map_device(process_t *process, uint16_t vendor, uint16_t device_id)
    pci_config_write32(device->bus, device->slot, device->func, 0x14, bar1); // restore
 
    uint32_t size = ~(probe_size & ~0xF) + 1;
-   if(size == 0) return 0;
-
-   // MMIO + DMA
-   cmd |= PCI_CMD_MMIO | PCI_CMD_DMA;
-   pci_config_write32(device->bus, device->slot, device->func, 0x04, cmd);
+   if(size == 0) return -1;
 
    uint32_t size_total = ((size + (MEM_BLOCK_SIZE - 1)) / MEM_BLOCK_SIZE) * MEM_BLOCK_SIZE; // round up
    debug_printf("Mapping 0x%h size 0x%h (0x%h)\n", bar1, size, size_total);
 
    if(process->mmio_end + size_total > V_MMIO_END) {
       debug_printf("PCI map failed: No more vmem");
-      return 0;
+      return -1;
    }
-   uint32_t addr = process->mmio_end;
-   // map bar1 into task
-   map_size(process->page_dir, bar1, process->mmio_end, size, 1, 1, 1); // no cache
+
+   // create kobj
+   kobj_inst_t *inst = create_kobj_inst(KOBJ_PCI, device);
+   if(!inst)
+      return -1;
+   kobj_handle_t h = process_acquire_kobj(process, inst);
+   if(h < 0) {
+      inst->stopped = true; // never started
+      free_kobj_inst(inst);
+      return -1;
+   }
+   
+   device->inst = inst;
+   device->vaddr = process->mmio_end;
    process->mmio_end += size_total;
+   device->size = size;
 
-   // track so we can silence bus mastering if the driver dies (see dma_cleanup)
-   bool tracked = false;
-   for(int i = 0; i < process->device_count; i++)
-      if(process->devices[i] == device) { tracked = true; break; }
-   if(!tracked && process->device_count < PROCESS_MAX_PCI)
-      process->devices[process->device_count++] = device;
+   inst->data = device;
 
-   return addr;
+   // map bar1 into task
+   map_size(process->page_dir, bar1, device->vaddr, size, 1, 1, 1); // no cache
+
+   // MMIO + DMA
+   cmd |= PCI_CMD_MMIO | PCI_CMD_DMA;
+   pci_config_write32(device->bus, device->slot, device->func, 0x04, cmd);
+
+   *vaddr = device->vaddr;
+   return h;
 }
 
-// unmap - clear mmio and dma enable flags
+// clear mmio and dma enable flags
 void pci_disable_device(pci_device_t *device) {
    uint32_t cmd = pci_config_read32(device->bus, device->slot, device->func, 0x04);
    cmd &= ~(PCI_CMD_MMIO | PCI_CMD_DMA);
    pci_config_write32(device->bus, device->slot, device->func, 0x04, cmd);
 }
 
-// stop all pci devices
-void pci_cleanup(process_t *process) {
-   for(int i = 0; i < process->device_count; i++)
-      pci_disable_device(process->devices[i]);
-   process->device_count = 0;
+void pci_stop(kobj_inst_t *inst) {
+   pci_disable_device(inst->data);
+}
+
+void pci_free_inst(kobj_inst_t *inst) {
+   pci_device_t *device = inst->data;
+   device->inst = NULL;
+}
+
+void pci_close(kobj_ref_t *ref, process_t *process, bool ending) {
+   pci_device_t *device = ref->inst->data;
+   if(!ending) {
+      // unmap
+      unmap_size(process->page_dir, device->vaddr, device->size);
+   }
 }
 
 pci_device_t *get_pci_devices(int *count) {

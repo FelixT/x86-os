@@ -652,6 +652,7 @@ bool fs_rename(char *oldpath, char *newname) {
 }
 
 int fs_filesize(fs_file_t *file) {
+   if(!file->data) return 0;
    return file->data->file_size;
 }
 

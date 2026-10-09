@@ -382,6 +382,7 @@ void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }
 
+// *very unsafe*
 void api_draw_bmp(registers_t *regs) {
    // IN: ebx = bmp address
    // IN: ecx = x
@@ -546,8 +547,8 @@ void api_set_window_title(registers_t *regs) {
    }
    if(cindex >= 0 && cindex < mainwindow->child_count) {
       gui_window_t *window = mainwindow->children[cindex];
-      int windex = get_window_index_from_pointer(window);
-      if(windex) {
+      int w = get_window_index_from_pointer(window);
+      if(window && w >= 0) {
          strcpy(window->title, title);
          window_draw_outline(window, true);
          toolbar_draw();
@@ -1670,15 +1671,24 @@ void api_pci_map(registers_t *regs) {
    // IN: ebx - vendor
    // IN: ecx - device id
    // OUT: ebx - vaddr (0 on failure)
+   // OUT: ecx - handle
    // mapping device MMIO enables bus-master DMA, granting the task access to
    // arbitrary physical memory - restrict to privileged tasks only
    process_t *process = get_current_task_state()->process;
+   uint32_t vendor = regs->ebx;
+   uint32_t device = regs->ecx;
+   regs->ebx = 0;
+   regs->ecx = -1;
    if(!process->privileged) {
       debug_printf("api_pci_map: denied for unprivileged task\n");
-      regs->ebx = 0;
       return;
    }
-   regs->ebx = pci_map_device(process, regs->ebx, regs->ecx);
+   uint32_t vaddr;
+   kobj_handle_t h = pci_map_device(process, vendor, device, &vaddr);
+   if(h < 0)
+      return;
+   regs->ebx = vaddr;
+   regs->ecx = h;
 }
 
 void api_pci_exists(registers_t *regs) {
@@ -1792,6 +1802,10 @@ void api_escalate(registers_t *regs) {
    
    // show dialog
    int popup = windowmgr_add();
+   if(popup < 0) {
+      regs->ebx = 0;
+      return;
+   }
    char buffer[512];
    sprintf(buffer, "Process %u wants privilege escalation", task->process->uid);
    window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);

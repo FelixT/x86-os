@@ -48,6 +48,7 @@ typedef struct page_table_entry_t {
 }__attribute__((packed, aligned(4))) page_table_entry_t;
 
 void unmap(page_dir_entry_t *dir, uint32_t addr);
+void unmap_size(page_dir_entry_t *dir, uint32_t vaddr, uint32_t size);
 bool map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache);
 int map_size(page_dir_entry_t *dir, uint32_t phys_addr, uint32_t virt_addr, uint32_t size, int user, int rw, int no_cache);
 bool page_set_memtype(page_dir_entry_t *dir, uint32_t vaddr, uint32_t size, uint8_t pat_index);

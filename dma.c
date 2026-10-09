@@ -5,7 +5,7 @@
 
 // creates a dma inst + a ref to it
 // returns handle to ref + addr
-kobj_handle_t dma_create(int size, void *process, uint32_t *vaddr) {
+kobj_handle_t dma_create(int size, process_t *process, uint32_t *vaddr) {
    if(size <= 0) return -1;
    uint8_t *mem = malloc(size); // use kmalloc page allocator as it guarantees continous mem
    dma_t *dma = malloc(sizeof(dma_t));
@@ -33,9 +33,8 @@ kobj_handle_t dma_create(int size, void *process, uint32_t *vaddr) {
    ref->data = dma_ref;
 
    // identity map - todo: give process vaddr
-   process_t *p = process;
-   dma_ref->mapped_pages = map_size(p->page_dir, dma->paddr, dma->paddr, size, 1, 1, 0);
-   p->no_allocated += dma_ref->mapped_pages;
+   dma_ref->mapped_pages = map_size(process->page_dir, dma->paddr, dma->paddr, size, 1, 1, 0);
+   process->no_allocated += dma_ref->mapped_pages;
    dma_ref->vaddr = dma->paddr;
 
    *vaddr = dma_ref->vaddr;
@@ -44,27 +43,23 @@ kobj_handle_t dma_create(int size, void *process, uint32_t *vaddr) {
 }
 
 // called when dma instance is destroyed
-void dma_cleanup(void *inst) {
-   kobj_inst_t *i = inst;
-   dma_t *dma = i->data;
+void dma_cleanup(kobj_inst_t *inst) {
+   dma_t *dma = inst->data;
    if(dma->size)
       free(dma->paddr, dma->size);
    free((uint32_t)dma, sizeof(dma_t));
 }
 
 // called when ref is destroyed
-void dma_close(void *ref, void *process, bool ending) {
-   kobj_ref_t *r = ref;
-   dma_t *dma = r->inst->data;
+void dma_close(kobj_ref_t *ref, process_t *process, bool ending) {
+   dma_t *dma = ref->inst->data;
 
-   if(r->data)
-      free((uint32_t)r->data, sizeof(dma_ref_t));
+   if(ref->data)
+      free((uint32_t)ref->data, sizeof(dma_ref_t));
    
    if(ending)
       return; // don't bother unmapping when process is ending
 
-   process_t *p = process;
    // unmap heap from user (still needs to be identity mapped for kernel)
-   p->no_allocated -= map_size(p->page_dir, dma->paddr, dma->paddr, dma->size, 0, 1, 0);
-
+   process->no_allocated -= map_size(process->page_dir, dma->paddr, dma->paddr, dma->size, 0, 1, 0);
 }

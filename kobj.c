@@ -7,10 +7,13 @@ static uint32_t kobj_uid_counter = 1;
 static uint32_t kobj_ref_uid_counter = 1;
 
 const kobj_t kobjs[KOBJ_NONE+1] = {
-   [KOBJ_DMA] = {.type = KOBJ_DMA, .free_func = &dma_cleanup, .close_func = &dma_close}
+   [KOBJ_DMA] = {.type = KOBJ_DMA, .free_func = &dma_cleanup, .close_func = &dma_close, .stop_func = NULL},
+   [KOBJ_PCI] = {.type = KOBJ_PCI, .free_func = &pci_free_inst, .close_func = &pci_close, .stop_func = &pci_stop}
 };
 
 kobj_inst_t *create_kobj_inst(int type, void *data) {
+   if(type < 0 || type >= KOBJ_NONE)
+      return NULL;
    kobj_inst_t *kobj = malloc(sizeof(kobj_inst_t));
    if(!kobj) return NULL;
    
@@ -19,12 +22,16 @@ kobj_inst_t *create_kobj_inst(int type, void *data) {
    kobj->mutex = NULL;
    kobj->obj = &kobjs[type];
    kobj->ref_count = 0;
+   kobj->stopped = false;
    return kobj;
 }
 
 void free_kobj_inst(kobj_inst_t *inst) {
-   debug_printf("Freeing kobj inst %u type %i free 0x%h\n", inst->uid, inst->obj->type, inst->obj->free_func);
-   if(inst->obj && inst->obj->free_func)
+   if(!inst->stopped && inst->obj->stop_func) {
+      inst->obj->stop_func(inst);
+      inst->stopped = true;
+   }
+   if(inst->obj->free_func)
       inst->obj->free_func(inst);
    free((uint32_t)inst, sizeof(kobj_inst_t));
 }

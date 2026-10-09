@@ -342,7 +342,7 @@ void wm_event(wm_event_type_t type, int x, int y, uint16_t c) {
       }
    }
    if(wm_event_thread.queue_size == WM_EVENT_QUEUE_SIZE) {
-      debug_printf("WM: event failed, queue is full\n");
+      debug_printf("WM: event failed, queue is full\n"); // todo: crashes shouldn't be dropped
       return;
    }
    wm_event_t *event = &wm_event_thread.queue[wm_event_thread.queue_tail];
@@ -462,6 +462,10 @@ void window_close(int windowIndex, bool end) {
       getWindow(windowIndex)->minimised = true;
       setSelectedWindowIndex(-1);
       int popup = windowmgr_add();
+      if(popup < 0) {
+         gui_redrawall();
+         return;
+      }
       window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Minimised debug window");
       setSelectedWindowIndex(popup);
       gui_redrawall();
@@ -510,6 +514,10 @@ void window_close(int windowIndex, bool end) {
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
       free((uint32_t)&window->cmd_history[i][0], TEXT_BUFFER_LENGTH);
       window->cmd_history[i] = NULL;
+   }
+   if(task_state && task_state->process && window->framebuffer) {
+      // unmap from process (identity mapped)
+      map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1, 0);
    }
    free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
    window->framebuffer = NULL;
@@ -2050,7 +2058,6 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       args[1] = height - TITLEBAR_HEIGHT;
       args[0] = get_cindex_from_window(task_state, window);
       map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1, 0);
-      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*4, 1, 1, 0);
       if(regs)
          task_call_subroutine(regs, task_state, "resize", (uint32_t)(window->resize_func), args, 4);
       else
@@ -2074,7 +2081,6 @@ void window_release(gui_window_t *window) {
       args[2] = gui_mouse_x - window->x; // x relative to window content
       args[1] = gui_mouse_y - window->y - TITLEBAR_HEIGHT; // y relative to window content
       args[0] = get_cindex(task_state);
-      map_size(task_state->process->page_dir, (uint32_t)args, (uint32_t)args, sizeof(uint32_t)*3, 1, 1, 0);
       wm_call_subroutine(task_state, "release", (uint32_t)(window->release_func), args, 3);
    }
 

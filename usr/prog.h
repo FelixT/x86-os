@@ -8,6 +8,8 @@
 #include "../surface_t.h"
 #include "../lib/api.h"
 
+typedef int handle_t;
+
 static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
@@ -986,16 +988,19 @@ static inline bool shared_close(uint32_t block_uid) {
    return success;
 }
 
-static inline uint8_t *pci_map(uint16_t vendor, uint16_t device_id) {
+static inline uint8_t *pci_map(uint16_t vendor, uint16_t device_id, handle_t *handle) {
    uint32_t addr;
+   int h;
    asm volatile(
       "int $0x30"
-      : "=b" (addr)
+      : "=b" (addr),
+      "=c" (h)
       : "a" (82),
       "b" ((uint32_t)vendor),
       "c" ((uint32_t)device_id)
       : "cc", "memory"
    );
+   *handle = h;
    return (uint8_t*)addr;
 }
 
@@ -1011,8 +1016,6 @@ static inline bool pci_exists(uint16_t vendor, uint16_t device_id) {
    );
    return exists;
 }
-
-typedef int handle_t;
 
 typedef struct dma_t {
    volatile uint8_t *mem; // NULL on fail

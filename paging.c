@@ -40,6 +40,14 @@ void unmap(page_dir_entry_t *dir, uint32_t vaddr) {
       invlpg(vaddr);
 }
 
+void unmap_size(page_dir_entry_t *dir, uint32_t vaddr, uint32_t size) {
+   uint32_t vstart = page_align_down(vaddr);
+   uint32_t vend = page_align_up(vstart + size);
+
+   for(uint32_t addr = vstart; addr < vend; addr += PAGE_SIZE)
+      unmap(dir, addr);
+}
+
 bool map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache) {
 
    // map 4 KiB aligned vadddr to 4 KiB aligned physical addr

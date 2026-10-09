@@ -10,6 +10,7 @@ typedef struct netdev_t netdev_t;
 struct netdev_t {
    uint8_t mac[6];
    void *state;
+   handle_t device;
 
    // implemented by driver
    int (*send)(netdev_t *dev, uint8_t *frame, uint16_t len);

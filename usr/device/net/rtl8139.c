@@ -96,7 +96,9 @@ void rtl_poll(netdev_t *dev) {
 }
 
 void rtl_free(netdev_t *dev) {
-   (void)dev;
+   io[RTL_CMD] = 0x10; // reset device
+   io = NULL;
+   hrelease(dev->device); // stop bus mastering before freeing buffers
    hrelease(rx_dma.h);
    for(int i = 0; i < 4; i++) {
       hrelease(tx_dma[i].h);
@@ -105,14 +107,22 @@ void rtl_free(netdev_t *dev) {
 
 // rtl8139 usermode driver
 netdev_t *rtl_init() {
-   io = pci_map(0x10EC, 0x8139);
+   handle_t h;
+   io = pci_map(0x10EC, 0x8139, &h);
    if(io == NULL) {
       printf("PCI map failed\n");
       exit(1);
    }
+   
+   // power on, soft reset
+   io[RTL_CONFIG_1] = 0x00; // config1: out of low-power
+   io[RTL_CMD] = 0x10; // cr: rst
+   while(io[RTL_CMD] & 0x10);
+
    // get continuous physical memory for rx dma buffer
    rx_dma = dma(RX_SIZE);
    if(rx_dma.mem == 0) {
+      hrelease(h);
       return NULL;
    }
 
@@ -120,17 +130,13 @@ netdev_t *rtl_init() {
    for(int i = 0; i < 4; i++) {
       tx_dma[i] = dma(TX_BUF_SIZE);
       if(tx_dma[i].mem == NULL) {
+         hrelease(h);
          hrelease(rx_dma.h);
          for(int j = 0; j < i; j++)
             hrelease(tx_dma[j].h);
          return NULL;
       }
    }
-
-   // power on, soft reset
-   io[RTL_CONFIG_1] = 0x00; // config1: out of low-power
-   io[RTL_CMD] = 0x10; // cr: rst
-   while(io[RTL_CMD] & 0x10);
 
    // read MAC
    for(int i = 0; i < 6; i++) mac_addr[i] = io[i];
@@ -153,5 +159,6 @@ netdev_t *rtl_init() {
    device.send = &rtl_send;
    device.poll = &rtl_poll;
    device.free = &rtl_free;
+   device.device = h;
    return &device;
 }

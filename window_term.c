@@ -232,6 +232,7 @@ void term_cmd_help() {
    window_term_printf("  BG colour, BGIMG path\n");
    window_term_printf("  PADDING size, REDRAWALL\n");
    window_term_printf("  PCI, TASKI <task>, CHANNELS\n");
+   window_term_printf("  HANDLES <task>\n");
 }
 
 void term_cmd_clear(gui_window_t *selected) {
@@ -434,7 +435,6 @@ void term_cmd_padding(char *arg) {
 }
 
 void term_cmd_pci() {
-   pci_check_devices();
    int c;
    pci_device_t *devices = get_pci_devices(&c);
    for(int i = 0; i < c; i++) {
@@ -462,7 +462,7 @@ void term_cmd_taski(char *arg) {
       window_term_printf("Exe path %s\n", process->exe_path);
       window_term_printf("Window %i\n", process->window);
       window_term_printf("Event queue size %i\n", process->event_queue_size);
-      window_term_printf("KObjs %i mapped devices %i fds %i\n", process->kobj_count, process->device_count, process->fd_count);
+      window_term_printf("KObjs %i fds %i\n", process->kobj_count, process->fd_count);
    }
 }
 
@@ -482,6 +482,32 @@ void term_cmd_channels() {
 
 void term_cmd_mtrr() {
    mtrr_print();
+}
+
+void term_cmd_handles(char *arg) {
+   if(strlen(arg) == 0) {
+      for(int i = 0; i < TOTAL_TASKS; i++) {
+         task_state_t *task = &gettasks()[i];
+         if(!task->enabled || task != task->process->threads[0])
+            continue;
+         window_term_printf("Task %i - %i handles\n", i, task->process->kobj_count);
+      }
+      return;
+   }
+   int id = strtoint(arg);
+   if(id < 0 || id >= TOTAL_TASKS) {
+      window_term_printf("Task not found\n");
+      return;
+   }
+   task_state_t *task = &gettasks()[id];
+   if(!task->enabled) return;
+   process_t *process = task->process;
+   window_term_printf("Process %u - %i handles\n", process->uid, task->process->kobj_count);
+   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
+      kobj_ref_t *ref = task->process->kobj[i];
+      if(!ref || !ref->inst) continue;
+      window_term_printf("%i - type %i refcount %i\n", i, ref->inst->obj->type, ref->inst->ref_count);
+   }
 }
 
 void term_cmd_default(char *command) {
@@ -540,6 +566,8 @@ void window_term_checkcmd(void *window) {
       term_cmd_channels();
    else if(strequ(command, "MTRR"))
       term_cmd_mtrr();
+   else if(strequ(command, "HANDLES"))
+      term_cmd_handles((char*)arg);
    else
       term_cmd_default((char*)command);
    

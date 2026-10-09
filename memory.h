@@ -9,10 +9,10 @@
 // kernel is loaded into KERNEL_START
 
 // physical memory layout
-#define KERNEL_SIZE  0x40000 // kernel binary size (~ the real size of 258k)
+#define KERNEL_SIZE  0x60000 // kernel binary size (> the real size of ~250k)
 
 #define KERNEL_START 0x1000000 // loaded to here in bootloader1
-#define KERNEL_END   0x1040000 // KERNEL_START + KERNEL_SIZE
+#define KERNEL_END   0x1060000 // KERNEL_START + KERNEL_SIZE
 
 // kstack used for kernel page dir (before any tasks are launched, each task has its own kstack located in heap)
 #define KSTACK_START 0x160000
@@ -22,8 +22,8 @@
 #define KSTACK_DF_START 0x164000 // separate kstack for running double fault exception handler
 #define KSTACK_DF_TOS 0x168000
 
-#define HEAP_KERNEL     0x1040000 // unified physical heap for user & kernel
-#define HEAP_KERNEL_END 0x3040000 // HEAP_KERNEL + 0x2000000
+#define HEAP_KERNEL     0x1060000 // unified physical heap for user & kernel
+#define HEAP_KERNEL_END 0x3060000 // HEAP_KERNEL + 0x2000000
 
 #define KERNEL_HEAP_SIZE 0x2000000 // bytes
 #define MEM_BLOCK_SIZE   0x1000 // 4096 bytes (page size) for now (previously 0x200/512 bytes)
@@ -35,7 +35,7 @@
 // physical -> virtual offset is 0 for now (V_KERNEL_START-KERNEL_START)
 #define V_KERNEL_OFFSET 0x0
 #define V_KERNEL_START 0x1000000
-#define V_KERNEL_END   0x1040000 // V_KERNEL_START + 0x40000 (kernel size 0x40000)
+#define V_KERNEL_END   0x1060000 // V_KERNEL_START + 0x60000 (kernel size 0x60000)
 
 #define V_SHARED_START 0xA0000000
 #define V_SHARED_END   0xB0000000

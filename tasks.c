@@ -32,7 +32,6 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    for(int i = 0; i < PROCESS_MAX_FDS; i++)
       process->file_descriptors[i] = NULL;
    process->mmio_end = V_MMIO_START;
-   process->device_count = 0;
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++)
       process->kobj[i] = NULL;
    process->kobj_count = 0;
@@ -168,6 +167,8 @@ bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
 
    int tmpwindow = getSelectedWindowIndex();
    task->process->window = windowmgr_add();
+   if(task->process->window < 0)
+      return false;
    if(focus)
       window_draw_outline(getSelectedWindow(), false);
    else
@@ -265,6 +266,10 @@ void task_reset_windows(int task) {
    if(taskw >= 0 && taskw < getWindowCount() && !getWindow(taskw)->closed) {
       gui_window_t *window = getWindow(taskw);
 
+      if(window->scrollbar) {
+         window->scrollbar->visible = false;
+         window->scrollbar->return_func = NULL;
+      }
       if(window->read_task >= 0) // notify window read_task of eof (mirrors window_close)
          fs_read_window_callback(window, true);
       window_resetfuncs(window);
@@ -419,9 +424,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
          // close shared memory
          shared_cleanup(task->process);
-
-         // silence mapped devices
-         pci_cleanup(task->process);
 
          // free kernel objs
          process_release_kobjs(task->process);
@@ -1439,6 +1441,17 @@ bool process_release_kobj(process_t *process, kobj_handle_t h) {
 
 void process_release_kobjs(process_t *process) {
    // when ending process
+
+   // send stop() to devices (before freeing any objects)
+   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
+      kobj_ref_t *ref = process->kobj[i];
+      if(!ref) continue;
+      if(!ref->inst->stopped && ref->inst->obj->stop_func) {
+         ref->inst->obj->stop_func(ref->inst);
+         ref->inst->stopped = true;
+      }
+   }
+
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
       kobj_ref_t *ref = process->kobj[i];
       if(!ref) continue;

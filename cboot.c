@@ -16,7 +16,7 @@ extern uint8_t videomode;
 
 surface_t surface;
 
-int size = 256000;
+int size = KERNEL_SIZE;
 
 extern uint8_t vbe_mode_info_structure[256];
 

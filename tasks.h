@@ -57,7 +57,6 @@ typedef enum {
 
 #define PROCESS_MAX_KOBJ 64
 #define PROCESS_MAX_FDS 64
-#define PROCESS_MAX_PCI 4
 #define PROCESS_MAX_PORTS 16
 #define TASK_MAX_CHANNELS 16
 
@@ -79,16 +78,14 @@ typedef struct process_t {
    kobj_ref_t *kobj[PROCESS_MAX_KOBJ];
    int kobj_count; // live refs (handles are slot indices, reused)
 
-   int no_allocated; // kmallocd paged, currently only incremented via dma
+   int no_allocated; // kmallocd pages, currently only incremented via dma
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[PROCESS_MAX_FDS];
    int fd_count;
-   task_event_t *event_queue[EVENT_QUEUE_SIZE]; // could be linked list
+   task_event_t *event_queue[EVENT_QUEUE_SIZE];
    int event_queue_size;
    uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
-   pci_device_t *devices[PROCESS_MAX_PCI]; // mapped pci devices
-   int device_count;
    struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
    int port_count;
    char **launch_args;

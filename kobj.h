@@ -12,17 +12,21 @@ typedef int kobj_handle_t; // index into process->kobj[]
 
 typedef enum {
     KOBJ_DMA,
+    KOBJ_PCI, // pci device
     KOBJ_NONE // must be at end
 } kobj_type_t;
+
+typedef struct kobj_inst_t kobj_inst_t;
+typedef struct kobj_ref_t kobj_ref_t;
+typedef struct process_t process_t;
 
 typedef struct kobj_t {
     kobj_type_t type;
     
-    void (*close_func)(void *ref, void *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
-    void (*free_func)(void *inst); // called when last ref is closed
+    void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd)
+    void (*close_func)(kobj_ref_t *ref, process_t *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
+    void (*free_func)(kobj_inst_t *inst); // called when last ref is closed
 } kobj_t;
-
-void kobjs_init();
 
 typedef struct kobj_inst_t {
     uint32_t uid;
@@ -30,6 +34,7 @@ typedef struct kobj_inst_t {
     void *data;
     int ref_count;
     kmutex_t *mutex;
+    bool stopped; // stop_func sent
 } kobj_inst_t;
 
 typedef struct kobj_ref_t {

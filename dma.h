@@ -7,6 +7,8 @@
 #include "kobj.h"
 #include "tasks.h"
 
+typedef struct process_t process_t;
+
 typedef struct dma_t {
    uint32_t paddr;
    int size;
@@ -17,12 +19,8 @@ typedef struct dma_ref_t {
    int mapped_pages;
 } dma_ref_t;
 
-static inline dma_t *get_dma(kobj_inst_t *inst) {
-   return inst->data;
-}
-
-kobj_handle_t dma_create(int size, void *process, uint32_t *vaddr);
-void dma_cleanup(void *data);
-void dma_close(void *ref_data, void *process, bool ending);
+kobj_handle_t dma_create(int size, process_t *process, uint32_t *vaddr);
+void dma_cleanup(kobj_inst_t *inst);
+void dma_close(kobj_ref_t *ref, process_t *process, bool ending);
 
 #endif

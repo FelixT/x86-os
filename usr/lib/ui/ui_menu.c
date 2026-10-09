@@ -142,7 +142,7 @@ void destroy_menu(wo_t *menu) {
 
 menu_item_t *get_menu_item(wo_t *menu, int index) {
    menu_t *menu_data = menu->data;
-   if(index < 0 || index > menu_data->item_count)
+   if(index < 0 || index >= menu_data->item_count)
       return NULL;
    return &menu_data->items[index];
 }

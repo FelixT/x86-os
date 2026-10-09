@@ -196,6 +196,15 @@ void grid_release(wo_t *grid, draw_context_t context, int x, int y) {
    }
 }
 
+static void grid_cell_unhover(grid_cell_t *cell) {
+   cell->hovering = false;
+   for(int k = 0; k < cell->child_count; k++) {
+      wo_t *child = cell->children[k];
+      if(child)
+         child->hovering = false;
+   }
+}
+
 void grid_hover(wo_t *grid, draw_context_t context, int x, int y) {
    if(grid == NULL || grid->data == NULL) return;
    grid_t *grid_data = (grid_t *)grid->data;
@@ -217,7 +226,7 @@ void grid_hover(wo_t *grid, draw_context_t context, int x, int y) {
       if(cell != oldCell) {
          // unhover old
          if(oldCell) {
-            oldCell->hovering = false;
+            grid_cell_unhover(oldCell);
             draw_grid_cell(grid, context, oldCell, grid_data->hoveredrow, grid_data->hoveredcol);
          }
 
@@ -263,7 +272,7 @@ void grid_hover(wo_t *grid, draw_context_t context, int x, int y) {
    } else {
       // unhover old
       if(grid_data->hovered) {
-         grid_data->hovered->hovering = false;
+         grid_cell_unhover(grid_data->hovered);
          draw_grid_cell(grid, context, grid_data->hovered, grid_data->hoveredrow, grid_data->hoveredcol);
          grid_data->hovered = NULL;
       }
@@ -334,14 +343,9 @@ void grid_unhover(wo_t *grid, draw_context_t context) {
          grid_cell_t *cell = &grid_data->cells[i][j];
          if(!cell->hovering) continue;
 
-         cell->hovering = false;
-         // unhover children
-         for(int k = 0; k < cell->child_count; k++) {
-            wo_t *child = cell->children[k];
-            if(!child->hovering) continue;
-            child->hovering = false;
-         }
+         grid_cell_unhover(cell);
          draw_grid_cell(grid, context, cell, i, j);
+         grid_data->hovered = NULL;
 
          return;
       }
