@@ -1402,22 +1402,22 @@ int copy_from_task(int task, void *dest, void *src, size_t size) {
 }
 
 kobj_ref_t *process_get_kobj(process_t *process, kobj_handle_t h) {
-   if(!process || h < 0 || h >= PROCESS_MAX_KOBJ)
+   if(!process || h < 0) return NULL;
+   int index = KOBJ_HANDLE_INDEX(h);
+   if(index >= PROCESS_MAX_KOBJ) return NULL;
+   kobj_ref_t *ref = process->kobj[index];
+   if(!ref || !ref->inst) return NULL;
+   uint32_t check = (uint32_t)h >> 16;
+   if(check != KOBJ_HANDLE_CHECK(ref->uid)) {
+      debug_printf("process_get_kobj: stale handle 0x%h (process %u)\n", h, process->uid);
       return NULL;
-
-   kobj_ref_t *ref = process->kobj[h];
-   if(!ref || !ref->inst)
-      return NULL;
+   }
    return ref;
 }
 
 kobj_ref_t *process_get_kobj_type(process_t *process, kobj_handle_t h, kobj_type_t type) { // validates type
-   if(!process || h < 0 || h >= PROCESS_MAX_KOBJ)
-      return NULL;
-
-   kobj_ref_t *ref = process->kobj[h];
-   if(!ref || !ref->inst || ref->inst->obj->type != type)
-      return NULL;
+   kobj_ref_t *ref = process_get_kobj(process, h);
+   if(!ref || ref->inst->obj->type != type) return NULL;
    return ref;
 }
 
@@ -1434,14 +1434,14 @@ kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst) {
    if(!ref) return -1;
    process->kobj[h] = ref;
    process->kobj_count++;
-   return h;
+   return h | (KOBJ_HANDLE_CHECK(ref->uid) << 16);
 }
 
 bool process_release_kobj(process_t *process, kobj_handle_t h) {
    kobj_ref_t *ref = process_get_kobj(process, h);
    if(!ref) return false;
    if(!kobj_release(ref, process, false)) return false;
-   process->kobj[h] = NULL;
+   process->kobj[KOBJ_HANDLE_INDEX(h)] = NULL;
    process->kobj_count--;
    return true;
 }

@@ -46,11 +46,6 @@ void debug_writestr(char *c) {
    cboot_printf("%s", c);
 }
 
-void gui_writeuint(uint32_t num, uint16_t colour) {
-   (void)colour;
-   cboot_printf("%u", num);
-}
-
 void gui_writestr(char *c, uint16_t colour) {
    (void)colour;
    cboot_printf("%s", c);

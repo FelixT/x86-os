@@ -95,27 +95,9 @@ void gui_writenum(int num, uint16_t colour) {
    gui_writestr(out, colour);
 }
 
-void gui_writeuint_hex(uint32_t num, uint16_t colour) {
-   char out[20];
-   uinttohexstr(num, out);
-   gui_writestr(out, colour);
-}
-
-void gui_writeuint(uint32_t num, uint16_t colour) {
-   char out[20];
-   uinttostr(num, out);
-   gui_writestr(out, colour);
-}
-
 void gui_writenumat(int num, uint16_t colour, int x, int y) {
    char out[20];
    inttostr(num, out);
-   gui_writestrat(out, colour, x, y);
-}
-
-void gui_writeuintat(uint32_t num, uint16_t colour, int x, int y) {
-   char out[20];
-   uinttostr(num, out);
    gui_writestrat(out, colour, x, y);
 }
 

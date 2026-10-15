@@ -43,6 +43,8 @@ kobj_ref_t *create_kobj_ref(kobj_inst_t *inst) {
    if(!ref) return NULL;
    inst->ref_count++;
    ref->uid = kobj_ref_uid_counter++;
+   if(!KOBJ_HANDLE_CHECK(ref->uid)) // skip uid that causes blank checkbits (i.e. bare index handles)
+      ref->uid = kobj_ref_uid_counter++;
    ref->inst = inst;
    ref->data = NULL;
    return ref;

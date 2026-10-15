@@ -265,7 +265,7 @@ void resize() {
 void _start() {
    set_window_size(360, 280);
    
-   override_draw(0, -1);
+   wm_override(WM_DRAW, 0, -1);
 
    char buffer[256];
 
@@ -276,7 +276,7 @@ void _start() {
       exit(1);
    ui = dialog->ui;
 
-   override_resize(&resize, -1);
+   wm_override(WM_RESIZE, &resize, -1);
 
    dialog_set_title(dialog, "System Settings");
 

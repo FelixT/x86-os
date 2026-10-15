@@ -8,7 +8,10 @@
 
 // resources/objects that the kernel knows how to handle
 
-typedef int kobj_handle_t; // index into process->kobj[]
+typedef int kobj_handle_t; // bits 0-15: index into process->kobj[], bits 16-30: checkbits (low 15 bits of ref uid)
+
+#define KOBJ_HANDLE_INDEX(h) ((h) & 0xFFFF)
+#define KOBJ_HANDLE_CHECK(uid) ((uid) & 0x7FFF) // bit 31 is clear so handles remain non negative
 
 typedef enum {
     KOBJ_DMA,

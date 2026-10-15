@@ -159,7 +159,7 @@ void msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
 
 void _start() {
    set_window_title("msgr");
-   override_term_checkcmd(&checkcmd);
+   wm_override(WM_CHECKCMD, &checkcmd, -1);
    override_msg(&msg_func);
 
    while(true) { yield(); }

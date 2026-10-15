@@ -624,7 +624,7 @@ void _start(int argc, char **args) {
       exit(0);
    }
 
-   override_term_checkcmd(&checkcmd);
+   wm_override(WM_CHECKCMD, &checkcmd, -1);
 
    while(true) {
       yield();

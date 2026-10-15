@@ -85,7 +85,8 @@ typedef enum {
    MSG_ERR_TOO_MANY_HANDLES = -22,
    MSG_ERR_PEER_INVALID_BUF = -23,
    MSG_ERR_INVALID_HANDLES = -24,
-   MSG_ERR_PEER_INVALID_HANDLES = -25
+   MSG_ERR_PEER_INVALID_HANDLES = -25,
+   MSG_ERR_PEER_INVALID_MSG = -26 // receiver's msg_recv_t* became invalid
 } msg_err_t;
 
 typedef int handle_t;
@@ -100,12 +101,31 @@ typedef struct msg_send_t {
 typedef struct msg_recv_t {
    void *buffer;
    int buffer_size;
-   int sent_size; // msg size as sent
    handle_t *handles;
    int handle_count; // max handles to receive
+   // written by kernel on reply/receive
+   int bytes_received;
+   int sent_size; // msg size as sent
    int handles_sent;
    int handles_received;
+   uint32_t call_uid; // set on receive
 } msg_recv_t;
+
+typedef enum { // callback args:
+   WM_KEYPRESS, // uint16_t c, int w
+   WM_KEYRELEASE, // uint16_t c, int w
+   WM_CHECKCMD, // char *buffer
+   WM_CLICK, // int x, int y, int w
+   WM_MOUSERELEASE, // int x, int y, int w
+   WM_DRAW, // (use NULL to disable default terminal draw)
+   WM_RESIZE, // uint16_t *framebuffer, int width (not including scrollbar if shown), int height, int w 
+   WM_DRAG, // int x, int y, int w
+   WM_HOVER, // int x, int y, int w
+   WM_CLOSE, // int w
+   WM_RIGHTCLICK, // int x, int y, int w
+   WM_MOUSEOUT, // int w
+} wm_action_t;
+
 
 #define W_SETTING_BGCOLOUR 0
 #define W_SETTING_TXTCOLOUR 1

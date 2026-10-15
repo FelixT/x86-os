@@ -126,11 +126,6 @@ void api_write_string(registers_t *regs) {
       free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
 }
 
-void api_write_number(registers_t *regs) {
-   // write ebx
-   api_printf("%i", regs->ebx);
-}
-
 void api_write_uint(registers_t *regs) {
    // write ebx
    api_printf("%u", regs->ebx);
@@ -155,13 +150,6 @@ void api_write_string_at(registers_t *regs) {
       colour = window->txtcolour;
    int windowindex = get_window_index_from_pointer(window);
    window_writestrat(str, colour, regs->ecx, regs->edx, windowindex);
-}
-
-void api_write_number_at(registers_t *regs) {
-   // IN: ebx = num
-   // IN: ecx = x
-   // IN: edx = y
-   window_writenumat(regs->ebx, 0, regs->ecx, regs->edx, get_current_task_window());
 }
 
 void api_yield(registers_t *regs) {
@@ -268,114 +256,68 @@ void api_end_task(registers_t *regs) {
    end_task(get_current_task(), regs);
 }
 
-void api_override_checkcmd(registers_t *regs) {
-   // override terminal checkcmd function with ebx
-   if(!api_get_window()) return;
-   uint32_t addr = regs->ebx;
-   api_get_window()->checkcmd_func = (void *)(addr);
-}
-
-void api_override_mouseclick(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->click_func = (void *)(regs->ebx);
-}
-
-void api_override_draw(registers_t *regs) {
-   // override draw function with ebx
-   // IN: ebx = func
-   // IN: ecx = window
-   uint32_t addr = regs->ebx;
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(addr != 0 || !window) return;
-   window->draw_func = (void *)(addr);
-}
-
-void api_override_resize(registers_t *regs) {
-   // override resize function with ebx
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   uint32_t addr = regs->ebx;
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->resize_func = (void *)(addr);
-}
-
-void api_override_drag(registers_t *regs) {
-   // override drag function with ebx
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   uint32_t addr = regs->ebx;
-   window->drag_func = (void *)(addr);
-}
-
-void api_override_release(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->release_func = (void *)(regs->ebx);
-}
-
-void api_override_keypress(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->keypress_func = (void *)(regs->ebx);
-}
-
-void api_override_keyrelease(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->keyrelease_func = (void *)(regs->ebx);
-}
-
-void api_override_hover(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->hover_func = (void *)(regs->ebx);
-}
-
-void api_override_close(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   // OUT: ebx - success
-   if(regs->ecx == (uint32_t)-1) {
-      // cannot override close on main window
-      regs->ebx = 0;
-      return;
-   }
-   gui_window_t *window = api_get_cwindow(regs->ecx);
+void api_wm_override(registers_t *regs) {
+   // IN: ebx - wm_action_t action
+   // IN: ecx - callback function address
+   // IN: edx - window cindex
+   // OUT: ebx - bool success
+   gui_window_t *window = api_get_cwindow(regs->edx);
    if(!window) {
       regs->ebx = 0;
       return;
    }
-   window->close_func = (void *)(regs->ebx);
+   void *func = (void*)regs->ecx;
+   wm_action_t action = regs->ebx;
+   switch(action) {
+      case WM_KEYPRESS:
+         window->keypress_func = func;
+         break;
+      case WM_KEYRELEASE:
+         window->keyrelease_func = func;
+         break;
+      case WM_CHECKCMD:
+         window->checkcmd_func = func;
+         break;
+      case WM_CLICK:
+         window->click_func = func;
+         break;
+      case WM_MOUSERELEASE:
+         window->release_func = func;
+         break;
+      case WM_DRAW:
+         if(func != NULL) { // only used to remove default terminal draw func
+            regs->ebx = 0;
+            return;
+         }
+         window->draw_func = func;
+         break;
+      case WM_RESIZE:
+         window->resize_func = func;
+         break;
+      case WM_DRAG:
+         window->drag_func = func;
+         break;
+      case WM_HOVER:
+         window->hover_func = func;
+         break;
+      case WM_CLOSE:
+         if((int)regs->edx < 0) { // can't override main window
+            regs->ebx = 0;
+            return;
+         }
+         window->close_func = func;
+         break;
+      case WM_RIGHTCLICK:
+         window->rightclick_func = func;
+         break;
+      case WM_MOUSEOUT:
+         window->mouseout_func = func;
+         break;
+      default:
+         regs->ebx = 0;
+         return;
+   }
    regs->ebx = 1;
-}
-
-void api_override_rightclick(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->rightclick_func = (void *)(regs->ebx);
-}
-
-void api_override_mouseout(registers_t *regs) {
-   // IN: ebx = function address
-   // IN: ecx = window cindex
-   gui_window_t *window = api_get_cwindow(regs->ecx);
-   if(!window) return;
-   window->mouseout_func = (void *)(regs->ebx);
 }
 
 void api_end_subroutine(registers_t *regs) {
@@ -1955,9 +1897,7 @@ void api_msg_call(registers_t *regs) {
    // IN: ecx - msg_send_t *send_msg
    // IN: edx - msg_recv_t *recv_msg
    // OUT: ebx - read size (< 0 - error)
-   // OUT: ecx - handles received from server
-   // OUT: edx - handles sent by server
-   // OUT: esi - sent size
+   // OUT: recv_msg - bytes_received, sent_size, handles_sent, handles_received written on reply
    uint32_t channel_uid = regs->ebx;
    msg_send_t *send_msg = (msg_send_t*)regs->ecx;
    msg_recv_t *recv_msg = (msg_recv_t*)regs->edx;
@@ -1978,10 +1918,7 @@ void api_msg_receive(registers_t *regs) {
    // IN: ebx - port uid
    // IN: ecx - msg_recv_t *recv_msg
    // OUT: ebx - bytes read, errors negative
-   // OUT: ecx - call uid (unique call msg id)
-   // OUT: edx - bytes sent by client (msgs may be truncated)
-   // OUT: esi - handles sent by client
-   // OUT: edi - handles recieved
+   // OUT: recv_msg - bytes_received, sent_size, handles_sent, handles_received written on receive
    uint32_t port_uid = regs->ebx;
    msg_recv_t *recv_msg = (msg_recv_t*)regs->ecx;
    regs->ebx = msg_validate_recv(recv_msg);
@@ -2000,10 +1937,8 @@ void api_msg_reply(registers_t *regs) {
    // OUT: ebx - bytes written, < 0 for failure
    uint32_t call_uid = regs->ebx;
    msg_send_t *send_msg = (msg_send_t*)regs->ecx;
-   regs->ebx = msg_validate_send(send_msg);
-   if((int)regs->ebx < 0)
-      return;
    task_state_t *task = get_current_task_state();
+   // msg_validate_send performed from msg_reply
    int r = msg_reply(regs, task, call_uid, send_msg);
    if(r < 0)
       regs->ebx = r;

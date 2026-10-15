@@ -588,7 +588,7 @@ void _start() {
 
    // interp window
    printf("f3BASIC interpreter\n");
-   override_term_checkcmd(&line_callback);
+   wm_override(WM_CHECKCMD, &line_callback, -1);
    set_window_title("f3BASIC");
 
    // output window

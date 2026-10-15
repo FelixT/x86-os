@@ -1838,8 +1838,10 @@ void desktop_click(int x, int y) {
    // kterm
    if(x >= 10 && y >= icony && x <= 60 && y <= icony + iconheight) {
       int w = windowmgr_add();
+      if(w < 0) return;
       strcpy(getWindow(w)->title, "KTerm");
-      window_draw(getSelectedWindow());
+      window_draw_outline(getWindow(w), false);
+      window_draw(getWindow(w));
    }
 }
 

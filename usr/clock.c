@@ -22,8 +22,8 @@ void _start() {
 
    s = get_surface();
    ui = ui_init(&s, -1);
-   override_draw(0, -1);
-   override_resize(&resize, -1);
+   wm_override(WM_DRAW, 0, -1);
+   wm_override(WM_RESIZE, &resize, -1);
 
    wo_t *hour_label = create_label(10, 5, 40, 14, "HH");
    get_label(hour_label)->filled = true;

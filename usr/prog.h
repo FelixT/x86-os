@@ -27,15 +27,6 @@ static inline void write_str(char *str) {
    write_str_w(str, -1);
 }
 
-static inline void write_num(int num) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (2),
-      "b" (num)
-      : "cc", "memory"
-   );
-}
-
 static inline void yield() {
    asm volatile(
       "int $0x30"
@@ -131,24 +122,18 @@ static inline void end_subroutine() {
    );
 }
 
-static inline void override_click(void *callback, int window) {
+static inline bool wm_override(wm_action_t action, void *callback, int window) {
+   bool success;
    asm volatile(
       "int $0x30"
-      :: "a" (13),
-      "b" ((uint32_t)callback),
-      "c" (window)
+      : "=b" (success)
+      : "a" (11),
+      "b" (action),
+      "c" ((uint32_t)callback),
+      "d" (window)
       : "cc", "memory"
    );
-}
-
-static inline void override_draw(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (29),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
+   return success;
 }
 
 static inline int get_width_w(int window) {
@@ -318,110 +303,6 @@ static inline void debug_write_str(char *str) {
       "int $0x30"
       :: "a" (49),
       "b" (str)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_resize(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (34),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_drag(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (36),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_release(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (38),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_keypress(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (64),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_keyrelease(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (46),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline bool override_close(void *callback, int window) {
-   bool success;
-   asm volatile(
-      "int $0x30"
-      : "=b" (success)
-      : "a" (27),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-   return success;
-}
-
-static inline void override_rightclick(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (17),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_hover(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (11),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void override_mouseout(void *callback, int window) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (45),
-      "b" ((uint32_t)callback),
-      "c" (window)
-      : "cc", "memory"
-   );
-}
-
-static inline void write_numat(int num, int x, int y) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (28),
-      "b" ((uint32_t)num),
-      "c" ((uint32_t)x),
-      "d" ((uint32_t)y)
       : "cc", "memory"
    );
 }
@@ -1187,28 +1068,18 @@ static inline bool port_disconnect(uint32_t port_uid, uint32_t channel_uid) {
    return success;
 }
 
+// updates recv_msg
 static inline int msg_sync_send_obj(uint32_t channel_uid, msg_send_t *send_msg, msg_recv_t *recv_msg) {
    int read_size;
-   int handles_received;
-   int handles_sent;
-   int sent_size;
    asm volatile(
       "int $0x30;"
-      : "=b" (read_size),
-      "=c" (handles_received),
-      "=d" (handles_sent),
-      "=S" (sent_size)
+      : "=b" (read_size)
       : "a" (98),
       "b" (channel_uid),
       "c" ((uint32_t)send_msg),
       "d" ((uint32_t)recv_msg)
       : "cc", "memory"
    );
-   if(read_size >= 0) {
-      recv_msg->sent_size = sent_size;
-      recv_msg->handles_received = handles_received;
-      recv_msg->handles_sent = handles_sent;
-   }
    return read_size;
 }
 
@@ -1218,36 +1089,26 @@ static inline int msg_sync_send(uint32_t channel_uid, uint8_t *send_buffer, int 
    return msg_sync_send_obj(channel_uid, &send_msg, &recv_msg);
 }
 
-static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg, uint32_t *call_id) {
+// updates recv_msg
+static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg) {
    int bytes_read;
-   int sent_size;
-   int handles_received;
-   int handles_sent;
-   uint32_t call_id_in;
    asm volatile(
       "int $0x30;"
-      : "=b" (bytes_read),
-      "=c" (call_id_in),
-      "=d" (sent_size),
-      "=S" (handles_sent),
-      "=D" (handles_received)
+      : "=b" (bytes_read)
       : "a" (99),
       "b" (port_uid),
       "c" ((uint32_t)recv_msg)
       : "cc", "memory"
    );
-   if(bytes_read >= 0) {
-      *call_id = call_id_in;
-      recv_msg->sent_size = sent_size;
-      recv_msg->handles_received = handles_received;
-      recv_msg->handles_sent = handles_sent;
-   }
    return bytes_read;
 }
 
-static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_id) {
+static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid) {
    msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
-   return msg_sync_receive_obj(port_uid, &recv_msg, call_id);
+   int r = msg_sync_receive_obj(port_uid, &recv_msg);
+   if(r >= 0)
+      *call_uid = recv_msg.call_uid;
+   return r;
 }
 
 static inline int msg_sync_reply_obj(uint32_t call_uid, msg_send_t *send_msg) {
@@ -1266,17 +1127,6 @@ static inline int msg_sync_reply_obj(uint32_t call_uid, msg_send_t *send_msg) {
 static inline int msg_sync_reply(uint32_t call_uid, uint8_t *send_buffer, int send_size) {
    msg_send_t send_msg = {.buffer = send_buffer, .size = send_size, .handle_count = 0};
    return msg_sync_reply_obj(call_uid, &send_msg);
-}
-
-// terminal override
-
-static inline void override_term_checkcmd(void (*callback)(char *cmd)) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (39),
-      "b" ((uint32_t)callback)
-      : "cc", "memory"
-   );
 }
 
 #endif

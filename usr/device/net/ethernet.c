@@ -349,7 +349,7 @@ void _start() {
 
    printf("Polling - IP: %i.%i.%i.%i\n", LOCAL_IP);
 
-   override_term_checkcmd(&callback); // debugging commands
+   wm_override(WM_CHECKCMD, &callback, -1); // debugging commands
 
    while(true) {
       dev->poll(dev); // drain any frames the card received

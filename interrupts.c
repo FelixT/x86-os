@@ -160,9 +160,7 @@ void software_handler(registers_t *regs) {
       case 1:
          api_write_string(regs);
          break;
-      case 2:
-         api_write_number(regs);
-         break;
+      //case 2:
       case 3:
          api_yield(regs);
          break;
@@ -188,26 +186,20 @@ void software_handler(registers_t *regs) {
          api_end_task(regs);
          break;
       case 11:
-         api_override_hover(regs);
+         api_wm_override(regs);
          break;
       case 12:
          api_end_subroutine(regs);
          break;
-      case 13:
-         api_override_mouseclick(regs);
-         break;
+      //case 13:
       case 14:
          api_return_window_width(regs);
          break;
       case 15:
          api_return_window_height(regs);
          break;
-      case 16:
-         //api_malloc(regs); // replaced with dma
-         break;
-      case 17:
-         api_override_rightclick(regs);
-         break;
+      //case 16:
+      //case 17:
       case 18:
          api_set_window_setting(regs);
          break;
@@ -235,15 +227,9 @@ void software_handler(registers_t *regs) {
       case 26:
          api_get_window_position(regs);
          break;
-      case 27: 
-         api_override_close(regs);
-         break;
-      case 28:
-         api_write_number_at(regs);
-         break;
-      case 29:
-         api_override_draw(regs);
-         break;
+      //case 27: 
+      //case 28:
+      //case 29:
       case 30:
          api_queue_event(regs);
          break;
@@ -256,27 +242,17 @@ void software_handler(registers_t *regs) {
       case 33:
          api_get_setting(regs);
          break;
-      case 34:
-         api_override_resize(regs);
-         break;
+      //case 34:
       case 35:
          api_set_setting(regs);
          break;
-      case 36:
-         api_override_drag(regs);
-         break;
+      //case 36:
       case 37:
          api_redraw_region(regs);
          break;
-      case 38:
-         api_override_release(regs);
-         break;
-      case 39:
-         api_override_checkcmd(regs);
-         break;
-      case 40:
-         //api_free(regs);
-         break;
+      //case 38:
+      //case 39:
+      //case 40:
       case 41:
          api_new_file(regs);
          break;
@@ -289,12 +265,8 @@ void software_handler(registers_t *regs) {
       case 44:
          api_get_working_dir(regs);
          break;
-      case 45:
-         api_override_mouseout(regs);
-         break;
-      case 46:
-         api_override_keyrelease(regs);
-         break;
+      //case 45:
+      //case 46:
       case 47:
          api_read(regs);
          break;
@@ -346,9 +318,7 @@ void software_handler(registers_t *regs) {
       case 63:
          api_close_window(regs);
          break;
-      case 64:
-         api_override_keypress(regs);
-         break;
+      //case 64:
       case 65:
          api_create_thread(regs);
          break;
@@ -392,14 +362,10 @@ void software_handler(registers_t *regs) {
          api_shared_create(regs);
          break;
       //case 79:
-      //   api_shared_grant(regs);
-      //   break;
       case 80:
          api_shared_map(regs);
          break;
       //case 81:
-      //   api_shared_close(regs);
-      //   break;
       case 82:
          api_pci_map(regs);
          break;

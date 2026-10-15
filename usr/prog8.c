@@ -6,7 +6,7 @@
 // ipc shared memory test program
 
 void _start(int argc, char **args) {
-   override_draw(NULL, -1);
+   wm_override(WM_DRAW, NULL, -1);
 
    // child/client
    if(argc > 0 && strequ(args[0], "child")) {
@@ -108,8 +108,7 @@ void _start(int argc, char **args) {
    msg_recv_t recv_msg = {.buffer_size = 0, .buffer = NULL, .handle_count = 1, .handles = &handle};
 
    while(true) {
-      uint32_t call_id;
-      int r = msg_sync_receive_obj(port, &recv_msg, &call_id);
+      int r = msg_sync_receive_obj(port, &recv_msg);
       if(r < 0) {
          printf("receive fail %i\n", r);
          break;
@@ -118,7 +117,7 @@ void _start(int argc, char **args) {
          printf("no handles received\n");
          // reply so client isn't left blocked in its call
          uint8_t msg[1] = {0};
-         msg_sync_reply(call_id, msg, 1);
+         msg_sync_reply(recv_msg.call_uid, msg, 1);
          continue;
       }
       uint8_t *mem = shared_map(handle);
@@ -127,14 +126,14 @@ void _start(int argc, char **args) {
 
       // reply to client
       uint8_t msg[1] = {1};
-      r = msg_sync_reply(call_id, msg, 1);
+      r = msg_sync_reply(recv_msg.call_uid, msg, 1);
       if(r < 0) {
          printf("reply fail %i\n", r);
          break;
       }
-      msg_recv_t timing_msg = {.buffer_size = 1, .buffer = msg, .handle_count = 0};
+      msg_recv_t cmd_msg = {.buffer_size = 1, .buffer = msg, .handle_count = 0};
       while(true) {
-         r = msg_sync_receive_obj(port, &timing_msg, &call_id);
+         r = msg_sync_receive_obj(port, &cmd_msg);
          if(r < 0) {
             printf("receive fail %i\n", r);
             break;
@@ -143,13 +142,13 @@ void _start(int argc, char **args) {
             // quit cmd (or empty msg)
             printf("received quit cmd\n");
             msg[0] = 0;
-            msg_sync_reply(call_id, msg, 1); // don't leave client blocked in its call
+            msg_sync_reply(cmd_msg.call_uid, msg, 1); // don't leave client blocked in its call
             break;
          }
          // redraw cmd
          bmp_draw(mem, 0, 0, 1, false);
          redraw();
-         r = msg_sync_reply(call_id, msg, 1);
+         r = msg_sync_reply(cmd_msg.call_uid, msg, 1);
          if(r < 0) {
             printf("reply fail %i\n", r);
             break;

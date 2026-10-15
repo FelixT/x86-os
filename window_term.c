@@ -506,7 +506,7 @@ void term_cmd_handles(char *arg) {
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
       kobj_ref_t *ref = task->process->kobj[i];
       if(!ref || !ref->inst) continue;
-      window_term_printf("%i - type %i refcount %i\n", i, ref->inst->obj->type, ref->inst->ref_count);
+      window_term_printf("%i (%i) - type %i refcount %i\n", i, i | (KOBJ_HANDLE_CHECK(ref->uid) << 16), ref->inst->obj->type, ref->inst->ref_count);
    }
 }
 

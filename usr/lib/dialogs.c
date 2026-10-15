@@ -621,9 +621,9 @@ int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int wind
    dialog_colourpicker_draw(dialog);
    ui_redraw_window(dialog->ui);
 
-   override_click(&dialog_colourpicker_click, dialog->window);
-   override_drag(&dialog_colourpicker_drag, dialog->window);
-   override_resize(&dialog_colourpicker_resize, dialog->window);
+   wm_override(WM_CLICK, &dialog_colourpicker_click, dialog->window);
+   wm_override(WM_DRAG, &dialog_colourpicker_drag, dialog->window);
+   wm_override(WM_RESIZE, &dialog_colourpicker_resize, dialog->window);
 
    return index;
 }
@@ -953,7 +953,7 @@ int dialog_filepicker(char *startpath, void (*return_func)(char *out, int window
    dialog->folder_icon_data = dialog_load_icon("/bmp/folder20.bmp", NULL, NULL);
 
    create_scrollbar(&dialog_filepicker_scroll, dialog->window);
-   override_resize(&dialog_filepicker_resize, dialog->window);
+   wm_override(WM_RESIZE, &dialog_filepicker_resize, dialog->window);
 
    dialog_filepicker_show_dir(dialog);
    ui_redraw(dialog->ui);
@@ -1265,15 +1265,15 @@ int dialog_window_settings(int window, char *title) {
 }
 
 void dialog_init_overrides(int window) {
-   override_click(&dialog_click, window);
-   override_hover(&dialog_hover, window);
-   override_release(&dialog_release, window);
-   override_keypress(&dialog_keypress, window);
-   override_close(&dialog_window_close, window);
-   override_resize(&dialog_resize, window);
-   override_rightclick(&dialog_rightclick, window);
-   override_mouseout(&dialog_mouseout, window);
-   override_draw(0, window);
+   wm_override(WM_CLICK, &dialog_click, window);
+   wm_override(WM_HOVER, &dialog_hover, window);
+   wm_override(WM_MOUSERELEASE, &dialog_release, window);
+   wm_override(WM_KEYPRESS, &dialog_keypress, window);
+   wm_override(WM_CLOSE, &dialog_window_close, window);
+   wm_override(WM_RESIZE, &dialog_resize, window);
+   wm_override(WM_RIGHTCLICK, &dialog_rightclick, window);
+   wm_override(WM_MOUSEOUT, &dialog_mouseout, window);
+   wm_override(WM_DRAW, 0, window);
 }
 
 dialog_t *get_dialog(int index) {

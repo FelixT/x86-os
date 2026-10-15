@@ -48,6 +48,7 @@ typedef struct msg_channel_t {
    uint32_t call_uid;
    msg_send_t client_send_msg; // store sent msg until server receives
    msg_recv_t client_recv_msg; // stored reply msg until server replies
+   msg_recv_t *client_recv_msg_user; // client's msg_recv_t* (in its address space), receipt written on reply
 } msg_channel_t;
 
 typedef struct msg_waiter_t {
@@ -55,6 +56,7 @@ typedef struct msg_waiter_t {
    int task_id;
    uint32_t task_uid;
    msg_recv_t recv_msg;
+   msg_recv_t *recv_msg_user; // server's msg_recv_t* (in its address space), receipt written on call
 } msg_waiter_t;
 
 // a port represents a message queue
@@ -72,6 +74,13 @@ typedef struct msg_port_t {
    
    struct msg_port_t *next;
 } msg_port_t;
+
+typedef struct msg_copy_receipt_t {
+   int bytes; // bytes copied
+   int handles; // handles copied
+   int sender_status; // 0 for no error, < 0 for msg_err_t
+   int receiver_status; // 0 for no error
+} msg_copy_receipt_t;
 
 uint32_t create_port(task_state_t *task, char *name, bool client_reserves);
 uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid);

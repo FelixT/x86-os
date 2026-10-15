@@ -1,6 +1,7 @@
 #include "msg.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "lib/maths.h"
 #include "windowmgr.h" // for debug
@@ -192,6 +193,7 @@ uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid) {
    channel->call_uid = 0;
    channel->client_recv_msg.buffer = NULL;
    channel->client_recv_msg.handle_count = 0;
+   channel->client_recv_msg_user = NULL;
    channel->client_send_msg.buffer = NULL;
    channel->client_send_msg.handle_count = 0;
    return channel->uid;
@@ -366,6 +368,7 @@ bool msg_add_waiter(msg_port_t *port, task_state_t *task, msg_recv_t *recv_msg) 
    if(!slot) return false;
 
    slot->recv_msg = *recv_msg;
+   slot->recv_msg_user = recv_msg;
    slot->task_id = task->task_id;
    slot->task_uid = task->task_uid;
    slot->active = true;
@@ -382,18 +385,18 @@ void msg_remove_waiter(msg_port_t *port, task_state_t *task) {
    }
 }
 
-msg_waiter_t *msg_find_waiter(msg_port_t *port) {
-   // find and reserve waiting task
+int msg_find_waiter(msg_port_t *port) {
    for(int i = 0; i < MAX_TASK_THREADS; i++) {
       msg_waiter_t *waiter = &port->waiters[i];
       if(!waiter->active) continue;
-      waiter->active = false;
       task_state_t *t = msg_get_task(waiter->task_id, waiter->task_uid);
-      if(!t || !t->paused || t->pause_reason != PAUSE_MSG_RECEIVE) // stale
+      if(!t || !t->paused || t->pause_reason != PAUSE_MSG_RECEIVE) { // stale
+         waiter->active = false;
          continue;
-      return waiter;
+      }
+      return i;
    }
-   return NULL;
+   return -1;
 }
 
 void msg_free_handles(process_t *process, handle_t *handles, int count) {
@@ -401,100 +404,105 @@ void msg_free_handles(process_t *process, handle_t *handles, int count) {
       process_release_kobj(process, handles[i]);
 }
 
-static bool msg_do_copy(bool sending, task_state_t *send_task, task_state_t *receive_task, msg_send_t *send_msg, msg_recv_t *recv_msg, int *send_return, int *receive_return, int *copied_bytes, int *copied_handles) {
-   // copy from send_msg -> recv_msg
-   // sending  -> current task is sending to receive_task (msg_call, msg_reply)
-   // !sending -> current task is receiving from send_task (msg_receive)
+static int msg_copy_from_sender(task_state_t *send_task, void *dest, void *src, int size) {
+   if(send_task == get_current_task_state()) {
+      memcpy(dest, src, size);
+      return size;
+   }
+   return copy_from_task(send_task->task_id, dest, src, size);
+}
 
-   *send_return = 0;
-   *receive_return = 0;
+// write kernel fields to receiver's  msg_recv_t*
+static bool msg_write_receipt(task_state_t *task, msg_recv_t *user_recv_msg, msg_send_t *send_msg, msg_copy_receipt_t *receipt, uint32_t call_uid) {
+   msg_recv_t out;
+   out.bytes_received = receipt->bytes;
+   out.sent_size = send_msg->size;
+   out.handles_sent = send_msg->handle_count;
+   out.handles_received = receipt->handles;
+   out.call_uid = call_uid;
+   size_t off = offsetof(msg_recv_t, bytes_received);
+   int sz = sizeof(msg_recv_t) - off;
+   return copy_to_task(task->task_id, (uint8_t*)user_recv_msg + off, (uint8_t*)&out + off, sz) == sz;
+}
 
-   *copied_bytes = 0;
-   *copied_handles = 0;
+static msg_copy_receipt_t msg_do_copy(task_state_t *send_task, task_state_t *receive_task, msg_send_t *send_msg, msg_recv_t *recv_msg, msg_recv_t *recv_msg_user, uint32_t call_uid) {
+   // copy from send_msg -> recv_msg, then write the receipt to recv_msg_user
+   msg_copy_receipt_t r = {.bytes = 0, .handles = 0, .receiver_status = 0, .sender_status = 0};
+   handle_t handles[MSG_MAX_HANDLES];
 
    // copy message (buffer)
-
    void *send_buffer = send_msg->buffer;
    if(send_buffer) {
+
       // use tmp buffer (fast for small msg size)
       uint8_t tmp[MSG_MAX_LEN];
-      int write_len = min(recv_msg->buffer_size, send_msg->size); // truncate
-      if(sending) {
-         // send_buffer validated in api
-         memcpy(tmp, send_buffer, write_len);
-         if(copy_to_task(receive_task->task_id, recv_msg->buffer, tmp, write_len) != write_len) {
-            *send_return = MSG_ERR_PEER_INVALID_BUF;
-            *receive_return = MSG_ERR_INVALID_BUF;
-            return false;
-         }
-      } else {
-         if(copy_from_task(send_task->task_id, tmp, send_buffer, write_len) != write_len) {
-            *send_return = MSG_ERR_INVALID_BUF;
-            return false;
-         }
-         // recv_msg->buffer validated in api
-         memcpy(recv_msg->buffer, tmp, write_len); 
+      int copy_len = min(recv_msg->buffer_size, send_msg->size); // truncate
+
+      // copy into tmp
+      if(msg_copy_from_sender(send_task, tmp, send_buffer, copy_len) != copy_len) {
+         r.sender_status = MSG_ERR_INVALID_BUF;
+         return r;
       }
+
+      // copy tmp into recv buffer
+      if(copy_to_task(receive_task->task_id, recv_msg->buffer, tmp, copy_len) != copy_len) {
+         r.sender_status = MSG_ERR_PEER_INVALID_BUF;
+         r.receiver_status = MSG_ERR_INVALID_BUF;
+         return r;
+      }
+
       // success
-      *copied_bytes = write_len;
+      r.bytes = copy_len;
+
    }
    
    // copy handles
    int copy_handles = min(send_msg->handle_count, recv_msg->handle_count);
    if(copy_handles > 0) {
-      handle_t tmp[MSG_MAX_HANDLES];
       int sz = copy_handles*sizeof(handle_t);
-      
-      if(sending) {
-         // send_msg->handles is mapped
-         for(int i = 0; i < copy_handles; i++) {
-            handle_t h = process_copy_kobj(send_task->process, receive_task->process, send_msg->handles[i]);
-            if(h < 0) {
-               msg_free_handles(receive_task->process, tmp, i);
-               if(h == -2) { // receiver had too many handles
-                  *send_return = MSG_ERR_PEER_INVALID_HANDLES;
-                  *receive_return = MSG_ERR_LIMIT; // too many handles
-               } else { // receiver couldn't connect
-                  *send_return = MSG_ERR_INVALID_HANDLES;
-                  *receive_return = MSG_ERR_PEER_INVALID_HANDLES;
-               }
-               return false;
-            }
-            tmp[i] = h;
-         }
-         if(copy_to_task(receive_task->task_id, recv_msg->handles, tmp, sz) != sz) {
-            msg_free_handles(receive_task->process, tmp, copy_handles);
-            *send_return = MSG_ERR_PEER_INVALID_HANDLES;
-            *receive_return = MSG_ERR_INVALID_HANDLES;
-            return false;
-         }
-      } else {
-         // recv_msg->handles is mapped
-         if(copy_from_task(send_task->task_id, tmp, send_msg->handles, sz) != sz) {
-            *send_return = MSG_ERR_INVALID_HANDLES;
-            return false;
-         }
-         for(int i = 0; i < copy_handles; i++) {
-            handle_t h = process_copy_kobj(send_task->process, receive_task->process, tmp[i]);
-            if(h < 0) {
-               msg_free_handles(receive_task->process, tmp, i);
-               if(h == -2) { // receiver had too many handles
-                  *send_return = MSG_ERR_PEER_INVALID_HANDLES;
-                  *receive_return = MSG_ERR_LIMIT; // too many handles
-               } else { // receiver couldn't connect
-                  *send_return = MSG_ERR_INVALID_HANDLES;
-                  *receive_return = MSG_ERR_PEER_INVALID_HANDLES;
-               }
-               return false;
-            }
-            tmp[i] = h;
-         }
-         memcpy(recv_msg->handles, tmp, sz);
+
+      // copy into handles
+      if(msg_copy_from_sender(send_task, handles, send_msg->handles, sz) != sz) {
+         r.sender_status = MSG_ERR_INVALID_HANDLES;
+         return r;
       }
-      *copied_handles = copy_handles;
+
+      // copy kobjs into recv task and update handles
+      for(int i = 0; i < copy_handles; i++) {
+         handle_t h = process_copy_kobj(send_task->process, receive_task->process, handles[i]);
+         if(h < 0) {
+            msg_free_handles(receive_task->process, handles, i);
+            if(h == -2) { // receiver had too many handles
+               r.sender_status = MSG_ERR_PEER_INVALID_HANDLES;
+               r.receiver_status = MSG_ERR_LIMIT; // too many handles
+            } else { // sender's handle is stale or couldn't be connected
+               r.sender_status = MSG_ERR_INVALID_HANDLES;
+            }
+            return r;
+         }
+         handles[i] = h;
+      }
+
+      // copy handles into recv task
+      if(copy_to_task(receive_task->task_id, recv_msg->handles, handles, sz) != sz) {
+         msg_free_handles(receive_task->process, handles, copy_handles);
+         r.sender_status = MSG_ERR_PEER_INVALID_HANDLES;
+         r.receiver_status = MSG_ERR_INVALID_HANDLES;
+         return r;
+      }
+
+      r.handles = copy_handles;
    }
 
-   return true;
+   if(!msg_write_receipt(receive_task, recv_msg_user, send_msg, &r, call_uid)) {
+      // receiver unmapped its msg_recv_t*, undo the handle copy so they don't leak
+      msg_free_handles(receive_task->process, handles, r.handles);
+      r.sender_status = MSG_ERR_PEER_INVALID_MSG;
+      r.receiver_status = MSG_ERR_INVALID_MSG;
+      return r;
+   }
+
+   return r;
 }
 
 static bool msg_check_handles(process_t *process, handle_t *handles, int size) {
@@ -558,10 +566,11 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_se
    }
 
    channel->client_recv_msg = *recv_msg;
+   channel->client_recv_msg_user = recv_msg;
 
    // find waiting server thread
-   msg_waiter_t *waiter = msg_find_waiter(port);
-   if(!waiter) {
+   int w = msg_find_waiter(port);
+   if(w < 0) {
       // server isn't waiting yet, store write until it does
       channel->client_send_msg = *send_msg;
       task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
@@ -570,28 +579,30 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_se
    }
 
    // found waiter, do copy
+   msg_waiter_t *waiter = &port->waiters[w];
    task_state_t *server_task = &gettasks()[waiter->task_id];
    msg_recv_t *server_recv_msg = &waiter->recv_msg;
-   int send_return, recv_return;
-   int copied_bytes, copied_handles;
-   if(!msg_do_copy(true, task, server_task, send_msg, server_recv_msg, &send_return, &recv_return, &copied_bytes, &copied_handles)) {
-      // copy failed 
-      server_task->registers.ebx = recv_return;
-      task_resume(server_task);
+   uint32_t call_uid = call_uid_counter++;
+   msg_copy_receipt_t r = msg_do_copy(task, server_task, send_msg, server_recv_msg, waiter->recv_msg_user, call_uid);
+   if(r.sender_status < 0) {
+      // copy failed
+      if(r.receiver_status < 0) {
+         // server failure - wake server
+         waiter->active = false;
+         server_task->registers.ebx = r.receiver_status;
+         task_resume(server_task);
+      }
       // return error code to api
-      return send_return;
+      return r.sender_status;
    }
 
    // send success
-   channel->call_uid = call_uid_counter++;
+   waiter->active = false;
+   channel->call_uid = call_uid;
 
    // set server task's regs (matching api_msg_receive)
 
-   server_task->registers.ebx = copied_bytes; // bytes read/copied to server
-   server_task->registers.ecx = channel->call_uid;
-   server_task->registers.edx = send_msg->size; // bytes sent by client
-   server_task->registers.esi = send_msg->handle_count; // handles sent by client
-   server_task->registers.edi = copied_handles; // handles received
+   server_task->registers.ebx = r.bytes; // bytes read/copied to server
    task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
    task_resume(server_task);
    switch_to_task(server_task->task_id, regs); // immediately wake server
@@ -621,7 +632,7 @@ int msg_validate_send(msg_send_t *msg) {
 
 int msg_validate_recv(msg_recv_t *msg) {
    task_state_t *task = get_current_task_state();
-   if(!task_validate_mem(task, msg, sizeof(msg_recv_t), 0))
+   if(!task_validate_mem(task, msg, sizeof(msg_recv_t), 1))
       return MSG_ERR_INVALID_MSG;
    if(!task_validate_mem(task, msg->buffer, msg->buffer_size, 1))
       return MSG_ERR_INVALID_BUF;
@@ -662,25 +673,21 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_re
       // clear stored call
       client_send_msg->buffer = NULL;
       client_send_msg->handle_count = 0;
+      uint32_t call_uid = call_uid_counter++;
 
-      int send_return, recv_return;
-      int copied_bytes, copied_handles;
-      if(!msg_do_copy(false, client_task, task, &send_msg, recv_msg, &send_return, &recv_return, &copied_bytes, &copied_handles)) {
+      msg_copy_receipt_t r = msg_do_copy(client_task, task, &send_msg, recv_msg, recv_msg, call_uid);
+      if(r.sender_status < 0) {
          // copy failed - wake client/sender with error
-         client_task->registers.ebx = send_return;
+         client_task->registers.ebx = r.sender_status;
          task_resume(client_task);
-         if(recv_return)
-            return recv_return;
+         if(r.receiver_status < 0)
+            return r.receiver_status;
          continue; // check for next send (server stays waiting)
       }
 
       // success (match api_msg_receive expected regs)
-      channel->call_uid = call_uid_counter++;
-      regs->ebx = copied_bytes;
-      regs->ecx = channel->call_uid;
-      regs->edx = send_msg.size;
-      regs->esi = send_msg.handle_count;
-      regs->edi = copied_handles;
+      channel->call_uid = call_uid;
+      regs->ebx = r.bytes;
 
       return 0;
    }
@@ -696,13 +703,19 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_re
    return 0;
 }
 
+static msg_err_t msg_get_peer_error(msg_err_t err) {
+   if(err == MSG_ERR_INVALID_BUF)
+      return MSG_ERR_PEER_INVALID_BUF;
+   else if(err == MSG_ERR_INVALID_HANDLES)
+      return MSG_ERR_PEER_INVALID_HANDLES;
+   
+   return MSG_ERR_PEER_INVALID_MSG;
+}
+
 int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send_t *send_msg) {
    if(call_uid == 0)
       return MSG_ERR_MSG_NOT_FOUND;
    
-   if(send_msg->size > (int)MSG_MAX_LEN)
-      return MSG_ERR_TOO_LONG;
-
    msg_channel_t *channel = NULL;
    for(int i = 0; i < task->process->port_count; i++) {
       msg_port_t *p = task->process->ports[i];
@@ -721,35 +734,52 @@ int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send
    if(!channel)
       return MSG_ERR_MSG_NOT_FOUND;
 
-   if(!msg_check_handles(task->process, send_msg->handles, send_msg->handle_count)) {
-      debug_printf("msg_reply: invalid handle\n");
-      return MSG_ERR_INVALID_HANDLES;
-   }
-
    channel->call_uid = 0;
 
    task_state_t *client_task = msg_get_task(channel->client_taskid, channel->client_taskuid);
+
    if(!client_task || client_task->pause_reason !=  PAUSE_MSG_CALL)
       return MSG_ERR_PEER_DISCONNECTED;
 
+   // client is (also) resumed with error code for any failure
+   registers_t *client_regs = &client_task->registers;
 
-   msg_recv_t *recv_msg = &channel->client_recv_msg;
-   int send_return, recv_return;
-   int copied_bytes, copied_handles;
-   if(!msg_do_copy(true, task, client_task, send_msg, recv_msg, &send_return, &recv_return, &copied_bytes, &copied_handles)) {
-      client_task->registers.ebx = recv_return;
+   int err = msg_validate_send(send_msg);
+   if(err < 0) {
+      client_regs->ebx = msg_get_peer_error(err);
       task_resume(client_task);
-      return send_return;
+      return err;
    }
 
-   // success - resume client (matches api_msg_call expected regs)
-   client_task->registers.ebx = copied_bytes;
-   client_task->registers.ecx = copied_handles;
-   client_task->registers.edx = send_msg->handle_count;
-   client_task->registers.esi = send_msg->size;
+   if(send_msg->size > (int)MSG_MAX_LEN) {
+      client_regs->ebx = MSG_ERR_PEER_INVALID_MSG;
+      task_resume(client_task);
+      return MSG_ERR_TOO_LONG;
+   }
+
+   if(!msg_check_handles(task->process, send_msg->handles, send_msg->handle_count)) {
+      debug_printf("msg_reply: invalid handle\n");
+      client_regs->ebx = MSG_ERR_PEER_INVALID_HANDLES;
+      task_resume(client_task);
+      return MSG_ERR_INVALID_HANDLES;
+   }
+
+   msg_recv_t *recv_msg = &channel->client_recv_msg;
+   msg_copy_receipt_t r = msg_do_copy(task, client_task, send_msg, recv_msg, channel->client_recv_msg_user, 0);
+   if(r.sender_status < 0) {
+      if(r.receiver_status < 0)
+         client_regs->ebx = r.receiver_status;
+      else
+         client_regs->ebx = msg_get_peer_error(r.sender_status);
+      task_resume(client_task);
+      return r.sender_status; // wake server with error
+   }
+
+   // success
+   client_regs->ebx = r.bytes;
+   regs->ebx = r.bytes;
    task_resume(client_task);
-   regs->ebx = copied_bytes;
-   switch_to_task(client_task->task_id, regs);
+   switch_to_task(client_task->task_id, regs); // resume client immediately
 
    return 0;
 }
@@ -960,6 +990,7 @@ bool port_close_connection(registers_t *regs, task_state_t *task, uint32_t port_
       channel->client_send_msg.handle_count = 0;
       channel->client_recv_msg.buffer = NULL;
       channel->client_recv_msg.handle_count = 0;
+      channel->client_recv_msg_user = NULL;
       channel->call_uid = 0; //  stale reply fails
    }
 
