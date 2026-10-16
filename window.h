@@ -9,8 +9,16 @@
 #include "registers_t.h"
 #include "window_t.h"
 
-void window_scroll(gui_window_t *window);
+void window_drag(gui_window_t *window, int x, int y, int relX, int relY);
+void window_click(gui_window_t *window, int x, int y);
+void window_keypress(gui_window_t *window, uint16_t c);
+void window_keyrelease(gui_window_t *window, uint16_t c);
+void window_mousemove(gui_window_t *window, int x, int y);
+void window_mouseout(gui_window_t *window);
+bool window_rightclick(gui_window_t *window, int x, int y);
+void window_release(gui_window_t *window, int x, int y);
 
+void window_scroll(gui_window_t *window);
 void window_drawcharat(char c, uint16_t colour, int x, int y, int windowIndex);
 void window_drawrect(uint16_t colour, int x, int y, int width, int height, int windowIndex);
 void window_writestrat(char *c, uint16_t colour, int x, int y, int windowIndex);

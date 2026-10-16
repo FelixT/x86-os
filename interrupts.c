@@ -361,11 +361,15 @@ void software_handler(registers_t *regs) {
       case 78:
          api_shared_create(regs);
          break;
-      //case 79:
+      case 79:
+         api_focus_task(regs);
+         break;
       case 80:
          api_shared_map(regs);
          break;
-      //case 81:
+      case 81:
+         api_get_taskid(regs);
+         break;
       case 82:
          api_pci_map(regs);
          break;
@@ -747,7 +751,7 @@ __attribute__((noreturn)) void kernel_panic(void) {
    gui_window_t *window = getSelectedWindow();
    window->minimised = false;
    window->needs_redraw = true;
-   window_draw(window);
+   window_draw(window, false);
    int popup = windowmgr_add();
    if(popup < 0)
       while(true) {};

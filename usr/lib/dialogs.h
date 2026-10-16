@@ -63,6 +63,7 @@ wo_t *dialog_create_browsebtn(int x, int y, int width, int height, int window, c
 wo_t *dialog_create_numeric(int x, int y, int width, int height, int start, void (*change_func)(int value));
 uint16_t *dialog_load_icon(char *path, int *width, int *height);
 void dialog_close(wo_t *wo, int window);
+void dialog_init_scroll(dialog_t *dialog);
 
 #define MAX_DIALOGS 10
 

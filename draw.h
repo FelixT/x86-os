@@ -5,6 +5,11 @@
 
 #include "surface_t.h"
 
+typedef struct rect_t {
+   int x, y;
+   int w, h;
+} rect_t;
+
 static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
@@ -26,5 +31,9 @@ void draw_line(surface_t *surface, uint16_t colour, int x, int y, bool vertical,
 void draw_char(surface_t *surface, char c, uint16_t colour, int x, int y);
 void draw_string(surface_t *surface, char *c, uint16_t colour, int x, int y);
 uint16_t rgb16_lighten(uint16_t color, uint8_t amount);
+uint16_t rgb16_darken(uint16_t color, uint8_t amount);
+void draw_set_clip(rect_t rect);
+void draw_clear_clip();
+bool clip_rect(surface_t *surface, int *x, int *y, int *w, int *h);
 
 #endif

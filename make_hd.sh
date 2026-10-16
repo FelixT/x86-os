@@ -15,9 +15,9 @@ dd if=o/main.bin of=o/hd3.bin bs=512000 count=1 conv=notrunc status=none
 rm -f fs.img
 
 find . -name ".DS_Store" -delete
-mkfs.fat -F 16 -n FATFS -C fs.img 20480
+sudo mkfs.fat -F 16 -n FATFS -C fs.img 40960
 # mount drive & copy files from fs_root dir with mcopy (faster than mount & unmount bottleneck)
-mcopy -s -i fs.img fs_root/* ::
+sudo mcopy -s -i fs.img fs_root/* "::"
 
 # add fs at 512000
 cat o/hd3.bin fs.img > hd.bin

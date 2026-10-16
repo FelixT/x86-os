@@ -86,5 +86,7 @@ void api_port_disconnect(registers_t *regs);
 void api_msg_call(registers_t *regs);
 void api_msg_receive(registers_t *regs);
 void api_msg_reply(registers_t *regs);
+void api_focus_task(registers_t *regs);
+void api_get_taskid(registers_t *regs);
 
 #endif

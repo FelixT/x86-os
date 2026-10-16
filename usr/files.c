@@ -777,7 +777,7 @@ void _start(int argc, char **args) {
    (void)args;
 
    // init
-   set_window_size(315, 235);
+   set_window_size(310, 210, -1);
    set_window_title("File Manager");
 
    surface = get_surface();

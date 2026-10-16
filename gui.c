@@ -20,7 +20,10 @@ bool mouse_enabled = false;
 bool mouse_scrolling_enabled = false;
 bool mouse_held = false;
 bool mouse_heldright = false;
-bool cursor_resize = false;
+
+cursor_t default_cursor = {.outline = 27, .fill = 28};
+cursor_t resize_cursor = {.outline = 29, .fill = 30};
+cursor_id_t shown_cursor = CURSOR_DEFAULT;
 bool gui_cursor_shown = false;
 
 surface_t main_surface; // always main buffer, suface may be swapped during redrawall
@@ -181,7 +184,7 @@ void gui_keypress(char scan_code) {
 }
 
 void gui_draw_window(int windowIndex) {
-   window_draw(getWindow(windowIndex));
+   window_draw(getWindow(windowIndex), true);
 }
 
 void mouse_set_sample_rate(uint8_t rate) {
@@ -271,16 +274,34 @@ void gui_draw(void) {
 
 void gui_cursor_draw() {
    if(!mouse_enabled || gui_cursor_shown) return;
-   char outline = 27;
-   char fill = 28;
-   if(cursor_resize) {
-      outline = 29;
-      fill = 30;
+   if(shown_cursor == CURSOR_NONE) return;
+   cursor_t *cursor;
+   switch(shown_cursor) {
+      case CURSOR_DEFAULT:
+         cursor = &default_cursor;
+         break;
+      case CURSOR_RESIZE:
+         cursor = &resize_cursor;
+         break;
+      default:
+         return;
    }
 
-   draw_char(&main_surface, outline, 0, gui_mouse_x, gui_mouse_y);
-   draw_char(&main_surface, fill, COLOUR_WHITE, gui_mouse_x, gui_mouse_y);
+   draw_char(&main_surface, cursor->outline, 0, gui_mouse_x, gui_mouse_y);
+   draw_char(&main_surface, cursor->fill, COLOUR_WHITE, gui_mouse_x, gui_mouse_y);
    gui_cursor_shown = true;
+}
+
+void gui_set_cursor(cursor_id_t c) {
+   if(shown_cursor == c) return;
+   gui_cursor_restore_bg();
+   shown_cursor = c;
+   gui_cursor_save_bg();
+   gui_cursor_draw();
+}
+
+cursor_id_t gui_get_cursor() {
+   return shown_cursor;
 }
 
 void mouse_update(int *relX, int *relY) {

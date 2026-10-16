@@ -263,7 +263,7 @@ void resize() {
 }
 
 void _start() {
-   set_window_size(360, 280);
+   set_window_size(360, 280, -1);
    
    wm_override(WM_DRAW, 0, -1);
 

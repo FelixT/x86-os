@@ -6,6 +6,7 @@
 #include "window_t.h"
 #include "registers_t.h"
 #include "tasks.h"
+#include "lib/api.h"
 
 #define WM_SETTING_STR_LEN 256
 typedef struct windowmgr_settings_t {
@@ -23,14 +24,28 @@ typedef struct windowmgr_settings_t {
 
 #define MAX_WINDOWS 64
 
+#define TITLEBAR_HEIGHT 17
+
+#define TOOLBAR_ITEM_WIDTH 85
+#define TOOLBAR_PADDING 3
+#define TOOLBAR_ITEM_HEIGHT 15
+#define TOOLBAR_HEIGHT 20
+
+#define MENUBAR_HEIGHT 20
+#define MENUBAR_MAX_ITEMS 8
+#define MENUBAR_PADDING 12
+#define MENUBAR_MAX_MENU_SIZE 8
+#define MENUBAR_MENU_WIDTH 100
+
 typedef enum {
    MOUSE_CLICK,
    MOUSE_RIGHTCLICK,
    MOUSE_RELEASE,
-   MOUSE_HOVER,
+   MOUSE_HOVER, // move
    MOUSE_DRAG,
    MOUSE_SCROLL,
    KEY_PRESS,
+   KEY_RELEASE,
    WINDOW_CLOSE,
    TASK_CRASH // event to display 'task crashed' dialog
 } wm_event_type_t;
@@ -47,13 +62,16 @@ void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bo
 void wm_call_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
 void wm_event_defer_yield(int task);
 
+void menubar_init();
+
 bool cursor_hide_region(int x, int y, int width, int height);
 void cursor_show(bool hidden);
 
-void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height);
-void window_draw_content(gui_window_t *window);
+void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, int width, int height, bool do_occlude);
+void window_draw_content(gui_window_t *window, bool occlude);
 void window_draw_outline(gui_window_t *window, bool occlude);
 void windowmgr_redrawall();
+void windowmgr_redraw_rect(rect_t clip);
 void windowmgr_draw();
 
 int windowmgr_add();
@@ -69,8 +87,9 @@ void debug_printf(char *format, ...);
 gui_window_t *getWindow(int index);
 gui_window_t *getSelectedWindow();
 void windowmgr_keypress(int scan_code);
-void window_draw(gui_window_t *window);
+void window_draw(gui_window_t *window, bool occlude);
 void toolbar_draw();
+void menubar_draw();
 bool windowmgr_click(int x, int y);
 void windowmgr_rightclick(int x, int y);
 void windowmgr_dragged(int relX, int relY);
@@ -82,7 +101,7 @@ void windowmgr_mousemove(int x, int y);
 void windowmgr_scroll(int y, int w);
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback);
 void window_close(int windowIndex, bool end);
-void window_release(gui_window_t *window);
+void window_minimise(gui_window_t *window, bool minimise);
 int get_window_index_from_pointer(gui_window_t *window);
 void window_resetfuncs(gui_window_t *window);
 void window_removefuncs(gui_window_t *window);

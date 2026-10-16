@@ -20,12 +20,6 @@
 
 #include "draw.h"
 
-#define TITLEBAR_HEIGHT 17
-#define TOOLBAR_ITEM_WIDTH 85
-#define TOOLBAR_PADDING 3
-#define TOOLBAR_ITEM_HEIGHT 15
-#define TOOLBAR_HEIGHT 20
-
 // https://wiki.osdev.org/User:Omarrx024/VESA_Tutorial
 typedef struct vbe_mode_info_t {
 	uint16_t attributes;
@@ -62,10 +56,17 @@ typedef struct vbe_mode_info_t {
 	uint16_t off_screen_mem_size;
 	uint8_t reserved1[206];
 } __attribute__ ((packed)) vbe_mode_info_t;
+
 static inline uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
    // 5r 6g 5b
    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
+
+typedef enum {
+	CURSOR_DEFAULT,
+	CURSOR_NONE,
+	CURSOR_RESIZE
+} cursor_id_t;
 
 #define COLOUR_WINDOW_OUTLINE gui_rgb16(230, 230, 230)
 #define COLOUR_DARK_GREY gui_rgb16(40, 40, 40) 
@@ -73,7 +74,7 @@ static inline uint16_t gui_rgb16(uint8_t r, uint8_t g, uint8_t b) {
 #define COLOUR_LIGHTLIGHT_GREY gui_rgb16(250, 250, 250) 
 #define COLOUR_TOOLBAR_ENTRY gui_rgb16(140, 140, 140)
 #define COLOUR_TOOLBAR_BORDER gui_rgb16(20, 20, 20)
-#define COLOUR_TOOLBAR gui_rgb16(182, 182, 182)
+#define COLOUR_TOOLBAR gui_rgb16(192, 192, 192)
 #define COLOUR_TITLEBAR_CLASSIC 0xDEFB
 #define COLOUR_TITLEBAR_COLOUR1 0xDF1B
 #define COLOUR_TITLEBAR_COLOUR2 0xB5B6
@@ -99,6 +100,8 @@ void gui_drawcharat(char c, uint16_t colour, int x, int y);
 void gui_cursor_draw();
 void gui_cursor_save_bg();
 void gui_cursor_restore_bg();
+void gui_set_cursor(cursor_id_t c);
+cursor_id_t gui_get_cursor();
 
 void gui_keypress(char scan_code);
 void gui_backspace();

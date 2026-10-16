@@ -14,6 +14,7 @@
 #include "draw.h"
 #include "windowmgr.h"
 #include "windowobj.h"
+#include "window_term.h"
 #include "lib/string.h"
 
 surface_t window_getsurface(int windowIndex) {
@@ -24,6 +25,238 @@ surface_t window_getsurface(int windowIndex) {
    surface.pitch = window->width;
    surface.buffer = (uint32_t)window->framebuffer;
    return surface;
+}
+
+// window action handlers
+
+void window_drag(gui_window_t *window, int x, int y, int relX, int relY) {
+   // drag inside window
+
+   // check windowobjs
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      int woX = x - wo->x;
+      int woY = y - wo->y;
+      if(woX < 0 || woY < 0 || woX >= wo->width || woY >= wo->height || wo == window->scrollbar)
+         continue;
+      windowobj_dragged(wo, woX, woY, relX, relY);
+   }
+
+   // call drag func
+   if(window->drag_func == NULL) return;
+   int taskIndex = get_task_from_window(get_window_index_from_pointer(window));
+   if(taskIndex == -1) {
+      // call as kernel
+      window->drag_func(x, y);
+   } else {
+      // calling function as task
+      task_state_t *task = &gettasks()[taskIndex];
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = x;
+      args[1] = y;
+      args[0] = get_cindex(task);
+   
+      wm_call_subroutine(task, "dragged", (uint32_t)(window->drag_func), args, 3);
+   }
+}
+
+// only called if window is already selected
+void window_click(gui_window_t *window, int x, int y) {
+   // check if we clicked on window object
+   int clicked_index = -1;
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      if(x >= wo->x && x < wo->x + wo->width
+      && y >= wo->y && y < wo->y + wo->height) {
+         windowobj_click((void*)wo, x - wo->x, y - wo->y);
+         windowobj_redraw((void*)window, (void*)wo);
+         clicked_index = i;
+         break;
+      }
+   }
+   
+   // unclick others
+   for(int i = 0; i < window->window_object_count; i++) {
+      if(i == clicked_index) continue;
+      windowobj_t *wo = window->window_objects[i];
+      if(!wo->clicked) continue;
+      wo->clicked = false;
+      for(int x = 0; x < wo->child_count; x++) {
+         windowobj_t *child = wo->children[x];
+         child->clicked = false;
+      }
+   }
+
+   // call click_func
+   if(window->click_func == NULL) return;
+
+   // switch to task
+   int taskIndex = get_task_from_window(get_window_index_from_pointer(window));
+   if(taskIndex == -1) {
+      // call as kernel
+      window->click_func(x, y);
+   } else {
+      // calling as task
+      task_state_t *task = &gettasks()[taskIndex];
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = x;
+      args[1] = y;
+      args[0] = get_cindex(task);
+      wm_call_subroutine(task, "click", (uint32_t)(window->click_func), args, 3);
+   }
+}
+
+void window_keypress(gui_window_t *window, uint16_t c) {
+   // check if we have a window object selected
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      if(!wo->clicked) continue;
+
+      windowobj_keydown((void*)wo, c);
+      windowobj_redraw((void*)window, (void*)wo);
+      return;
+   }
+
+   if(!window->keypress_func) return;
+
+   int taskIndex = get_task_from_window(get_window_index_from_pointer(window));
+
+   if(taskIndex == -1 || window->keypress_func == &window_term_keypress) {
+      // launch into function directly as kernel
+      (*(window->keypress_func))(c, window);
+   } else {
+      // run as task
+      task_state_t *task = &gettasks()[taskIndex];
+      uint32_t *args = malloc(sizeof(uint32_t) * 2);
+      args[1] = c;
+      args[0] = get_cindex(task);
+
+      wm_call_subroutine(task, "keypress", (uint32_t)(window->keypress_func), args, 2);
+   }
+}
+
+void window_keyrelease(gui_window_t *window, uint16_t c) {
+   // keyrelease func
+   if(!window->keyrelease_func) return;
+   int taskIndex = get_task_from_window(get_window_index_from_pointer(window));
+   if(taskIndex < 0) return;
+   task_state_t *task = &gettasks()[taskIndex];
+
+   uint32_t *args = malloc(sizeof(uint32_t) * 2);
+   args[1] = c;
+   args[0] = get_cindex(task);
+
+   wm_call_subroutine(task, "keyrelease", (uint32_t)(window->keyrelease_func), args, 2);
+}
+
+void window_mousemove(gui_window_t *window, int x, int y) {
+   // check window objects
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      int relX_wo = x - wo->x;
+      int relY_wo = y - wo->y;
+      bool inside = relX_wo > 0 && relX_wo < wo->width && relY_wo > 0 && relY_wo < wo->height;
+   
+      if(inside) {
+         if(!wo->hovering || wo->type == WO_MENU || wo->type == WO_CANVAS || wo->type == WO_SCROLLBAR) {
+            //wo->hovering = true;
+            if(wo->hover_func)
+               wo->hover_func((void*)wo, relX_wo, relY_wo);
+            windowobj_redraw((void*)window, (void*)wo);
+         }
+      } else {
+         if(wo->hovering) {
+            wo->hovering = false;
+
+            for(int i = 0; i < wo->child_count; i++) {
+               ((windowobj_t*)(wo->children[i]))->hovering = false;
+            }
+
+            if(wo->draw_func)
+               wo->draw_func((void*)wo);
+            windowobj_redraw((void*)window, (void*)wo);
+         }
+      }
+   }
+
+   // call hover function
+   if(window->hover_func) {
+      int task = get_task_from_window(get_window_index_from_pointer(window));
+      if(task < 0) return;
+      task_state_t *task_state = &gettasks()[task];
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = x;
+      args[1] = y;
+      args[0] = get_cindex(task_state);
+      wm_call_subroutine(task_state, "hover", (uint32_t)(window->hover_func), args, 3);
+   }
+}
+
+void window_mouseout(gui_window_t *window) {
+   if(!window->resized && window->mouseout_func) {
+      // call mouseout routine
+      int task = get_task_from_window(get_window_index_from_pointer(window));
+      if(task < 0) return;
+      task_state_t *task_state = &gettasks()[task];
+      uint32_t *args = malloc(sizeof(uint32_t) * 1);
+      args[0] = get_cindex(task_state);
+      wm_call_subroutine(task_state, "mouseout", (uint32_t)(window->mouseout_func), args, 1);
+   }
+   // set all window objs as not hovered
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      if(wo->hovering) {
+         wo->hovering = false;
+         for(int i = 0; i < wo->child_count; i++) {
+            ((windowobj_t*)(wo->children[i]))->hovering = false;
+         }
+         if(wo->draw_func)
+            wo->draw_func((void*)wo);
+         windowobj_redraw((void*)window, (void*)wo);
+      }
+   }
+}
+
+bool window_rightclick(gui_window_t *window, int x, int y) {
+   if(!window->rightclick_func) return false;
+   // switch to task
+   int taskIndex = get_task_from_window(get_window_index_from_pointer(window));
+   if(taskIndex > -1) {
+      task_state_t *task = &gettasks()[taskIndex];
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = x;
+      args[1] = y;
+      args[0] = get_cindex(task);
+      wm_call_subroutine(task, "rightclick", (uint32_t)(window->rightclick_func), args, 3);
+      return true;
+   }
+   return false;
+}
+
+void window_release(gui_window_t *window, int x, int y) {
+   // call mouse release func if exists
+   int index = get_window_index_from_pointer(window);
+   int task = get_task_from_window(index);
+   if(task > -1 && window->release_func) {
+      task_state_t *task_state = &gettasks()[task];
+      uint32_t *args = malloc(sizeof(uint32_t) * 3);
+      args[2] = x; // relative to window content
+      args[1] = y;
+      args[0] = get_cindex(task_state);
+      wm_call_subroutine(task_state, "release", (uint32_t)(window->release_func), args, 3);
+   }
+
+   // check windowobjs
+   for(int i = 0; i < window->window_object_count; i++) {
+      windowobj_t *wo = window->window_objects[i];
+      if(wo->clicked) {
+         int relX = x - wo->x;
+         int relY = y - wo->y;
+         bool r = windowobj_release((void*)wo, relX, relY);
+         windowobj_redraw(window, wo);
+         if(r) return;
+      }
+   }
 }
 
 // === window actions ===
@@ -72,7 +305,7 @@ void window_drawchar(char c, uint16_t colour, int windowIndex) {
 
       // immediately output each line
       if(!selected->minimised && !selected->dragged)
-         window_draw_content_region(selected, 0, selected->text_y - getFont()->height - getFont()->padding_y, selected->width, getFont()->height + getFont()->padding_y);
+         window_draw_content_region(selected, 0, selected->text_y - getFont()->height - getFont()->padding_y, selected->width, getFont()->height + getFont()->padding_y, true);
 
       return;
    }
@@ -123,6 +356,7 @@ void window_writeuint(uint32_t num, uint16_t colour, int windowIndex) {
    window_writestr(out, colour, windowIndex);
 }
 
+// scroll window content by 1 row of text
 void window_scroll(gui_window_t *window) {
    uint16_t *terminal_buffer = window->framebuffer;
 
@@ -137,7 +371,6 @@ void window_scroll(gui_window_t *window) {
    window->text_x = getFont()->padding;
 }
 
-extern void window_draw_content(gui_window_t *window);
 void window_newline(gui_window_t* window) {
    window->text_x = getFont()->padding;
    window->text_y += getFont()->height + getFont()->padding;
@@ -148,7 +381,7 @@ void window_newline(gui_window_t* window) {
 
    // immediately output each line
    window->needs_redraw=true;
-   window_draw_content(window); // call windowmgr and tell it to redraw
+   window_draw_content(window, true); // call windowmgr and tell it to redraw
 }
 
 // windowobj functions
@@ -212,6 +445,8 @@ windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_me
    return menu;
 }
 
+// window scroll functions
+
 static void window_default_scroll(int deltaY, gui_window_t *window) {
    // scroll every object by deltaY
    for(int i = 0; i < window->window_object_count; i++) {
@@ -221,7 +456,7 @@ static void window_default_scroll(int deltaY, gui_window_t *window) {
       }
    }
    window_clearbuffer(window, window->bgcolour);
-   window_draw(window);
+   window_draw(window, true);
 }
 
 void window_scroll_do_callback(void *regs, gui_window_t *window, int deltaY) {

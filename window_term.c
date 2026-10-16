@@ -79,7 +79,7 @@ void window_term_keypress(uint16_t key, void *window) {
          selected->text_x = (selected->text_index)*(getFont()->width+getFont()->padding);
       }
 
-      window_draw(selected);
+      window_draw(selected, true);
 
    }
 }
@@ -119,9 +119,7 @@ void window_term_return(void *window) {
          buffer[selected->text_index] = '\0';
          uint32_t *args = malloc(sizeof(uint32_t) * 1);
          args[0] = (uint32_t)buffer;
-         // map both to prog
-         map(task->process->page_dir, (uint32_t)args, (uint32_t)args, 1, 1, 0);
-         map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1, 0);
+         map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1, 0); // todo: replace
 
          wm_call_subroutine(task, "checkcmd", (uint32_t)selected->checkcmd_func, args, 1);
       }
@@ -139,7 +137,7 @@ void window_term_return(void *window) {
    selected->text_buffer[selected->text_index] = '\0';
    selected->needs_redraw = true;
 
-   window_draw_content(selected);
+   window_draw_content(selected, true);
 }
 
 void window_term_backspace(void *window) {
@@ -150,7 +148,7 @@ void window_term_backspace(void *window) {
       selected->text_buffer[selected->text_index] = '\0';
    }
 
-   window_draw(window);
+   window_draw(window, true);
 }
 
 void window_term_uparrow(void *window) {
@@ -164,7 +162,7 @@ void window_term_uparrow(void *window) {
    strcpy_fixed(selected->text_buffer, selected->cmd_history[selected->cmd_history_pos], len);
    selected->text_index = len;
    selected->text_x=len*(getFont()->width+getFont()->padding);
-   window_draw(window);
+   window_draw(window, true);
 }
 
 void window_term_downarrow(void *window) {
@@ -183,7 +181,7 @@ void window_term_downarrow(void *window) {
       selected->text_index = len;
       selected->text_x=len*(getFont()->width+getFont()->padding);
    }
-   window_draw(window);
+   window_draw(window, true);
 }
 
 void window_term_draw(void *window) {
@@ -219,7 +217,7 @@ void window_term_clear(void *window) {
    selected->text_index = 0;
    selected->text_buffer[0] = '\0';
    selected->needs_redraw = true;
-   window_draw_content(selected);
+   window_draw_content(selected, true);
 }
 
 void term_cmd_help() {

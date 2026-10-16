@@ -47,7 +47,7 @@ typedef struct wo_t {
    void (*hover_func)(struct wo_t *wo, draw_context_t draw_context, int x, int y);
    void (*mousein_func)(struct wo_t *wo, draw_context_t draw_context, int x, int y);
    void (*unhover_func)(struct wo_t *wo, draw_context_t draw_context); // mouseout
-   void (*drag_func)(struct wo_t *wo, int x, int y);
+   void (*drag_func)(struct wo_t *wo, draw_context_t draw_context, int x, int y);
    void (*keypress_func)(struct wo_t *wo, uint16_t c, int window);
    void (*destroy_func)(struct wo_t *wo);
 } wo_t;

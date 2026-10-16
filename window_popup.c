@@ -167,7 +167,7 @@ void window_popup_colourpicker_return(void *windowobj, int x, int y) {
       }
 
       getSelectedWindow()->needs_redraw = true;
-      window_draw(getSelectedWindow());
+      window_draw(getSelectedWindow(), false);
    }
 
 }

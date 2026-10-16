@@ -14,8 +14,9 @@ enum windowobj_type {
    WO_SCROLLER
 };
 
+// menu item
 typedef struct windowobj_menu_t {
-   char text[20];
+   char text[64]; // strlen 0 for separator
    void (*func)();
    bool disabled;
 } windowobj_menu_t;
@@ -47,6 +48,7 @@ typedef struct windowobj_t {
    bool disabled;
    bool oneline; // no return behaviour unless overriden
    bool isstatic; // not editable
+   bool underline;
    int textpos; // text length
    int cursor_textpos; // position in text cursor is at
    int cursorx;
@@ -61,6 +63,7 @@ typedef struct windowobj_t {
    uint16_t colour_border_hover;
    uint16_t colour_bg_hover;
    uint16_t colour_text;
+   void *userstate;
 
    void *children[MAX_CHILDREN];
    int child_count;
@@ -74,8 +77,9 @@ void windowobj_redraw(void *window, void *windowobj);
 void windowobj_click(void *windowobj, int relX, int relY);
 bool windowobj_release(void *windowobj, int relX, int relY);
 void windowobj_hover(void *windowobj, int x, int y);
-void windowobj_keydown(void *windowobj, int scan_code);
+void windowobj_keydown(void *windowobj, uint16_t c);
 void windowobj_free(windowobj_t *wo);
 void windowobj_dragged(void *windowobj, int x, int y, int relX, int relY);
+void windowobj_menu_resize(windowobj_t *wo);
 
 #endif

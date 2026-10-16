@@ -47,6 +47,7 @@ wo_t *create_button(int x, int y, int width, int height, char *text) {
    button->draw_func = &draw_button;
    button->click_func = &click_button;
    button->release_func = &release_button;
+   button->destroy_func = &destroy_button;
    button->type = WO_BUTTON;
 
    return button;
@@ -58,7 +59,6 @@ void destroy_button(wo_t *button) {
       free(button->data);
       button->data = NULL;
    }
-   free(button);
 }
 
 void draw_button(wo_t *button, draw_context_t context) {

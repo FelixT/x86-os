@@ -15,6 +15,11 @@ typedef struct font_t {
    uint8_t *fontmap[256]; // 256 possible chars, map from char to pointer to letter
 } __attribute__((packed)) font_t;
 
+typedef struct cursor_t {
+   char outline;
+   char fill;
+} cursor_t;
+
 typedef struct fontfile_t {
    uint8_t size;
    uint8_t width;
@@ -29,5 +34,6 @@ void getFontLetter(font_t *font, char c, int* dest);
 void font_init();
 void font_load(fontfile_t *file);
 int font_width(int len);
+int font_str_width(char *str);
 
 #endif

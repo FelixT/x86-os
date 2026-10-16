@@ -47,6 +47,7 @@ $GCC $FLAGS usr/about.c -o o/about.elf $UI_LIB
 $GCC $FLAGS usr/clock.c -o o/clock.elf $UI_LIB
 $GCC $FLAGS usr/test.c -o o/test.elf o/lib/string.o o/lib/stdio.o o/lib/stdlib.o
 $GCC $FLAGS usr/msgr.c -o o/msgr.elf o/lib/string.o o/lib/stdio.o o/lib/stdlib.o
+$GCC $FLAGS usr/desktop.c -o o/desktop.elf $DIALOGS_LIB
 
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
@@ -73,6 +74,7 @@ cp o/about.elf fs_root/sys/about.elf
 cp o/clock.elf fs_root/sys/clock.elf
 cp o/test.elf fs_root/sys/test.elf
 cp o/msgr.elf fs_root/sys/msgr.elf
+cp o/desktop.elf fs_root/sys/desktop.elf
 
 # compile device drivers
 bash usr/device/make.sh

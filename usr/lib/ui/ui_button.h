@@ -18,6 +18,7 @@ typedef struct button_t {
 } button_t;
 
 wo_t *create_button(int x, int y, int width, int height, char *text);
+void destroy_button(wo_t *button);
 void draw_button(wo_t *button, draw_context_t context);
 void set_button_release(wo_t *button, void(*release_func)(wo_t *wo, int window));
 button_t *get_button(wo_t *button);

@@ -2,7 +2,7 @@ ENTRY(start_32)
 OUTPUT_FORMAT(elf32-i386)
 
 MEMORY {
-    ram (rwx) : ORIGIN = 0x1000000, LENGTH = 256K
+    ram (rwx) : ORIGIN = 0x1000000, LENGTH = 384K
 }
 
 SECTIONS {

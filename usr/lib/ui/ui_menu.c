@@ -6,14 +6,16 @@
 #include "../stdio.h"
 
 void draw_menu_item(wo_t *menu, draw_context_t context, int index) {
-   if(index < 0) return;
+   menu_t *menu_data = (menu_t *)menu->data;
+
+   if(index < 0 || index >= menu_data->item_count
+   || index < menu_data->offset || index >= menu_data->offset + menu_data->shown_items)
+      return;
 
    uint16_t bg_selected = rgb16(222, 222, 222);
    uint16_t bg_hover = rgb16(243, 243, 243);
    uint16_t bg_item = rgb16(250, 250, 250);
    uint16_t border_light = rgb16(235, 235, 235);
-
-   menu_t *menu_data = (menu_t *)menu->data;
 
    int bgwidth = menu->width - 2;
    if(menu_data->scrollbar_visible)
@@ -108,6 +110,10 @@ void draw_menu(wo_t *menu, draw_context_t context) {
    if(shown_items > max_items)
       shown_items = max_items;
    menu_data->shown_items = shown_items;
+   if(menu_data->offset > menu_data->item_count - shown_items)
+      menu_data->offset = menu_data->item_count - shown_items;
+   if(menu_data->offset < 0)
+      menu_data->offset = 0;
    int shown_height = shown_items*item_height;
 
    int bgwidth = menu->width - 2;

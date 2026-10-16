@@ -126,6 +126,15 @@ typedef enum { // callback args:
    WM_MOUSEOUT, // int w
 } wm_action_t;
 
+#define KEY_BACKSPACE 0x08
+#define KEY_ESCAPE 0x1B
+#define KEY_RETURN 0x0D
+#define KEY_CONTROL 0x80
+#define KEY_SHIFT 0x81
+#define KEY_UPARROW 0x100
+#define KEY_DOWNARROW 0x101
+#define KEY_LEFTARROW 0x102
+#define KEY_RIGHTARROW 0x103
 
 #define W_SETTING_BGCOLOUR 0
 #define W_SETTING_TXTCOLOUR 1

@@ -298,7 +298,6 @@ static void cleanup_checkcmd_args(process_t *process, uint32_t *args) {
    char *buffer = (char*)args[0];
    if(process) {
       unshare_heap_page(process->page_dir, (uint32_t)buffer);
-      unshare_heap_page(process->page_dir, (uint32_t)args);
    }
    free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
 }
@@ -387,7 +386,8 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
       // kill other threads
       int remaining_threads = 0;
-      debug_printf("Ending %i other threads of process\n", task->process->no_threads - 1);
+      if(task->process->no_threads - 1 > 0)
+         debug_printf("Ending %i other threads of process\n", task->process->no_threads - 1);
       for(int i = 1; i < MAX_TASK_THREADS; i++) {
          task_state_t *thread = task->process->threads[i];
          if(!thread) continue;
@@ -1434,7 +1434,7 @@ kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst) {
    if(!ref) return -1;
    process->kobj[h] = ref;
    process->kobj_count++;
-   return h | (KOBJ_HANDLE_CHECK(ref->uid) << 16);
+   return h | (KOBJ_HANDLE_CHECK(ref->uid) << 16); // includes checkbits
 }
 
 bool process_release_kobj(process_t *process, kobj_handle_t h) {

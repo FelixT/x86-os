@@ -5,6 +5,7 @@
 
 #include "bmp.h"
 #include "gui.h"
+#include "lib/maths.h"
 
 bool bmp_check(bmp_info_t *info) {
    // check if supported
@@ -56,8 +57,12 @@ void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransp
    if(scale < 1) return;
 
    uint16_t *framebuffer = (uint16_t*)surface->buffer;
+   int minX = 0, minY = 0;
    int screenWidth = surface->width;
    int screenHeight = surface->height;
+   if(!clip_rect(surface, &minX, &minY, &screenWidth, &screenHeight)) return;
+   screenWidth += minX;
+   screenHeight += minY;
 
    bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
    bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
@@ -73,16 +78,21 @@ void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransp
 
    uint32_t rowSize = ((info->bpp * info->width+(32-1))/32)*4; // has to be multiple of 4 bytes, bytes per row
 
+   int xiStart = minX > x ? (minX - x) / scale : 0;
+   int yiStart = minY > y ? (minY - y) / scale : 0;
+   int xiEnd = screenWidth > x ? min(info->width, (screenWidth - x + scale - 1) / scale) : 0;
+   int yiEnd = screenHeight > y ? min(info->height, (screenHeight - y + scale - 1) / scale) : 0;
+
    // pixels starts at bottom, works up left to right
-   for(int yi = 0; yi < info->height; yi++) {
+   for(int yi = yiStart; yi < yiEnd; yi++) {
       int rowOffset = (info->height - (yi + 1)) * rowSize;
       int scaledY = y + yi * scale;
 
-      if (scaledY + scale <= 0 || scaledY >= screenHeight) continue; // Skip rows completely outside the screen
-
-      for(int xi = 0; xi < info->width; xi++) {
+      for(int xi = xiStart; xi < xiEnd; xi++) {
          int index = rowOffset + xi;
          int index16 = rowOffset / 2 + xi;
+
+         int scaledX = x + xi * scale;
 
          uint16_t colour;
          if(info->bpp == 8) {
@@ -93,16 +103,13 @@ void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransp
 
          if(whiteIsTransparent && colour == COLOUR_WHITE) continue;
 
-         int scaledX = x + xi * scale;
-         if(scaledX + scale <= 0 || scaledX >= screenWidth) continue;
-
          for(int dy = 0; dy < scale; dy++) {
             int sy = scaledY + dy;
-            if(sy < 0 || sy >= screenHeight) continue;
+            if(sy < minY || sy >= screenHeight) continue;
 
             for(int dx = 0; dx < scale; dx++) {
                int sx = scaledX + dx;
-               if(sx < 0 || sx >= screenWidth) continue;
+               if(sx < minX || sx >= screenWidth) continue;
 
                framebuffer[sy * surface->pitch + sx] = colour;
             }

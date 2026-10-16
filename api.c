@@ -246,7 +246,7 @@ void api_redraw_region(registers_t *regs) {
    gui_window_t *window = api_get_cwindow(regs->edi);
    if(!window) return;
 
-   window_draw_content_region(window, regs->ebx, regs->ecx, regs->edx, regs->esi);
+   window_draw_content_region(window, regs->ebx, regs->ecx, regs->edx, regs->esi, true);
 }
 
 void api_end_task(registers_t *regs) {
@@ -478,25 +478,13 @@ void api_set_window_title(registers_t *regs) {
    char *title = (char*)regs->ebx;
    if(api_validate_str(title, 20) < 0) return;
 
-   if(get_current_task_window() < 0) return;
-   gui_window_t *mainwindow = &gui_get_windows()[get_current_task_window()];
-   if(cindex == -1) {
-      strcpy(mainwindow->title, title);
-      window_draw_outline(mainwindow, true);
-      toolbar_draw();
-
-      return;
-   }
-   if(cindex >= 0 && cindex < mainwindow->child_count) {
-      gui_window_t *window = mainwindow->children[cindex];
-      int w = get_window_index_from_pointer(window);
-      if(window && w >= 0) {
-         strcpy(window->title, title);
-         window_draw_outline(window, true);
-         toolbar_draw();
-      }
-      return;
-   }
+   gui_window_t *window = api_get_cwindow(cindex);
+   if(!window) return;
+   strcpy(window->title, title);
+   window_draw_outline(window, true);
+   toolbar_draw();
+   if(window->active)
+      menubar_draw();
 }
 
 void api_set_working_dir(registers_t *regs) {
@@ -950,26 +938,22 @@ void api_scroll_to(registers_t *regs) {
 void api_set_window_size(registers_t *regs) {
    // IN: ebx width
    // IN: ecx height
+   // IN: edx window
    // doesn't call resize function
    int width = regs->ebx;
    int height = regs->ecx + TITLEBAR_HEIGHT;
+   int w = regs->edx;
 
    if(width < 20 || height < 20) return;
 
-   gui_window_t *window = api_get_window();
+   gui_window_t *window = api_get_cwindow(w);
    if(!window) return;
-   int maxwidth = gui_get_surface()->width - 5;
-   int maxheight = gui_get_surface()->height - TOOLBAR_HEIGHT;
-   if(width > maxwidth)
-      width = maxwidth;
-   if(height > maxheight)
-      height = maxheight;
-   if(window->x + width > maxwidth)
-      window->x = 0;
-   if(window->y + height > maxheight)
-      window->y = 0;
+   rect_t old_bounds = {.w = window->width + 3, .h = window->height + 3, .x = window->x - 1, .y = window->y - 1};
    window_resize(regs, window, width, height, false);
-   gui_redrawall();
+   windowmgr_redraw_rect(old_bounds);
+   window_draw_outline(window, true);
+   window->needs_redraw = true;
+   window_draw(window, true);
 }
 
 void api_get_font_info(registers_t *regs) {
@@ -1014,6 +998,7 @@ void api_create_window(registers_t *regs) {
       r = -1;
    }
    window_resize(regs, newwindow, width, height, true);
+   window_draw_outline(newwindow, false);
    regs->ebx = r;
 }
 
@@ -1286,17 +1271,16 @@ void api_set_window_position(registers_t *regs) {
    // IN: ebx x
    // IN: ecx y
    // IN: edx window
-   int margin = 3;
    gui_window_t *window = api_get_cwindow(regs->edx);
    if(!window) return;
    int x = regs->ebx;
    int y = regs->ecx;
-   if(x < margin) x = margin;
-   if(y < margin) y = margin;
-   if(x > (int)gui_get_width() - window->width - margin)
-      x = (int)gui_get_width() - window->width - margin;
-   if(y > (int)gui_get_height() - window->height - TOOLBAR_HEIGHT - margin)
-      y = (int)gui_get_height() - window->height - TOOLBAR_HEIGHT - margin;
+   if(x < 0) x = 0;
+   if(y < MENUBAR_HEIGHT) y = MENUBAR_HEIGHT;
+   if(x > (int)gui_get_width() - window->width)
+      x = (int)gui_get_width() - window->width;
+   if(y > (int)gui_get_height() - window->height - TOOLBAR_HEIGHT)
+      y = (int)gui_get_height() - window->height - TOOLBAR_HEIGHT;
    window->x = x;
    window->y = y;
    gui_redrawall();
@@ -1317,15 +1301,24 @@ void api_set_window_minimised(registers_t *regs) {
    // IN: ecx window
    gui_window_t *window = api_get_cwindow(regs->ecx);
    if(!window) return;
-   window->minimised = regs->ebx;
-   if(window == getSelectedWindow()) {
-      getSelectedWindow()->active = false;
-      setSelectedWindowIndex(-1);
-   } else {
-      if(!window->minimised)
-         setSelectedWindowIndex(get_window_index_from_pointer(window));
-   }
-   gui_redrawall();
+   window_minimise(window, (bool)regs->ebx);
+}
+
+void api_focus_task(registers_t *regs) {
+   // IN: ebx taskid
+   int taskid = regs->ebx;
+   if(taskid < 0 || taskid >= TOTAL_TASKS) return;
+   task_state_t *task = &gettasks()[taskid];
+   if(!task->enabled || !task->process) return;
+   if(task->process->window < 0 || task->process->window >= MAX_WINDOWS) return;
+   gui_window_t *window = getWindow(task->process->window);
+   if(window->closed) return;
+   window_minimise(window, false);
+}
+
+void api_get_taskid(registers_t *regs) {
+   // OUT: ebx taskid
+   regs->ebx = get_current_task();
 }
 
 void api_get_tasks(registers_t *regs) {
@@ -1746,6 +1739,7 @@ void api_escalate(registers_t *regs) {
    strcpy(getWindow(popup)->title, "Escalate Process");
    strcpy(dialog->wo_okbtn->text, "Grant");
    toolbar_draw();
+   menubar_draw();
    window_draw_outline(getWindow(popup), false);
 
    task_pause(task, PAUSE_ESCALATE);

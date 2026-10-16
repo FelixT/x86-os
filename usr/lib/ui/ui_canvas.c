@@ -241,6 +241,20 @@ void canvas_unhover(wo_t *canvas, draw_context_t context) {
    }
 }
 
+void destroy_canvas(wo_t *canvas) {
+   canvas_t *canvas_data = canvas->data;
+
+   // canvas owns its children
+   for(int i = 0; i < canvas_data->child_count; i++) {
+      wo_t *child = canvas_data->children[i];
+      if(!child) continue;
+      destroy_wo(child);
+      free(child);
+   }
+
+   free(canvas_data);
+}
+
 wo_t *create_canvas(int x, int y, int width, int height) {
    wo_t *canvas = create_wo(x, y, width, height);
    if(!canvas) return NULL;
@@ -263,6 +277,7 @@ wo_t *create_canvas(int x, int y, int width, int height) {
    canvas->keypress_func = &canvas_keypress;
    canvas->unhover_func = &canvas_unhover;
    canvas->mousein_func = &canvas_mousein;
+   canvas->destroy_func = &destroy_canvas;
    canvas->focusable = true;
 
    return canvas;

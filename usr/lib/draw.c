@@ -102,6 +102,7 @@ void draw_string(draw_context_t *ctx, char *str, uint16_t colour, int x, int y) 
       char *buf = malloc(maxchars+1);
       strncpy(buf, str, maxchars);
       write_strat_w(buf, x, y, colour, ctx->window);
+      free(buf);
    } else {
       write_strat_w(str, x, y, colour, ctx->window);
    }

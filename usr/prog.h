@@ -612,14 +612,35 @@ static inline void scroll_to(uint32_t y, int window) {
    );
 }
 
-static inline void set_window_size(int width, int height) {
-      asm volatile (
+static inline void set_window_size(int width, int height, int w) {
+   asm volatile (
       "int $0x30"
       :: "a" (60),
       "b" (width),
-      "c" (height)
+      "c" (height),
+      "d" (w)
       : "cc", "memory"
    );
+}
+
+static inline void focus_task(int taskid) {
+   asm volatile (
+      "int $0x30"
+      :: "a" (79),
+      "b" (taskid)
+      : "cc", "memory"
+   );
+}
+
+static inline int get_taskid() {
+   int taskid;
+   asm volatile (
+      "int $0x30"
+      : "=b" (taskid)
+      : "a" (81)
+      : "cc", "memory"
+   );
+   return taskid;
 }
 
 static inline void set_window_position(int x, int y, int window) {

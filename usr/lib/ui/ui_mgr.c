@@ -10,6 +10,7 @@ ui_mgr_t *ui_init(surface_t *surface, int window) {
    ui->wo_count = 0;
    ui->focused = NULL;
    ui->hovered = NULL;
+   ui->clicked = NULL;
    ui->surface = surface;
    ui->window = window;
    ui->default_menu = NULL;
@@ -55,10 +56,17 @@ draw_context_t ui_get_context(ui_mgr_t *ui) {
 
 void ui_draw(ui_mgr_t *ui) {
    draw_context_t context = ui_get_context(ui);
-   for(int i = 0; i < ui->wo_count; i++) {
-      if(ui->wos[i] && ui->wos[i]->enabled && ui->wos[i]->visible && ui->wos[i]->draw_func)
-         ui->wos[i]->draw_func(ui->wos[i], context);
+   // fixed drawn in 2nd pass
+   for(int pass = 0; pass < 2; pass++) {
+      bool fixed = pass == 1;
+      for(int i = 0; i < ui->wo_count; i++) {
+         wo_t *wo = ui->wos[i];
+         if(wo && wo->fixed == fixed && wo->enabled && wo->visible && wo->draw_func)
+            wo->draw_func(wo, context);
+      }
    }
+   if(ui->shown_menu)
+      ui->shown_menu->draw_func(ui->shown_menu, context);
 }
 
 void ui_redraw_window(ui_mgr_t *ui) {
@@ -74,7 +82,37 @@ void ui_redraw(ui_mgr_t *ui) {
    ui_redraw_window(ui);
 }
 
+// fixed layer first (prioritised for actions)
+static wo_t *ui_wo_at(ui_mgr_t *ui, int x, int y) {
+   for(int pass = 0; pass < 2; pass++) {
+      bool fixed = pass == 0;
+      for(int i = ui->wo_count-1; i >= 0; i--) {
+         wo_t *wo = ui->wos[i];
+         if(!(wo && wo->fixed == fixed && wo->enabled && wo->visible))
+            continue;
+         if(x >= wo->x && x < wo->x + wo->width
+         && y >= wo->y && y < wo->y + wo->height)
+            return wo;
+      }
+   }
+   return NULL;
+}
+
 bool hid_menu = false;
+
+static void ui_finish_click(ui_mgr_t *ui) {
+   // a click that never got its release, e.g. the click handler opened a
+   // new window, which became selected and was sent the release instead.
+   // finish it the way ui_release would have
+   wo_t *wo = ui->clicked;
+   if(!wo) return;
+   wo->clicked = false;
+   if(wo->focusable && !ui->focused) {
+      ui->focused = wo;
+      wo->selected = true;
+   }
+   ui->clicked = NULL;
+}
 
 bool ui_click(ui_mgr_t *ui, int x, int y) {
    draw_context_t context = ui_get_context(ui);
@@ -95,31 +133,26 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
    }
    hid_menu = false;
 
+   ui_finish_click(ui);
+
    wo_t *focused = ui->focused;
    if(ui->focused) {
       ui->focused->selected = false;
       ui->focused = NULL;
    }
 
-   bool clicked = false;
-   for(int i = ui->wo_count-1; i >= 0; i--) {
-      wo_t *wo = ui->wos[i];
-      if(!(wo && wo->enabled && wo->visible))
-         continue;
-      if(x >= wo->x && x < wo->x + wo->width
-      && y >= wo->y && y < wo->y + wo->height) {
-         clicked = true;
-         ui->clicked = wo;
-         wo->clicked = true;
-         if(wo->click_func)
-            wo->click_func(wo, context, x - wo->x, y - wo->y);
-         else if(wo->draw_func)
-            wo->draw_func(wo, context);
+   wo_t *wo = ui_wo_at(ui, x, y);
+   bool clicked = wo != NULL;
+   if(wo) {
+      ui->clicked = wo;
+      wo->clicked = true;
+      if(wo->click_func)
+         wo->click_func(wo, context, x - wo->x, y - wo->y);
+      else if(wo->draw_func)
+         wo->draw_func(wo, context);
 
-         if(wo->click_func || wo->draw_func)
-            ui_redraw_wo(ui, wo);
-         break;
-      }
+      if(wo->click_func || wo->draw_func)
+         ui_redraw_wo(ui, wo);
    }
 
    if(focused && focused != ui->clicked) {
@@ -177,7 +210,41 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
          break;
       }
    }
+
+   // released outside the clicked wo, so it didn't get focus. this is also
+   // the case when the press went to another window: the first click on an
+   // inactive window only activates it, but its release still comes here
+   wo_t *clicked = ui->clicked;
+   if(clicked && clicked != ui->focused && clicked->focusable
+   && clicked->enabled && clicked->visible) {
+      if(clicked->unfocus_func)
+         clicked->unfocus_func(clicked, context);
+      else if(clicked->draw_func)
+         clicked->draw_func(clicked, context);
+
+      if(clicked->unfocus_func || clicked->draw_func)
+         ui_redraw_wo(ui, clicked);
+   }
    ui->clicked = NULL;
+}
+
+void ui_drag(ui_mgr_t *ui, int x, int y) {
+   if(!ui->clicked || !ui->clicked->drag_func) return;
+   ui->clicked->drag_func(ui->clicked, ui_get_context(ui), x, y);
+}
+
+void ui_bring_to_front(ui_mgr_t *ui, wo_t *wo) {
+   int index = -1;
+   for(int i = 0; i < ui->wo_count; i++) {
+      if(!ui->wos[i]) continue;
+      if(ui->wos[i] == wo) {
+         index = i;
+         break;
+      }
+   }
+   if(index == -1 || index == ui->wo_count-1) return;
+   memmove(&ui->wos[index], &ui->wos[index + 1], sizeof(wo_t*) * (ui->wo_count - 1 - index));
+   ui->wos[ui->wo_count - 1] = wo;
 }
 
 void ui_keypress(ui_mgr_t *ui, uint16_t c) {
@@ -204,10 +271,13 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
       && y >= ui->shown_menu->y && y < ui->shown_menu->y + ui->shown_menu->height) {
          ui->shown_menu->hovering = true;
          ui->shown_menu->hover_func(ui->shown_menu, context, x - ui->shown_menu->x, y - ui->shown_menu->y);
+         ui_redraw_window(ui);
       } else {
-         ui->shown_menu->hovering = false;
+         if(ui->shown_menu->hovering) {
+            ui->shown_menu->hovering = false;
+            ui_redraw_window(ui);
+         }
       }
-      ui_redraw_window(ui);
       return;
    }
 
@@ -217,35 +287,30 @@ void ui_hover(ui_mgr_t *ui, int x, int y) {
       ui->hovered = NULL;
    }
 
-   for(int i = ui->wo_count-1; i >= 0; i--) {
-      wo_t *wo = ui->wos[i];
-      if(!(wo && wo->enabled && wo->visible))
-         continue;
-      if(x >= wo->x && x < wo->x + wo->width
-      && y >= wo->y && y < wo->y + wo->height) {
-         wo->hovering = true;
-         ui->hovered = wo;
+   // can only hover one object at a time
+   wo_t *wo = ui_wo_at(ui, x, y);
+   if(wo) {
+      wo->hovering = true;
+      ui->hovered = wo;
 
-         bool redraw = false;
+      bool redraw = false;
 
-         if(wo->hover_func) {
-            wo->hover_func(wo, context, x - wo->x, y - wo->y);
+      if(wo->hover_func) {
+         wo->hover_func(wo, context, x - wo->x, y - wo->y);
+         redraw = true;
+      }
+
+      if(wo != hovered) {
+         if(wo->mousein_func) {
+            wo->mousein_func(wo, context, x - wo->x, y - wo->y);
+            redraw = true;
+         } else if(wo->draw_func) {
+            wo->draw_func(wo, context);
             redraw = true;
          }
-         
-         if(wo != hovered) {
-            if(wo->mousein_func) {
-               wo->mousein_func(wo, context, x - wo->x, y - wo->y);
-               redraw = true;
-            } else if(wo->draw_func) {
-               wo->draw_func(wo, context);
-               redraw = true;
-            }
-         }
-
-         if(redraw) ui_redraw_wo(ui, wo);
-         break; // can only hover one object at a time
       }
+
+      if(redraw) ui_redraw_wo(ui, wo);
    }
 
    // draw on unhover
@@ -284,6 +349,21 @@ void ui_rightclick(ui_mgr_t *ui, int x, int y) {
    if(menu->draw_func)
       menu->draw_func(menu, context);
    ui->shown_menu = menu;
+}
+
+bool ui_remove(ui_mgr_t *ui, wo_t *wo) {
+   if(ui->hovered == wo)
+      ui->hovered = NULL;
+   if(ui->clicked == wo)
+      ui->clicked = NULL;
+   if(ui->focused == wo)
+      ui->focused = NULL;
+   for(int i = 0; i < ui->wo_count; i++) {
+      if(ui->wos[i] != wo) continue;
+      ui->wos[i] = NULL;
+      return true;
+   }
+   return false;
 }
 
 void ui_unfocus() {
@@ -359,6 +439,7 @@ void ui_scroll(ui_mgr_t *ui, int deltaY, int offsetY) {
 
    for(int i = 0; i < ui->wo_count; i++) {
       wo_t *wo = ui->wos[i];
+      if(!wo) continue;
       if(wo->fixed) {
          memset16(fb + wo->y*ui->surface->width, bg, wo->height*ui->surface->width);
          continue;

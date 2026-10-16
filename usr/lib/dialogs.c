@@ -54,6 +54,16 @@ void dialog_release(int x, int y, int window) {
    end_subroutine();
 }
 
+void dialog_drag(int x, int y, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_drag(dialog->ui, x, y);
+   end_subroutine();
+}
+
 void dialog_hover(int x, int y, int window) {
    dialog_t *dialog = dialog_from_window(window);
    if(!dialog) {
@@ -1268,12 +1278,28 @@ void dialog_init_overrides(int window) {
    wm_override(WM_CLICK, &dialog_click, window);
    wm_override(WM_HOVER, &dialog_hover, window);
    wm_override(WM_MOUSERELEASE, &dialog_release, window);
+   wm_override(WM_DRAG, &dialog_drag, window);
    wm_override(WM_KEYPRESS, &dialog_keypress, window);
    wm_override(WM_CLOSE, &dialog_window_close, window);
    wm_override(WM_RESIZE, &dialog_resize, window);
    wm_override(WM_RIGHTCLICK, &dialog_rightclick, window);
    wm_override(WM_MOUSEOUT, &dialog_mouseout, window);
    wm_override(WM_DRAW, 0, window);
+}
+
+void dialog_scroll(int deltaY, int offsetY, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   ui_scroll(dialog->ui, deltaY, offsetY);
+   ui_redraw(dialog->ui);
+   end_subroutine();
+}
+
+void dialog_init_scroll(dialog_t *dialog) {
+   create_scrollbar(&dialog_scroll, dialog->window);
 }
 
 dialog_t *get_dialog(int index) {

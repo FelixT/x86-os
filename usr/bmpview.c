@@ -795,6 +795,7 @@ void _start(int argc, char **args) {
    width = get_width();
    height = get_height();
    drawbg();
+   redraw();
 
    if(argc == 2) {
       if(*args[1] != '\0') {

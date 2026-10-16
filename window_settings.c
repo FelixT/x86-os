@@ -34,14 +34,14 @@ void window_settings_redraw(void *w) {
    window_clearbuffer(window, window->bgcolour);
    window_settings_draw(w);
    window->needs_redraw = true;
-   window_draw(window);
+   window_draw(window, true);
 }
 
 extern uint16_t gui_bg;
 
 void window_settings_update(window_settings_t *settings) {
    settings->selected->needs_redraw = true;
-   window_draw(settings->selected);
+   window_draw(settings->selected, true);
 }
 
 // callback from text windowobj
