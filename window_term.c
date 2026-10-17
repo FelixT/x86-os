@@ -108,7 +108,7 @@ void window_term_return(void *window) {
    if(selected->read_task > 0) {
       fs_read_window_callback(selected, false);
    } else if(selected->checkcmd_func != &window_term_checkcmd) {
-      // "checkcmd" override
+      // E_CHECKCMD override
       if(selected->checkcmd_func != NULL) {
          int taskIndex = get_task_from_window(getSelectedWindowIndex());
          if(taskIndex < 0) return;
@@ -117,11 +117,13 @@ void window_term_return(void *window) {
          char *buffer = (char*)malloc(TEXT_BUFFER_LENGTH);
          strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
          buffer[selected->text_index] = '\0';
-         uint32_t *args = malloc(sizeof(uint32_t) * 1);
-         args[0] = (uint32_t)buffer;
+         uint32_t args[1] = { (uint32_t)buffer };
          map(task->process->page_dir, (uint32_t)buffer, (uint32_t)buffer, 1, 1, 0); // todo: replace
 
-         wm_call_subroutine(task, "checkcmd", (uint32_t)selected->checkcmd_func, args, 1);
+         if(!wm_call_subroutine(task, E_CHECKCMD, (uint32_t)selected->checkcmd_func, args, 1)) {
+            unshare_heap_page(task->process->page_dir, (uint32_t)buffer);
+            free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
+         }
       }
    } else {
       window_term_checkcmd(selected); // default term behaviour
@@ -259,8 +261,8 @@ void term_cmd_tasks() {
       if(tasks[i].enabled) {
          window_term_printf("\n%i: ", i);
          window_term_printf("<w%i: %s>", tasks[i].process->window, gui_get_windows()[tasks[i].process->window].title);
-         if(tasks[i].in_routine)
-            window_term_printf(" <routine %s>", tasks[i].routine_name);
+         if(tasks[i].routine != E_NONE)
+            window_term_printf(" <routine %i>", tasks[i].routine);
          if(tasks[i].process->privileged)
             window_term_printf(" privileged");
          if(tasks[i].kernel_esp)
@@ -448,7 +450,7 @@ void term_cmd_taski(char *arg) {
       return;
    }
    task_state_t *task = &gettasks()[id];
-   window_term_printf("Task %i uid %u (enabled %i paused %i reason %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->pause_reason, task->crashed, task->in_routine);
+   window_term_printf("Task %i uid %u (enabled %i paused %i reason %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->pause_reason, task->crashed, task->routine);
    window_term_printf("Stack base 0x%h\n", task->stack_base);
    process_t *process = task->process;
    if(process) {

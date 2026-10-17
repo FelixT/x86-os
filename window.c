@@ -51,12 +51,8 @@ void window_drag(gui_window_t *window, int x, int y, int relX, int relY) {
    } else {
       // calling function as task
       task_state_t *task = &gettasks()[taskIndex];
-      uint32_t *args = malloc(sizeof(uint32_t) * 3);
-      args[2] = x;
-      args[1] = y;
-      args[0] = get_cindex(task);
-   
-      wm_call_subroutine(task, "dragged", (uint32_t)(window->drag_func), args, 3);
+      uint32_t args[3] = { x, y, get_cindex(task) };
+      wm_call_subroutine(task, E_DRAGGED, (uint32_t)(window->drag_func), args, 3);
    }
 }
 
@@ -98,11 +94,8 @@ void window_click(gui_window_t *window, int x, int y) {
    } else {
       // calling as task
       task_state_t *task = &gettasks()[taskIndex];
-      uint32_t *args = malloc(sizeof(uint32_t) * 3);
-      args[2] = x;
-      args[1] = y;
-      args[0] = get_cindex(task);
-      wm_call_subroutine(task, "click", (uint32_t)(window->click_func), args, 3);
+      uint32_t args[3] = { x, y, get_cindex(task) };
+      wm_call_subroutine(task, E_CLICK, (uint32_t)(window->click_func), args, 3);
    }
 }
 
@@ -127,11 +120,8 @@ void window_keypress(gui_window_t *window, uint16_t c) {
    } else {
       // run as task
       task_state_t *task = &gettasks()[taskIndex];
-      uint32_t *args = malloc(sizeof(uint32_t) * 2);
-      args[1] = c;
-      args[0] = get_cindex(task);
-
-      wm_call_subroutine(task, "keypress", (uint32_t)(window->keypress_func), args, 2);
+      uint32_t args[2] = { c, get_cindex(task) };
+      wm_call_subroutine(task, E_KEYPRESS, (uint32_t)(window->keypress_func), args, 2);
    }
 }
 
@@ -142,11 +132,8 @@ void window_keyrelease(gui_window_t *window, uint16_t c) {
    if(taskIndex < 0) return;
    task_state_t *task = &gettasks()[taskIndex];
 
-   uint32_t *args = malloc(sizeof(uint32_t) * 2);
-   args[1] = c;
-   args[0] = get_cindex(task);
-
-   wm_call_subroutine(task, "keyrelease", (uint32_t)(window->keyrelease_func), args, 2);
+   uint32_t args[2] = { c, get_cindex(task) };
+   wm_call_subroutine(task, E_KEYRELEASE, (uint32_t)(window->keyrelease_func), args, 2);
 }
 
 void window_mousemove(gui_window_t *window, int x, int y) {
@@ -184,11 +171,8 @@ void window_mousemove(gui_window_t *window, int x, int y) {
       int task = get_task_from_window(get_window_index_from_pointer(window));
       if(task < 0) return;
       task_state_t *task_state = &gettasks()[task];
-      uint32_t *args = malloc(sizeof(uint32_t) * 3);
-      args[2] = x;
-      args[1] = y;
-      args[0] = get_cindex(task_state);
-      wm_call_subroutine(task_state, "hover", (uint32_t)(window->hover_func), args, 3);
+      uint32_t args[3] = { x, y, get_cindex(task_state) };
+      wm_call_subroutine(task_state, E_HOVER, (uint32_t)(window->hover_func), args, 3);
    }
 }
 
@@ -198,9 +182,8 @@ void window_mouseout(gui_window_t *window) {
       int task = get_task_from_window(get_window_index_from_pointer(window));
       if(task < 0) return;
       task_state_t *task_state = &gettasks()[task];
-      uint32_t *args = malloc(sizeof(uint32_t) * 1);
-      args[0] = get_cindex(task_state);
-      wm_call_subroutine(task_state, "mouseout", (uint32_t)(window->mouseout_func), args, 1);
+      uint32_t args[1] = { get_cindex(task_state) };
+      wm_call_subroutine(task_state, E_MOUSEOUT, (uint32_t)(window->mouseout_func), args, 1);
    }
    // set all window objs as not hovered
    for(int i = 0; i < window->window_object_count; i++) {
@@ -223,11 +206,8 @@ bool window_rightclick(gui_window_t *window, int x, int y) {
    int taskIndex = get_task_from_window(get_window_index_from_pointer(window));
    if(taskIndex > -1) {
       task_state_t *task = &gettasks()[taskIndex];
-      uint32_t *args = malloc(sizeof(uint32_t) * 3);
-      args[2] = x;
-      args[1] = y;
-      args[0] = get_cindex(task);
-      wm_call_subroutine(task, "rightclick", (uint32_t)(window->rightclick_func), args, 3);
+      uint32_t args[3] = { x, y, get_cindex(task) };
+      wm_call_subroutine(task, E_RIGHTCLICK, (uint32_t)(window->rightclick_func), args, 3);
       return true;
    }
    return false;
@@ -239,11 +219,8 @@ void window_release(gui_window_t *window, int x, int y) {
    int task = get_task_from_window(index);
    if(task > -1 && window->release_func) {
       task_state_t *task_state = &gettasks()[task];
-      uint32_t *args = malloc(sizeof(uint32_t) * 3);
-      args[2] = x; // relative to window content
-      args[1] = y;
-      args[0] = get_cindex(task_state);
-      wm_call_subroutine(task_state, "release", (uint32_t)(window->release_func), args, 3);
+      uint32_t args[3] = { x, y, get_cindex(task_state) };
+      wm_call_subroutine(task_state, E_RELEASE, (uint32_t)(window->release_func), args, 3);
    }
 
    // check windowobjs
@@ -472,14 +449,11 @@ void window_scroll_do_callback(void *regs, gui_window_t *window, int deltaY) {
       (*(void(*)(int, int))callback)(deltaY, offsetY);
    } else {
       task_state_t *task = &gettasks()[taskIndex];
-      uint32_t *args = malloc(sizeof(int) * 3);
-      args[2] = deltaY;
-      args[1] = offsetY;
-      args[0] = get_cindex_from_window(task, window);
+      uint32_t args[3] = { deltaY, offsetY, get_cindex_from_window(task, window) };
       if(!regs)
-         wm_call_subroutine(task, "scroll", (uint32_t)(callback), args, 3);
+         wm_call_subroutine(task, E_SCROLL, (uint32_t)(callback), args, 3);
       else
-         task_call_subroutine(regs, task, "scroll", (uint32_t)(callback), args, 3);
+         task_call_subroutine(regs, task, E_SCROLL, (uint32_t)(callback), args, 3);
    }
 }
 
@@ -690,14 +664,12 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
          int task = get_task_from_window(index);
          if(regs && task > -1 && window->resize_func) {
             task_state_t *task_state = &gettasks()[task];
-            uint32_t *args = malloc(sizeof(uint32_t) * 4);
-            args[3] = (uint32_t)window->framebuffer;
-            args[2] = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
-            args[1] = window->height - TITLEBAR_HEIGHT;
-            args[0] = get_cindex_from_window(task_state, window);
+            int w = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
+            int h = window->height - TITLEBAR_HEIGHT;
+            uint32_t args[4] = { (uint32_t)window->framebuffer, w, h, get_cindex_from_window(task_state, window) };
             map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1, 0);
             window_clearbuffer(window, window->bgcolour);
-            task_call_subroutine(regs, task_state, "resize", (uint32_t)(window->resize_func), args, 4);
+            task_call_subroutine(regs, task_state, E_RESIZE, (uint32_t)(window->resize_func), args, 4);
          }
       }
    }

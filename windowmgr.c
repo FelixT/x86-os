@@ -226,13 +226,15 @@ void wm_event_defer_yield(int task) {
 }
 
 // deferred yield to avoid yielding midway through wm code
-void wm_call_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
+bool wm_call_subroutine(task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc) {
    if(!wm_event_thread.task || get_current_task() != wm_event_thread.task->task_id) {
       debug_printf("wm_call_subroutine called from outside wm event thread\n");
       kernel_panic();
    }
-   task_queue_subroutine(task, name, addr, args, argc);
+   if(!task_queue_subroutine(task, type, addr, args, argc))
+      return false;
    wm_event_defer_yield(task->task_id);
+   return true;
 }
 
 void wm_event_thread_main() {
@@ -570,9 +572,8 @@ void window_close(int windowIndex, bool end) {
    // call close func if set
    if(do_callback && task_state && window->close_func != NULL && task != get_current_task()) {
       debug_printf("Calling close func for window %i\n", windowIndex);
-      uint32_t *args = malloc(sizeof(uint32_t) * 1);
-      args[0] = cindex;
-      wm_call_subroutine(task_state, "close", (uint32_t)(window->close_func), args, 1);
+      uint32_t args[1] = { cindex };
+      wm_call_subroutine(task_state, E_CLOSE, (uint32_t)(window->close_func), args, 1);
    }
 }
 
@@ -2381,16 +2382,14 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
 
    // call resize func if exists
    if(callback && task > -1 && window->resize_func) {
-      uint32_t *args = malloc(sizeof(uint32_t) * 4);
-      args[3] = (uint32_t)window->framebuffer;
-      args[2] = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
-      args[1] = height - TITLEBAR_HEIGHT;
-      args[0] = get_cindex_from_window(task_state, window);
+      int w = width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
+      int h = height - TITLEBAR_HEIGHT;
+      uint32_t args[4] = { (uint32_t)window->framebuffer, w, h, get_cindex_from_window(task_state, window) };
       map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 1, 1, 0);
       if(regs)
-         task_call_subroutine(regs, task_state, "resize", (uint32_t)(window->resize_func), args, 4);
+         task_call_subroutine(regs, task_state, E_RESIZE, (uint32_t)(window->resize_func), args, 4);
       else
-         wm_call_subroutine(task_state, "resize", (uint32_t)(window->resize_func), args, 4);
+         wm_call_subroutine(task_state, E_RESIZE, (uint32_t)(window->resize_func), args, 4);
    }
 
    if(scrollerhidden) {

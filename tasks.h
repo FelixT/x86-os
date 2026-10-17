@@ -28,10 +28,31 @@
 
 typedef struct task_state_t task_state_t;
 
-typedef struct {
-   char name[16];
+#define TASK_EVENT_MAX_ARGS 4
+
+// all events that callback to task
+typedef enum {
+   E_NONE, // not in a routine
+   E_DRAGGED,
+   E_CLICK,
+   E_RELEASE,
+   E_RIGHTCLICK,
+   E_KEYPRESS,
+   E_KEYRELEASE,
+   E_HOVER,
+   E_SCROLL,
+   E_RESIZE,
+   E_CLOSE,
+   E_CHECKCMD,
+   E_MOUSEOUT,
+   E_MSG,
+   E_EVENT
+} task_event_type_t;
+
+typedef struct task_event_t {
+   task_event_type_t type;
    uint32_t addr; // subroutine addr
-   uint32_t *args;
+   uint32_t args[TASK_EVENT_MAX_ARGS];
    int argc;
    int task_id; // events belong to specific task (/thread)
    uint32_t task_uid;
@@ -83,7 +104,7 @@ typedef struct process_t {
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[PROCESS_MAX_FDS];
    int fd_count;
-   task_event_t *event_queue[EVENT_QUEUE_SIZE];
+   task_event_t event_queue[EVENT_QUEUE_SIZE];
    int event_queue_size;
    uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
    struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
@@ -111,10 +132,8 @@ typedef struct task_state_t {
    uint32_t kernel_esp; // kernel stack pointer (0 if not parked in kernel)
    registers_t registers;
    registers_t routine_return_regs;
-   uint32_t *routine_args;
-   int routine_argc;
-   bool in_routine;
-   char routine_name[32];
+   void *checkcmd_buffer;
+   task_event_type_t routine;
    bool in_syscall;
    uint16_t syscall_no;
 
@@ -144,6 +163,7 @@ void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
 int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised);
+void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr);
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();
@@ -166,8 +186,8 @@ int get_task_from_window(int windowIndex);
 int get_free_task_index();
 void task_unreserve(int task);
 
-bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
-bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+bool task_call_subroutine(registers_t *regs, task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc);
+bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc);
 int task_find_queued_subroutine(task_state_t *task);
 void task_remove_queued_subroutine(task_state_t *task, int index);
 void task_subroutine_end(registers_t *regs);

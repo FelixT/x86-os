@@ -210,16 +210,12 @@ static msg_notify_status_t call_msg_func(registers_t *regs, task_state_t *task, 
       task_wake(task);
       return MSG_NOTIFY_NO_CALLBACK;
    }
-   uint32_t *args = malloc(sizeof(uint32_t) * 3); // todo: avoid allocating each call
-   if(!args) return MSG_NOTIFY_DROPPED;
-   args[2] = port_uid;
-   args[1] = channel_uid;
-   args[0] = flags;
+   uint32_t args[3] = { port_uid, channel_uid, flags };
    bool delivered;
    if(regs)
-      delivered = task_call_subroutine(regs, task, "msg", (uint32_t)task->msg_func, args, 3);
+      delivered = task_call_subroutine(regs, task, E_MSG, (uint32_t)task->msg_func, args, 3);
    else
-      delivered = task_queue_subroutine(task, "msg", (uint32_t)task->msg_func, args, 3);
+      delivered = task_queue_subroutine(task, E_MSG, (uint32_t)task->msg_func, args, 3);
 
    return delivered ? MSG_NOTIFY_DELIVERED : MSG_NOTIFY_DROPPED;
 }

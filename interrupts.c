@@ -815,8 +815,8 @@ void err_exception_handler(int int_no, registers_t *regs) {
       window_writenum(int_no, 0, 0);
       window_writestr("\n", 0, 0);
       
-      if(task_state->in_routine)
-         debug_printf("Task was in routine %s\n", task_state->routine_name);
+      if(task_state->routine != E_NONE)
+         debug_printf("Task was in routine %i\n", task_state->routine);
 
       crash_task(int_no, regs, task);
    } else {

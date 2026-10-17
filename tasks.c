@@ -100,7 +100,8 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].wake_pending = false;
    tasks[index].crashed = false;
    tasks[index].kill_pending = false;
-   tasks[index].in_routine = false;
+   tasks[index].routine = E_NONE;
+   tasks[index].checkcmd_buffer = NULL;
    tasks[index].in_syscall = false;
    tasks[index].msg_func = NULL;
    tasks[index].msg_channel_count = 0;
@@ -288,47 +289,37 @@ void task_reset_windows(int task) {
 }
 
 // heap page returned back to kernel only access (set in new_page)
-static void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr) {
+void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr) {
    addr = page_align_down(addr);
    map(dir, addr, addr, 0, 0, 0);
 }
 
 // hacky but less hacky than having task clean this up
-static void cleanup_checkcmd_args(process_t *process, uint32_t *args) {
-   char *buffer = (char*)args[0];
-   if(process) {
+static void cleanup_checkcmd_args(process_t *process, char *buffer) {
+   if(process)
       unshare_heap_page(process->page_dir, (uint32_t)buffer);
-   }
    free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
-}
-
-static void free_process_events(process_t *process) {
-   // free all events in queue
-   for(int i = 0; i < process->event_queue_size; i++) {
-      task_event_t *event = process->event_queue[i];
-      if(!event) continue;
-      if(strequ(event->name, "checkcmd"))
-         cleanup_checkcmd_args(process, event->args);
-      if(event->args)
-         free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
-      free((uint32_t)event, sizeof(task_event_t));
-   }
-   process->event_queue_size = 0;
 }
 
 static void free_task_events(task_state_t *task) {
    // remove events for ended thread of still running process
    int e;
    while((e = task_find_queued_subroutine(task)) >= 0) {
-      task_event_t *event = task->process->event_queue[e];
+      task_event_t *event = &task->process->event_queue[e];
+      if(event->type == E_CHECKCMD)
+         cleanup_checkcmd_args(task->process, (char*)event->args[0]);
       task_remove_queued_subroutine(task, e);
       msg_retry_notifications(task);
-      if(strequ(event->name, "checkcmd"))
-         cleanup_checkcmd_args(task->process, event->args);
-      if(event->args)
-         free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
-      free((uint32_t)event, sizeof(task_event_t));
    }
+}
+
+static void free_process_events(process_t *process) {
+   for(int i = 0; i < process->event_queue_size; i++) {
+      task_event_t *event = &process->event_queue[i];
+      if(event->type == E_CHECKCMD)
+         cleanup_checkcmd_args(process, (char*)event->args[0]);
+   }
+   process->event_queue_size = 0;
 }
 
 static bool end_task_helper(int index, registers_t *regs, bool child) {
@@ -363,10 +354,11 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
    if(task->process->window >= 0)
       task_write_to_window(index, "<Task ended>\n", true);
 
-   if(task->in_routine) {
-      debug_printf("Task was in routine %s\n", task->routine_name);
-      if(strequ(task->routine_name, "checkcmd"))
-         cleanup_checkcmd_args(task->process, task->routine_args);
+   if(task->routine != E_NONE) {
+      debug_printf("Task was in routine %i\n", task->routine);
+      if(task->routine == E_CHECKCMD)
+         cleanup_checkcmd_args(task->process, task->checkcmd_buffer);
+      task->checkcmd_buffer = NULL;
    }
 
    if(task->in_syscall)
@@ -465,14 +457,8 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
       }
    }
 
-   if(task->routine_args) {
-      free((uint32_t)task->routine_args, task->routine_argc * sizeof(uint32_t*));
-      task->routine_args = NULL;
-      task->routine_argc = 0;
-   }
-
    task->reserved = false;
-   task->in_routine = false;
+   task->routine = E_NONE;
 
    if(regs && !get_current_task_state()->enabled)
       switch_task(regs, false);
@@ -880,21 +866,21 @@ int get_task_from_window(int windowIndex) {
    return -1;
 }
 
-bool task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint32_t *args, int argc) {
-   if(argc > 10) {
+bool task_execute_subroutine(registers_t *regs, task_event_type_t type, uint32_t addr, uint32_t *args, int argc) {
+   if(argc > TASK_EVENT_MAX_ARGS) {
       debug_printf("task_execute_subroutine called with too many args\n");
       kernel_panic();
    }
 
    // construct stack frame
-   uint32_t frame[11];
+   uint32_t frame[TASK_EVENT_MAX_ARGS+1];
 
    // push unused return address to stack
    frame[0] = regs->eip;
 
    // push arguments to stack
    for(int i = 0; i < argc; i++)
-      frame[argc-i] = args[i];
+      frame[i+1] = args[i];
 
    int size = 4*(argc+1);
    if(copy_to_task(current_task, (void*)(regs->useresp - size), (void*)frame, size) != size) {
@@ -902,14 +888,12 @@ bool task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
       return false;
    }
    
-   strcpy(tasks[current_task].routine_name, name);
+   tasks[current_task].routine = type;
+   tasks[current_task].checkcmd_buffer = type == E_CHECKCMD ? (void*)args[0] : NULL;
 
    // save registers
 
    tasks[current_task].routine_return_regs = *regs;
-
-   tasks[current_task].routine_args = args;
-   tasks[current_task].routine_argc = argc;
 
    regs->useresp -= size;
 
@@ -917,8 +901,6 @@ bool task_execute_subroutine(registers_t *regs, char *name, uint32_t addr, uint3
 
    // update eip to func addr
    regs->eip = addr;
-
-   tasks[current_task].in_routine = true;
 
    return true;
 }
@@ -950,8 +932,7 @@ void task_wake(task_state_t *task) {
 // queue is shared by every thread of process
 int task_find_queued_subroutine(task_state_t *task) {
    for(int i = 0; i < task->process->event_queue_size; i++) {
-      task_event_t *event = task->process->event_queue[i];
-      if(!event) continue;
+      task_event_t *event = &task->process->event_queue[i];
       if(event->task_id == task->task_id && event->task_uid == task->task_uid)
          return i;
    }
@@ -961,7 +942,7 @@ int task_find_queued_subroutine(task_state_t *task) {
 void task_remove_queued_subroutine(task_state_t *task, int index) {
    task->process->event_queue_size--;
    // todo: circular queue is faster than memmove
-   memmove(&task->process->event_queue[index], &task->process->event_queue[index+1], (task->process->event_queue_size - index) * sizeof(task_event_t*));
+   memmove(&task->process->event_queue[index], &task->process->event_queue[index+1], (task->process->event_queue_size - index) * sizeof(task_event_t));
 }
 
 bool task_execute_queued_subroutine(void *regs, int taskid) {
@@ -969,119 +950,111 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
 
    task_state_t *task = &tasks[taskid];
    // wait until task_subroutine_end to call this function if in routine
-   if(task->in_routine || task->crashed)
+   if(task->routine != E_NONE || task->crashed)
       return false;
 
    while(true) {
       int e = task_find_queued_subroutine(task);
       if(e < 0) return false; // queue is empty
 
-      task_event_t *event = task->process->event_queue[e];
+      task_event_t *event = &task->process->event_queue[e];
 
       // skip stale msgs to avoid extra wakeups
       // if channel flags are set the notification isn't skipped
-      bool stale = strequ(event->name, "msg") && event->args[0] == 0 && msg_notif_is_stale(task, event->args[2], event->args[1]);
+      bool stale = event->type == E_MSG && event->args[2] == 0 && msg_notif_is_stale(task, event->args[0], event->args[1]);
 
       if(!stale) {
          if(!switch_to_task(taskid, regs)) return false;
-         if(!task_execute_subroutine(regs, event->name, event->addr, event->args, event->argc)) { // takes ownership of args
+         if(!task_execute_subroutine(regs, event->type, event->addr, event->args, event->argc)) {
             crash_task(14, NULL, taskid);
             return false;
          }
-      } else {
-         free((uint32_t)event->args, event->argc * sizeof(uint32_t*));
       }
 
       task_remove_queued_subroutine(task, e);
       msg_retry_notifications(task); // free'd queue entry so check for dropped messages
 
-      free((uint32_t)event, sizeof(task_event_t));
-
       if(!stale) return true;
    }
 }
 
-bool task_queue_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
+bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc) {
    if(!task->enabled) {
       debug_printf("Couldn't queue routine for task %i - task is disabled\n", task->task_id);
-      free((uint32_t)args, sizeof(uint32_t*)*argc);
+      return false;
+   }
+
+   if(argc > TASK_EVENT_MAX_ARGS) {
+      debug_printf("task_queue_subroutine: exceeded event max args\n");
       return false;
    }
 
    task_unsnooze(task);
 
    // coalesce scroll and hover events
-   if(strequ(name, "hover") || strequ(name, "scroll")) {
+   if(type == E_HOVER || type == E_SCROLL) {
       for(int i = 0; i < task->process->event_queue_size; i++) {
-         task_event_t *existing = task->process->event_queue[i];
+         task_event_t *existing = &task->process->event_queue[i];
          if(existing->task_id != task->task_id || existing->task_uid != task->task_uid) continue;
          if(existing->addr != addr) continue;
-         if(!strequ(existing->name, name)) continue;
+         if(existing->type != type) continue;
 
-         if(strequ(name, "scroll") && existing->argc == 3 && argc == 3) {
-            existing->args[2] += args[2]; // delta
+         if(type == E_SCROLL && existing->argc == 3 && argc == 3) {
+            existing->args[0] += args[0]; // delta
             existing->args[1] = args[1];  // offset
-            existing->args[0] = args[0];
-            free((uint32_t)args, sizeof(uint32_t*)*argc);
+            existing->args[2] = args[2];
          } else {
             // replace hover coords
-            if(existing->args)
-               free((uint32_t)existing->args, sizeof(uint32_t*)*existing->argc);
-            existing->args = args;
+            memcpy(existing->args, args, sizeof(uint32_t)*argc);
             existing->argc = argc;
          }
          return true;
       }
-   } else if(strequ(name, "msg")) {
+   } else if(type == E_MSG) {
       // coalesce msg events
       for(int i = 0; i < task->process->event_queue_size; i++) {
-         task_event_t *existing = task->process->event_queue[i];
+         task_event_t *existing = &task->process->event_queue[i];
          if(existing->task_id != task->task_id || existing->task_uid != task->task_uid) continue;
          if(existing->addr != addr) continue;
-         if(!strequ(existing->name, name)) continue;
-         if(existing->args[2] != args[2] || existing->args[1] != args[1]) continue; // only coalesce msgs on same port & channel
-         existing->args[0] |= args[0]; // OR together flags
-         free((uint32_t)args, sizeof(uint32_t*)*argc);
+         if(existing->type != type) continue;
+         if(existing->args[0] != args[0] || existing->args[1] != args[1]) continue; // only coalesce msgs on same port & channel
+         existing->args[2] |= args[2]; // OR together flags
          return true;
       }
    }
 
    if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
-      debug_printf("Task %i hit maximum event queue size with event %s\n", task->task_id, name);
-      free((uint32_t)args, sizeof(uint32_t*)*argc);
+      debug_printf("Task %i hit maximum event queue size with event type %i\n", task->task_id, type);
       return false;
    }
    // add to event queue
-   task_event_t *event = (task_event_t*)malloc(sizeof(task_event_t));
-   strcpy(event->name, name);
+   task_event_t *event = &task->process->event_queue[task->process->event_queue_size++];
+   event->type = type;
    event->addr = addr;
-   event->args = args;
+   memcpy(event->args, args, sizeof(uint32_t)*argc);
    event->argc = argc;
    event->task_id = task->task_id;
    event->task_uid = task->task_uid;
-   task->process->event_queue[task->process->event_queue_size++] = event;
 
    return true;
 }
 
-bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc) {
+bool task_call_subroutine(registers_t *regs, task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc) {
 
    // call subroutine immediately, switching to task
    
    if(!task->enabled) {
       debug_printf("Task %i is ended, exiting subroutine", task->task_id);
-      free((uint32_t)args, sizeof(uint32_t*)*argc);
       return false;
    }
    
    task_unsnooze(task);
 
-   if(task->paused || task->in_routine || task->kernel_esp) {
-      return task_queue_subroutine(task, name, addr, args, argc);
+   if(task->paused || task->routine != E_NONE || task->kernel_esp) {
+      return task_queue_subroutine(task, type, addr, args, argc);
    }
 
    if(!switch_to_task(task->task_id, regs)) {
-      free((uint32_t)args, sizeof(uint32_t*)*argc);
       return false;
    }
 
@@ -1089,14 +1062,13 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
    // otherwise just wait for queued event
    if(task_find_queued_subroutine(task) >= 0) {
       debug_printf("Not in routine but queue has content\n");
-      bool queued = task_queue_subroutine(task, name, addr, args, argc);
+      bool queued = task_queue_subroutine(task, type, addr, args, argc);
       if(!task_execute_queued_subroutine(regs, current_task) && task->crashed)
          switch_task(regs, false);
       return queued;
    }
 
-   if(!task_execute_subroutine(regs, name, addr, args, argc)) {
-      free((uint32_t)args, sizeof(uint32_t*)*argc);
+   if(!task_execute_subroutine(regs, type, addr, args, argc)) {
       crash_task(14, regs, task->task_id);
       return false;
    }
@@ -1107,19 +1079,16 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, char *name, uin
 void task_subroutine_end(registers_t *regs) {
    // restore registers
    //debug_writestr("Ending subrouting\n");
-   if(!tasks[current_task].in_routine)
+   if(tasks[current_task].routine == E_NONE)
       return;
 
    *regs = tasks[current_task].routine_return_regs;
 
-   if(strequ(tasks[current_task].routine_name, "checkcmd"))
-      cleanup_checkcmd_args(tasks[current_task].process, tasks[current_task].routine_args);
+   if(tasks[current_task].routine == E_CHECKCMD)
+      cleanup_checkcmd_args(tasks[current_task].process, tasks[current_task].checkcmd_buffer);
+   tasks[current_task].checkcmd_buffer = NULL;
 
-   free((uint32_t)tasks[current_task].routine_args, tasks[current_task].routine_argc*sizeof(uint32_t*));
-   tasks[current_task].routine_args = NULL;
-   tasks[current_task].routine_argc = 0;
-
-   tasks[current_task].in_routine = false;
+   tasks[current_task].routine = E_NONE;
 
    // check for any other queued events and run if there are
    task_execute_queued_subroutine(regs, current_task);

@@ -72,7 +72,7 @@ static inline registers_t *api_write_regs(registers_t *regs, task_state_t *task)
 
 // write to correct registers after potential task switch or entering routine
 static inline registers_t *api_return_regs(registers_t *regs, task_state_t *task, bool was_in_routine) {
-   if(!was_in_routine && task->in_routine && get_current_task_state() == task)
+   if(!was_in_routine && task->routine != E_NONE && get_current_task_state() == task)
       return &task->routine_return_regs;
    return api_write_regs(regs, task);
 }
@@ -924,7 +924,7 @@ void api_set_scrollable_height(registers_t *regs) {
    gui_window_t *window = api_get_cwindow(regs->ecx);
    if(!window) return;
    task_state_t *task = get_current_task_state();
-   bool was_in_routine = task->in_routine;
+   bool was_in_routine = task->routine != E_NONE;
    window_set_scrollable_height(regs, window, regs->ebx); // fires resize callback
    api_return_regs(regs, task, was_in_routine)->ebx = window->width - (window->scrollbar && window->scrollbar->visible ? 14 : 0);
 }
@@ -1832,7 +1832,7 @@ void api_snooze(registers_t *regs) {
    // pause + yield, wait for something to wake
    // can be a api_unpause, any callback, or a msg with no msg_func (ie allow polling for msgs)
    task_state_t *task = get_current_task_state();
-   if(task->in_routine) {
+   if(task->routine != E_NONE) {
       regs->ebx = 0;
       return;
    }

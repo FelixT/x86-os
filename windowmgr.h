@@ -59,7 +59,7 @@ void wm_redrawall();
 void wm_event(wm_event_type_t type, int x, int y, uint16_t c);
 void wm_event_thread_exit_resume(registers_t *regs);
 void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bool minimised);
-void wm_call_subroutine(task_state_t *task, char *name, uint32_t addr, uint32_t *args, int argc);
+bool wm_call_subroutine(task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc);
 void wm_event_defer_yield(int task);
 
 void menubar_init();
