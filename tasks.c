@@ -41,7 +41,6 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->no_threads = 0;
    for(int i = 0; i < MAX_TASK_THREADS; i++)
       process->threads[i] = NULL;
-   process->event_queue_size = 0;
    process->heap_start = 0;
    process->heap_end = 0;
    process->launch_argc = 0;
@@ -50,26 +49,34 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    return process;
 }
 
-// returns thread no
-int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process) {
+static bool create_task_stacks(task_state_t *task) {
    // lazy allocated stacks
-   if(!tasks[index].stack_base) {
+   if(!task->stack_base) {
       void *stack = malloc(TASK_STACK_SIZE - 0x1000); // don't need to allocate physical memory for page guard
       if(!stack) {
-         debug_printf("couldn't allocate stack for task %i\n", index);
-         return -1;
+         debug_printf("couldn't allocate stack for task %i\n", task->task_id);
+         return false;
       }
-      tasks[index].stack_base = (uint32_t)stack;
+      task->stack_base = (uint32_t)stack;
    }
-   if(!tasks[index].kernel_stack_top) {
+   if(!task->kernel_stack_top) {
       void *kernel_stack = malloc(KSTACK_SIZE); // do need to allocate physical memory for page guard (currently)
       if(!kernel_stack) {
-         debug_printf("couldn't allocate kernel stack for task %i\n", index);
-         return -1;
+         debug_printf("couldn't allocate kernel stack for task %i\n", task->task_id);
+         return false;
       }
-      tasks[index].kernel_stack_top = (uint32_t)kernel_stack + KSTACK_SIZE;
+      task->kernel_stack_top = (uint32_t)kernel_stack + KSTACK_SIZE;
    }
+   return true;
+}
+
+// returns thread no
+int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process) {
+   if(!create_task_stacks(&tasks[index]))
+      return -1;
    memset((void*)tasks[index].stack_base, 0, TASK_STACK_SIZE - 0x1000); // clear stack
+
+   kqueue_init(&tasks[index].event_queue, &tasks[index].event_buf, EVENT_QUEUE_SIZE, sizeof(task_event_t));
 
    int thread_no = -1;
    if(process == NULL) {
@@ -301,25 +308,13 @@ static void cleanup_checkcmd_args(process_t *process, char *buffer) {
    free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
 }
 
-static void free_task_events(task_state_t *task) {
-   // remove events for ended thread of still running process
-   int e;
-   while((e = task_find_queued_subroutine(task)) >= 0) {
-      task_event_t *event = &task->process->event_queue[e];
+static void free_event_queue(task_state_t *task) {
+   task_event_t *event;
+   while((event = kqueue_peek(&task->event_queue))) {
       if(event->type == E_CHECKCMD)
          cleanup_checkcmd_args(task->process, (char*)event->args[0]);
-      task_remove_queued_subroutine(task, e);
-      msg_retry_notifications(task);
+      kqueue_drop(&task->event_queue);
    }
-}
-
-static void free_process_events(process_t *process) {
-   for(int i = 0; i < process->event_queue_size; i++) {
-      task_event_t *event = &process->event_queue[i];
-      if(event->type == E_CHECKCMD)
-         cleanup_checkcmd_args(process, (char*)event->args[0]);
-   }
-   process->event_queue_size = 0;
 }
 
 static bool end_task_helper(int index, registers_t *regs, bool child) {
@@ -372,6 +367,9 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
    // release held mutexes, remove task from any waiter queues
    ksync_cleanup_task(task);
 
+   // free task event queue
+   free_event_queue(task);
+
    if(task->process->threads[0] == task) {
       // main thread, terminate entire process
       debug_printf("Ending task process\n");
@@ -395,9 +393,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
          // free task memory
          if(task->process->prog_size != 0)
             free(task->process->prog_start, task->process->prog_size);
-
-         // free process events
-         free_process_events(task->process);
 
          // free fds
          for(int i = 0; i < task->process->fd_count; i++) {
@@ -444,8 +439,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
       }
       task->process = NULL;
    } else {
-      free_task_events(task);
-
       task_unmap_stack(task);
 
       // reclaim slot from process threads
@@ -475,6 +468,7 @@ void tasks_alloc() {
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
       tasks[i].reserved = false;
+      tasks[i].process = NULL;
       tasks[i].kernel_stack_top = 0; // stacks are lazy allocated when index is first claimed in create_task_entry and persist end_task
       tasks[i].stack_base = 0;
    }
@@ -928,23 +922,6 @@ void task_wake(task_state_t *task) {
       task->wake_pending = true;
 }
 
-// index of the first queued event belonging to this thread, -1 if none
-// queue is shared by every thread of process
-int task_find_queued_subroutine(task_state_t *task) {
-   for(int i = 0; i < task->process->event_queue_size; i++) {
-      task_event_t *event = &task->process->event_queue[i];
-      if(event->task_id == task->task_id && event->task_uid == task->task_uid)
-         return i;
-   }
-   return -1;
-}
-
-void task_remove_queued_subroutine(task_state_t *task, int index) {
-   task->process->event_queue_size--;
-   // todo: circular queue is faster than memmove
-   memmove(&task->process->event_queue[index], &task->process->event_queue[index+1], (task->process->event_queue_size - index) * sizeof(task_event_t));
-}
-
 bool task_execute_queued_subroutine(void *regs, int taskid) {
    // check events queue
 
@@ -954,10 +931,9 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
       return false;
 
    while(true) {
-      int e = task_find_queued_subroutine(task);
-      if(e < 0) return false; // queue is empty
-
-      task_event_t *event = &task->process->event_queue[e];
+      task_event_t *event = kqueue_peek(&task->event_queue);
+      if(!event)
+         return false; // queue is empty
 
       // skip stale msgs to avoid extra wakeups
       // if channel flags are set the notification isn't skipped
@@ -971,8 +947,8 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
          }
       }
 
-      task_remove_queued_subroutine(task, e);
-      msg_retry_notifications(task); // free'd queue entry so check for dropped messages
+      kqueue_drop(&task->event_queue);
+      msg_retry_task_notifications(task); // free'd queue entry so check for dropped messages
 
       if(!stale) return true;
    }
@@ -993,9 +969,8 @@ bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t 
 
    // coalesce scroll and hover events
    if(type == E_HOVER || type == E_SCROLL) {
-      for(int i = 0; i < task->process->event_queue_size; i++) {
-         task_event_t *existing = &task->process->event_queue[i];
-         if(existing->task_id != task->task_id || existing->task_uid != task->task_uid) continue;
+      for(int i = 0; i < kqueue_count(&task->event_queue); i++) {
+         task_event_t *existing = kqueue_at(&task->event_queue, i);
          if(existing->addr != addr) continue;
          if(existing->type != type) continue;
 
@@ -1012,9 +987,8 @@ bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t 
       }
    } else if(type == E_MSG) {
       // coalesce msg events
-      for(int i = 0; i < task->process->event_queue_size; i++) {
-         task_event_t *existing = &task->process->event_queue[i];
-         if(existing->task_id != task->task_id || existing->task_uid != task->task_uid) continue;
+      for(int i = 0; i < kqueue_count(&task->event_queue); i++) {
+         task_event_t *existing = kqueue_at(&task->event_queue, i);
          if(existing->addr != addr) continue;
          if(existing->type != type) continue;
          if(existing->args[0] != args[0] || existing->args[1] != args[1]) continue; // only coalesce msgs on same port & channel
@@ -1023,18 +997,17 @@ bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t 
       }
    }
 
-   if(task->process->event_queue_size == EVENT_QUEUE_SIZE) {
+   
+   // add to event queue
+   task_event_t *event = kqueue_reserve(&task->event_queue);
+   if(!event) {
       debug_printf("Task %i hit maximum event queue size with event type %i\n", task->task_id, type);
       return false;
    }
-   // add to event queue
-   task_event_t *event = &task->process->event_queue[task->process->event_queue_size++];
    event->type = type;
    event->addr = addr;
    memcpy(event->args, args, sizeof(uint32_t)*argc);
    event->argc = argc;
-   event->task_id = task->task_id;
-   event->task_uid = task->task_uid;
 
    return true;
 }
@@ -1060,7 +1033,8 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, task_event_type
 
    // if the thread has no queued events, launch into routine immediately
    // otherwise just wait for queued event
-   if(task_find_queued_subroutine(task) >= 0) {
+   task_event_t *event = kqueue_peek(&task->event_queue);
+   if(event) {
       debug_printf("Not in routine but queue has content\n");
       bool queued = task_queue_subroutine(task, type, addr, args, argc);
       if(!task_execute_queued_subroutine(regs, current_task) && task->crashed)
@@ -1094,7 +1068,7 @@ void task_subroutine_end(registers_t *regs) {
    task_execute_queued_subroutine(regs, current_task);
 
    // queue notifications that were dropped while event queue was full
-   msg_retry_notifications(&tasks[current_task]);
+   msg_retry_task_notifications(&tasks[current_task]);
 
    if(tasks[current_task].paused) {
       switch_task(regs, false); // yield

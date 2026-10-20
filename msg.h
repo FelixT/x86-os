@@ -89,7 +89,7 @@ int port_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid, ui
 bool msg_wait_on_receive(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
 bool close_port(registers_t *regs, task_state_t *task, uint32_t port_uid);
 bool port_disconnect(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid);
-void msg_retry_notifications(task_state_t *task);
+void msg_retry_task_notifications(task_state_t *task);
 void msg_cleanup_process(process_t *process);
 void msg_cleanup_task(task_state_t *task);
 bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_uid);

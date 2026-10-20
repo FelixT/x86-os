@@ -1065,7 +1065,7 @@ bool close_port(registers_t *regs, task_state_t *task, uint32_t port_uid) {
    return true;
 }
 
-static void msg_retry_task_notifications(task_state_t *task) {
+void msg_retry_task_notifications(task_state_t *task) {
    if(!task->msg_notify_pending) return;
    task->msg_notify_pending = false;
 
@@ -1118,15 +1118,6 @@ bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_
       return false;
 
    return true; // no msgs, no flags
-}
-
-void msg_retry_notifications(task_state_t *task) {
-   process_t *process = task->process;
-   for(int i = 0; i < MAX_TASK_THREADS; i++) {
-      task_state_t *thread = process->threads[i];
-      if(!thread || !thread->enabled || thread->process != process) continue;
-      msg_retry_task_notifications(thread);
-   }
 }
 
 void msg_cleanup_process(process_t *process) {

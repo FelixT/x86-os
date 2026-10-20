@@ -454,6 +454,7 @@ void term_cmd_taski(char *arg) {
    window_term_printf("Stack base 0x%h\n", task->stack_base);
    process_t *process = task->process;
    if(process) {
+      window_term_printf("Event queue size %i\n", kqueue_count(&task->event_queue));
       window_term_printf("Process uid %u threads %i privileged %i\n", process->uid, process->no_threads, process->privileged);
       window_term_printf("Working dir %s\n", process->working_dir);
       window_term_printf("Prog mem 0x%h - 0x%h\n", process->vmem_start, process->vmem_end);
@@ -461,7 +462,6 @@ void term_cmd_taski(char *arg) {
       window_term_printf("MMIO 0x%h - 0x%h\n", V_MMIO_START, process->mmio_end);
       window_term_printf("Exe path %s\n", process->exe_path);
       window_term_printf("Window %i\n", process->window);
-      window_term_printf("Event queue size %i\n", process->event_queue_size);
       window_term_printf("KObjs %i fds %i\n", process->kobj_count, process->fd_count);
    }
 }

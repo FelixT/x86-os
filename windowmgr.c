@@ -8,6 +8,7 @@
 #include "bmp.h"
 #include "windowobj.h"
 #include "events.h"
+#include "kqueue.h"
 
 #include "window_term.h"
 #include "window_settings.h"
@@ -84,10 +85,11 @@ typedef struct wm_launch_event_t {
 
 #define WM_LAUNCH_QUEUE_SIZE 4
 
+static wm_launch_event_t wm_launch_queue_buf[WM_LAUNCH_QUEUE_SIZE];
+static kqueue_t wm_launch_queue = { .buffer = &wm_launch_queue_buf, .elem_size = sizeof(wm_launch_event_t), .capacity = WM_LAUNCH_QUEUE_SIZE, .head = 0, .tail = 0 };
+
 typedef struct wm_launch_thread_t {
    task_state_t *task; // kthread
-   wm_launch_event_t queue[WM_LAUNCH_QUEUE_SIZE];
-   int queue_head, queue_tail, queue_size;
 } wm_launch_thread_t;
 
 // event thread
@@ -100,17 +102,18 @@ typedef struct wm_event_t {
    uint16_t c;
 } wm_event_t;
 
+static wm_event_t wm_event_queue_buf[WM_EVENT_QUEUE_SIZE];
+static kqueue_t wm_event_queue = { .buffer = &wm_event_queue_buf, .elem_size = sizeof(wm_event_t), .capacity = WM_EVENT_QUEUE_SIZE, .head = 0, .tail = 0 };
+
 typedef struct wm_event_thread_t {
    task_state_t *task; // kthread
-   wm_event_t queue[WM_EVENT_QUEUE_SIZE];
-   int queue_head, queue_tail, queue_size;
    int paused_task;
    int yielding_to; // queued until end of event
 } wm_event_thread_t;
 
 static wm_thread_t wm_thread = {.task=NULL, .draw_pending = false, .redrawall_pending = false, .paused_task = -1};
-static wm_launch_thread_t wm_launch_thread = {.task=NULL, .queue_head = 0, .queue_tail = 0, .queue_size = 0};
-static wm_event_thread_t wm_event_thread = {.task=NULL, .queue_head = 0, .queue_tail = 0, .queue_size = 0, .paused_task = -1, .yielding_to = -1};
+static wm_launch_thread_t wm_launch_thread = {.task=NULL};
+static wm_event_thread_t wm_event_thread = {.task=NULL, .paused_task = -1, .yielding_to = -1};
 
 void windowmgr_draw();
 
@@ -160,57 +163,46 @@ void wm_launch_thread_main() {
    wm_launch_thread.task = get_current_task_state();
 
    while(true) {
-      if(!wm_launch_thread.queue_size) {
+      wm_launch_event_t launch;
+      if(!kqueue_pop(&wm_launch_queue, &launch)) { // queue is empty
          task_pause(get_current_task_state(), PAUSE_KTHREAD);
          kernel_yield();
          continue;
       }
-      wm_launch_event_t *launch = &wm_launch_thread.queue[wm_launch_thread.queue_head];
-      if(!launch->elf) {
+      if(!launch.elf) {
          // binary
-         tasks_launch_binary(NULL, launch->path);
+         tasks_launch_binary(NULL, launch.path);
       } else {
          // elf
-         int new_task = tasks_setup_elf(launch->path, launch->argc, launch->args, launch->focus, false, launch->minimised);
+         int new_task = tasks_setup_elf(launch.path, launch.argc, launch.args, launch.focus, false, launch.minimised);
          if(new_task < 0) {
-            debug_printf("wm_launch %s failed\n", launch->path);
-            free_launch_args(launch->args, launch->argc);
+            debug_printf("wm_launch %s failed\n", launch.path);
+            free_launch_args(launch.args, launch.argc);
          } else {
             gettasks()[new_task].enabled = true;
             // map args
-            if(launch->args) {
+            if(launch.args) {
                page_dir_entry_t *dir = gettasks()[new_task].process->page_dir;
-               map_size(dir, (uint32_t)launch->args, (uint32_t)launch->args, sizeof(char*)*(launch->argc+1), 1, 1, 0);
-               for(int i = 0; i < launch->argc; i++)
-                  map_size(dir, (uint32_t)launch->args[i], (uint32_t)launch->args[i], strlen(launch->args[i])+1, 1, 1, 0);
+               map_size(dir, (uint32_t)launch.args, (uint32_t)launch.args, sizeof(char*)*(launch.argc+1), 1, 1, 0);
+               for(int i = 0; i < launch.argc; i++)
+                  map_size(dir, (uint32_t)launch.args[i], (uint32_t)launch.args[i], strlen(launch.args[i])+1, 1, 1, 0);
             }
          }
       }
-      // remove from queue
-      wm_launch_thread.queue_size--;
-      wm_launch_thread.queue_head++;
-      wm_launch_thread.queue_head%=WM_LAUNCH_QUEUE_SIZE;
 
       kernel_yield_if_blocking();
    }
 }
 
 void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bool minimised) {
-   if(wm_launch_thread.queue_size == WM_LAUNCH_QUEUE_SIZE) {
+   if(kqueue_full(&wm_launch_queue)) {
       debug_printf("WM: launch %s failed, queue is full\n", path);
       free_launch_args(args, argc);
       return;
    }
-   wm_launch_event_t *launch = &wm_launch_thread.queue[wm_launch_thread.queue_tail];
-   strcpy(launch->path, path);
-   launch->focus = focus;
-   launch->minimised = minimised;
-   launch->elf = elf;
-   launch->args = args;
-   launch->argc = argc;
-   wm_launch_thread.queue_tail++;
-   wm_launch_thread.queue_tail%=WM_LAUNCH_QUEUE_SIZE;
-   wm_launch_thread.queue_size++;
+   wm_launch_event_t launch = {.elf = elf, .args = args, .argc = argc, .focus = focus, .minimised = minimised};
+   strcpy(launch.path, path);
+   kqueue_push(&wm_launch_queue, &launch);
    if(wm_launch_thread.task)
       task_resume(wm_launch_thread.task);
 }
@@ -241,7 +233,8 @@ void wm_event_thread_main() {
    wm_event_thread.task = get_current_task_state();
 
    while(true) {
-      if(!wm_event_thread.queue_size) {
+      wm_event_t event;
+      if(!kqueue_pop(&wm_event_queue, &event)) { // queue is empty
          int paused = wm_event_thread.paused_task;
          wm_event_thread.paused_task = -1;
          if(paused >= 0 && kernel_yield_to(paused))
@@ -251,11 +244,6 @@ void wm_event_thread_main() {
          kernel_yield();
          continue;
       }
-      wm_event_t event = wm_event_thread.queue[wm_event_thread.queue_head];
-      // remove from queue
-      wm_event_thread.queue_size--;
-      wm_event_thread.queue_head++;
-      wm_event_thread.queue_head%=WM_EVENT_QUEUE_SIZE;
 
       wm_event_thread.yielding_to = -1;
       switch(event.type) {
@@ -320,15 +308,14 @@ void wm_event_thread_wake() {
 // wm_events are queued from irqs so can't yield
 // instead, immediately invoke the wm_event thread at the end of the handler
 void wm_event_thread_exit_resume(registers_t *regs) {
-   if(!wm_event_thread.task || wm_event_thread.queue_size == 0) return;
+   if(!wm_event_thread.task || kqueue_empty(&wm_event_queue)) return;
    kernel_exit_resume(regs, wm_event_thread.task->task_id);
 }
 
 void wm_event(wm_event_type_t type, int x, int y, uint16_t c) {
-   if((type == MOUSE_HOVER || type == MOUSE_DRAG || type == MOUSE_SCROLL) && wm_event_thread.queue_size) {
+   if((type == MOUSE_HOVER || type == MOUSE_DRAG || type == MOUSE_SCROLL) && !kqueue_empty(&wm_event_queue)) {
       // coalesce into most recent event
-      int idx = (wm_event_thread.queue_tail+WM_EVENT_QUEUE_SIZE-1)%WM_EVENT_QUEUE_SIZE;
-      wm_event_t *e = &wm_event_thread.queue[idx];
+      wm_event_t *e = kqueue_last(&wm_event_queue);
       bool merged = true;
       if(e->type == type) {
          if(type == MOUSE_HOVER) {
@@ -351,18 +338,12 @@ void wm_event(wm_event_type_t type, int x, int y, uint16_t c) {
          }
       }
    }
-   if(wm_event_thread.queue_size == WM_EVENT_QUEUE_SIZE) {
+   if(kqueue_full(&wm_event_queue)) {
       debug_printf("WM: event failed, queue is full\n"); // todo: crashes shouldn't be dropped
       return;
    }
-   wm_event_t *event = &wm_event_thread.queue[wm_event_thread.queue_tail];
-   event->type = type;
-   event->x = x;
-   event->y = y;
-   event->c = c;
-   wm_event_thread.queue_tail++;
-   wm_event_thread.queue_tail%=WM_EVENT_QUEUE_SIZE;
-   wm_event_thread.queue_size++;
+   wm_event_t event = {.type = type, .x = x, .y = y, .c = c};
+   kqueue_push(&wm_event_queue, &event);
    wm_event_thread_wake();
 }
 

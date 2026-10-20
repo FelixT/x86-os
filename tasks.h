@@ -16,6 +16,7 @@
 #include "fs.h"
 #include "pci.h"
 #include "kobj.h"
+#include "kqueue.h"
 
 #define TASK_STACK_SIZE 0x0004000
 
@@ -54,8 +55,6 @@ typedef struct task_event_t {
    uint32_t addr; // subroutine addr
    uint32_t args[TASK_EVENT_MAX_ARGS];
    int argc;
-   int task_id; // events belong to specific task (/thread)
-   uint32_t task_uid;
 } task_event_t;
 
 #define EVENT_QUEUE_SIZE 64
@@ -104,8 +103,6 @@ typedef struct process_t {
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[PROCESS_MAX_FDS];
    int fd_count;
-   task_event_t event_queue[EVENT_QUEUE_SIZE];
-   int event_queue_size;
    uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
    struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
    int port_count;
@@ -136,6 +133,9 @@ typedef struct task_state_t {
    task_event_type_t routine;
    bool in_syscall;
    uint16_t syscall_no;
+
+   kqueue_t event_queue;
+   task_event_t event_buf[EVENT_QUEUE_SIZE];
 
    void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags);
    struct msg_channel_t *msg_channels[TASK_MAX_CHANNELS];
@@ -188,8 +188,6 @@ void task_unreserve(int task);
 
 bool task_call_subroutine(registers_t *regs, task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc);
 bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc);
-int task_find_queued_subroutine(task_state_t *task);
-void task_remove_queued_subroutine(task_state_t *task, int index);
 void task_subroutine_end(registers_t *regs);
 bool task_execute_queued_subroutine(void *regs, int taskid); // returns whether a routine was launched
 void task_wake(task_state_t *task); // latched wake - only resumes a snoozing thread
