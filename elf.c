@@ -79,7 +79,6 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       return -1;
    }
    memset(newProg, 0, vmem_size);
-   debug_printf("elf_load: map 0x%h-0x%h to 0x%h-0x%h\n", (uint32_t)newProg, (uint32_t)newProg + vmem_size, vmem_start, vmem_end);
 
    bool mapped = true;
    for(uint32_t i = 0; i < vmem_size; i+=0x1000)

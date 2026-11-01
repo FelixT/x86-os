@@ -31,8 +31,7 @@ void setpixelb(surface_t *surface, int index, int colour, int *buffer, int count
    ((uint16_t*)surface->buffer)[index] = colour;
 }
 
-// clip to surface + clipping
-// false if nothing to draw
+// clip to surface + clipping, false if nothing to draw
 bool clip_rect(surface_t *surface, int *x, int *y, int *w, int *h) {
    int x0 = *x, y0 = *y;
    int x1 = *x + *w, y1 = *y + *h;

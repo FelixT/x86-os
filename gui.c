@@ -180,7 +180,7 @@ void gui_redrawall() { // may yield
 }
 
 void gui_keypress(char scan_code) {
-   wm_event(KEY_PRESS, 0, 0, (uint16_t)scan_code);
+   wm_event(KEY_PRESS, 0, 0, 0, 0, (uint16_t)scan_code);
 }
 
 void gui_draw_window(int windowIndex) {
@@ -336,22 +336,26 @@ void mouse_update(int *relX, int *relY) {
    gui_cursor_save_bg();
    gui_cursor_draw();
 
-   wm_event(MOUSE_HOVER, gui_mouse_x, gui_mouse_y, 0);
+   // while held, hover is handled by the drag event
+   if(!mouse_held)
+      wm_event(MOUSE_HOVER, gui_mouse_x, gui_mouse_y, 0, 0, 0);
 }
 
 void mouse_leftclick(int relX, int relY) {
    // dragging windows
    if(mouse_held) {
-      wm_event(MOUSE_DRAG, relX, relY, 0);
+      wm_event(MOUSE_DRAG, gui_mouse_x, gui_mouse_y, relX, relY, 0);
    } else {
       mouse_held = true;
-      wm_event(MOUSE_CLICK, gui_mouse_x, gui_mouse_y, 0);
+      wm_event(MOUSE_CLICK, gui_mouse_x, gui_mouse_y, 0, 0, 0);
    }
 }
 
 void mouse_release() {
-   if(mouse_held)
-      wm_event(MOUSE_RELEASE, gui_mouse_x, gui_mouse_y, 0);
+   if(mouse_held) {
+      wm_event(MOUSE_RELEASE, gui_mouse_x, gui_mouse_y, 0, 0, 0);
+      wm_event(MOUSE_HOVER, gui_mouse_x, gui_mouse_y, 0, 0, 0);
+   }
 
    mouse_held = false;
    mouse_heldright = false;
@@ -361,7 +365,7 @@ void mouse_rightclick() {
    if(mouse_heldright) {
       // nothing
    } else {
-      wm_event(MOUSE_RIGHTCLICK, gui_mouse_x, gui_mouse_y, 0);
+      wm_event(MOUSE_RIGHTCLICK, gui_mouse_x, gui_mouse_y, 0, 0, 0);
       mouse_heldright = true;
    }
 }

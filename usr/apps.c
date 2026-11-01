@@ -22,6 +22,7 @@ wo_t *grid;
 wo_t *current_apps_canvas;
 surface_t surface;
 int scrollOffsetY = 0;
+uint32_t last_event_count = (uint32_t)-1;
 
 void app_launch(wo_t *label) {
    label_t *label_data = label->data;  
@@ -198,12 +199,22 @@ void reposition() {
 }
 
 void refresh() {
+   static int c = 0;
+   c++;
+
+   uint32_t count = get_task_event_count();
+   if(count == last_event_count && (c%8)!=0) {
+      queue_event(&refresh, 100, NULL);
+      end_subroutine();
+      return;
+   }
+   last_event_count = count;
    refresh_open();
    reposition();
    clear();
    ui_redraw(ui);
 
-   queue_event(&refresh, 1000, NULL);
+   queue_event(&refresh, 100, NULL);
    end_subroutine();
 }
 
@@ -319,7 +330,7 @@ void _start() {
    redraw();
    set_window_minimised(false, -1);
 
-   queue_event(&refresh, 1000, NULL);
+   queue_event(&refresh, 100, NULL);
    
    while(true) {
       snooze();

@@ -56,7 +56,7 @@ typedef enum {
 
 void wm_draw();
 void wm_redrawall();
-void wm_event(wm_event_type_t type, int x, int y, uint16_t c);
+void wm_event(wm_event_type_t type, int x, int y, int relX, int relY, uint16_t c);
 void wm_event_thread_exit_resume(registers_t *regs);
 void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bool minimised);
 bool wm_call_subroutine(task_state_t *task, task_event_type_t type, uint32_t addr, uint32_t *args, int argc);
@@ -73,6 +73,7 @@ void window_draw_outline(gui_window_t *window, bool occlude);
 void windowmgr_redrawall();
 void windowmgr_redraw_rect(rect_t clip);
 void windowmgr_draw();
+void windowmgr_focus_swap(gui_window_t *window);
 
 int windowmgr_add();
 bool window_init(gui_window_t *window);
@@ -92,12 +93,12 @@ void toolbar_draw();
 void menubar_draw();
 bool windowmgr_click(int x, int y);
 void windowmgr_rightclick(int x, int y);
-void windowmgr_dragged(int relX, int relY);
+void windowmgr_dragged(int x, int y, int relX, int relY);
 void desktop_draw();
 void desktop_click(int x, int y);
 void desktop_init();
 void desktop_setbgimg(uint8_t *img, int size);
-void windowmgr_mousemove(int x, int y);
+void windowmgr_mousemove(int x, int y, bool mouse_held);
 void windowmgr_scroll(int y, int w);
 void window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback);
 void window_close(int windowIndex, bool end);

@@ -15,6 +15,7 @@ bool switching = false; // preemptive multitasking
 
 uint32_t process_uid_counter = 0;
 uint32_t task_uid_counter = 0;
+uint32_t task_event_counter = 0; // incremented on start/end
 
 process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process_t *process = malloc(sizeof(process_t));
@@ -173,14 +174,17 @@ bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
    task->registers.eflags = 0x202; // interrupts enabled
    task->registers.ss = USR_DATA_SEG | 3;
 
-   int tmpwindow = getSelectedWindowIndex();
-   task->process->window = windowmgr_add();
-   if(task->process->window < 0)
+   int window = windowmgr_add();
+   if(window < 0)
       return false;
-   if(focus)
-      window_draw_outline(getSelectedWindow(), false);
-   else
-      setSelectedWindowIndex(tmpwindow);
+   
+   task->process->window = window;
+
+   if(focus) {
+      windowmgr_focus_swap(NULL);
+      setSelectedWindowIndex(window);
+      window_draw_outline(getWindow(window), false);
+   }
 
    if(minimised)
       gui_get_windows()[task->process->window].minimised = true;
@@ -191,6 +195,8 @@ bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
       task->process->file_descriptors[2] = fs_open("/dev/stderr", FS_FLAG_WRITEONLY);
       task->process->fd_count = 3;
    }
+
+   task_event_counter++;
    return true;
 }
 
@@ -344,8 +350,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
       return false;
    }
 
-   debug_printf("Ending task %i - Current task is %i\n", index, get_current_task());
-
    if(task->process->window >= 0)
       task_write_to_window(index, "<Task ended>\n", true);
 
@@ -372,7 +376,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
    if(task->process->threads[0] == task) {
       // main thread, terminate entire process
-      debug_printf("Ending task process\n");
 
       // kill other threads
       int remaining_threads = 0;
@@ -455,6 +458,8 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
    if(regs && !get_current_task_state()->enabled)
       switch_task(regs, false);
+
+   task_event_counter++;
 
    return true;
 }
@@ -968,18 +973,17 @@ bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t 
    task_unsnooze(task);
 
    // coalesce scroll and hover events
-   if(type == E_HOVER || type == E_SCROLL) {
-      for(int i = 0; i < kqueue_count(&task->event_queue); i++) {
-         task_event_t *existing = kqueue_at(&task->event_queue, i);
-         if(existing->addr != addr) continue;
-         if(existing->type != type) continue;
-
+   if(type == E_HOVER || type == E_SCROLL || type == E_DRAGGED) {
+      // check last event
+      task_event_t *existing = kqueue_last(&task->event_queue);
+      if(existing && existing->addr == addr && existing->type == type
+      && existing->args[argc-1] == args[argc-1]) { // only batch for same window
          if(type == E_SCROLL && existing->argc == 3 && argc == 3) {
             existing->args[0] += args[0]; // delta
             existing->args[1] = args[1];  // offset
             existing->args[2] = args[2];
          } else {
-            // replace hover coords
+            // replace hover/drag coords
             memcpy(existing->args, args, sizeof(uint32_t)*argc);
             existing->argc = argc;
          }
@@ -1052,7 +1056,6 @@ bool task_call_subroutine(registers_t *regs, task_state_t *task, task_event_type
 
 void task_subroutine_end(registers_t *regs) {
    // restore registers
-   //debug_writestr("Ending subrouting\n");
    if(tasks[current_task].routine == E_NONE)
       return;
 
@@ -1452,4 +1455,8 @@ kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_proc
       return -1;
    }
    return h;
+}
+
+uint32_t get_task_event_counter() {
+   return task_event_counter;
 }

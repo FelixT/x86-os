@@ -51,7 +51,7 @@ void window_drag(gui_window_t *window, int x, int y, int relX, int relY) {
    } else {
       // calling function as task
       task_state_t *task = &gettasks()[taskIndex];
-      uint32_t args[3] = { x, y, get_cindex(task) };
+      uint32_t args[3] = { x, y, get_cindex_from_window(task, window) };
       wm_call_subroutine(task, E_DRAGGED, (uint32_t)(window->drag_func), args, 3);
    }
 }
@@ -171,7 +171,7 @@ void window_mousemove(gui_window_t *window, int x, int y) {
       int task = get_task_from_window(get_window_index_from_pointer(window));
       if(task < 0) return;
       task_state_t *task_state = &gettasks()[task];
-      uint32_t args[3] = { x, y, get_cindex(task_state) };
+      uint32_t args[3] = { x, y, get_cindex_from_window(task_state, window) };
       wm_call_subroutine(task_state, E_HOVER, (uint32_t)(window->hover_func), args, 3);
    }
 }
@@ -182,7 +182,7 @@ void window_mouseout(gui_window_t *window) {
       int task = get_task_from_window(get_window_index_from_pointer(window));
       if(task < 0) return;
       task_state_t *task_state = &gettasks()[task];
-      uint32_t args[1] = { get_cindex(task_state) };
+      uint32_t args[1] = { get_cindex_from_window(task_state, window) };
       wm_call_subroutine(task_state, E_MOUSEOUT, (uint32_t)(window->mouseout_func), args, 1);
    }
    // set all window objs as not hovered
@@ -219,7 +219,7 @@ void window_release(gui_window_t *window, int x, int y) {
    int task = get_task_from_window(index);
    if(task > -1 && window->release_func) {
       task_state_t *task_state = &gettasks()[task];
-      uint32_t args[3] = { x, y, get_cindex(task_state) };
+      uint32_t args[3] = { x, y, get_cindex_from_window(task_state, window) };
       wm_call_subroutine(task_state, E_RELEASE, (uint32_t)(window->release_func), args, 3);
    }
 

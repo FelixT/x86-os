@@ -4,6 +4,7 @@
 #include "prog.h"
 #include "lib/stdio.h"
 #include "../lib/string.h"
+#include "../lib/maths.h"
 
 int task_count;
 api_task_t *tasks;
@@ -79,8 +80,6 @@ void show_tasks() {
          strcat(buffer, " <paused>");
       add_menu_item(menu_wo, buffer, &task_click);
    }
-   clear();
-   ui_redraw(dialog->ui);
 }
 
 void launch_task_return(char *out, int window) {
@@ -101,14 +100,20 @@ void end_task_callback(wo_t *wo, int window) {
    (void)window;
    end_task(selected_task);
    show_tasks();
+   clear();
+   ui_redraw(dialog->ui);
 }
 
 void refresh_callback(wo_t *wo, int window) {
    (void)wo;
    dialog_t *dialog = dialog_from_window(window);
    menu_t *menu = dialog_get(dialog, "tasks_menu")->data;
+   int offset = menu->offset;
    menu->offset = 0;
    show_tasks();
+   menu->offset = min(offset, menu->item_count - menu->shown_items);
+   clear();
+   ui_redraw(dialog->ui);
 }
 
 void close_callback(wo_t *wo, int window) {
@@ -201,6 +206,8 @@ void _start() {
    ui_add(dialog->ui, button);
 
    show_tasks();
+   clear();
+   ui_redraw(dialog->ui);
 
    while(true) {
       snooze();

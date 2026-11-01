@@ -44,8 +44,8 @@ static inline void *kqueue_get(kqueue_t *q, int i) {
    return (uint8_t*)q->buffer + kqueue_slot(q, i) * q->elem_size;
 }
 
-// last pushed (caller checks empty)
 static inline void *kqueue_last(kqueue_t *q) {
+   if(kqueue_empty(q)) return NULL;
    int i = q->tail == 0 ? 2 * q->capacity - 1 : q->tail - 1;
    return kqueue_get(q, i);
 }

@@ -229,7 +229,6 @@ void api_return_window_height(registers_t *regs) {
 
 void api_redraw_window(registers_t *regs) {
    // IN: ebx = window index
-   // check if selected?
    gui_window_t *window = api_get_cwindow(regs->ebx);
    if(!window) return;
    window->needs_redraw = true;
@@ -949,8 +948,14 @@ void api_set_window_size(registers_t *regs) {
    gui_window_t *window = api_get_cwindow(w);
    if(!window) return;
    rect_t old_bounds = {.w = window->width + 3, .h = window->height + 3, .x = window->x - 1, .y = window->y - 1};
+   bool minimised = window->minimised;
+   if(!minimised) {
+      window->minimised = true;
+      windowmgr_redraw_rect(old_bounds);
+      window->minimised = false;
+   }
    window_resize(regs, window, width, height, false);
-   windowmgr_redraw_rect(old_bounds);
+   if(minimised) return;
    window_draw_outline(window, true);
    window->needs_redraw = true;
    window_draw(window, true);
@@ -998,6 +1003,8 @@ void api_create_window(registers_t *regs) {
       r = -1;
    }
    window_resize(regs, newwindow, width, height, true);
+   windowmgr_focus_swap(NULL);
+   setSelectedWindowIndex(i);
    window_draw_outline(newwindow, false);
    regs->ebx = r;
 }
@@ -1008,9 +1015,10 @@ void api_close_window(registers_t *regs) {
    int cindex = regs->ebx;
    gui_window_t *mainwindow = api_get_window();
    if(!mainwindow) return;
+   int w = get_current_task_state()->process->window;
    if(cindex == -1) {
       // close main window and all children without killing task
-      window_close(get_current_task_state()->process->window, false);
+      window_close(w, false);
       gui_redrawall();
       regs->ebx = 1;
       return;
@@ -1022,12 +1030,13 @@ void api_close_window(registers_t *regs) {
    }
    gui_window_t *window = mainwindow->children[cindex];
    int index = get_window_index_from_pointer(window);
-   debug_printf("Closing window %i\n", index);
+   window->minimised = true;
+   rect_t old_bounds = {.w = window->width + 3, .h = window->height + 3, .x = window->x - 1, .y = window->y - 1};
+   windowmgr_redraw_rect(old_bounds);
    window_close(index, false);
    mainwindow->children[cindex] = NULL;
-   if(getSelectedWindow() == NULL)
-      setSelectedWindowIndex(get_current_task_state()->process->window);
-   gui_redrawall();
+   if(!getSelectedWindow())
+      window_minimise(mainwindow, false);
    regs->ebx = 1;
 }
 
@@ -1273,6 +1282,7 @@ void api_set_window_position(registers_t *regs) {
    // IN: edx window
    gui_window_t *window = api_get_cwindow(regs->edx);
    if(!window) return;
+   rect_t old_bounds = {.w = window->width + 3, .h = window->height + 3, .x = window->x - 1, .y = window->y - 1};
    int x = regs->ebx;
    int y = regs->ecx;
    if(x < 0) x = 0;
@@ -1283,7 +1293,12 @@ void api_set_window_position(registers_t *regs) {
       y = (int)gui_get_height() - window->height - TOOLBAR_HEIGHT;
    window->x = x;
    window->y = y;
-   gui_redrawall();
+   if(window->minimised) return;
+   windowmgr_redraw_rect(old_bounds);
+   window_draw_outline(window, true);
+   window->needs_redraw = true;
+   window_draw(window, true);
+
 }
 
 void api_get_window_position(registers_t *regs) {
@@ -1738,9 +1753,7 @@ void api_escalate(registers_t *regs) {
    window_create_button(getWindow(popup), 135, 45, "Deny", &api_escalate_cancel);
    strcpy(getWindow(popup)->title, "Escalate Process");
    strcpy(dialog->wo_okbtn->text, "Grant");
-   toolbar_draw();
-   menubar_draw();
-   window_draw_outline(getWindow(popup), false);
+   window_minimise(getWindow(popup), false);
 
    task_pause(task, PAUSE_ESCALATE);
    switch_task(regs, false); // yield
@@ -1940,3 +1953,7 @@ void api_msg_reply(registers_t *regs) {
 }
 
 // todo: fast path that combines receive and reply
+
+void api_get_task_event_count(registers_t *regs) {
+   regs->ebx = get_task_event_counter();
+}

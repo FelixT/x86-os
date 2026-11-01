@@ -20,7 +20,7 @@ dialog_t *dialog_from_window(int window) {
 
 int get_free_dialog() {
    for(int i = 0; i < dialog_count; i++) {
-      if(dialogs[i]->active == false)
+      if(!dialogs[i]->active)
          return i;
    }
    if(dialog_count < MAX_DIALOGS) {

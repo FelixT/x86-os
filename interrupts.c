@@ -160,7 +160,9 @@ void software_handler(registers_t *regs) {
       case 1:
          api_write_string(regs);
          break;
-      //case 2:
+      case 2:
+         api_get_task_event_count(regs);
+         break;
       case 3:
          api_yield(regs);
          break;
@@ -494,10 +496,10 @@ void mouse_handler(registers_t *regs) {
          int scroll = (int8_t)mouse_data[3];
          if(scroll == -1) {
             // scroll up
-            wm_event(MOUSE_SCROLL, -SCROLL_AMOUNT, -1, 0);
+            wm_event(MOUSE_SCROLL, -SCROLL_AMOUNT, -1, 0, 0, 0);
          } else if(scroll == 1) {
             // scroll down
-            wm_event(MOUSE_SCROLL, SCROLL_AMOUNT, -1, 0);
+            wm_event(MOUSE_SCROLL, SCROLL_AMOUNT, -1, 0, 0, 0);
          }
       }
 
@@ -584,7 +586,7 @@ uint32_t get_timer_tick() {
 void crash_task(int int_no, registers_t *regs, int task) {
    pause_task(task, regs); // pauses and marks and crashed
    uint32_t process_uid = gettasks()[task].process->uid;
-   wm_event(TASK_CRASH, task, process_uid, (uint16_t)int_no);
+   wm_event(TASK_CRASH, task, process_uid, 0, 0, (uint16_t)int_no);
 }
 
 extern int current_servicing_task;
@@ -747,14 +749,18 @@ __attribute__((noreturn)) void kernel_panic(void) {
    }
    panic = true;
    switching = false; // prevents kernel yield
+   swap_pagedir(page_get_kernel_pagedir());
    setSelectedWindowIndex(0);
    gui_window_t *window = getSelectedWindow();
    window->minimised = false;
    window->needs_redraw = true;
    window_draw(window, false);
    int popup = windowmgr_add();
-   if(popup < 0)
+   if(popup < 0) {
+      windowmgr_redrawall();
       while(true) {};
+   }
+   setSelectedWindowIndex(popup);
    gui_window_t *popup_window = getWindow(popup);
    window_popup_dialog(popup_window, NULL, "f3sys has crashed");
    popup_window->x = 5;
@@ -762,6 +768,7 @@ __attribute__((noreturn)) void kernel_panic(void) {
    strcpy(popup_window->title, "kernel panic");
    popup_window->window_objects[1]->visible = false; // ok btn
    popup_window->window_objects[0]->y += 14; // txt
+   window_minimise(popup_window, false);
    extern surface_t surface;
    extern surface_t main_surface;
    surface = main_surface;

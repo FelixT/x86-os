@@ -122,6 +122,17 @@ static inline void end_subroutine() {
    );
 }
 
+static inline uint32_t get_task_event_count() {
+   uint32_t event_count;
+   asm volatile(
+      "int $0x30"
+      : "=b" (event_count)
+      : "a" (2)
+      : "cc", "memory"
+   );
+   return event_count;
+}
+
 static inline bool wm_override(wm_action_t action, void *callback, int window) {
    bool success;
    asm volatile(

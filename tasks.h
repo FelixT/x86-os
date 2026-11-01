@@ -164,6 +164,7 @@ bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
 int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised);
 void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr);
+uint32_t get_task_event_counter();
 
 void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();

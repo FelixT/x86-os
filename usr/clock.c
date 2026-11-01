@@ -52,7 +52,10 @@ void _start() {
       uint32_t hours = (time / 3600) % 24;
       uint32_t minutes = (time / 60) % 60;
       uint32_t seconds = time % 60;
-      if(seconds == last_seconds) continue;
+      if(seconds == last_seconds) {
+         sleep(200);
+         continue;
+      }
       last_seconds = seconds;
 
       bool leading = hours < 10;

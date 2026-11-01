@@ -26,8 +26,6 @@ extern uint16_t *draw_buffer;
 extern surface_t main_surface; // screen, even while surface is swapped to draw_buffer
 
 extern bool gui_cursor_shown;
-extern int gui_mouse_x;
-extern int gui_mouse_y;
 extern int cursor_oldx;
 extern int cursor_oldy;
 extern bool mouse_heldright;
@@ -99,6 +97,7 @@ typedef struct wm_launch_thread_t {
 typedef struct wm_event_t {
    wm_event_type_t type;
    int x, y;
+   int relX, relY;
    uint16_t c;
 } wm_event_t;
 
@@ -210,10 +209,6 @@ void wm_queue_launch(char *path, bool elf, char **args, int argc, bool focus, bo
 void windowmgr_release(int x, int y);
 
 void wm_event_defer_yield(int task) {
-   if(wm_event_thread.yielding_to == task)
-      debug_printf("wm_event_defer_yield: yield to same task");
-   if(wm_event_thread.yielding_to != -1)
-      debug_printf("wm_event_defer_yield: overwrote %i\n", wm_event_thread.yielding_to);
    wm_event_thread.yielding_to = task;
 }
 
@@ -245,7 +240,6 @@ void wm_event_thread_main() {
          continue;
       }
 
-      wm_event_thread.yielding_to = -1;
       switch(event.type) {
          case MOUSE_CLICK:
             if(!windowmgr_click(event.x, event.y))
@@ -255,10 +249,10 @@ void wm_event_thread_main() {
             windowmgr_release(event.x, event.y);
             break;
          case MOUSE_DRAG:
-            windowmgr_dragged(event.x, event.y);
+            windowmgr_dragged(event.x, event.y, event.relX, event.relY);
             break;
          case MOUSE_HOVER:
-            windowmgr_mousemove(event.x, event.y);
+            windowmgr_mousemove(event.x, event.y, false);
             break;
          case MOUSE_RIGHTCLICK:
             windowmgr_rightclick(event.x, event.y);
@@ -284,6 +278,11 @@ void wm_event_thread_main() {
             break;
          default:
             //
+      }
+
+      if(kqueue_count(&wm_event_queue) > 0) {
+         kernel_yield_if_blocking();
+         continue;
       }
       
       int yield = wm_event_thread.yielding_to;
@@ -312,18 +311,20 @@ void wm_event_thread_exit_resume(registers_t *regs) {
    kernel_exit_resume(regs, wm_event_thread.task->task_id);
 }
 
-void wm_event(wm_event_type_t type, int x, int y, uint16_t c) {
+void wm_event(wm_event_type_t type, int x, int y, int relX, int relY, uint16_t c) {
    if((type == MOUSE_HOVER || type == MOUSE_DRAG || type == MOUSE_SCROLL) && !kqueue_empty(&wm_event_queue)) {
       // coalesce into most recent event
       wm_event_t *e = kqueue_last(&wm_event_queue);
-      bool merged = true;
-      if(e->type == type) {
+      if(e && e->type == type) {
+         bool merged = true;
          if(type == MOUSE_HOVER) {
             e->x = x;
             e->y = y;
          } else if(type == MOUSE_DRAG) {
-            e->x += x; // relX,Y
-            e->y += y;
+            e->x = x;
+            e->y = y;
+            e->relX += relX;
+            e->relY += relY;
          } else if(type == MOUSE_SCROLL && e->y == y) { // for same window
             if(y == -1)
                e->x += x; // deltaY
@@ -342,7 +343,7 @@ void wm_event(wm_event_type_t type, int x, int y, uint16_t c) {
       debug_printf("WM: event failed, queue is full\n"); // todo: crashes shouldn't be dropped
       return;
    }
-   wm_event_t event = {.type = type, .x = x, .y = y, .c = c};
+   wm_event_t event = {.type = type, .x = x, .y = y, .relX = relX, .relY = relY, .c = c};
    kqueue_push(&wm_event_queue, &event);
    wm_event_thread_wake();
 }
@@ -452,13 +453,10 @@ void window_close(int windowIndex, bool end) {
       // debug window
       window_minimise(getWindow(windowIndex), true);
       int popup = windowmgr_add();
-      if(popup < 0) {
-         gui_redrawall();
+      if(popup < 0)
          return;
-      }
       window_popup_dialog(getWindow(popup), getWindow(windowIndex), "Minimised debug window");
-      setSelectedWindowIndex(popup);
-      gui_redrawall();
+      window_minimise(getWindow(popup), false);
       return;
    }
 
@@ -477,17 +475,20 @@ void window_close(int windowIndex, bool end) {
       if(!end_task(task, NULL))
          return; // keep window open so the task can be closed
    } else {
-      if(task_state && task_state->process->window == windowIndex)
-         task_state->process->window = -1;
-
-      if(get_current_task_state() != task_state)
+      if(task_state && get_current_task_state()->process != task_state->process)
          do_callback = true; // don't notify for windows task itself closed
+   }
+
+   // call close func if set
+   if(do_callback && window->close_func != NULL) {
+      uint32_t args[1] = { cindex };
+      wm_call_subroutine(task_state, E_CLOSE, (uint32_t)(window->close_func), args, 1);
+      window->close_func = NULL;
+      return; // task has to close window
    }
 
    if(windowIndex == getSelectedWindowIndex())
       setSelectedWindowIndex(-1);
-
-   window->closed = true;
 
    // remove from parent's child list
    if(window->parent) {
@@ -501,6 +502,11 @@ void window_close(int windowIndex, bool end) {
       window->parent = NULL;
    }
 
+   if(!ending_task && task_state && task_state->process->window == windowIndex)
+      task_state->process->window = -1;
+
+   window->closed = true;
+
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
       free((uint32_t)&window->cmd_history[i][0], TEXT_BUFFER_LENGTH);
       window->cmd_history[i] = NULL;
@@ -509,7 +515,7 @@ void window_close(int windowIndex, bool end) {
       // unmap from process (identity mapped)
       map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1, 0);
    }
-   free((uint32_t)window->framebuffer, window->width*(window->height-TITLEBAR_HEIGHT)*2);
+   free((uint32_t)window->framebuffer, window->framebuffer_size);
    window->framebuffer = NULL;
 
    // free window objects
@@ -540,9 +546,6 @@ void window_close(int windowIndex, bool end) {
       }
    }
 
-   if(render_order[0] && !render_order[0]->closed && !render_order[0]->minimised)
-      setSelectedWindowIndex(get_window_index_from_pointer(render_order[0]));
-
    // take children with them
    for(int i = 0; i < window->child_count; i++) {
       gui_window_t *child = (gui_window_t*)window->children[i];
@@ -550,12 +553,8 @@ void window_close(int windowIndex, bool end) {
       window_close(get_window_index_from_pointer(child), false);
    }
 
-   // call close func if set
-   if(do_callback && task_state && window->close_func != NULL && task != get_current_task()) {
-      debug_printf("Calling close func for window %i\n", windowIndex);
-      uint32_t args[1] = { cindex };
-      wm_call_subroutine(task_state, E_CLOSE, (uint32_t)(window->close_func), args, 1);
-   }
+   if(render_order[0] && !render_order[0]->closed && !render_order[0]->minimised)
+      window_minimise(render_order[0], false);
 }
 
 bool window_init(gui_window_t *window) {
@@ -655,11 +654,9 @@ void window_removefuncs(gui_window_t *window) {
    window->mouseout_func = NULL;
 }
 
-// adds new window and selects it
 int windowmgr_add() {
    int index = getFirstFreeIndex();
    if(index == -1) {
-   
       if(windowCount < MAX_WINDOWS) {
          windowCount++;
          index = windowCount - 1;
@@ -669,24 +666,30 @@ int windowmgr_add() {
       }
    }
       
-   if(window_init(&gui_windows[index])) {
-      setSelectedWindowIndex(index);
-      int x = gui_get_width()/16 + index * 30;
-      int y = gui_get_height()/16 + index * 30;
-      if(x > gui_windows[index].width - 20)
-         x = 20;
-      if(y > gui_windows[index].height - TOOLBAR_HEIGHT - 20)
-         y = 20;
-      gui_windows[index].x = x;
-      gui_windows[index].y = y;
+   gui_window_t *window = &gui_windows[index];
+   if(window_init(window)) {
+      int screenW = gui_get_width();
+      int screenH = gui_get_height();
+      int x = screenW/16 + index * 30;
+      int y = screenH/16 + index * 30;
+      if(x > (int)screenW/2)
+         x -= screenW/2 - 40;
+      if(y > screenH/2)
+         y -= screenH/2 - 40;
+      window->x = x;
+      window->y = y;
 
-      toolbar_draw();
-      menubar_draw();
+      // add to end of render order
+      for(int i = 0; i < MAX_WINDOWS; i++) {
+         if(!render_order[i]) {
+            render_order[i] = window;
+            break;
+         }
+      }
 
       return index;
    } else {
-      strcpy((char*)gui_windows[index].title, "ERROR");
-      gui_windows[index].closed = true;
+      window->closed = true;
       debug_writestr("Couldn't create window\n");
       return -1;
    }
@@ -837,10 +840,10 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
       
       gui_window_t *win = render_order[i];
       if(win->minimised) continue;
-      if(!(window->x >= win->x + win->width
-         || window->x + window->width + 2 <= win->x
-         || window->y >= win->y + win->height
-         || window->y + window->height + 2 <= win->y)) {
+      if(!(winX >= win->x + win->width + 2
+      || winX + winW <= win->x - 1
+      || winY >= win->y + win->height + 2
+      || winY + winH <= win->y - 1)) {
          occlude = true;
          break;
       }
@@ -867,8 +870,15 @@ void window_draw_content_region(gui_window_t *window, int offsetX, int offsetY, 
                
                gui_window_t *win = render_order[i];
                if(win->minimised) continue;
-               if(screenX >= win->x - 1 && screenX < win->x + win->width + 1
-               && screenY >= win->y - 1 && screenY < win->y + win->height + 1) {
+
+               bool in_outline = screenX >= win->x - 1 && screenX <= win->x + win->width
+                  && screenY >= win->y - 1 && screenY <= win->y + win->height;
+
+               bool in_shadow = win == selectedWindow
+                  && ((screenX == win->x + win->width + 1 && screenY >= win->y + 3 && screenY <= win->y + win->height + 1)
+                  || (screenY == win->y + win->height + 1 && screenX >= win->x + 3 && screenX <= win->x + win->width + 1));
+               
+               if(in_outline || in_shadow) {
                   occluded = true;
                   break;
                }
@@ -952,6 +962,7 @@ void windowmgr_getproperties() {
       if(new >= 0) window_close(new, false);
       return;
    }
+   window_minimise(getWindow(new), false);
 }
 
 // focus new window
@@ -1287,24 +1298,15 @@ static void windowmgr_quitselected() {
    end_task(task, NULL);
 }
 
+static gui_window_t *window_menu_targets[MENUBAR_MAX_MENU_SIZE];
+
 static void windowmgr_select_window() {
    if(!open_menu) return;
-   int task = get_task_from_window(gui_selected_window);
-   if(task < 0) return;
-   int index = open_menu->menu.menuhovered - 4;
-   if(index < -1) return;
-   task_state_t *task_state = &gettasks()[task];
-   process_t *process = task_state->process;
-   if(!process || process->window < 0) return;
-   gui_window_t *window = getWindow(process->window);
-   if(index == -1) {
-      window_minimise(window, false);
-   } else {
-      if(index >= window->child_count) return;
-      gui_window_t *w = window->children[index];
-      if(w)
-         window_minimise(w, false);
-   }
+   int index = open_menu->menu.menuhovered;
+   if(index < 0 || index >= MENUBAR_MAX_MENU_SIZE) return;
+   gui_window_t *w = window_menu_targets[index];
+   if(w && !w->closed)
+      window_minimise(w, false);
 }
 
 void menubar_open_window_menu(wm_menubar_menu_t *menu) {
@@ -1312,7 +1314,9 @@ void menubar_open_window_menu(wm_menubar_menu_t *menu) {
    menu->menu.menuitem_count = 3;
    menu->menu.width = MENUBAR_MENU_WIDTH;
    windowobj_menu_resize(&menu->menu);
-   
+   for(int i = 0; i < MENUBAR_MAX_MENU_SIZE; i++)
+      window_menu_targets[i] = NULL;
+
    if(gui_selected_window < 0) return;
    int task = get_task_from_window(gui_selected_window);
    if(task < 0) return;
@@ -1323,11 +1327,14 @@ void menubar_open_window_menu(wm_menubar_menu_t *menu) {
    if(window->closed) return;
    char buf[256];
    sprintf(buf, "%s%s%s", window->title, window->active?" (selected)":"", window->minimised?" (minimised)":"");
+   window_menu_targets[menu->menu.menuitem_count] = window;
    menubar_menu_add_item(menu, &windowmgr_select_window, buf);
    for(int i = 0; i < window->child_count; i++) {
       gui_window_t *w = window->children[i];
       if(!w) continue;
+      if(menu->menu.menuitem_count == MENUBAR_MAX_MENU_SIZE) break;
       sprintf(buf, "%s%s%s", w->title, w->active?" (selected)":"", w->minimised?" (minimised)":"");
+      window_menu_targets[menu->menu.menuitem_count] = w;
       menubar_menu_add_item(menu, &windowmgr_select_window, buf);
    }
 }
@@ -1835,15 +1842,17 @@ bool clicked_on_window(int index, int x, int y) {
    return false;
 }
 
-void windowmgr_dragged(int relX, int relY) {
+void windowmgr_dragged(int x, int y, int relX, int relY) {
+   windowmgr_mousemove(x, y, true);
+
    gui_window_t *window = getSelectedWindow();
    if(selectedWindow == NULL || !selectedWindow->active) return;
 
    if(!selectedWindow->dragged && !selectedWindow->resized) {
       if(relX == 0 && relY == 0) return;
    
-      int windowX = gui_mouse_x - selectedWindow->x;
-      int windowY = gui_mouse_y - (selectedWindow->y + TITLEBAR_HEIGHT);
+      int windowX = x - selectedWindow->x;
+      int windowY = y - (selectedWindow->y + TITLEBAR_HEIGHT);
 
       // check scrollbar
       if(selectedWindow->scrollbar != NULL && selectedWindow->scrollbar->visible) {
@@ -1977,8 +1986,8 @@ void windowmgr_release(int x, int y) {
 
    // only the window that got the press gets the release, not one the press just focused
    if(pressed && !pressed->closed && !pressed->minimised) {
-      int relX = gui_mouse_x - pressed->x;
-      int relY = gui_mouse_y - pressed->y - TITLEBAR_HEIGHT;
+      int relX = x - pressed->x;
+      int relY = y - pressed->y - TITLEBAR_HEIGHT;
       window_release(pressed, relX, relY);
    }
 
@@ -2221,12 +2230,11 @@ void desktop_click(int x, int y) {
       int w = windowmgr_add();
       if(w < 0) return;
       strcpy(getWindow(w)->title, "KTerm");
-      window_draw_outline(getWindow(w), false);
-      window_draw(getWindow(w), true);
+      window_minimise(getWindow(w), false);
    }
 }
 
-void windowmgr_mousemove(int x, int y) {
+void windowmgr_mousemove(int x, int y, bool mouse_held) {
    if(wm_wo_mouse_event(MOUSE_HOVER, x, y)) return;
 
    if(selectedWindow) {
@@ -2243,7 +2251,8 @@ void windowmgr_mousemove(int x, int y) {
       if(relX > 0 && relX < selectedWindow->width
       && relY > 0 && relY < selectedWindow->height - TITLEBAR_HEIGHT) {
          selectedWindow->hovering = true;
-         window_mousemove(selectedWindow, relX, relY);
+         if(!mouse_held)
+            window_mousemove(selectedWindow, relX, relY);
       } else {
          if(selectedWindow->hovering) {
             // mouse out/unhover
@@ -2416,7 +2425,7 @@ int get_cindex_from_window(task_state_t *task, gui_window_t *window) {
       return -1; // main window
    for(int i = 0; i < mainwin->child_count; i++) {
       gui_window_t *child = mainwin->children[i];
-      if(child && child->active && child == window)
+      if(child && child == window)
          return i;
    }
    return -2;

@@ -118,7 +118,7 @@ typedef enum { // callback args:
    WM_CLICK, // int x, int y, int w
    WM_MOUSERELEASE, // int x, int y, int w
    WM_DRAW, // (use NULL to disable default terminal draw)
-   WM_RESIZE, // uint16_t *framebuffer, int width (not including scrollbar if shown), int height, int w 
+   WM_RESIZE, // uint16_t *framebuffer, int width, int height, int w - width not including scrollbar if shown
    WM_DRAG, // int x, int y, int w
    WM_HOVER, // int x, int y, int w
    WM_CLOSE, // int w

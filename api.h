@@ -88,5 +88,6 @@ void api_msg_receive(registers_t *regs);
 void api_msg_reply(registers_t *regs);
 void api_focus_task(registers_t *regs);
 void api_get_taskid(registers_t *regs);
+void api_get_task_event_count(registers_t *regs);
 
 #endif

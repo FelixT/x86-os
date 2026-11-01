@@ -304,7 +304,7 @@ void endtask_dismiss(void *dialog, void *regs) {
    int w = get_task_window(d->task_id);
    end_task(d->task_id, regs);
    if(w < 0) return;
-   wm_event(WINDOW_CLOSE, w, 0, 0);
+   wm_event(WINDOW_CLOSE, w, 0, 0, 0, 0);
 }
 
 void endtask_debug(void *windowobj, int x, int y) {
@@ -350,6 +350,5 @@ void show_endtask_dialog(int task_id, uint32_t process_uid, uint16_t int_no) {
       window_disable(getWindow(get_task_window(task_id)));
    strcpy(getWindow(popup)->title, "Error");
    strcpy(dialog->wo_okbtn->text, "Exit");
-   window_draw_outline(getWindow(popup), false);
-   windowmgr_draw();
+   window_minimise(getWindow(popup), false);
 }
