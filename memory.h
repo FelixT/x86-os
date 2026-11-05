@@ -37,8 +37,8 @@
 #define V_KERNEL_START 0x1000000
 #define V_KERNEL_END   0x1060000 // V_KERNEL_START + 0x60000 (kernel size 0x60000)
 
-#define V_SHARED_START 0xA0000000
-#define V_SHARED_END   0xB0000000
+#define VM_START 0xA0000000 // where vmem for a process starts
+#define VM_END 0xB0000000
 
 #define V_MMIO_START 0xB0000000 // start for each process
 #define V_MMIO_END   0xC0000000

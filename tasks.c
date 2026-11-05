@@ -46,6 +46,7 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->heap_end = 0;
    process->launch_argc = 0;
    process->launch_args = NULL;
+   process->regions = NULL;
    
    return process;
 }
@@ -434,6 +435,8 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
          // free launch args
          free_launch_args(task->process->launch_args, task->process->launch_argc);
+
+         process_free_vm(task->process);
 
          // free process
          free((uint32_t)task->process, sizeof(process_t));
@@ -1455,6 +1458,95 @@ kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_proc
       return -1;
    }
    return h;
+}
+
+vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags, kobj_inst_t *inst) {
+   if(size == 0)
+      return NULL;
+
+   size = page_align_up(size);
+
+   uint32_t vmem = VM_START;
+   vm_region_t *region = process->regions;
+   vm_region_t *prev = NULL;
+   while(region) {
+      if(region->vaddr - vmem >= size) {
+         // found gap at vmem
+         break;
+      }
+      vmem = region->vaddr + region->size;
+      prev = region;
+      region = region->next;
+   }
+
+   uint32_t end = vmem + size;
+   if(end < VM_START || end > VM_END)
+      return NULL;
+   
+   vm_region_t *new = malloc(sizeof(vm_region_t));
+   if(!new)
+      return NULL;
+   new->flags = flags;
+   new->vaddr = vmem;
+   new->size = size;
+   new->next = region;
+   new->inst = inst;
+   kobj_add_ref(inst); // mapping holds a ref count even if handle is closed
+   if(prev) {
+      prev->next = new;
+   } else {
+      process->regions = new;
+   }
+   return new;
+}
+
+// find which vm region addr is in
+vm_region_t *process_find_vm(process_t *process, uint32_t vaddr) {
+   vm_region_t *region = process->regions;
+   while(region) {
+      if(vaddr >= region->vaddr && vaddr - region->vaddr < region->size)
+         return region;
+      region = region->next;
+   }
+   return NULL;
+}
+
+bool process_unmap_vm(process_t *process, uint32_t vaddr) {
+   vm_region_t *prev = NULL;
+   vm_region_t *region = process->regions;
+   while(region) {
+      if(region->vaddr == vaddr) {
+         // found
+         unmap_size(process->page_dir, region->vaddr, region->size);
+
+         kobj_release_ref(region->inst);
+
+         if(prev)
+            prev->next = region->next;
+         else
+            process->regions = region->next;
+
+         free((uint32_t)region, sizeof(vm_region_t));
+
+         return true;
+      }
+      prev = region;
+      region = region->next;
+   }
+   return false;
+}
+
+// free all vm (ie on process end)
+void process_free_vm(process_t *process) {
+   vm_region_t *region = process->regions;
+   while(region) {
+      kobj_release_ref(region->inst);
+      vm_region_t *next = region->next;
+      free((uint32_t)region, sizeof(vm_region_t));
+      region = next;
+   }
+
+   process->regions = NULL;
 }
 
 uint32_t get_task_event_counter() {

@@ -18,6 +18,7 @@ typedef struct textarea_t {
    bool bordered;
    bool focused;
    int padding;
+   bool label; // non editable
 
    int cursor_pos;
 } textarea_t;

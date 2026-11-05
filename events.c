@@ -21,6 +21,7 @@ void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, i
     }
     
     event_t *event = malloc(sizeof(event_t));
+    if(!event) return;
     event->time = timer_i + delta;
     event->callback = callback;
     event->task = taskid;

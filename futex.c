@@ -6,8 +6,8 @@
 typedef struct futex_waiter_t {
    int task_id;
    uint32_t task_uid;
-   uint32_t process_uid;
-   void *futex_addr;
+   uint32_t process_uid; // used to compare private futex, 0 for shared memory
+   uint32_t key_addr; // vaddr if private, paddr if shared
    struct futex_waiter_t *next;
 } futex_waiter_t;
 
@@ -15,8 +15,19 @@ struct futex_bucket {
    futex_waiter_t *w;
 } buckets[256];
 
-static inline unsigned private_hash(uintptr_t k) {
+static inline uint32_t private_hash(uint32_t k) {
    return (k >> 2) % 256;
+}
+
+static uint32_t futex_key(process_t *process, uint32_t vaddr, uint32_t *process_uid) {
+   vm_region_t *region = process_find_vm(process, vaddr);
+   if(region && region->inst->obj->type == KOBJ_SHARED) {
+      shared_block_t *block = region->inst->data;
+      *process_uid = 0;
+      return block->paddr + (vaddr - region->vaddr);
+   }
+   *process_uid = process->uid;
+   return vaddr;
 }
 
 int futex_wait(void *futex_addr, uint32_t expected) {
@@ -31,17 +42,21 @@ int futex_wait(void *futex_addr, uint32_t expected) {
       return FUTEX_WAIT_NOBLOCK;
    }
 
+   task_state_t *task = get_current_task_state();
    futex_waiter_t *waiter = malloc(sizeof(futex_waiter_t));
    if(!waiter) {
       return FUTEX_WAIT_FAIL;
    }
    waiter->task_id = task_id;
-   waiter->task_uid = get_current_task_state()->task_uid;
-   waiter->process_uid = get_current_task_state()->process->uid;
-   waiter->futex_addr = futex_addr;
+   waiter->task_uid = task->task_uid;
+
+   uint32_t pid;
+   uint32_t addr = futex_key(task->process, (uint32_t)futex_addr, &pid);
+   waiter->key_addr = addr;
+   waiter->process_uid = pid;
 
    // add to start of waiters bucket list
-   struct futex_bucket *bucket = &buckets[private_hash((uintptr_t)futex_addr)];
+   struct futex_bucket *bucket = &buckets[private_hash(addr)];
    waiter->next = bucket->w;
    bucket->w = waiter;
 
@@ -49,18 +64,17 @@ int futex_wait(void *futex_addr, uint32_t expected) {
 }
 
 void futex_wake(void *regs, void *futex_addr) {
-   unsigned hash = private_hash((uintptr_t)futex_addr);
-   uint32_t waker_process_uid = get_current_task_state()->process->uid;
+   task_state_t *task = get_current_task_state(); // waker
+   uint32_t pid;
+   uint32_t addr = futex_key(task->process, (uint32_t)futex_addr, &pid);
+   uint32_t hash = private_hash(addr);
+
    futex_waiter_t *prev = NULL;
    futex_waiter_t *waiter = buckets[hash].w;
    while(waiter != NULL) {
-      task_state_t *task = &gettasks()[waiter->task_id];
-      bool stale = !task->enabled || task->task_uid != waiter->task_uid;
-      bool match = waiter->futex_addr == futex_addr;
-      // check if the waker is from the same process as the waiter, or shared memory
-      if(match && !stale) {
-         match &= (waiter->process_uid == waker_process_uid) || shared_addr_accessible(task->process, (uint32_t)futex_addr);
-      }
+      task_state_t *waiter_task = &gettasks()[waiter->task_id];
+      bool stale = !waiter_task->enabled || waiter_task->task_uid != waiter->task_uid;
+      bool match = waiter->key_addr == addr && waiter->process_uid == pid;
 
       if(!stale && !match) {
          prev = waiter;
@@ -77,8 +91,8 @@ void futex_wake(void *regs, void *futex_addr) {
       free((uint32_t)unlinked, sizeof(futex_waiter_t));
 
       if(!stale && match) {
-         task_resume(task);
-         switch_to_task(task->task_id, regs);
+         task_resume(waiter_task);
+         switch_to_task(waiter_task->task_id, regs);
          return; // wake only one waiter
       }
    }

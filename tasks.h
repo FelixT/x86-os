@@ -80,6 +80,14 @@ typedef enum {
 #define PROCESS_MAX_PORTS 16
 #define TASK_MAX_CHANNELS 16
 
+typedef struct vm_region_t {
+   uint32_t vaddr;
+   kobj_inst_t *inst; // inst the mapping belongs to
+   uint32_t size;
+   uint32_t flags;
+   struct vm_region_t *next; // sorted by vaddr
+} vm_region_t;
+
 // process struct - shared between threads
 typedef struct process_t {
    uint32_t uid;
@@ -97,6 +105,7 @@ typedef struct process_t {
    // resources
    kobj_ref_t *kobj[PROCESS_MAX_KOBJ];
    int kobj_count; // live refs (handles are slot indices, reused)
+   vm_region_t *regions;
 
    int no_allocated; // kmallocd pages, currently only incremented via dma
    uint32_t heap_start; // heap/end of ds (vmem location)
@@ -217,5 +226,11 @@ void process_release_kobjs(process_t *process);
 kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle);
 bool process_sole_kobj_owner(process_t *process, kobj_inst_t *inst);
 bool process_has_another_ref(process_t *process, kobj_ref_t *ref);
+
+vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags, kobj_inst_t *inst);
+bool process_unmap_vm(process_t *process, uint32_t vaddr);
+void process_free_vm(process_t *process);
+vm_region_t *process_find_vm(process_t *process, uint32_t vaddr);
+
 
 #endif

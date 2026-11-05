@@ -346,13 +346,16 @@ static inline int launch_task(char *path, int argc, char **args, bool copy, bool
    return id;
 }
 
-static inline void unpause_task(int id) {
+static inline bool unpause_task(int id) {
+   bool success;
    asm volatile (
       "int $0x30;"
-      :: "a" (71),
+      : "=b" (success)
+      : "a" (71),
       "b" ((uint32_t)id)
       : "cc", "memory"
    );
+   return success;
 }
 
 static inline void end_task(int id) {
@@ -847,22 +850,17 @@ static inline void futex_wake(void *addr) {
    );
 }
 
-typedef struct shared_t {
-   handle_t h;
-   void *mem;
-} shared_t;
 
-static inline shared_t shared_create(int size) {
-   shared_t shared;
+static inline handle_t shared_create(int size) {
+   handle_t h;
    asm volatile(
       "int $0x30"
-      : "=b" (shared.mem),
-      "=c" (shared.h)
+      : "=b" (h)
       : "a" (78),
       "b" ((uint32_t)size)
       : "cc", "memory"
    );
-   return shared;
+   return h;
 }
 
 static inline void *shared_map(handle_t handle) {
@@ -875,6 +873,18 @@ static inline void *shared_map(handle_t handle) {
       : "cc", "memory"
    );
    return (void*)addr;
+}
+
+static inline bool unmap(uint32_t addr) {
+   bool success;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success)
+      : "a" (64),
+      "b" (addr)
+      : "cc", "memory"
+   );
+   return success;
 }
 
 static inline uint8_t *pci_map(uint16_t vendor, uint16_t device_id, handle_t *handle) {
@@ -952,7 +962,7 @@ static inline bool escalate() {
    return success;
 }
 
-// returns a port uid, or a msg_err_t - test with MSG_IS_ERROR (lib/api.h)
+// returns a port uid, or a msg_err_t - test with MSG_IS_ERR (lib/api.h)
 static inline uint32_t create_port(char *name, bool client_reserves) {
    uint32_t port;
    asm volatile(
@@ -966,7 +976,7 @@ static inline uint32_t create_port(char *name, bool client_reserves) {
    return port;
 }
 
-// returns a channel uid, or a msg_err_t - test with MSG_IS_ERROR (lib/api.h)
+// returns a channel uid, or a msg_err_t - test with MSG_IS_ERR (lib/api.h)
 static inline uint32_t port_connect(char *name, uint32_t *port) {
    uint32_t port_uid;
    uint32_t channel;

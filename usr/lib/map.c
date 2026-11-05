@@ -6,10 +6,18 @@
 #include "../../lib/string.h"
 
 void map_init(map_t *map, uint32_t size) {
+   uint32_t power = 1;
+   while(power < size)
+      power <<= 1;
+   size = power;
    map->table = malloc(size * sizeof(map_entry_t));
    memset(map->table, 0, size * sizeof(map_entry_t));
    map->size = size;
    map->count = 0;
+}
+
+void map_free(map_t *map) {
+   free(map->table);
 }
 
 uint32_t hash_fnv1a(const char *key) {

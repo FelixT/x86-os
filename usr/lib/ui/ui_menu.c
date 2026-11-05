@@ -179,8 +179,7 @@ menu_item_t *add_menu_item(wo_t *menu, const char *text, void (*func)(wo_t *item
    menu_data->item_count++;
 
    int item_height = get_font_info().height + 7;
-   if(item_height*menu_data->item_count > menu->height)
-      menu_data->scrollbar_visible = true;
+   menu_data->scrollbar_visible = item_height*menu_data->item_count > menu->height;
 
    return item;
 }
@@ -327,11 +326,23 @@ void menu_unhover(wo_t *menu, draw_context_t context) {
    draw_menu(menu, context);
 }
 
-void resize_menu(wo_t *menu) {
+void resize_menu_h(wo_t *menu) {
    if(menu == NULL || menu->data == NULL) return;
    font_info_t font_info = get_font_info();
    menu_t *menu_data = (menu_t *)menu->data;
    int item_height = font_info.height + 7;
+
+   menu->height = menu_data->item_count*item_height;
+   menu_data->scrollbar_visible = false;
+   menu_data->offset = 0;
+}
+
+void resize_menu(wo_t *menu) {
+   if(menu == NULL || menu->data == NULL) return;
+   resize_menu_h(menu);
+   
+   font_info_t font_info = get_font_info();
+   menu_t *menu_data = (menu_t *)menu->data;
    int max_len = 0;
    for(int i = 0; i < menu_data->item_count; i++) {
       menu_item_t *item = &menu_data->items[i];
@@ -339,11 +350,6 @@ void resize_menu(wo_t *menu) {
       if(len > max_len)
          max_len = len;
    }
-
-   menu->height = menu_data->item_count*item_height;
-   menu_data->scrollbar_visible = false;
-   menu_data->offset = 0;
-
    int width = max_len * (font_info.width + font_info.padding) + MENU_TEXT_INSET*2;
    menu->width = (width < MENU_MIN_WIDTH) ? MENU_MIN_WIDTH : width;
 }

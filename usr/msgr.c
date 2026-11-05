@@ -55,7 +55,7 @@ void checkcmd(char *buf) {
       char *name = buf + strlen("connect ");
       uint32_t port_uid;
       uint32_t channel_uid = port_connect(name, &port_uid);
-      if(MSG_IS_ERROR(channel_uid)) {
+      if(MSG_IS_ERR(channel_uid)) {
          printf("connect: error %i\n", (int)channel_uid);
          end_subroutine();
          return;

@@ -83,12 +83,13 @@ void dialog_close(wo_t *wo, int window) {
       return;
    }
    dialog->active = false;
+   map_free(&dialog->wo_map);
    close_window(window);
    if(window == -1)
       exit(0);
 }
 
-void dialog_resize(uint16_t fb, int width, int height, int window) {
+void dialog_resize(uint16_t *fb, int width, int height, int window) {
    (void)fb;
    (void)width;
    (void)height;
@@ -197,6 +198,7 @@ bool dialog_init(dialog_t *dialog, int window) {
    dialog->ui = ui_init(&dialog->surface, window);
    dialog->active = true;
    dialog->callback = NULL;
+   dialog->state = NULL;
    dialog->content_height = 0;
    map_init(&dialog->wo_map, 64);
    strcpy(dialog->title, "Window");
@@ -207,11 +209,12 @@ bool dialog_init(dialog_t *dialog, int window) {
       set_window_position(mainw_pos.x + 30, mainw_pos.y + 30, window);
    }
    // setup default menu
-   dialog->ui->default_menu = create_menu(0, 0, 105, 45);
+   dialog->ui->default_menu = create_menu(0, 0, 70, 45);
    dialog->ui->default_menu->visible = false;
    add_menu_item(dialog->ui->default_menu, "Close", &dialog_defaultmenu_close);
    add_menu_item(dialog->ui->default_menu, "Minimise", &dialog_defaultmenu_minimise);
    add_menu_item(dialog->ui->default_menu, "Settings", &dialog_defaultmenu_settings);
+   resize_menu_h(dialog->ui->default_menu);
    ui_add(dialog->ui, dialog->ui->default_menu);
    return true;
 }
@@ -234,10 +237,14 @@ bool dialog_msg(char *title, char *text) {
       return false;
    msg->type = DIALOG_MSG;
 
-   wo_t *label_wo = create_label(15, y, 260 - 30, 20, text);
-   ui_add(msg->ui, label_wo);
+   wo_t *textarea = create_textarea(15, y, 260 - 30, 20);
+   get_textarea(textarea)->label = true;
+   get_textarea(textarea)->padding = 6;
+   set_textarea_text(textarea, text);
+   textarea->height = textarea_get_rows(textarea) * (get_font_info().height + get_font_info().padding*2) + 12;
+   ui_add(msg->ui, textarea);
 
-   y += 25;
+   y += textarea->height + 10;
    int x = (260 - 50)/2;
    wo_t *btn_wo = create_button(x, y, 50, 20, "Ok");
    button_t *btn = (button_t *)btn_wo->data;
@@ -1306,4 +1313,8 @@ dialog_t *get_dialog(int index) {
    if(index < 0 || index >= dialog_count)
       return NULL;
    return dialogs[index];
+}
+
+int get_dialog_count() {
+   return dialog_count;
 }

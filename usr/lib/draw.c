@@ -1,6 +1,7 @@
 #include "draw.h"
 #include "stdlib.h"
 #include "../../lib/string.h"
+#include "../../lib/maths.h"
 
 static inline void setpixel_safe(surface_t *surface, int index, int colour) {
    if(index < 0 || index >= surface->width*surface->height) {
@@ -20,6 +21,17 @@ void draw_pixel(draw_context_t *ctx, uint16_t colour, int x, int y) {
    setpixel_safe(ctx->surface, index, colour);
 }
 
+static inline void setpixel(draw_context_t *ctx, uint16_t colour, int x, int y) {
+   ((uint16_t*)ctx->surface->buffer)[y*(int)ctx->surface->width + x] = colour;
+}
+
+// clip rect to context, false if nothing to draw
+static bool clip_rect(draw_context_t *ctx, rect_t *r) {
+   rect_t surface_r = { 0, 0, ctx->surface->width, ctx->surface->height };
+   *r = rect_intersect(rect_intersect(*r, ctx->clipRect), surface_r);
+   return r->width > 0 && r->height > 0;
+}
+
 void draw_line(draw_context_t *ctx, uint16_t colour, int x, int y, bool vertical, int length) {
    if(vertical) {
       for(int yi = y; yi < y+length; yi++)
@@ -31,9 +43,11 @@ void draw_line(draw_context_t *ctx, uint16_t colour, int x, int y, bool vertical
 }
 
 void draw_rect(draw_context_t *ctx, uint16_t colour, int x, int y, int width, int height) {
-   for(int yi = y; yi < y+height; yi++)
-      for(int xi = x; xi < x+width; xi++)
-         draw_pixel(ctx, colour, xi, yi);
+   rect_t r = { .x = x, .y = y, .width = width, .height = height };
+   if(!clip_rect(ctx, &r)) return;
+   uint16_t *fb = (uint16_t*)ctx->surface->buffer;
+   for(int yi = r.y; yi < r.y + r.height; yi++)
+      memset16(fb + yi*ctx->surface->width + r.x, colour, r.width);
 }
 
 void draw_rect_gradient(draw_context_t *ctx, uint16_t color1, uint16_t color2, int x, int y, int width, int height, int direction) {
@@ -108,20 +122,17 @@ void draw_string(draw_context_t *ctx, char *str, uint16_t colour, int x, int y) 
    }
 }
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
 rect_t rect_intersect(rect_t a, rect_t b) {
-   int x1 = MAX(a.x, b.x);
-   int y1 = MAX(a.y, b.y);
-   int x2 = MIN(a.x + a.width, b.x + b.width);
-   int y2 = MIN(a.y + a.height, b.y + b.height);
+   int x1 = max(a.x, b.x);
+   int y1 = max(a.y, b.y);
+   int x2 = min(a.x + a.width, b.x + b.width);
+   int y2 = min(a.y + a.height, b.y + b.height);
    
    return (rect_t) {
       .x = x1,
       .y = y1,
-      .width = MAX(0, x2 - x1),
-      .height = MAX(0, y2 - y1)
+      .width = max(0, x2 - x1),
+      .height = max(0, y2 - y1)
    };
 }
 

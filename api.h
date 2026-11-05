@@ -8,8 +8,6 @@ void api_write_uint(registers_t *regs); // deprecated
 void api_write_newline(); // deprecated
 void api_write_string_at(registers_t *regs);
 void api_yield(registers_t *regs);
-void api_print_program_stack(registers_t *regs);
-void api_print_stack();
 void api_return_framebuffer(registers_t *regs);
 void api_return_window_width(registers_t *regs);
 void api_return_window_height(registers_t *regs);
@@ -88,6 +86,7 @@ void api_msg_receive(registers_t *regs);
 void api_msg_reply(registers_t *regs);
 void api_focus_task(registers_t *regs);
 void api_get_taskid(registers_t *regs);
+void api_unmap(registers_t *regs);
 void api_get_task_event_count(registers_t *regs);
 
 #endif

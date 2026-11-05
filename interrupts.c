@@ -166,12 +166,8 @@ void software_handler(registers_t *regs) {
       case 3:
          api_yield(regs);
          break;
-      case 4:
-         api_print_program_stack(regs);
-         break;
-      case 5:
-         api_print_stack();
-         break;
+      //case 4:
+      //case 5:
       case 6:
          api_write_uint(regs);
          break;
@@ -320,7 +316,9 @@ void software_handler(registers_t *regs) {
       case 63:
          api_close_window(regs);
          break;
-      //case 64:
+      case 64:
+         api_unmap(regs);
+         break;
       case 65:
          api_create_thread(regs);
          break;
@@ -551,6 +549,12 @@ uint32_t delayed_ticks = 0;
 void timer_handler(registers_t *regs) {
    timer_i++;
    events_check(regs);
+   if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
+      // don't preempt when interrupting kernel
+
+      // note: immediately swaps if new task was parked in kernel
+      switch_task(regs, true);
+   }
 
 #if DEBUG_DELAYS
    outb(0x20, 0x0A); // check pic irr bit 0 for unresolved
@@ -568,13 +572,6 @@ void timer_handler(registers_t *regs) {
    } else {
       if(timer_i%340 == 0) { // ~2fps auto redraw
          gui_draw();
-      }
-
-      if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
-         // don't preempt when interrupting kernel
-
-         // note: immediately swaps if new task was parked in kernel
-         switch_task(regs, true);
       }
    }
 }

@@ -10,12 +10,22 @@
 #include "ui/ui_canvas.h"
 #include "ui/ui_image.h"
 #include "ui/ui_menu.h"
+#include "ui/ui_textarea.h"
 #include "stdint.h"
 #include "map.h"
 
+typedef enum {
+   DIALOG_MSG,
+   DIALOG_INPUT,
+   DIALOG_COLOURPICKER,
+   DIALOG_FILEPICKER,
+   DIALOG_SETTINGS,
+   DIALOG_YESNO
+} dialog_type_t;
+
 typedef struct dialog_t {
    bool active;
-   int type;
+   dialog_type_t type;
    int window;
    char title[32];
    surface_t surface;
@@ -48,6 +58,7 @@ bool dialog_msg(char *title, char *text);
 int dialog_input(char *text, void *return_func);
 int dialog_colourpicker(uint16_t colour, void (*return_func)(char *out, int window));
 dialog_t *get_dialog(int index);
+int get_dialog_count();
 dialog_t *dialog_from_window(int window);
 int dialog_filepicker(char *startdir, void (*return_func)(char *out, int window));
 void dialog_init_overrides(int window);
@@ -64,14 +75,8 @@ wo_t *dialog_create_numeric(int x, int y, int width, int height, int start, void
 uint16_t *dialog_load_icon(char *path, int *width, int *height);
 void dialog_close(wo_t *wo, int window);
 void dialog_init_scroll(dialog_t *dialog);
+void dialog_resize(uint16_t *fb, int width, int height, int window);
 
 #define MAX_DIALOGS 10
-
-#define DIALOG_MSG 0
-#define DIALOG_INPUT 1
-#define DIALOG_COLOURPICKER 2
-#define DIALOG_FILEPICKER 2
-#define DIALOG_SETTINGS 3
-#define DIALOG_YESNO 4
 
 #endif

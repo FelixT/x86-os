@@ -2,6 +2,7 @@
 
 #include "prog.h"
 #include "../lib/string.h"
+#include "../lib/maths.h"
 #include "lib/stdio.h"
 #include "lib/stdlib.h"
 #include "lib/dialogs.h"
@@ -72,9 +73,6 @@ void resize(uint32_t fb, uint32_t w, uint32_t h) {
    ui_redraw(dialog->ui);
    end_subroutine();
 }
-
-static inline int min(int a, int b) { return (a < b) ? a : b; }
-static inline int max(int a, int b) { return (a > b) ? a : b; }
 
 int brush_type = 0;
 
@@ -192,11 +190,6 @@ void set(int x, int y) {
             bmpbuffer[index] = colour;
       }
    }
-}
-
-int abs(int i) {
-   if(i < 0) return -i;
-   return i;
 }
 
 void drawLine(int x0, int y0, int x1, int y1) {

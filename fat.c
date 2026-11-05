@@ -1207,6 +1207,9 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
 
    uint32_t allocate = (readEntireFile) ? fileSizeDisk : size;
    uint8_t *fileContents = malloc(allocate);
+   if(!fileContents) {
+      return NULL;
+   }
 
    uint32_t byte = 0;
    c = clusterNo;

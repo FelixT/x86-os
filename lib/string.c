@@ -390,60 +390,60 @@ uint32_t hextouint(char *str) {
 
 void *memset(void *dest, uint8_t ch, int count) {
    // faster memset using fancy assembly
+   void *ret = dest;
+   if(count <= 0) return ret;
+
    // Use stosb for small blocks (under 16 bytes)
    if(count < 16) {
       asm volatile (
          "rep stosb"
-         :
-         : "D" (dest), "a" (ch), "c" (count)
+         : "+D" (dest), "+c" (count)
+         : "a" (ch)
          : "memory", "cc"
       );
-      return dest;
+      return ret;
    }
-    
+
    // For larger blocks, use stosd (4 bytes at a time)
    uint32_t value = ch;
    value |= value << 8;
    value |= value << 16;  // Replicate the byte across all 4 bytes
-   
+
    // Handle unaligned prefix bytes
    int pre = (4 - ((uintptr_t)dest & 3)) & 3;
+   count -= pre;
    if(pre > 0) {
-      if(pre > count) pre = count;
       asm volatile (
          "rep stosb"
-         :
-         : "D" (dest), "a" (ch), "c" (pre)
+         : "+D" (dest), "+c" (pre)
+         : "a" (ch)
          : "memory", "cc"
       );
-      dest = (char*)dest + pre;
-      count -= pre;
    }
-   
+
    // Handle the bulk with stosd (4 bytes at a time)
    size_t dwords = count / 4;
    if(dwords > 0) {
       asm volatile (
          "rep stosl"
-         :
-         : "D" (dest), "a" (value), "c" (dwords)
+         : "+D" (dest), "+c" (dwords)
+         : "a" (value)
          : "memory", "cc"
       );
-      dest = (char*)dest + (dwords * 4);
-      count &= 3;
    }
-   
+
    // Handle trailing bytes
+   count &= 3;
    if(count > 0) {
       asm volatile (
-         "rep stosb" :
-         : "D" (dest), "a" (ch), "c" (count)
+         "rep stosb"
+         : "+D" (dest), "+c" (count)
+         : "a" (ch)
          : "memory", "cc"
       );
    }
 
-   return dest;
-
+   return ret;
 }
 
 void memcpy(void *dest, const void *src, int bytes) {

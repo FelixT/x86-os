@@ -26,6 +26,7 @@ typedef struct process_t process_t;
 
 typedef struct kobj_t {
     kobj_type_t type;
+    uint32_t default_rights;
     
     bool (*connect_func)(kobj_ref_t *ref, process_t *process); // called when duplicating handle, NULL if only one ref possible
     void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd)
@@ -46,11 +47,14 @@ typedef struct kobj_ref_t {
     uint32_t uid;
     kobj_inst_t *inst;
     void *data; // per user data
+    uint32_t rights;
 } kobj_ref_t;
 
 kobj_inst_t *create_kobj_inst(int type, void *data);
 kobj_ref_t *create_kobj_ref(kobj_inst_t *inst); // reference to an instance
 void free_kobj_inst(kobj_inst_t *inst);
+void kobj_add_ref(kobj_inst_t *inst); // increment ref count
+void kobj_release_ref(kobj_inst_t *inst); // decrease ref count + free inst if last ref
 
 bool kobj_release(kobj_ref_t *ref, void *process, bool ending);
 

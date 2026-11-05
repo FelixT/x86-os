@@ -304,7 +304,7 @@ void endtask_dismiss(void *dialog, void *regs) {
    int w = get_task_window(d->task_id);
    end_task(d->task_id, regs);
    if(w < 0) return;
-   wm_event(WINDOW_CLOSE, w, 0, 0, 0, 0);
+   window_close(w, false);
 }
 
 void endtask_debug(void *windowobj, int x, int y) {
@@ -336,9 +336,13 @@ void endtask_debug(void *windowobj, int x, int y) {
 }
 
 void show_endtask_dialog(int task_id, uint32_t process_uid, uint16_t int_no) {
-   int popup = windowmgr_add();
    char buffer[50];
    sprintf(buffer, "Task %i paused due to exception %i", task_id, int_no);
+   int popup = windowmgr_add();
+   if(popup < 0) {
+      debug_printf("%s\n", buffer);
+      return;
+   }
    window_popup_dialog_t *dialog = window_popup_dialog(getWindow(popup), NULL, buffer);
    dialog->callback_func = &endtask_callback;
    dialog->dismiss_func = &endtask_dismiss; // closing dialog ends task

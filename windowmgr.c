@@ -263,13 +263,6 @@ void wm_event_thread_main() {
          case KEY_PRESS:
             windowmgr_keypress(event.c);
             break;
-         case WINDOW_CLOSE:
-            int w = event.x;
-            int t = get_task_from_window(w);
-            if(t != -1) break; // window already closed+reassigned
-            window_close(w, true);
-            gui_redrawall();
-            break;
          case TASK_CRASH:
             int task_id = event.x;
             uint32_t process_uid = event.y;
@@ -1295,7 +1288,12 @@ static void windowmgr_quitselected() {
    if(!selectedWindow) return;
    int task = get_task_from_window(gui_selected_window);
    if(task < 0) return;
-   end_task(task, NULL);
+   int w = get_task_window(task);
+   if(w < 0) {
+      end_task(task, NULL);
+      return;
+   }
+   window_close(w, true);
 }
 
 static gui_window_t *window_menu_targets[MENUBAR_MAX_MENU_SIZE];
@@ -1993,22 +1991,37 @@ void windowmgr_release(int x, int y) {
 
    gui_window_t *window = dragged_window ? dragged_window : getSelectedWindow();
    dragged_window = NULL;
-   bool redraw = false;
    if(!window) return;
    if(window->dragged) {
-      redraw = outline_saved;
+      rect_t old_bounds = {.w = window->width + 3, .h = window->height + 3, .x = window->x - 1, .y = window->y - 1};
+
       window->dragged = false;
       window->x = window->drag_x;
       window->y = window->drag_y;
+
+      windowmgr_redraw_rect(old_bounds);
+
+      window_draw_outline(window, true);
+      window->needs_redraw = true;
+      window_draw(window, true);
    }
    if(window->resized) {
-      redraw = true;
-      window_resize(NULL, window, window->width, window->height, true);
+      int oldW = window->surface.width;
+      int oldH = window->surface.height + TITLEBAR_HEIGHT;
+      rect_t old_bounds = {.w = oldW + 3, .h = oldH + 3, .x = window->x - 1, .y = window->y - 1};
       window->resized = false;
+      if(!window_resize(NULL, window, window->width, window->height, true)) {
+         window->width = oldW;
+         window->height = oldH;
+         outline_saved = false;
+         return;
+      }
+      windowmgr_redraw_rect(old_bounds);
+      window_draw_outline(window, true);
+      window->needs_redraw = true;
+      window_draw(window, true);
    }
    outline_saved = false;
-   if(redraw)
-      gui_redrawall();
 }
 
 void windowmgr_rightclick(int x, int y) {
@@ -2295,7 +2308,7 @@ int get_window_index_from_pointer(gui_window_t *window) {
    return -1;
 }
 
-void window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback) {
+bool window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback) {
    width = max(width, 20);
    height = max(height, 20);
    int maxwidth = surface.width - 5;
@@ -2303,18 +2316,22 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    int screenbottom = surface.height - TOOLBAR_HEIGHT - 5;
    width = min(width, maxwidth);
    height = min(height, maxheight);
-   if(window->x + width > maxwidth)
-      window->x = maxwidth - width + 2;
-   if(window->y + height > screenbottom)
-      window->y = screenbottom - height;
-   if(window->y < MENUBAR_HEIGHT)
-      window->y = MENUBAR_HEIGHT;
 
    uint16_t *old_framebuffer = window->framebuffer;
    uint32_t old_framebuffer_size = window->framebuffer_size;
    int old_width = window->surface.width;
    int old_height = window->surface.height;
 
+   uint32_t new_framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
+   uint16_t *new_framebuffer = malloc(new_framebuffer_size);
+   if(!new_framebuffer)
+      return false;
+
+   if(window->x + width > maxwidth)
+      window->x = maxwidth - width + 2;
+   if(window->y + height > screenbottom)
+      window->y = screenbottom - height;
+   
    // unmap previous framebuffer
    int index = get_window_index_from_pointer(window);
    int task = get_task_from_window(index);
@@ -2322,8 +2339,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    if(task > -1)
       map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1, 0);
 
-   window->framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
-   window->framebuffer = malloc(window->framebuffer_size);
+   window->framebuffer_size = new_framebuffer_size;
+   window->framebuffer = new_framebuffer;
    window->width = width;
    window->height = height;
    window->surface.buffer = (uint32_t)window->framebuffer;
@@ -2387,6 +2404,8 @@ void window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       // needs to be done after resize event as framebuffer changed
       window_scroll_to(regs, window, 0);
    }
+
+   return true;
 }
 
 windowmgr_settings_t *windowmgr_get_settings() {

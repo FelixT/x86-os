@@ -5,7 +5,7 @@
 #include "../stdlib.h"
 #include "../draw.h"
 
-// 'one-line' text input
+// multi-line text input
 
 static inline int ui_string_width(char *txt) {
    return strlen(txt)*(get_font_info().width+get_font_info().padding);
@@ -100,6 +100,12 @@ void draw_textarea(wo_t *textarea, draw_context_t context) {
    if(textarea == NULL || textarea->data == NULL) return;
    textarea_t *textarea_data = textarea->data;
 
+   if(textarea_data->label) {
+      textarea->clicked = false;
+      textarea->selected = false;
+      textarea->hovering = false;
+   }
+
    uint16_t bg = textarea_data->colour_bg;
    uint16_t txt = textarea_data->colour_txt;
    uint16_t light = textarea_data->colour_border_light;
@@ -145,7 +151,7 @@ void draw_textarea(wo_t *textarea, draw_context_t context) {
    int max_line_len = width / (get_font_info().width + get_font_info().padding);
    char *display_text = malloc(max_line_len+1);
    display_text[0] = '\0';
-   display_text[max_line_len+1] = '\0';
+   display_text[max_line_len] = '\0';
 
    int text_x = x + get_font_info().padding + textarea_data->padding;
    int start_y = y + get_font_info().padding + textarea_data->padding;
@@ -307,6 +313,7 @@ void blink_cursor(cursor_event_t *event) {
 
 void click_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
    textarea_t *textarea_data = wo->data;
+   if(textarea_data->label) return;
    if(!textarea_data->focused) {
       draw_textarea(wo, draw_context);
       return;
@@ -330,6 +337,7 @@ void click_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
 void release_textarea(wo_t *wo, draw_context_t draw_context, int x, int y) {
    (void)x;
    (void)y;
+   if(get_textarea(wo)->label) return;
    get_textarea(wo)->focused = true;
    draw_textarea(wo, draw_context);
    // set up blinking cursor
@@ -363,6 +371,7 @@ wo_t *create_textarea(int x, int y, int width, int height) {
    textarea_data->bordered = true;
    textarea_data->cursor_pos = 0;
    textarea_data->padding = 2;
+   textarea_data->label = false;
 
    textarea->type = WO_TEXTAREA;
    textarea->data = textarea_data;

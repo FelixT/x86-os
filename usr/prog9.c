@@ -91,7 +91,7 @@ void client_start() {
 
    uint32_t port_uid;
    uint32_t channel_uid = port_connect("/prog9", &port_uid);
-   if(MSG_IS_ERROR(channel_uid)) {
+   if(MSG_IS_ERR(channel_uid)) {
       printf("Failed to connect to port, error %i\n", (int)channel_uid);
       exit(1);
    }
@@ -177,7 +177,7 @@ void _start(int argc, char **args) {
       while(true) {
          printf("connecting\n");
          channel = port_connect("/prog9", &serverport);
-         if(!MSG_IS_ERROR(channel))
+         if(!MSG_IS_ERR(channel))
             break;
 
          sleep(100);
@@ -224,7 +224,7 @@ void _start(int argc, char **args) {
    free(childargs[0]);
 
    uint32_t port = create_port("/prog9", true);
-   if(MSG_IS_ERROR(port)) {
+   if(MSG_IS_ERR(port)) {
       printf("Failed to create port, error %i\n", (int)port);
       exit(1);
    }

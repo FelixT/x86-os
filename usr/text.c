@@ -238,6 +238,6 @@ void _start(int argc, char **args) {
    ui_redraw(ui);
 
    while(true) {
-      asm volatile("nop");
+      snooze();
    }
 }

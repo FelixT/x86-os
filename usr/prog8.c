@@ -17,14 +17,19 @@ void _start(int argc, char **args) {
       int img1_size = fpsize(img1_path);
       if(img1_size <= 0) {
          printf("loading img1 failed\n");
-         exit(0);
+         exit(1);
       }
-      shared_t shared = shared_create(img1_size);
-      if(!shared.mem) {
+      handle_t shared = shared_create(img1_size);
+      if(shared < 0) {
          printf("shared_create failed\n");
-         exit(0);
+         exit(1);
       }
-      printf("created shared mem handle %i\n", shared.h);
+      printf("created shared mem handle %i\n", shared);
+      uint8_t *shared_mem = shared_map(shared);
+      if(!shared_mem) {
+         printf("shared_map failed\n");
+         exit(1);
+      }
 
       uint8_t *img1 = malloc(img1_size);
       int fd = open(img1_path, 0);
@@ -38,28 +43,28 @@ void _start(int argc, char **args) {
       int img2_size = fpsize(img2_path);
       if(img2_size <= 0) {
          printf("loading img2 failed\n");
-         exit(0);
+         exit(1);
       }
 
       uint32_t port;
       uint32_t channel = port_connect("/prog8", &port);
-      if(MSG_IS_ERROR(channel)) {
+      if(MSG_IS_ERR(channel)) {
          printf("couldn't connect to channel\n");
          exit(0);
       }
-      handle_t handles[] = {shared.h};
+      handle_t handles[] = {shared};
       uint8_t cmd = 1; // 1 = redraw, 0 = quit
       msg_send_t send_msg = {.buffer = &cmd, .size = 1, .handle_count = 1, .handles = handles};
       uint8_t buf[1];
       msg_recv_t recv_msg = {.buffer_size = 1, .buffer = buf, .handle_count = 0};
 
-      memcpy(shared.mem, img1, img1_size);
+      memcpy(shared_mem, img1, img1_size);
 
       // notify server
       int r = msg_sync_send_obj(channel, &send_msg, &recv_msg);
       if(r < 0) {
          printf("send fail %i\n", r);
-         exit(0);
+         exit(1);
       }
 
       printf("received %i\n", buf[0]);
@@ -80,9 +85,9 @@ void _start(int argc, char **args) {
       bool img = false;
       while(true) {
          if(img) {
-            memcpy(shared.mem, img1, img1_size);
+            memcpy(shared_mem, img1, img1_size);
          } else {
-            memcpy(shared.mem, img2, img2_size);
+            memcpy(shared_mem, img2, img2_size);
          }
          img = !img;
          sleep(1000);

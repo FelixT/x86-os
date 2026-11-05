@@ -160,21 +160,6 @@ void api_yield(registers_t *regs) {
    }
 }
 
-// potentially broken
-void api_print_program_stack(registers_t *regs) {
-   for(int i = 0; i < 64; i++)
-      api_printf("%i ", ((int*)regs->esp)[i]);
-}
-
-void api_print_stack() {
-   // show current stack contents
-   int esp;
-   asm("movl %%esp, %0" : "=r"(esp));
-
-   for(int i = 0; i < 64; i++)
-      api_printf("%i ", ((int*)esp)[i]);
-}
-
 void api_return_framebuffer(registers_t *regs) {
    // IN: ebx = window index or -2 for screen surface
    // OUT: ebx = framebuffer address (NULL for screen surface)
@@ -323,14 +308,20 @@ void api_end_subroutine(registers_t *regs) {
    task_subroutine_end(regs) ;
 }
 
-// *very unsafe*
 void api_draw_bmp(registers_t *regs) {
    // IN: ebx = bmp address
    // IN: ecx = x
    // IN: edx = y
    // IN: esi = scale
+   // IN: edi = white is transparent
    if(get_current_task_window() < 0) return;
    gui_window_t *window = &gui_get_windows()[get_current_task_window()];
+   if(!api_validate_mem((void*)regs->ebx, sizeof(bmp_header_t)+sizeof(bmp_info_t), false))
+      return;
+   int size = bmp_filesize((uint8_t*)regs->ebx);
+   if(size <= 0) return;
+   if(!api_validate_mem((void*)regs->ebx, size, false))
+      return;
 
    bmp_draw((uint8_t*)regs->ebx, &window->surface, regs->ecx, regs->edx, regs->edi, regs->esi);
 }
@@ -507,6 +498,8 @@ void api_get_working_dir(registers_t *regs) {
 }
 
 void api_debug_write_str(registers_t *regs) {
+   if(!api_validate_str((char*)regs->ebx, API_WRITESTR_MAX_LENGTH))
+      return;
    debug_printf("t%iw%i: %s\n", get_current_task(), get_current_task_window(), regs->ebx);
 }
 
@@ -514,6 +507,7 @@ void api_sbrk(registers_t *regs) {
    // change heap size
 
    // IN: ebx - int increment/delta
+   // OUT: ebx - old heap end, -1 on error
    int delta = (int)regs->ebx;
    task_state_t *task = &gettasks()[get_current_task()];
 
@@ -528,11 +522,15 @@ void api_sbrk(registers_t *regs) {
 
    uint32_t old_end = page_align_up(task->process->heap_start + old_heapsize);
    uint32_t new_end = page_align_up(task->process->heap_start + new_heapsize);
+   if(new_end >= VM_START) {
+      // todo: check physical memory
+      regs->ebx = (uint32_t)-1;
+      return;
+   }
 
    if(new_end < old_end) {
       // shrink
       int delta_pages = (old_end - new_end) / 0x1000;
-      debug_printf("Shrink by %u pages\n", delta_pages);
       
       uint32_t *physical_addrs = NULL;
       if(delta_pages > 0) {
@@ -564,7 +562,6 @@ void api_sbrk(registers_t *regs) {
 
    task->process->heap_end = task->process->heap_start + new_heapsize;
    regs->ebx = old_heap_end;
-
 }
 
 // find the lowest free fd, slot claimed via commit_fd
@@ -1456,8 +1453,10 @@ void api_pipe(registers_t *regs) {
 
 void api_unpause(registers_t *regs) {
    // IN: ebx - task id
+   // OUT: ebx - task is unpaused or pause is pending
    // todo: check if child of calling process or called by root process
    int task_id = regs->ebx;
+   regs->ebx = 0;
    if(task_id < 0 || task_id >= TOTAL_TASKS) {
       debug_printf("api_unpause: invalid task id\n");
       return;
@@ -1467,6 +1466,7 @@ void api_unpause(registers_t *regs) {
       debug_printf("Couldn't unpause task %i - paused for reason %i\n", task->task_id, task->pause_reason);
       return;
    }
+   regs->ebx = 1;
    if(!task->paused) {
       task->wake_pending = true; // latch it for the next snooze
       return;
@@ -1577,16 +1577,12 @@ void api_futex_wake(registers_t *regs) {
 
 void api_shared_create(registers_t *regs) {
    // IN: ebx - size
-   // OUT: ebx - addr, NULL on fail
-   // OUT: ecx - handle
-   uint32_t vaddr;
+   // OUT: ebx - handle, -1 on fail
    int size = regs->ebx;
-   regs->ebx = 0;
-   regs->ecx = -1;
-   kobj_handle_t h = shared_create(get_current_task_state()->process, size, &vaddr);
-   if(h < 0) return;
-   regs->ebx = vaddr;
-   regs->ecx = h;
+   regs->ebx = -1;
+   if(size < 0) return;
+   kobj_handle_t h = shared_create(get_current_task_state()->process, size);
+   regs->ebx = h;
 }
 
 void api_shared_map(registers_t *regs) {
@@ -1600,7 +1596,15 @@ void api_shared_map(registers_t *regs) {
       debug_printf("api_shared_map: handle not found\n");
       return;
    }
-   regs->ebx = shared_map_instance(process, ref->inst->data);
+   regs->ebx = shared_map(process, ref->inst);
+}
+
+void api_unmap(registers_t *regs) {
+   // IN: ebx - addr
+   // OUT: ebx - success
+   process_t *process = get_current_task_state()->process;
+   uint32_t addr = regs->ebx;
+   regs->ebx = process_unmap_vm(process, addr);
 }
 
 void api_pci_map(registers_t *regs) {

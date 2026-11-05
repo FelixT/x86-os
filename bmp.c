@@ -53,6 +53,20 @@ uint16_t bmp_get_colour(uint8_t *bmp, int x, int y) {
       return pixels16bit[index];
 }
 
+uint32_t bmp_filesize(uint8_t *bmp) {
+   bmp_header_t *header = (bmp_header_t*)(&bmp[0]);
+   bmp_info_t *info = (bmp_info_t*)(&bmp[sizeof(bmp_header_t)]);
+   if(info->width <= 0) return 0;
+   if(info->height <= 0) return 0;
+
+   uint64_t rowSize = (((uint64_t)info->bpp * (uint64_t)info->width+(32-1))/32)*4;
+   uint64_t total = (uint64_t)header->dataOffset + (uint64_t)info->height * rowSize;
+   uint64_t paletteEnd = (uint64_t)sizeof(bmp_header_t) + (uint64_t)info->headerSize + (uint64_t)(info->bpp == 8 ? 256*4 : 0);
+   uint64_t sz = total > paletteEnd ? total : paletteEnd;
+   if(sz > 0x7FFFFFFF) return 0;
+   return (uint32_t)sz;
+}
+
 void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransparent, int scale) {
    if(scale < 1) return;
 
@@ -69,8 +83,9 @@ void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransp
    
    if(!bmp_check(info)) return;
 
-   if(info->colourPaletteLength == 0)
-      info->colourPaletteLength = 1 << info->bpp; // 2^n
+   uint32_t colourPaletteLength = info->colourPaletteLength;
+   if(colourPaletteLength == 0)
+      colourPaletteLength = 1 << info->bpp; // 2^n
 
    bmp_colour_t *colours = (bmp_colour_t*)(&bmp[0]+sizeof(bmp_header_t)+info->headerSize); // colour table for 8 bit bmps
    uint8_t *pixels8bit = (uint8_t*)(&bmp[0] + header->dataOffset);

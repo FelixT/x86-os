@@ -46,7 +46,6 @@ typedef enum {
    MOUSE_SCROLL,
    KEY_PRESS,
    KEY_RELEASE,
-   WINDOW_CLOSE,
    TASK_CRASH // event to display 'task crashed' dialog
 } wm_event_type_t;
 
@@ -100,7 +99,7 @@ void desktop_init();
 void desktop_setbgimg(uint8_t *img, int size);
 void windowmgr_mousemove(int x, int y, bool mouse_held);
 void windowmgr_scroll(int y, int w);
-void window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback);
+bool window_resize(registers_t *regs, gui_window_t *window, int width, int height, bool callback);
 void window_close(int windowIndex, bool end);
 void window_minimise(gui_window_t *window, bool minimise);
 int get_window_index_from_pointer(gui_window_t *window);

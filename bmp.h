@@ -36,5 +36,6 @@ void bmp_draw(uint8_t *bmp, surface_t *surface, int x, int y, bool whiteIsTransp
 uint16_t bmp_get_colour(uint8_t *bmp, int x, int y);
 int32_t bmp_get_width(uint8_t *bmp);
 int32_t bmp_get_height(uint8_t *bmp);
+uint32_t bmp_filesize(uint8_t *bmp);
 
 #endif

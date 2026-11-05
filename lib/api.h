@@ -46,7 +46,7 @@ typedef enum {
 } api_setting_t;
 
 #define MSG_ERR_BASE 0xFFFFFF00
-#define MSG_IS_ERROR(x) ((uint32_t)(x) >= MSG_ERR_BASE)
+#define MSG_IS_ERR(x) ((uint32_t)(x) >= MSG_ERR_BASE)
 
 #define MSG_PORT_NAME_LEN 32
 #define MSG_MAX_HANDLES 4
@@ -136,7 +136,11 @@ typedef enum { // callback args:
 #define KEY_LEFTARROW 0x102
 #define KEY_RIGHTARROW 0x103
 
-#define W_SETTING_BGCOLOUR 0
-#define W_SETTING_TXTCOLOUR 1
+typedef enum {
+   W_SETTING_BGCOLOUR,
+   W_SETTING_TXTCOLOUR
+} w_setting_t; 
+
+#define KOBJ_RIGHTS_ALL 0xFFFFFFFFu
 
 #endif

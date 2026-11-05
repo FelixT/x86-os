@@ -339,8 +339,9 @@ void ui_rightclick(ui_mgr_t *ui, int x, int y) {
    menu->visible = true;
    menu->x = x;
    menu->y = y;
-   if(menu->x + menu->width > ui->surface->width)
-      menu->x = ui->surface->width - menu->width;
+   int width = get_width_w(ui->window);
+   if(menu->x + menu->width > width)
+      menu->x = width - menu->width;
    if(menu->y + menu->height > ui->surface->height)
       menu->y = ui->surface->height - menu->height;
    menu_t *menu_data = menu->data;

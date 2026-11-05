@@ -11,4 +11,9 @@ static inline int min(int a, int b) {
     else return b;
 }
 
+static inline int abs(int n) {
+    if(n < 0) return -n;
+    return n;
+}
+
 #endif
