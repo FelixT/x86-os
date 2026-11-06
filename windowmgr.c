@@ -21,6 +21,8 @@ gui_window_t *selectedWindow = NULL;
 
 gui_window_t *gui_windows;
 
+uint32_t window_uid_counter = 1;
+
 extern surface_t surface; // screen
 extern uint16_t *draw_buffer;
 extern surface_t main_surface; // screen, even while surface is swapped to draw_buffer
@@ -431,6 +433,13 @@ gui_window_t *getWindow(int index) {
    return &gui_windows[index];
 }
 
+gui_window_t *get_window_checked(int index, uint32_t uid) {
+   if(index < 0 || index >= windowCount) return NULL;
+   gui_window_t *window = &gui_windows[index];
+   if(window->closed || window->uid != uid) return NULL;
+   return window;
+}
+
 gui_window_t *getSelectedWindow() {
    if(gui_selected_window == -1) return NULL;
    return &gui_windows[gui_selected_window];
@@ -551,6 +560,9 @@ void window_close(int windowIndex, bool end) {
 }
 
 bool window_init(gui_window_t *window) {
+   window->uid = window_uid_counter++;
+   if(window_uid_counter == 0)
+      window_uid_counter = 1;
    strcpy(window->title, "Window");
    window->x = gui_get_width()/16;
    window->y = gui_get_height()/16;
@@ -658,7 +670,7 @@ int windowmgr_add() {
          return -1;
       }
    }
-      
+
    gui_window_t *window = &gui_windows[index];
    if(window_init(window)) {
       int screenW = gui_get_width();
@@ -686,7 +698,6 @@ int windowmgr_add() {
       debug_writestr("Couldn't create window\n");
       return -1;
    }
-
 }
 
 // hide cursor if it overlaps with region about to be drawn to screen
@@ -1122,9 +1133,19 @@ void toolbar_draw() {
    }
 
    int toolbarPos = 0;
-   // padding = 2px
+
+   bool overflow = false;
+   int max_shown = (gui_get_width() - 80)/(TOOLBAR_ITEM_WIDTH + TOOLBAR_PADDING);
+   int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
+   int textY = itemY+(TOOLBAR_ITEM_HEIGHT - getFont()->height)/2;
    for(int i = 0; i < getWindowCount(); i++) {
       if(getWindow(i)->closed) continue;
+
+      if(toolbarPos == max_shown) {
+         overflow = true;
+         getWindow(i)->toolbar_pos = -1;
+         continue;
+      }
 
       int bg = rgb16(230, 230, 230);
       int bg2 = rgb16(210, 210, 210);
@@ -1149,13 +1170,11 @@ void toolbar_draw() {
       char text[11];
       strcpy_fixed(text, getWindow(i)->title, displayedChars);
       int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
-      int itemY = surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING);
       if(wm_settings.theme == 1) {
          draw_rect_gradient(&surface, bg, bg2, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT, windowmgr_get_settings()->titlebar_gradientstyle);
       } else {
          gui_drawrect(bg, itemX, itemY, TOOLBAR_ITEM_WIDTH, TOOLBAR_ITEM_HEIGHT);
       }
-      int textY = itemY+(TOOLBAR_ITEM_HEIGHT - getFont()->height)/2;
       gui_writestrat(text, fg, itemX+textX, textY);
       // if selected, draw underline
       if(getWindow(i)->active)
@@ -1164,6 +1183,24 @@ void toolbar_draw() {
       getWindow(i)->toolbar_pos = toolbarPos;
       toolbarPos++;
    }
+
+   if(overflow) {
+      int itemX = TOOLBAR_PADDING+toolbarPos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING);
+      int itemW = 38;
+
+      int bg = rgb16(230, 230, 230);
+      int bg2 = rgb16(210, 210, 210);
+      int fg = COLOUR_DARK_GREY;
+      if(wm_settings.theme == 1) {
+         draw_rect_gradient(&surface, bg, bg2, itemX, itemY, itemW, TOOLBAR_ITEM_HEIGHT, windowmgr_get_settings()->titlebar_gradientstyle);
+      } else {
+         gui_drawrect(bg, itemX, itemY, itemW, TOOLBAR_ITEM_HEIGHT);
+      }
+      int textWidth = font_width(3);
+      int textX = itemW/2 - textWidth/2;
+      gui_writestrat("...", fg, itemX+textX, textY);
+   }
+   
    windowobj_draw(app_button);
 
    cursor_show(cursor_hidden);
@@ -1297,13 +1334,14 @@ static void windowmgr_quitselected() {
 }
 
 static gui_window_t *window_menu_targets[MENUBAR_MAX_MENU_SIZE];
+static uint32_t window_menu_target_uids[MENUBAR_MAX_MENU_SIZE];
 
 static void windowmgr_select_window() {
    if(!open_menu) return;
    int index = open_menu->menu.menuhovered;
    if(index < 0 || index >= MENUBAR_MAX_MENU_SIZE) return;
    gui_window_t *w = window_menu_targets[index];
-   if(w && !w->closed)
+   if(w && !w->closed && w->uid == window_menu_target_uids[index])
       window_minimise(w, false);
 }
 
@@ -1326,6 +1364,7 @@ void menubar_open_window_menu(wm_menubar_menu_t *menu) {
    char buf[256];
    sprintf(buf, "%s%s%s", window->title, window->active?" (selected)":"", window->minimised?" (minimised)":"");
    window_menu_targets[menu->menu.menuitem_count] = window;
+   window_menu_target_uids[menu->menu.menuitem_count] = window->uid;
    menubar_menu_add_item(menu, &windowmgr_select_window, buf);
    for(int i = 0; i < window->child_count; i++) {
       gui_window_t *w = window->children[i];
@@ -1333,6 +1372,7 @@ void menubar_open_window_menu(wm_menubar_menu_t *menu) {
       if(menu->menu.menuitem_count == MENUBAR_MAX_MENU_SIZE) break;
       sprintf(buf, "%s%s%s", w->title, w->active?" (selected)":"", w->minimised?" (minimised)":"");
       window_menu_targets[menu->menu.menuitem_count] = w;
+      window_menu_target_uids[menu->menu.menuitem_count] = w->uid;
       menubar_menu_add_item(menu, &windowmgr_select_window, buf);
    }
 }
@@ -1778,7 +1818,8 @@ bool clicked_on_window(int index, int x, int y) {
    gui_window_t *window = getWindow(index);
    if(!window || window->closed) return false;
 
-   if(x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
+   if(window->toolbar_pos >= 0 && // discard hidden (overflowed)
+   x >= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING) && x <= TOOLBAR_PADDING+window->toolbar_pos*(TOOLBAR_ITEM_WIDTH+TOOLBAR_PADDING)+TOOLBAR_ITEM_WIDTH
    && y >= (int)surface.height-(TOOLBAR_ITEM_HEIGHT+TOOLBAR_PADDING) && y <= (int)surface.height-TOOLBAR_PADDING) {
       // clicked on window's icon in toolbar, maximise
       if(window->minimised) {

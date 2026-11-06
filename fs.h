@@ -40,6 +40,7 @@ typedef struct fs_file_t {
     int flags;
     uint8_t type;
     int window_index; // terminal window for terms
+    uint32_t window_uid;
     uint32_t current_pos;
     fs_file_data_t *data;
     fs_pipe_t *pipe;

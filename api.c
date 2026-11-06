@@ -414,6 +414,7 @@ void api_launch_task(registers_t *regs) {
    int calling_task = get_current_task();
    task_state_t *parenttask = &gettasks()[calling_task];
    int oldwindow = getSelectedWindowIndex();
+   uint32_t oldwindow_uid = oldwindow>=0 ? getWindow(oldwindow)->uid : 0;
 
    // set up the new task without switching context
    int new_task = tasks_setup_elf(pathbuf, argc, copied_args, !copy, copy, false);
@@ -436,7 +437,8 @@ void api_launch_task(registers_t *regs) {
       int child_win = task->process->window;
       window_close(child_win, false);
       task->process->window = -1;
-      setSelectedWindowIndex(oldwindow);
+      if(get_window_checked(oldwindow, oldwindow_uid)) // tasks_setup_elf can yield, so it may have closed
+         setSelectedWindowIndex(oldwindow);
    }
 
    // map args to new task

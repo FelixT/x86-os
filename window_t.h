@@ -11,6 +11,7 @@
 #define W_CHILDCOUNT 10
 
 typedef struct gui_window_t {
+   uint32_t uid;
    char title[20];
    int x;
    int y;

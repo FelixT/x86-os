@@ -12,9 +12,6 @@ kmutex_t fs_mutex = {.owner = NULL, .waiters = NULL, .waiters_tail = NULL};
 extern bool switching;
 
 // read entire file
-// todo: switch all kernel file reads to use this rather than fat_read_file (which doesn't lock)
-// currently fat_read_file is called from IRQs e.g. click->windowmgr->launch elf
-// or keypress(return)->window_term->load file (less important)
 uint8_t *fs_read_file_kernel(char *path, int *size) {
    if(switching) // may be called before tasks are init
       kmutex_lock(&fs_mutex);
@@ -44,6 +41,7 @@ static bool fs_is_term_path(char *path) {
 static fs_file_t *fs_open_term(fs_file_t *file) {
    file->type = FS_TYPE_TERM;
    file->window_index = getSelectedWindowIndex();
+   file->window_uid = getSelectedWindow() ? getSelectedWindow()->uid : 0;
    if(strequ(file->filename, "/dev/stdin"))
       file->flags = FS_FLAG_READONLY;
    else
@@ -405,8 +403,7 @@ static size_t fs_pipe_fill(fs_pipe_t *pipe, int task, void *src, size_t max) {
 // task -1 for kernel, e.g. in task_write_to_window
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
-      int w = file->window_index;
-      if(w >= 0 && w < getWindowCount() && !getWindow(w)->closed) {
+      if(get_window_checked(file->window_index, file->window_uid)) {
          window_writestrn((char*)buffer, size, 0, file->window_index);
          return size;
       } else {
@@ -508,12 +505,11 @@ void fs_read_window_callback(gui_window_t *window, bool eof) {
 
 int fs_read(fs_file_t *file, void *buffer, size_t size, int task) {
    if(file->type == FS_TYPE_TERM) {
-      int w = file->window_index;
-      if(w < 0 || w >= getWindowCount() || getWindow(w)->closed) {
+      gui_window_t *window = get_window_checked(file->window_index, file->window_uid);
+      if(!window) {
          debug_printf("FS: error reading from window %i\n", file->window_index);
          return FS_ERROR;
       }
-      gui_window_t *window = getWindow(w);
 
       if(file->flags & FS_FLAG_WRITEONLY) {
          debug_printf("FS: cannot read from write-only file %s\n", file->filename);

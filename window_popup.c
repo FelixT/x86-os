@@ -36,6 +36,8 @@ void window_popup_dialog_close(void *windowobj, int x, int y) {
    window_popup_dialog_t *dialog = (window_popup_dialog_t*)window->state;
    int index = get_window_index_from_pointer(window);
    int parent_index = get_window_index_from_pointer(dialog->parent);
+   if(!get_window_checked(parent_index, dialog->parent_uid))
+      parent_index = -1; // parent gone
 
    if(dialog->callback_func == NULL) {
       // self destruct
@@ -83,6 +85,7 @@ window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *p
 
    window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
+   dialog->parent_uid = parent ? parent->uid : 0;
    dialog->callback_func = NULL;
    dialog->dismiss_func = NULL;
    dialog->answered = false;
@@ -149,7 +152,10 @@ void window_popup_colourpicker_return(void *windowobj, int x, int y) {
    uint16_t colour = (uint16_t)hextouint(window->window_objects[0]->text);   
    void (*callback)(uint16_t) = cp->callback_func;
 
-   setSelectedWindowIndex(get_window_index_from_pointer(cp->parent));
+   int parent_index = get_window_index_from_pointer(cp->parent);
+   if(!get_window_checked(parent_index, cp->parent_uid))
+      parent_index = -1;
+   setSelectedWindowIndex(parent_index);
 
    // self destruct
    window_close(get_window_index_from_pointer(window), false);
@@ -195,6 +201,7 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
    window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
    cp->callback_func = callback;
    cp->parent = parent;
+   cp->parent_uid = parent->uid;
 
    int y = 5;
    windowobj_t *wo_col = malloc(sizeof(windowobj_t));

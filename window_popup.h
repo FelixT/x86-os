@@ -6,6 +6,7 @@
 
 typedef struct window_popup_dialog_t {
    gui_window_t *parent;
+   uint32_t parent_uid;
    windowobj_t *wo_okbtn;
    void (*callback_func)(void *dialog);
    void (*dismiss_func)(void *dialog, void *regs); // run if window closed
@@ -17,6 +18,7 @@ typedef struct window_popup_dialog_t {
 typedef struct window_popup_colourpicker_t {
    void (*callback_func)(uint16_t colour);
    gui_window_t *parent;
+   uint32_t parent_uid;
 } window_popup_colourpicker_t;
 
 window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *parent, char *text);
