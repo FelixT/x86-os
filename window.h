@@ -28,7 +28,6 @@ void window_writestr(char *c, uint16_t colour, int windowIndex);
 void window_writestrn(char *c, size_t size, uint16_t colour, int windowIndex);
 void window_drawchar(char c, uint16_t colour, int windowIndex);
 void window_writenum(int num, uint16_t colour, int windowIndex);
-void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex);
 void window_newline(gui_window_t* window);
 windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text, void (*func)(void *windowobj, int x, int y));
 windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text);

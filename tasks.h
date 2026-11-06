@@ -115,7 +115,6 @@ typedef struct process_t {
    uint32_t heap_end; // 'break point'
    fs_file_t *file_descriptors[PROCESS_MAX_FDS];
    int fd_count;
-   uint32_t mmio_end; // end vaddr (note: earlier vaddr never reclaimed)
    struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
    int port_count;
    char **launch_args;
@@ -184,6 +183,7 @@ void kernel_block();
 bool kernel_yield_if_blocking();
 bool kernel_yield_to(int next_index);
 bool launch_kthread(void *func, char *name, bool run);
+bool is_kthread(task_state_t *task);
 #define LAUNCH_KTHREAD(func, run) launch_kthread(func, #func, run)
 void end_kthread(int task);
 bool kernel_exit_resume(registers_t *regs, int task);

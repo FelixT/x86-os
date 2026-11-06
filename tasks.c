@@ -32,7 +32,6 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->fd_count = 0;
    for(int i = 0; i < PROCESS_MAX_FDS; i++)
       process->file_descriptors[i] = NULL;
-   process->mmio_end = V_MMIO_START;
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++)
       process->kobj[i] = NULL;
    process->kobj_count = 0;
@@ -344,7 +343,7 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
    }
 
    if(task->kernel_esp) {
-      if(task->process->page_dir == page_get_kernel_pagedir())
+      if(is_kthread(task))
          debug_printf("Can't end kthread %i\n", index);
       else
          task->kill_pending = true; // usermode parked in kernel, wait until end of syscall
@@ -817,6 +816,10 @@ bool launch_kthread(void *func, char *name, bool run) {
    if(run)
       kernel_yield_to(index);
    return true;
+}
+
+bool is_kthread(task_state_t *task) {
+   return task->in_syscall && task->process && !task->process->prog_start && task->process->page_dir == page_get_kernel_pagedir();
 }
 
 task_state_t *gettasks() {
@@ -1439,16 +1442,18 @@ uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index) {
    if(!inst->obj->map_func || !inst->obj->map_func(inst, index, &mapping))
       return 0;
    uint32_t flags = (rw ? VM_FLAG_WRITE : 0)|(mapping.no_cache ? VM_FLAG_NO_CACHE : 0);
+   uint32_t offset = mapping.paddr & PAGE_MASK;
+   mapping.size = page_align_up(mapping.size + offset);
    vm_region_t *region = process_alloc_vm(process, mapping.size, flags, inst);
    if(!region)
       return 0;
-   int mapped = map_size(process->page_dir, mapping.paddr, region->vaddr, mapping.size, 1, rw, mapping.no_cache);
+   int mapped = map_size(process->page_dir, mapping.paddr - offset, region->vaddr, mapping.size, 1, rw, mapping.no_cache);
    process->no_allocated += mapped;
-   if(mapped != (int)page_align_up(mapping.size)/PAGE_SIZE) {
+   if(mapped != (int)mapping.size/PAGE_SIZE) {
       process_unmap_vm(process, region->vaddr);
       return 0;
    }
-   return region->vaddr;
+   return region->vaddr + offset;
 }
 
 vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags, kobj_inst_t *inst) {
@@ -1506,7 +1511,7 @@ bool process_unmap_vm(process_t *process, uint32_t vaddr) {
    vm_region_t *prev = NULL;
    vm_region_t *region = process->regions;
    while(region) {
-      if(region->vaddr == vaddr) {
+      if(vaddr >= region->vaddr && vaddr - region->vaddr < region->size) {
          // found
          process->no_allocated -= unmap_size(process->page_dir, region->vaddr, region->size);
 

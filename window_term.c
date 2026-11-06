@@ -258,51 +258,47 @@ void term_cmd_tasks() {
    }
 
    for(int i = 0; i < TOTAL_TASKS; i++) {
-      if(tasks[i].enabled) {
-         window_term_printf("\n%i: ", i);
-         window_term_printf("<w%i: %s>", tasks[i].process->window, gui_get_windows()[tasks[i].process->window].title);
-         if(tasks[i].routine != E_NONE)
-            window_term_printf(" <routine %i>", tasks[i].routine);
-         if(tasks[i].process->privileged)
-            window_term_printf(" privileged");
-         if(tasks[i].kernel_esp)
-            window_term_printf(" parked");
-         if(tasks[i].kill_pending)
-            window_term_printf(" killpending");
-         if(tasks[i].paused)
-            window_term_printf(" paused code %u", tasks[i].pause_reason);
-         if(tasks[i].process->threads[0] == &tasks[i]) {
-            // main thread
-            window_term_printf(" main thread (%i children", tasks[i].process->no_threads-1);
+      task_state_t *task = &tasks[i];
+      if(!task->enabled) continue;
+      process_t *process = task->process;
+      int w = process->window;
+      window_term_printf("\n%i: ", i);
+      window_term_printf("<w%i:%s>", w, w > -1 ? getWindow(w)->title : process->exe_path);
+      if(is_kthread(task)) {
+         window_term_printf(" kthread");
+         continue;
+      }
+
+      if(task->routine != E_NONE)
+         window_term_printf(" <routine %i>", task->routine);
+      if(process->privileged)
+         window_term_printf(" privileged");
+      if(task->kernel_esp)
+         window_term_printf(" parked");
+      if(task->kill_pending)
+         window_term_printf(" killpending");
+      if(task->paused)
+         window_term_printf(" paused (%u)", task->pause_reason);
+
+      if(process->threads[0] == task) {
+         // main thread
+
+         if(process->no_threads > 1) {
+            window_term_printf(" (%i children: ", tasks[i].process->no_threads-1);
 
             int disp = 0;
             for(int t = 1; t < MAX_TASK_THREADS; t++) {
-               if(!tasks[i].process->threads[t]) continue;
-               if(disp > 0)
-                  window_term_printf(", ");
-               else
-                  window_term_printf(": ");
-               
-               window_term_printf("%i", tasks[i].process->threads[t]->task_id);
+               if(!tasks[i].process->threads[t]) continue;               
+               window_term_printf("%s%i", disp > 0 ? ", " : "", tasks[i].process->threads[t]->task_id);
                disp++;
             }
 
             window_term_printf(")");
-         } else {
-            window_term_printf(" child");
          }
-         int tmp = getSelectedWindow()->txtcolour;
-         getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
-         window_term_printf("\n   (eip 0x%h, allc %i/%ikb, heap 0x%h %ib)", tasks[i].registers.eip, tasks[i].process->no_allocated, tasks[i].process->no_allocated*MEM_BLOCK_SIZE/1000, tasks[i].process->heap_start, tasks[i].process->heap_end - tasks[i].process->heap_start);
-         window_term_printf("\n   (esp 0x%h, stack 0x%h-0x%h)", tasks[i].registers.useresp, tasks[i].stack_base, tasks[i].stack_base + TASK_STACK_SIZE - 0x1000);
-         window_term_printf("\n   (k stack 0x%h-0x%h)", tasks[i].kernel_stack_top - KSTACK_SIZE, tasks[i].kernel_stack_top);
-         getSelectedWindow()->txtcolour = tmp;
       } else {
-         if(i == 0 || tasks[i-1].enabled) // skip consecutive disabled tasks
-            window_term_printf("\n%i: Disabled", i);
+         window_term_printf(" child");
       }
    }
-   window_term_printf("\nCurrent task is %i\n", get_current_task());
 }
 
 void term_cmd_prog1() {
@@ -450,19 +446,22 @@ void term_cmd_taski(char *arg) {
       return;
    }
    task_state_t *task = &gettasks()[id];
-   window_term_printf("Task %i uid %u (enabled %i paused %i reason %i crashed %i in routine %i)\n", id, task->task_uid, task->enabled, task->paused, task->pause_reason, task->crashed, task->routine);
-   window_term_printf("Stack base 0x%h\n", task->stack_base);
+   window_term_printf("\nTask %i uid %u\nEnabled %i paused %i reason %i crashed %i in routine %i\n\n", id, task->task_uid, task->enabled, task->paused, task->pause_reason, task->crashed, task->routine);
+   window_term_printf("eip: 0x%h, esp: 0x%h\n", task->registers.eip, task->registers.useresp);
+   window_term_printf("Stack: 0x%h-0x%h\n", task->stack_base, task->stack_base + TASK_STACK_SIZE - 0x1000);
+   window_term_printf("kstack: 0x%h-0x%h\n", task->kernel_stack_top - KSTACK_SIZE, task->kernel_stack_top);
+
    process_t *process = task->process;
    if(process) {
-      window_term_printf("Event queue size %i\n", kqueue_count(&task->event_queue));
-      window_term_printf("Process uid %u threads %i privileged %i\n", process->uid, process->no_threads, process->privileged);
-      window_term_printf("Working dir %s\n", process->working_dir);
-      window_term_printf("Prog mem 0x%h - 0x%h\n", process->vmem_start, process->vmem_end);
-      window_term_printf("Heap 0x%h - 0x%h\n", process->heap_start, process->heap_end);
-      window_term_printf("MMIO 0x%h - 0x%h\n", V_MMIO_START, process->mmio_end);
-      window_term_printf("Exe path %s\n", process->exe_path);
-      window_term_printf("Window %i\n", process->window);
-      window_term_printf("KObjs %i fds %i\n", process->kobj_count, process->fd_count);
+      window_term_printf("Allocated: %i (%ikb)\n", task->process->no_allocated, task->process->no_allocated*MEM_BLOCK_SIZE/1000);
+      window_term_printf("Event queue size: %i\n", kqueue_count(&task->event_queue));
+      window_term_printf("Process uid: %u, threads: %i, privileged: %i\n", process->uid, process->no_threads, process->privileged);
+      window_term_printf("Working dir: %s\n", process->working_dir);
+      window_term_printf("Prog mem: 0x%h - 0x%h\n", process->vmem_start, process->vmem_end);
+      window_term_printf("Heap: 0x%h - 0x%h\n", process->heap_start, process->heap_end);
+      window_term_printf("Exe path: %s\n", process->exe_path);
+      window_term_printf("Window: %i\n", process->window);
+      window_term_printf("kobjs: %i, fds: %i\n", process->kobj_count, process->fd_count);
    }
 }
 
@@ -506,7 +505,13 @@ void term_cmd_handles(char *arg) {
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
       kobj_ref_t *ref = task->process->kobj[i];
       if(!ref || !ref->inst) continue;
-      window_term_printf("%i (%i) - type %i refcount %i\n", i, i | (KOBJ_HANDLE_CHECK(ref->uid) << 16), ref->inst->obj->type, ref->inst->ref_count);
+      window_term_printf("%i (%i) - inst %u type %i refcount %i\n", i, i | (KOBJ_HANDLE_CHECK(ref->uid) << 16), ref->inst->uid, ref->inst->obj->type, ref->inst->ref_count);
+   }
+
+   vm_region_t *region = process->regions;
+   while(region) {
+      window_term_printf("Region 0x%h size 0x%h inst %u type %u\n", region->vaddr, region->size, region->inst->uid, region->inst->obj->type);
+      region = region->next;
    }
 }
 

@@ -178,7 +178,7 @@ int test_dma(void) {
    uint32_t test_dma_phys;
    handle_t test_dma = dma(0x1000, &test_dma_phys);
    if(test_dma < 0) return -1;
-   void *mem = map(test_dma);
+   void *mem = map(test_dma, 0);
    if(!mem) return -1;
    memset(mem, 0, 0x1000);
    int freed = hrelease(test_dma);

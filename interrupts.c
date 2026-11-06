@@ -166,7 +166,9 @@ void software_handler(registers_t *regs) {
       case 3:
          api_yield(regs);
          break;
-      //case 4:
+      case 4:
+         api_control_handle(regs);
+         break;
       //case 5:
       case 6:
          api_write_uint(regs);
@@ -371,7 +373,7 @@ void software_handler(registers_t *regs) {
          api_get_taskid(regs);
          break;
       case 82:
-         api_pci_map(regs);
+         api_pci_connect(regs);
          break;
       case 83:
          api_pci_exists(regs);
@@ -671,7 +673,7 @@ fault_type_t identify_fault_type(registers_t *regs) {
    if(!own_kstack) return FAULT_SWITCHING;
    if(task->in_syscall && !task->process)
       return FAULT_KERNEL;
-   if(task->in_syscall && task->process->page_dir == page_get_kernel_pagedir())
+   if(is_kthread(task))
       return FAULT_KTHREAD;
    if(task->in_syscall)
       return FAULT_SYSCALL;

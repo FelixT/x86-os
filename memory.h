@@ -37,11 +37,10 @@
 #define V_KERNEL_START 0x1000000
 #define V_KERNEL_END   0x1060000 // V_KERNEL_START + 0x60000 (kernel size 0x60000)
 
-#define VM_START 0xA0000000 // where vmem for a process starts
-#define VM_END 0xB0000000
+// process vmem for heap is KERNEL_END - VM_START
 
-#define V_MMIO_START 0xB0000000 // start for each process
-#define V_MMIO_END   0xC0000000
+#define VM_START 0xA0000000 // where vmem for a process starts
+#define VM_END 0xC0000000
 
 #define V_STACKS_START 0xC0000000 // program stack for each mapped to known location (V_STACKS_START+i*TASK_STACK_SIZE)
 

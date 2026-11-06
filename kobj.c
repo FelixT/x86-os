@@ -15,16 +15,18 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .stop_func = NULL,
       .connect_func = NULL,
       .map_func = &dma_map,
-      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE,
+      .control_func = NULL
    },
    [KOBJ_PCI] = {
       .type = KOBJ_PCI,
       .free_func = &pci_free_inst,
-      .close_func = &pci_close,
+      .close_func = NULL,
       .stop_func = &pci_stop,
       .connect_func = NULL,
-      .map_func = NULL,
-      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE
+      .map_func = &pci_map,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE,
+      .control_func = &pci_control
    },
    [KOBJ_SHARED] = {
       .type = KOBJ_SHARED,
@@ -33,7 +35,8 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .stop_func = NULL,
       .connect_func = &shared_connect,
       .map_func = &shared_map,
-      .default_rights = KOBJ_RIGHTS_ALL
+      .default_rights = KOBJ_RIGHTS_ALL,
+      .control_func = NULL
    }
 };
 
@@ -45,7 +48,6 @@ kobj_inst_t *create_kobj_inst(int type, void *data) {
    
    kobj->uid = kobj_uid_counter++;
    kobj->data = data;
-   kobj->mutex = NULL;
    kobj->obj = &kobjs[type];
    kobj->ref_count = 0;
    kobj->handle_count = 0;

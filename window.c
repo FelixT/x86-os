@@ -260,12 +260,6 @@ void window_clearbuffer(gui_window_t *window, uint16_t colour) {
    memset16(window->framebuffer, colour, window->surface.width*(window->surface.height));
 }
 
-void window_writenumat(int num, uint16_t colour, int x, int y, int windowIndex) {
-   char out[20];
-   inttostr(num, out);
-   window_writestrat(out, colour, x, y, windowIndex);
-}
-
 void window_drawchar(char c, uint16_t colour, int windowIndex) {
 
    gui_window_t *selected = &(gui_get_windows()[windowIndex]);

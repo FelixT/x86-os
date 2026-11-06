@@ -17,7 +17,7 @@ void process() {
    if(MSG_IS_ERR(msg_sync_send_obj(channel, &send_msg, &recv_msg)))
       exit(1);
    
-   uint32_t *futex = map(handles[0]);
+   uint32_t *futex = map(handles[0], 0);
    if(!futex)
       exit(1);
 
@@ -68,7 +68,7 @@ void _start(int argc, char **args) {
    if(h < 0)
       exit(1);
 
-   uint32_t *futex = map(h);
+   uint32_t *futex = map(h, 0);
    if(!futex)
       exit(1);
 

@@ -39,6 +39,7 @@ typedef struct kobj_t {
     void (*close_func)(kobj_ref_t *ref, process_t *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
     void (*free_func)(kobj_inst_t *inst); // called when last ref is closed
     bool (*map_func)(kobj_inst_t *inst, int index, kobj_mapping_t *mapping);
+    bool (*control_func)(kobj_inst_t *inst, int operation, uint32_t arg, uint32_t *out);
 } kobj_t;
 
 typedef struct kobj_inst_t {
@@ -47,7 +48,6 @@ typedef struct kobj_inst_t {
     void *data;
     int ref_count; // total references, ie including mappings & internals ref. 0 -> free_func
     int handle_count; // open handles. 0 -> stop_func
-    kmutex_t *mutex;
     bool stopped; // stop_func sent
 } kobj_inst_t;
 

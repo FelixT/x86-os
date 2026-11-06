@@ -234,5 +234,5 @@ void _start(int argc, char **args) {
 
    create_thread(&client_start);
 
-   while(true) { yield(); }
+   while(true) { snooze(); }
 }

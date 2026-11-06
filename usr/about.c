@@ -5,7 +5,6 @@
 #include "prog.h"
 #include "lib/ui/ui_mgr.h"
 #include "lib/ui/ui_label.h"
-#include "lib/sort.h"
 #include "lib/draw.h"
 
 void _start() {
@@ -16,7 +15,7 @@ void _start() {
    surface_t surface = get_surface();
    ui_mgr_t *ui = ui_init(&surface, -1);
 
-   ui_add(ui, create_label(10, 10, 140, 40, "f3sys v0.6.9"));
+   ui_add(ui, create_label(10, 10, 140, 40, "f3sys v0.6.10"));
    ui_redraw(ui);
    set_window_minimised(false, -1);
 

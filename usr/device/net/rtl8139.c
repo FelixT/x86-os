@@ -97,6 +97,7 @@ void rtl_poll(netdev_t *dev) {
 
 void rtl_free(netdev_t *dev) {
    io[RTL_CMD] = 0x10; // reset device
+   unmap((uint32_t)io);
    io = NULL;
    hrelease(dev->device); // stop bus mastering before freeing buffers
    unmap((uint32_t)rx_dma);
@@ -106,9 +107,14 @@ void rtl_free(netdev_t *dev) {
 
 // rtl8139 usermode driver
 netdev_t *rtl_init() {
-   handle_t h;
-   io = pci_map(0x10EC, 0x8139, &h);
-   if(io == NULL) {
+   handle_t h = pci_connect(0x10EC, 0x8139);
+   if(h < 0) {
+      printf("PCI connect failed\n");
+      exit(1);
+   }
+   // get BAR1
+   io = map(h, 1);
+   if(!io) {
       printf("PCI map failed\n");
       exit(1);
    }
@@ -123,13 +129,15 @@ netdev_t *rtl_init() {
    handle_t rx_dma_h = dma(RX_SIZE, &rx_dma_phys);
    if(rx_dma_h < 0) {
       hrelease(h);
+      unmap((uint32_t)io);
       return NULL;
    }
 
-   rx_dma = map(rx_dma_h);
+   rx_dma = map(rx_dma_h, 0);
    hrelease(rx_dma_h);
    if(!rx_dma) {
       hrelease(h);
+      unmap((uint32_t)io);
       return NULL;
    }
 
@@ -143,15 +151,17 @@ netdev_t *rtl_init() {
             unmap((uint32_t)tx_dma[j]);
          unmap((uint32_t)rx_dma);
          hrelease(h);
+         unmap((uint32_t)io);
          return NULL;
       }
-      tx_dma[i] = map(tx_dma_h[i]);
+      tx_dma[i] = map(tx_dma_h[i], 0);
       hrelease(tx_dma_h[i]);
       if(!tx_dma[i]) {
          unmap((uint32_t)rx_dma);
          for(int j = 0; j < i; j++)
             unmap((uint32_t)tx_dma[j]);
          hrelease(h);
+         unmap((uint32_t)io);
          return NULL;
       }
    }
@@ -170,6 +180,17 @@ netdev_t *rtl_init() {
    *(volatile uint16_t*)(io+RTL_IMR) = 0; // disable interrupts (use polling)
 
    *(volatile uint32_t*)(io+RTL_RCR) = 0xf | (1 << 7); // set 'receive' config AB+AM+APM+AAP + WRAP (ensure rx mem is continuous - requires padding)
+
+   // enable DMA
+   if(!hcontrol(h, PCI_CTRL_DMA, 1, NULL)) {
+      printf("PCI enable DMA failed\n");
+      unmap((uint32_t)rx_dma);
+      for(int i = 0; i < 4; i++)
+         unmap((uint32_t)tx_dma[i]);
+      hrelease(h);
+      unmap((uint32_t)io);
+      return NULL;
+   }
 
    io[RTL_CMD] = 0x0C; // re + te: enable receiver & transmitter
 

@@ -863,14 +863,14 @@ static inline handle_t shared_create(int size) {
    return h;
 }
 
-static inline void *map(handle_t handle) {
+static inline void *map(handle_t handle, int index) {
    uint32_t addr;
    asm volatile(
       "int $0x30"
       : "=b" (addr)
       : "a" (80),
       "b" ((uint32_t)handle),
-      "c" (0)
+      "c" (index)
       : "cc", "memory"
    );
    return (void*)addr;
@@ -888,20 +888,36 @@ static inline bool unmap(uint32_t addr) {
    return success;
 }
 
-static inline uint8_t *pci_map(uint16_t vendor, uint16_t device_id, handle_t *handle) {
-   uint32_t addr;
+static inline bool hcontrol(handle_t h, int operation, uint32_t arg, uint32_t *out) {
+   bool success;
+   uint32_t out_val;
+   asm volatile(
+      "int $0x30"
+      : "=b" (success),
+      "=c" (out_val)
+      : "a" (4),
+      "b" (h),
+      "c" (operation),
+      "d" (arg)
+      : "cc", "memory"
+   );
+
+   if(out)
+      *out = out_val;
+   return success;
+}
+
+static inline handle_t pci_connect(uint16_t vendor, uint16_t device_id) {
    int h;
    asm volatile(
       "int $0x30"
-      : "=b" (addr),
-      "=c" (h)
+      : "=b" (h)
       : "a" (82),
       "b" ((uint32_t)vendor),
       "c" ((uint32_t)device_id)
       : "cc", "memory"
    );
-   *handle = h;
-   return (uint8_t*)addr;
+   return h;
 }
 
 static inline bool pci_exists(uint16_t vendor, uint16_t device_id) {

@@ -210,7 +210,7 @@ global font_apostrophe
 font_apostrophe:
    db 00100b
    db 00100b
-   db 00000b
+   db 00100b
    db 00000b
    db 00000b
    db 00000b
@@ -274,22 +274,22 @@ font_lessthan:
    db 11000b
 
 ;[
-   db 11111b
-   db 10000b
-   db 10000b
-   db 10000b
-   db 10000b
-   db 10000b
-   db 11111b
+   db 01110b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01000b
+   db 01110b
 
 ;]
-   db 11111b
-   db 00001b
-   db 00001b
-   db 00001b
-   db 00001b
-   db 00001b
-   db 11111b
+   db 01110b
+   db 00010b
+   db 00010b
+   db 00010b
+   db 00010b
+   db 00010b
+   db 01110b
 
 ;{
    db 00011b

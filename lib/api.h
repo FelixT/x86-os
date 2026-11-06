@@ -141,6 +141,10 @@ typedef enum {
    W_SETTING_TXTCOLOUR
 } w_setting_t; 
 
+typedef enum {
+   PCI_CTRL_DMA, // arg: enable (1/0)
+} pci_ctrl_t;
+
 #define KOBJ_RIGHT_TRANSFER (1u<<0)
 #define KOBJ_RIGHT_READ (1u<<1)
 #define KOBJ_RIGHT_WRITE (1u<<2)

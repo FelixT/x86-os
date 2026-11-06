@@ -1609,28 +1609,43 @@ void api_unmap(registers_t *regs) {
    regs->ebx = process_unmap_vm(process, addr);
 }
 
-void api_pci_map(registers_t *regs) {
+// hcontrol
+void api_control_handle(registers_t *regs) {
+   // IN: ebx - kobj handle
+   // IN: ecx - operation
+   // IN: edx - arg
+   // OUT: ebx - bool success
+   // OUT: ecx - uint32 out val
+   kobj_handle_t h = regs->ebx;
+   int op = regs->ecx;
+   uint32_t arg = regs->edx;
+   regs->ebx = 0;
+   regs->ecx = 0;
+   process_t *process = get_current_task_state()->process;
+   kobj_ref_t *ref = process_get_kobj(process, h);
+   if(!ref) return;
+   if(!(ref->rights & KOBJ_RIGHT_WRITE)) return;
+   kobj_inst_t *inst = ref->inst;
+   if(!inst->obj->control_func) return;
+   uint32_t out = 0;
+   bool result = inst->obj->control_func(inst, op, arg, &out);
+   regs->ebx = result;
+   regs->ecx = out;
+}
+
+void api_pci_connect(registers_t *regs) {
    // IN: ebx - vendor
    // IN: ecx - device id
-   // OUT: ebx - vaddr (0 on failure)
-   // OUT: ecx - handle
-   // mapping device MMIO enables bus-master DMA, granting the task access to
-   // arbitrary physical memory - restrict to privileged tasks only
+   // OUT: ebx - handle
    process_t *process = get_current_task_state()->process;
    uint32_t vendor = regs->ebx;
    uint32_t device = regs->ecx;
-   regs->ebx = 0;
-   regs->ecx = -1;
+   regs->ebx = -1;
    if(!process->privileged) {
-      debug_printf("api_pci_map: denied for unprivileged task\n");
+      debug_printf("api_pci_connect: denied for unprivileged task\n");
       return;
    }
-   uint32_t vaddr;
-   kobj_handle_t h = pci_map_device(process, vendor, device, &vaddr);
-   if(h < 0)
-      return;
-   regs->ebx = vaddr;
-   regs->ecx = h;
+   regs->ebx = pci_connect(process, vendor, device);
 }
 
 void api_pci_exists(registers_t *regs) {
@@ -1668,6 +1683,7 @@ void api_dma(registers_t *regs) {
    regs->ecx = paddr;
 }
 
+// hrelease
 void api_close_handle(registers_t *regs) {
    // IN: ebx - kobj_handle
    // OUT: ebx - success
@@ -1729,7 +1745,7 @@ void api_escalate_cancel(void *windowobj, int x, int y) {
 void api_escalate(registers_t *regs) {
    // escalate process privilege
    // used for trusted drivers as this gives access to:
-   // api_pci_map, api_pci_exists, api_dma, api_dma_free
+   // api_pci_connect, api_pci_exists, api_dma
    // OUT: ebx - bool success
    task_state_t *task = get_current_task_state();
    if(task->process->privileged) {
@@ -1927,7 +1943,7 @@ void api_msg_receive(registers_t *regs) {
    // IN: ebx - port uid
    // IN: ecx - msg_recv_t *recv_msg
    // OUT: ebx - bytes read, errors negative
-   // OUT: recv_msg - bytes_received, sent_size, handles_sent, handles_received written on receive
+   // OUT: recv_msg - call_uid, bytes_received, sent_size, handles_sent, handles_received written on receive
    uint32_t port_uid = regs->ebx;
    msg_recv_t *recv_msg = (msg_recv_t*)regs->ecx;
    regs->ebx = msg_validate_recv(recv_msg);

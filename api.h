@@ -67,7 +67,7 @@ void api_futex_wait(registers_t *regs);
 void api_futex_wake(registers_t *regs);
 void api_shared_create(registers_t *regs);
 void api_map(registers_t *regs);
-void api_pci_map(registers_t *regs);
+void api_pci_connect(registers_t *regs);
 void api_pci_exists(registers_t *regs);
 void api_dma(registers_t *regs);
 void api_close_handle(registers_t *regs);
@@ -88,5 +88,6 @@ void api_focus_task(registers_t *regs);
 void api_get_taskid(registers_t *regs);
 void api_unmap(registers_t *regs);
 void api_get_task_event_count(registers_t *regs);
+void api_control_handle(registers_t *regs);
 
 #endif
