@@ -1585,18 +1585,20 @@ void api_shared_create(registers_t *regs) {
    regs->ebx = h;
 }
 
-void api_shared_map(registers_t *regs) {
+void api_map(registers_t *regs) {
    // IN: ebx - handle
+   // IN: ecx - index
    // OUT: ebx - addr or NULL
    int handle = regs->ebx;
+   int index = regs->ecx;
    regs->ebx = 0;
    process_t *process = get_current_task_state()->process;
-   kobj_ref_t *ref = process_get_kobj_type(process, handle, KOBJ_SHARED);
+   kobj_ref_t *ref = process_get_kobj(process, handle);
    if(!ref) {
-      debug_printf("api_shared_map: handle not found\n");
+      debug_printf("api_map: handle not found\n");
       return;
    }
-   regs->ebx = shared_map(process, ref->inst);
+   regs->ebx = process_map_kobj(process, ref, index);
 }
 
 void api_unmap(registers_t *regs) {
@@ -1645,29 +1647,25 @@ void api_pci_exists(registers_t *regs) {
    regs->ebx = (pci_find_device(regs->ebx, regs->ecx) != NULL);
 }
 
-
 void api_dma(registers_t *regs) {
    // IN: ebx - size
-   // OUT: ebx - physical addr (0 on failure)
-   // OUT: ecx - (kobj) handle
+   // OUT: ebx - (kobj) handle
+   // OUT: ecx - physical addr
    // todo: on newer processors use iommu
    process_t *process = get_current_task_state()->process;
    int size = regs->ebx;
-   regs->ebx = 0;
-   regs->ecx = -1;
-   if(size < 0)
-      return;
+   regs->ebx = -1;
+   regs->ecx = 0;
+   if(size < 0) return;
    if(!process->privileged) {
       debug_printf("api_dma: denied for unprivileged task\n");
       return;
    }
-   // dma requires physical address of continuous memory provided by kmalloc
-   uint32_t addr;
-   kobj_handle_t h = dma_create(size, process, &addr);
-   if(h < 0)
-      return;
-   regs->ebx = addr;
-   regs->ecx = h;
+   uint32_t paddr;
+   kobj_handle_t h = dma_create(size, process, &paddr);
+   if(h < 0) return;
+   regs->ebx = h;
+   regs->ecx = paddr;
 }
 
 void api_close_handle(registers_t *regs) {

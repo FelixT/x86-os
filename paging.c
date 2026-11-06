@@ -17,35 +17,38 @@ page_dir_entry_t *current_page_dir;
 extern void load_page_dir(uint8_t *page_dir);
 extern void page_enable();
 
-void unmap(page_dir_entry_t *dir, uint32_t vaddr) {
+bool unmap(page_dir_entry_t *dir, uint32_t vaddr) {
    uint32_t index = vaddr / 0x1000; // 4096 bytes per page
    uint32_t dir_index = index / 1024; // 1024 table entries/dir
    uint32_t table_index = index%1024;
 
-   if(dir[dir_index].present) {
+   bool updated = false;
 
-      //page_dir[dir_index].present = 0;
+   if(dir[dir_index].present && dir[dir_index].address) {
+      page_table_entry_t *page_table = (page_table_entry_t*) ((dir[dir_index].address << 12) + V_KERNEL_OFFSET);
 
-      if(dir[dir_index].address) {
-
-         page_table_entry_t *page_table = (page_table_entry_t*) ((dir[dir_index].address << 12) + V_KERNEL_OFFSET);
-
+      if(page_table[table_index].present) {
          page_table[table_index].present = 0;
-
+         updated = true;
       }
-
    }
 
-   if(dir == current_page_dir)
+   if(updated && dir == current_page_dir)
       invlpg(vaddr);
+
+   return updated;
 }
 
-void unmap_size(page_dir_entry_t *dir, uint32_t vaddr, uint32_t size) {
+int unmap_size(page_dir_entry_t *dir, uint32_t vaddr, uint32_t size) {
    uint32_t vstart = page_align_down(vaddr);
    uint32_t vend = page_align_up(vstart + size);
 
-   for(uint32_t addr = vstart; addr < vend; addr += PAGE_SIZE)
-      unmap(dir, addr);
+   int mapped = 0;
+   for(uint32_t addr = vstart; addr < vend; addr += PAGE_SIZE) {
+      if(unmap(dir, addr))
+         mapped++;
+   }
+   return mapped;
 }
 
 bool map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw, int no_cache) {

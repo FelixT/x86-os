@@ -20,6 +20,12 @@ typedef enum {
     KOBJ_NONE // must be at end
 } kobj_type_t;
 
+typedef struct kobj_mapping_t {
+    uint32_t paddr;
+    uint32_t size;
+    bool no_cache; // true for MMIO
+} kobj_mapping_t;
+
 typedef struct kobj_inst_t kobj_inst_t;
 typedef struct kobj_ref_t kobj_ref_t;
 typedef struct process_t process_t;
@@ -32,13 +38,15 @@ typedef struct kobj_t {
     void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd)
     void (*close_func)(kobj_ref_t *ref, process_t *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
     void (*free_func)(kobj_inst_t *inst); // called when last ref is closed
+    bool (*map_func)(kobj_inst_t *inst, int index, kobj_mapping_t *mapping);
 } kobj_t;
 
 typedef struct kobj_inst_t {
     uint32_t uid;
     const kobj_t *obj;
     void *data;
-    int ref_count;
+    int ref_count; // total references, ie including mappings & internals ref. 0 -> free_func
+    int handle_count; // open handles. 0 -> stop_func
     kmutex_t *mutex;
     bool stopped; // stop_func sent
 } kobj_inst_t;

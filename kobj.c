@@ -11,10 +11,11 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
    [KOBJ_DMA] = {
       .type = KOBJ_DMA,
       .free_func = &dma_cleanup,
-      .close_func = &dma_close,
+      .close_func = NULL,
       .stop_func = NULL,
       .connect_func = NULL,
-      .default_rights = KOBJ_RIGHTS_ALL
+      .map_func = &dma_map,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE
    },
    [KOBJ_PCI] = {
       .type = KOBJ_PCI,
@@ -22,7 +23,8 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .close_func = &pci_close,
       .stop_func = &pci_stop,
       .connect_func = NULL,
-      .default_rights = KOBJ_RIGHTS_ALL
+      .map_func = NULL,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE
    },
    [KOBJ_SHARED] = {
       .type = KOBJ_SHARED,
@@ -30,6 +32,7 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .close_func = NULL,
       .stop_func = NULL,
       .connect_func = &shared_connect,
+      .map_func = &shared_map,
       .default_rights = KOBJ_RIGHTS_ALL
    }
 };
@@ -45,15 +48,19 @@ kobj_inst_t *create_kobj_inst(int type, void *data) {
    kobj->mutex = NULL;
    kobj->obj = &kobjs[type];
    kobj->ref_count = 0;
+   kobj->handle_count = 0;
    kobj->stopped = false;
    return kobj;
 }
 
+static void kobj_stop(kobj_inst_t *inst) {
+   if(inst->stopped || !inst->obj->stop_func) return;
+   inst->obj->stop_func(inst);
+   inst->stopped = true;
+}
+
 void free_kobj_inst(kobj_inst_t *inst) {
-   if(!inst->stopped && inst->obj->stop_func) {
-      inst->obj->stop_func(inst);
-      inst->stopped = true;
-   }
+   kobj_stop(inst);
    if(inst->obj->free_func)
       inst->obj->free_func(inst);
    free((uint32_t)inst, sizeof(kobj_inst_t));
@@ -63,6 +70,7 @@ kobj_ref_t *create_kobj_ref(kobj_inst_t *inst) {
    kobj_ref_t *ref = malloc(sizeof(kobj_ref_t));
    if(!ref) return NULL;
    kobj_add_ref(inst);
+   inst->handle_count++;
    ref->uid = kobj_ref_uid_counter++;
    if(!KOBJ_HANDLE_CHECK(ref->uid)) // skip uid that causes blank checkbits (i.e. bare index handles)
       ref->uid = kobj_ref_uid_counter++;
@@ -92,8 +100,12 @@ bool kobj_release(kobj_ref_t *ref, void *process, bool ending) {
    if(inst->obj->close_func)
       inst->obj->close_func(ref, process, ending);
 
+   inst->handle_count--;
+   if(inst->handle_count == 0)
+      kobj_stop(inst);
+
    kobj_release_ref(inst);
-   
+
    free((uint32_t)ref, sizeof(kobj_ref_t));
 
    return true;

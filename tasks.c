@@ -1395,49 +1395,21 @@ bool process_release_kobj(process_t *process, kobj_handle_t h) {
    return true;
 }
 
-bool process_has_another_ref(process_t *process, kobj_ref_t *ref) {
-   if(ref->inst->ref_count == 0) return false;
-   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
-      kobj_ref_t *r = process->kobj[i];
-      if(!r || r == ref) continue;
-      if(r->inst == ref->inst) return true;
-   }
-   return false;
-}
-
-// if all refs of an instance are owned by a process
-bool process_sole_kobj_owner(process_t *process, kobj_inst_t *inst) {
-   int count = inst->ref_count;
-   if(count == 1) return true;
-
-   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
-      kobj_ref_t *ref = process->kobj[i];
-      if(!ref) continue;
-      if(ref->inst == inst) count--;
-      if(count == 0) return true;
-   }
-   return false;
-}
-
 void process_release_kobjs(process_t *process) {
    // when ending process
 
-   // send stop() to devices (before freeing any objects)
-   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
-      kobj_ref_t *ref = process->kobj[i];
-      if(!ref) continue;
-      if(!ref->inst->stopped && ref->inst->obj->stop_func && process_sole_kobj_owner(process, ref->inst)) {
-         ref->inst->obj->stop_func(ref->inst);
-         ref->inst->stopped = true;
+   for(int pass = 0; pass < 2; pass++) {
+      bool device_pass = pass == 0;
+      for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
+         kobj_ref_t *ref = process->kobj[i];
+         if(!ref) continue;
+         bool is_device = ref->inst->obj->stop_func != NULL;
+         // release devices first in pass 0
+         if(is_device != device_pass) continue;
+         if(!kobj_release(ref, process, true)) continue;
+         process->kobj[i] = NULL;
+         process->kobj_count--;
       }
-   }
-
-   for(int i = 0; i < PROCESS_MAX_KOBJ; i++) {
-      kobj_ref_t *ref = process->kobj[i];
-      if(!ref) continue;
-      if(!kobj_release(ref, process, true)) continue;
-      process->kobj[i] = NULL;
-      process->kobj_count--;
    }
 }
 
@@ -1458,6 +1430,25 @@ kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_proc
       return -1;
    }
    return h;
+}
+
+uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index) {
+   bool rw = ref->rights & KOBJ_RIGHT_WRITE;
+   kobj_inst_t *inst = ref->inst;
+   kobj_mapping_t mapping;
+   if(!inst->obj->map_func || !inst->obj->map_func(inst, index, &mapping))
+      return 0;
+   uint32_t flags = (rw ? VM_FLAG_WRITE : 0)|(mapping.no_cache ? VM_FLAG_NO_CACHE : 0);
+   vm_region_t *region = process_alloc_vm(process, mapping.size, flags, inst);
+   if(!region)
+      return 0;
+   int mapped = map_size(process->page_dir, mapping.paddr, region->vaddr, mapping.size, 1, rw, mapping.no_cache);
+   process->no_allocated += mapped;
+   if(mapped != (int)page_align_up(mapping.size)/PAGE_SIZE) {
+      process_unmap_vm(process, region->vaddr);
+      return 0;
+   }
+   return region->vaddr;
 }
 
 vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags, kobj_inst_t *inst) {
@@ -1517,7 +1508,7 @@ bool process_unmap_vm(process_t *process, uint32_t vaddr) {
    while(region) {
       if(region->vaddr == vaddr) {
          // found
-         unmap_size(process->page_dir, region->vaddr, region->size);
+         process->no_allocated -= unmap_size(process->page_dir, region->vaddr, region->size);
 
          kobj_release_ref(region->inst);
 

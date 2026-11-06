@@ -66,7 +66,7 @@ void api_get_time(registers_t *regs);
 void api_futex_wait(registers_t *regs);
 void api_futex_wake(registers_t *regs);
 void api_shared_create(registers_t *regs);
-void api_shared_map(registers_t *regs);
+void api_map(registers_t *regs);
 void api_pci_map(registers_t *regs);
 void api_pci_exists(registers_t *regs);
 void api_dma(registers_t *regs);

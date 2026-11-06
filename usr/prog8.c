@@ -25,9 +25,9 @@ void _start(int argc, char **args) {
          exit(1);
       }
       printf("created shared mem handle %i\n", shared);
-      uint8_t *shared_mem = shared_map(shared);
+      uint8_t *shared_mem = map(shared);
       if(!shared_mem) {
-         printf("shared_map failed\n");
+         printf("map failed\n");
          exit(1);
       }
 
@@ -125,7 +125,7 @@ void _start(int argc, char **args) {
          msg_sync_reply(recv_msg.call_uid, msg, 1);
          continue;
       }
-      uint8_t *mem = shared_map(handle);
+      uint8_t *mem = map(handle);
       bmp_draw(mem, 0, 0, 1, false);
       redraw();
 

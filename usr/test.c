@@ -175,12 +175,18 @@ int test_dma(void) {
       printf("Need to be privileged for DMA\n");
       exit(1);
    }
-   dma_t test_dma = dma(0x1000);
-   if(!test_dma.mem) return -1;
-   memset((void*)test_dma.mem, 0, 0x1000);
-   int freed = hrelease(test_dma.h);
-   printf("Freed %i\nExpected fault:\n", freed);
-   memset((void*)test_dma.mem, 0, 0x1000); // expected fault
+   uint32_t test_dma_phys;
+   handle_t test_dma = dma(0x1000, &test_dma_phys);
+   if(test_dma < 0) return -1;
+   void *mem = map(test_dma);
+   if(!mem) return -1;
+   memset(mem, 0, 0x1000);
+   int freed = hrelease(test_dma);
+   printf("Freed %i\n", freed);
+   memset(mem, 0, 0x1000);
+   if(!unmap((uint32_t)mem)) return -1;
+   printf("Expected fault:\n");
+   memset(mem, 0, 0x1000); // expected fault
    return 0;
 }
 

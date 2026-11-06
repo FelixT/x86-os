@@ -365,7 +365,7 @@ void software_handler(registers_t *regs) {
          api_focus_task(regs);
          break;
       case 80:
-         api_shared_map(regs);
+         api_map(regs);
          break;
       case 81:
          api_get_taskid(regs);

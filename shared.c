@@ -2,16 +2,13 @@
 #include "memory.h"
 #include "windowmgr.h"
 
-uint32_t shared_map(process_t *process, kobj_inst_t *inst) {
+bool shared_map(kobj_inst_t *inst, int index, kobj_mapping_t *mapping) {
+   if(index != 0) return false;
    shared_block_t *block = inst->data;
-   vm_region_t *region = process_alloc_vm(process, block->size, 1, inst);
-   if(!region) return 0;
-
-   if(map_size(process->page_dir, block->paddr, region->vaddr, region->size, 1, 1, 0) != (int)page_align_up(block->size)/PAGE_SIZE) {
-      process_unmap_vm(process, region->vaddr);
-      return 0;
-   }
-   return region->vaddr;
+   mapping->paddr = block->paddr;
+   mapping->no_cache = 0;
+   mapping->size = block->size;
+   return true;
 }
 
 bool shared_connect(kobj_ref_t *ref, process_t *process) {

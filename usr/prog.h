@@ -863,13 +863,14 @@ static inline handle_t shared_create(int size) {
    return h;
 }
 
-static inline void *shared_map(handle_t handle) {
+static inline void *map(handle_t handle) {
    uint32_t addr;
    asm volatile(
       "int $0x30"
       : "=b" (addr)
       : "a" (80),
-      "b" ((uint32_t)handle)
+      "b" ((uint32_t)handle),
+      "c" (0)
       : "cc", "memory"
    );
    return (void*)addr;
@@ -916,26 +917,21 @@ static inline bool pci_exists(uint16_t vendor, uint16_t device_id) {
    return exists;
 }
 
-typedef struct dma_t {
-   volatile uint8_t *mem; // NULL on fail
+static inline handle_t dma(uint32_t size, uint32_t *paddr) {
    handle_t h;
-} dma_t;
-
-static inline dma_t dma(uint32_t size) {
-   dma_t dma;
-   uint32_t addr;
+   uint32_t p;
 
    asm volatile (
       "int $0x30"
-      : "=b" (addr),
-      "=c" (dma.h)
+      : "=b" (h),
+      "=c" (p)
       : "a" (84),
       "b" (size)
       : "cc", "memory"
    );
 
-   dma.mem = (uint8_t*)addr;
-   return dma;
+   *paddr = p;
+   return h;
 }
 
 // generic handle release

@@ -141,6 +141,9 @@ typedef enum {
    W_SETTING_TXTCOLOUR
 } w_setting_t; 
 
+#define KOBJ_RIGHT_TRANSFER (1u<<0)
+#define KOBJ_RIGHT_READ (1u<<1)
+#define KOBJ_RIGHT_WRITE (1u<<2)
 #define KOBJ_RIGHTS_ALL 0xFFFFFFFFu
 
 #endif
