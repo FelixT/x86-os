@@ -153,14 +153,14 @@ bool elf_run(registers_t *regs, uint8_t *prog, uint32_t size, int argc, char **a
 }
 
 // like elf_run but doesn't switch to new task. task is not enabled
-int elf_setup(uint8_t *prog, uint32_t size, int argc, char **args, bool focus, bool minimised, bool open_fds) {
+int elf_setup(uint8_t *prog, uint32_t size, int argc, char **args, bool focus, bool minimised) {
    int task_index = elf_load(prog, size);
    if(task_index < 0) return -1;
 
    task_state_t *task = &gettasks()[task_index];
    uint32_t vmem_start = task->process->vmem_start;
 
-   if(!setup_task_init(task_index, focus, minimised, open_fds)) {
+   if(!setup_task_init(task_index, focus, minimised)) {
       debug_printf("elf_setup: task setup failed\n");
       task_discard_entry(task_index);
       return -1;

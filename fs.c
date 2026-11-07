@@ -17,7 +17,7 @@ uint8_t *fs_read_file_kernel(char *path, int *size) {
       kmutex_lock(&fs_mutex);
    
    fat_dir_t *entry = fat_parse_path(path, true);
-   if(entry == NULL || entry->attributes == 0x10) {
+   if(!entry || entry->attributes == 0x10) {
       if(entry)
          free((uint32_t)entry, sizeof(fat_dir_t));
       if(switching)
@@ -38,15 +38,14 @@ static bool fs_is_term_path(char *path) {
    return strequ(path, "/dev/stdin") || strequ(path, "/dev/stdout") || strequ(path, "/dev/stderr");
 }
 
-static fs_file_t *fs_open_term(fs_file_t *file) {
+static void fs_open_term(process_t *process, fs_file_t *file) {
    file->type = FS_TYPE_TERM;
-   file->window_index = getSelectedWindowIndex();
-   file->window_uid = getSelectedWindow() ? getSelectedWindow()->uid : 0;
+   file->window_index = process->window;
+   file->window_uid = process->window >= 0 ? getWindow(process->window)->uid : 0;
    if(strequ(file->filename, "/dev/stdin"))
       file->flags = FS_FLAG_READONLY;
    else
       file->flags = FS_FLAG_WRITEONLY;
-   return file;
 }
 
 static bool fs_open_locked(fs_file_t *file);
@@ -110,6 +109,8 @@ static bool fs_open_locked(fs_file_t *file) {
 
 static fs_file_t *fs_file_alloc(char *path, int flags) {
    fs_file_t *file = (fs_file_t*)malloc(sizeof(fs_file_t));
+   if(!file) return NULL;
+   file->window_index = -1;
    file->active = true;
    file->data = NULL;
    file->pipe = NULL;
@@ -119,23 +120,50 @@ static fs_file_t *fs_file_alloc(char *path, int flags) {
    return file;
 }
 
-fs_file_t *fs_open(char *path, int flags) {
-   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
-      debug_printf("FS: invalid file path\n");
-      return NULL;
+// file teardown
+void fs_free(kobj_inst_t *inst) {
+   fs_close_locked(inst->data);
+}
+
+bool fs_connect(kobj_ref_t *ref, process_t *process) {
+   (void)ref;
+   (void)process;
+   return true; // allow file inst to have multiple refs (via process copy)
+}
+
+// wrap opened file in a handle - closes on failure
+static kobj_handle_t fs_file_handle(process_t *process, fs_file_t *file) {
+   kobj_inst_t *inst = create_kobj_inst(KOBJ_FILE, file);
+   if(!inst) {
+      fs_close_locked(file);
+      return -1;
    }
+   kobj_handle_t h = process_acquire_kobj(process, inst);
+   if(h < 0) free_kobj_inst(inst); // fs_free closes file
+   return h;
+}
+
+kobj_handle_t fs_open(process_t *process, char *path, int flags) {
+   if(!path || strlen(path) == 0 || strlen(path) > 255)
+      return -1;
 
    fs_file_t *file = fs_file_alloc(path, flags);
-   if(fs_is_term_path(path))
-      return fs_open_term(file);
+   if(!file)
+      return -1;
+
+   if(fs_is_term_path(path)) {
+      fs_open_term(process, file);
+      return fs_file_handle(process, file);
+   }
 
    kmutex_lock(&fs_mutex);
-   if(!fs_open_locked(file)) {
-      free((uint32_t)file, sizeof(fs_file_t));
-      file = NULL;
-   }
+   bool success = fs_open_locked(file);
    kmutex_unlock(&fs_mutex);
-   return file;
+   if(!success) {
+      fs_close_locked(file);
+      return -1;
+   }
+   return fs_file_handle(process, file);
 }
 
 bool fs_exists(char *path) {
@@ -179,34 +207,6 @@ void fs_close_locked(fs_file_t *file) {
          free((uint32_t)file->pipe, sizeof(fs_pipe_t));
    }
    free((uint32_t)file, sizeof(fs_file_t));
-}
-
-void fs_close(fs_file_t *file) {
-   if(!file) return;
-   bool is_file = file->type == FS_TYPE_FILE;
-   if(is_file)
-      kmutex_lock(&fs_mutex);
-   fs_close_locked(file);
-   if(is_file)
-      kmutex_unlock(&fs_mutex);
-}
-
-fs_file_t *fs_dup(fs_file_t *file) {
-   if(!file) return NULL;
-   fs_file_t *dup = (fs_file_t*)malloc(sizeof(fs_file_t));
-   *dup = *file;
-   if(file->data) {
-      fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
-      *data = *file->data;
-      dup->data = data;
-   }
-   if(file->pipe) {
-      dup->pipe = file->pipe;
-      dup->pipe->ref_count++;
-      if(dup->flags & FS_FLAG_WRITEONLY)
-         dup->pipe->writer_count++;
-   }
-   return dup;
 }
 
 fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
@@ -342,19 +342,24 @@ bool fs_mkdir(char *path) {
    return success;
 }
 
-fs_file_t *fs_new(char *path, int flags) {
-   if(path == NULL || strlen(path) == 0 || strlen(path) > 255) {
-      debug_printf("FS: invalid file path\n");
-      return NULL;
+kobj_handle_t fs_new(process_t *process, char *path, int flags) {
+   if(!path || strlen(path) == 0 || strlen(path) > 255) {
+      debug_printf("fs_new: invalid file path\n");
+      return -1;
    }
-   kmutex_lock(&fs_mutex);
+
    fs_file_t *file = fs_file_alloc(path, flags);
-   if(!fs_new_locked(file)) {
-      free((uint32_t)file, sizeof(fs_file_t));
-      file = NULL;
-   }
+   if(!file)
+      return -1;
+
+   kmutex_lock(&fs_mutex);
+   bool success = fs_new_locked(file);
    kmutex_unlock(&fs_mutex);
-   return file;
+   if(!success) {
+      fs_close_locked(file);
+      return -1;
+   }
+   return fs_file_handle(process, file);
 }
 
 // copy up to max bytes from pipe ring buffer into task (reader)
@@ -692,36 +697,48 @@ int fs_seek(fs_file_t *file, int offset, int type) {
    return pos;
 }
 
-void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end) {
+bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *write_end) {
    fs_pipe_t *pipe = (fs_pipe_t*)malloc(sizeof(fs_pipe_t));
+   if(!pipe) return false;
    memset(pipe, 0, sizeof(fs_pipe_t));
    pipe->read_waiting_task = -1;
    pipe->write_waiting_task = -1;
    pipe->writer_count = 1;
    pipe->ref_count = 2;
 
-   fs_file_t *read_file = (fs_file_t*)malloc(sizeof(fs_file_t));
-   read_file->filename[0] = '\0';
-   read_file->window_index = -1;
-   read_file->current_pos = 0;
-   read_file->data = NULL;
-   read_file->active = true;
+   fs_file_t *read_file = fs_file_alloc("", 0);
+   if(!read_file) {
+      free((uint32_t)pipe, sizeof(fs_pipe_t));
+      return false;
+   }
    read_file->type = FS_TYPE_PIPE;
    read_file->pipe = pipe;
-   read_file->flags = 0;
 
-   fs_file_t *write_file = (fs_file_t*)malloc(sizeof(fs_file_t));
-   write_file->filename[0] = '\0';
-   write_file->window_index = -1;
-   write_file->current_pos = 0;
-   write_file->data = NULL;
-   write_file->active = true;
+   fs_file_t *write_file = fs_file_alloc("", 0);
+   if(!write_file) {
+      free((uint32_t)pipe, sizeof(fs_pipe_t));
+      free((uint32_t)read_file, sizeof(fs_file_t));
+      return false;
+   }
    write_file->type = FS_TYPE_PIPE;
    write_file->pipe = pipe;
-   write_file->flags |= FS_FLAG_WRITEONLY;
+   write_file->flags = FS_FLAG_WRITEONLY;
 
-   *read_end = read_file;
-   *write_end = write_file;
+   kobj_handle_t read_h = fs_file_handle(process, read_file);
+   if(read_h < 0) {
+      fs_close_locked(write_file);
+      return false;
+   }
+
+   kobj_handle_t write_h = fs_file_handle(process, write_file);
+   if(write_h < 0) {
+      process_release_kobj(process, read_h);
+      return false;
+   }
+
+   *read_end = read_h;
+   *write_end = write_h;
+   return true;
 }
 
 bool fs_pipe_wake_reader(fs_pipe_t *pipe) {

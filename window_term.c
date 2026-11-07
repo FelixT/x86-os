@@ -461,7 +461,7 @@ void term_cmd_taski(char *arg) {
       window_term_printf("Heap: 0x%h - 0x%h\n", process->heap_start, process->heap_end);
       window_term_printf("Exe path: %s\n", process->exe_path);
       window_term_printf("Window: %i\n", process->window);
-      window_term_printf("kobjs: %i, fds: %i\n", process->kobj_count, process->fd_count);
+      window_term_printf("kobjs: %i\n", process->kobj_count);
    }
 }
 

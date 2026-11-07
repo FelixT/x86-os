@@ -17,6 +17,7 @@ typedef enum {
     KOBJ_DMA,
     KOBJ_PCI, // pci device
     KOBJ_SHARED,
+    KOBJ_FILE, // open file instance
     KOBJ_NONE // must be at end
 } kobj_type_t;
 

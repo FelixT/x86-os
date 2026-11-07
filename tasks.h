@@ -76,7 +76,6 @@ typedef enum {
 } task_pause_reason_t;
 
 #define PROCESS_MAX_KOBJ 64
-#define PROCESS_MAX_FDS 64
 #define PROCESS_MAX_PORTS 16
 #define TASK_MAX_CHANNELS 16
 
@@ -110,11 +109,10 @@ typedef struct process_t {
    int kobj_count; // live refs (handles are slot indices, reused)
    vm_region_t *regions;
 
+   kobj_handle_t stdio[3]; // lazy allocated
    int no_allocated; // mapped pages (via process_map_kobj)
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
-   fs_file_t *file_descriptors[PROCESS_MAX_FDS];
-   int fd_count;
    struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
    int port_count;
    char **launch_args;
@@ -163,7 +161,7 @@ typedef struct task_state_t {
 
 int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
 bool task_map_stack(task_state_t *task, int thread_no);
-bool setup_task_init(int index, bool focus, bool minimised, bool open_fds);
+bool setup_task_init(int index, bool focus, bool minimised);
 bool launch_task(int index, registers_t *regs, bool focus);
 void task_discard_entry(int index);
 void free_launch_args(char **args, int argc);
@@ -173,7 +171,7 @@ void tasks_init(registers_t *regs);
 void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
-int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised);
+int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimised);
 void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr);
 uint32_t get_task_event_counter();
 
@@ -227,6 +225,8 @@ kobj_ref_t *process_get_kobj_type(process_t *process, kobj_handle_t h, kobj_type
 bool process_release_kobj(process_t *process, kobj_handle_t h);
 void process_release_kobjs(process_t *process);
 kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle);
+void process_copy_stdio(process_t *send_process, process_t *receive_process);
+kobj_handle_t get_process_stdio(process_t *process, int fd);
 
 vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags, kobj_inst_t *inst);
 bool process_unmap_vm(process_t *process, uint32_t vaddr);

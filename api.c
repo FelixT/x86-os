@@ -351,7 +351,7 @@ void api_launch_task(registers_t *regs) {
    // IN: ebx = path
    // IN: ecx = argc
    // IN: edx = args
-   // IN: esi = copy environment of current task (use same wd & file descriptors)
+   // IN: esi = copy environment of current task (use same wd & copy handles)
    // IN: edi = paused
    // OUT: ebx = pid (-1 for failure)
 
@@ -417,7 +417,7 @@ void api_launch_task(registers_t *regs) {
    uint32_t oldwindow_uid = oldwindow>=0 ? getWindow(oldwindow)->uid : 0;
 
    // set up the new task without switching context
-   int new_task = tasks_setup_elf(pathbuf, argc, copied_args, !copy, copy, false);
+   int new_task = tasks_setup_elf(pathbuf, argc, copied_args, !copy, false);
    if(new_task < 0) {
       free_launch_args(copied_args, argc);
       debug_printf("api_launch_task failed\n");
@@ -429,10 +429,7 @@ void api_launch_task(registers_t *regs) {
    task_state_t *task = &gettasks()[new_task];
 
    if(copy) {
-      // duplicate parent's fds
-      for(int i = 0; i < parenttask->process->fd_count; i++)
-         task->process->file_descriptors[i] = fs_dup(parenttask->process->file_descriptors[i]);
-      task->process->fd_count = parenttask->process->fd_count;
+      process_copy_stdio(parenttask->process, task->process);
       strcpy(task->process->working_dir, parenttask->process->working_dir);
       int child_win = task->process->window;
       window_close(child_win, false);
@@ -566,18 +563,16 @@ void api_sbrk(registers_t *regs) {
    regs->ebx = old_heap_end;
 }
 
-// find the lowest free fd, slot claimed via commit_fd
-static int alloc_fd(process_t *process) {
-   for(int i = 0; i < PROCESS_MAX_FDS; i++) {
-      if(process->file_descriptors[i] == NULL)
-         return i;
-   }
-   return -1;
-}
-
-static void commit_fd(process_t *process, int fd, fs_file_t *file) {
-   process->file_descriptors[fd] = file;
-   if(fd >= process->fd_count) process->fd_count = fd + 1;
+static kobj_inst_t *api_get_file_inst(kobj_handle_t h, kobj_handle_t *out) {
+   process_t *process = get_current_task_state()->process;
+   if(h >= 0 && h <= 2) // stdio
+      h = get_process_stdio(process, h);
+   if(h < 0) return NULL;
+   kobj_ref_t *ref = process_get_kobj_type(process, h, KOBJ_FILE);
+   if(!ref) return NULL;
+   if(out)
+      *out = h;
+   return ref->inst;
 }
 
 void api_open(registers_t *regs) {
@@ -592,78 +587,61 @@ void api_open(registers_t *regs) {
       return;
    }
 
-   task_state_t *task = get_current_task_state();
-   int fd = alloc_fd(task->process);
-   if(fd < 0) {
-      debug_printf("api_open: too many open files\n");
-      regs->ebx = -1;
-      return;
-   }
+   process_t *process = get_current_task_state()->process;
 
-   fs_file_t *file = fs_open(path, flags);
-   if(!file) {
+   kobj_handle_t file = fs_open(process, path, flags);
+   if(file < 0) {
       if(flags & FS_FLAG_CREATE)
          debug_printf("api_open: could not create new file '%s'\n", path);
       regs->ebx = -1;
       return;
    }
-   commit_fd(task->process, fd, file);
-   regs->ebx = fd;
+   regs->ebx = file;
 }
 
 void api_truncate(registers_t *regs) {
    // IN: ebx - int fd
    // IN: ecx - size
-   task_state_t *task = get_current_task_state();
-   int fd = regs->ebx;
+   int handle = regs->ebx;
    int size = regs->ecx;
 
-   if(fd < 0 || fd >= task->process->fd_count) {
-      debug_printf("api_truncate: fd not found\n");
-      regs->ebx = -1;
-      return;
-   }
+   regs->ebx = -1;
 
-   fs_file_t *file = task->process->file_descriptors[fd];
+   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_truncate: fd inactive\n");
-      regs->ebx = -1;
       return;
    }
 
    if(file->type != FS_TYPE_FILE) {
       debug_printf("api_truncate: invalid fd type\n");
-      regs->ebx = -1;
       return;
    }
 
-   int result = fs_truncate(file, size);
-   regs->ebx = result;
+   kobj_add_ref(inst); // truncate may yield
+   regs->ebx = fs_truncate(file, size);
+   kobj_release_ref(inst);
 }
 
 void api_read(registers_t *regs) {
-   // IN: ebx - int fd
+   // IN: ebx - int handle (fd)
    // IN: ecx - char *buf
    // IN: size_t count
    // OUT: size_t bytes read
    task_state_t *task = get_current_task_state();
-   int fd = regs->ebx;
+   int handle = regs->ebx;
    char *buf = (char*)regs->ecx;
    int count = regs->edx;
 
    if(count == 0) { regs->ebx = 0; return; }
-   if(count < 0) { regs->ebx = -1; return; }
+   regs->ebx = -1;
+   if(count < 0) return;
    
-   if(fd < 0 || fd >= task->process->fd_count) {
-      debug_printf("read: fd not found\n");
-      regs->ebx = -1;
-      return;
-   }
-
-   fs_file_t *file = task->process->file_descriptors[fd];
+   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
-      debug_printf("read: fd inactive\n");
-      regs->ebx = -1;
+      debug_printf("api_read: fd inactive\n");
       return;
    }
 
@@ -671,17 +649,17 @@ void api_read(registers_t *regs) {
       int maxsize = api_validate_maxsize(buf, count, 1);
       if(maxsize < 0 || (count > 0 && maxsize == 0)) {
          debug_printf("api_read: invalid buffer\n");
-         regs->ebx = -1;
          return;
       }
       count = maxsize;
    } else if(file->type != FS_TYPE_TERM && file->type != FS_TYPE_PIPE) {
       debug_printf("api_read: invalid fd type\n");
-      regs->ebx = -1;
       return;
    }
 
-   int result = fs_read(file, buf, count, get_current_task());
+   kobj_add_ref(inst); // read may yield
+   int result = fs_read(file, buf, count, task->task_id);
+
    regs->ebx = result;
    if(result == FS_BLOCKING) {
       if(file->type == FS_TYPE_PIPE && file->pipe) {
@@ -690,7 +668,7 @@ void api_read(registers_t *regs) {
          int maxsize = api_validate_maxsize(buf, count, 1);
          if(maxsize < 0 || (count > 0 && maxsize == 0)) {
             debug_printf("api_read: invalid buffer\n");
-            regs->ebx = -1;
+            kobj_release_ref(inst);
             return;
          }
          file->pipe->read_buf = buf;
@@ -706,6 +684,8 @@ void api_read(registers_t *regs) {
             switch_to_task(writer_task, regs);
       }
    }
+
+   kobj_release_ref(inst);
 }
 
 void api_read_dir(registers_t *regs) {
@@ -753,29 +733,26 @@ void api_write(registers_t *regs) {
    // IN: edx - size_t size
    // OUT: ebx - size_t bytes written
    task_state_t *task = get_current_task_state();
-   int fd = regs->ebx;
+   int handle = regs->ebx;
    uint8_t *buffer = (uint8_t*)regs->ecx;
    int size = (int)regs->edx;
    int maxsize = api_validate_maxsize(buffer, size, 0);
+   regs->ebx = -1;
    if(maxsize < 0 || (size > 0 && maxsize == 0)) {
       debug_printf("api_write: invalid buffer\n");
-      regs->ebx = -1;
-      return;
-   }
-   if(fd < 0 || fd >= task->process->fd_count) {
-      debug_printf("api_write: fd not found\n");
-      regs->ebx = -1;
       return;
    }
 
-   fs_file_t *file = task->process->file_descriptors[fd];
+   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_write: fd inactive\n");
-      regs->ebx = -1;
       return;
    }
 
+   kobj_add_ref(inst); // write may yield
    int result = fs_write(file, buffer, maxsize, task->task_id);
+
    regs->ebx = result;
 
    if(result == FS_WRITE_WAIT && file->type == FS_TYPE_PIPE && file->pipe) {
@@ -792,18 +769,22 @@ void api_write(registers_t *regs) {
             switch_to_task(reader_task, regs);
       }
    }
+
+   kobj_release_ref(inst);
 }
 
 void api_fsize(registers_t *regs) {
    // IN: ebx - int fd
    // OUT: ebx - filesize
-   task_state_t *task = get_current_task_state();
-   int fd = regs->ebx;
-   if(fd < 0 || fd >= task->process->fd_count || !task->process->file_descriptors[fd]) {
-      regs->ebx = -1;
-   } else {
-      regs->ebx = fs_filesize(task->process->file_descriptors[fd]);
+   int handle = regs->ebx;
+   regs->ebx = -1;
+   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   fs_file_t *file = inst ? inst->data : NULL;
+   if(!file || !file->active) {
+      debug_printf("api_fsize: fd inactive\n");
+      return;
    }
+   regs->ebx = fs_filesize(file);
 }
 
 void api_fpsize(registers_t *regs) {
@@ -868,27 +849,18 @@ void api_new_file(registers_t *regs) {
    // IN: ebx - file path
    // OUT: ebx - int fd / -1 on error
    char *path = (char*)regs->ebx;
+   process_t *process = get_current_task_state()->process;
+   regs->ebx = -1;
    if(api_validate_str(path, 256) < 0) {
-      regs->ebx = -1;
       debug_printf("api_new_file: invalid path\n");
       return;
    }
-   fs_file_t *file = fs_new(path, 0);
-   if(!file) {
-      regs->ebx = -1;
+   kobj_handle_t h = fs_new(process, path, 0);
+   if(h < 0) {
       debug_printf("api_new_file: error\n");
       return;
    }
-   task_state_t *task = get_current_task_state();
-   int fd = alloc_fd(task->process);
-   if(fd < 0) {
-      debug_printf("api_new_file: too many open files\n");
-      fs_close(file);
-      regs->ebx = -1;
-      return;
-   }
-   commit_fd(task->process, fd, file);
-   regs->ebx = fd;
+   regs->ebx = h;
 }
 
 void api_seek(registers_t *regs) {
@@ -896,15 +868,17 @@ void api_seek(registers_t *regs) {
    // IN: ecx - int offset
    // IN: edx - int type
    // OUT: pos
-   task_state_t *task = get_current_task_state();
-   int fd = regs->ebx;
+   int handle = regs->ebx;
    int offset = regs->ecx;
    int type = regs->edx;
-   if(fd < 0 || fd >= task->process->fd_count || !task->process->file_descriptors[fd]) {
-      regs->ebx = -1;
-   } else {
-      regs->ebx = fs_seek(task->process->file_descriptors[fd], offset, type);
+   regs->ebx = -1;
+   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   fs_file_t *file = inst ? inst->data : NULL;
+   if(!file || !file->active) {
+      debug_printf("api_seek: fd inactive\n");
+      return;
    }
+   regs->ebx = fs_seek(file, offset, type);
 }
 
 void api_create_scrollbar(registers_t *regs) {
@@ -985,7 +959,7 @@ void api_create_window(registers_t *regs) {
       return;
    }
    int i = windowmgr_add();
-   if(i <= 0) {
+   if(i < 0) {
       regs->ebx = -2;
       return;
    }
@@ -1423,34 +1397,21 @@ void api_get_timer_tick(registers_t *regs) {
 }
 
 void api_pipe(registers_t *regs) {
-   // OUT: ebx - read fd
-   // OUT: ecx - write fd
-   task_state_t *task = get_current_task_state();
-   fs_file_t *read_file = NULL, *write_file = NULL;
-   fs_create_pipe(&read_file, &write_file);
-   int read_fd = alloc_fd(task->process);
-   if(read_fd == -1) {
+   // OUT: ebx - success
+   // OUT: ecx - read fd
+   // OUT: edx - write fd
+   process_t *process = get_current_task_state()->process;
+   kobj_handle_t read_h, write_h;
+   regs->ebx = 0;
+   regs->ecx = -1;
+   regs->edx = -1;
+   if(!fs_create_pipe(process, &read_h, &write_h)) {
       debug_printf("api_pipe: couldn't create fds\n");
-      regs->ebx = -1;
-      regs->ecx = -1;
-      fs_close(read_file);
-      fs_close(write_file);
       return;
    }
-   commit_fd(task->process, read_fd, read_file);
-   int write_fd = alloc_fd(task->process);
-   if(write_fd == -1) {
-      debug_printf("api_pipe: couldn't create fds\n");
-      regs->ebx = -1;
-      regs->ecx = -1;
-      fs_close(read_file);
-      task->process->file_descriptors[read_fd] = NULL;
-      fs_close(write_file);
-      return;
-   }
-   commit_fd(task->process, write_fd, write_file);
-   regs->ebx = read_fd;
-   regs->ecx = write_fd;
+   regs->ebx = 1;
+   regs->ecx = read_h;
+   regs->edx = write_h;
 }
 
 void api_unpause(registers_t *regs) {
@@ -1477,73 +1438,63 @@ void api_unpause(registers_t *regs) {
    switch_to_task(task_id, regs);
 }
 
+// duplicate file handle
 void api_dup(registers_t *regs) {
    // IN: ebx - old fd
    // OUT: ebx - new fd / -1 on error
-   task_state_t *task = get_current_task_state();
    int old_fd = regs->ebx;
-   if(old_fd < 0 || old_fd >= task->process->fd_count) {
-      debug_printf("api_dup: invalid fd\n");
-      regs->ebx = -1;
-      return;
-   }
-   fs_file_t *old_file = task->process->file_descriptors[old_fd];
+   regs->ebx = -1;
+   kobj_handle_t h;
+   kobj_inst_t *inst = api_get_file_inst(old_fd, &h);
+   fs_file_t *old_file = inst ? inst->data : NULL;
    if(!old_file || !old_file->active) {
       debug_printf("api_dup: old fd inactive\n");
-      regs->ebx = -1;
       return;
    }
-   int new_fd = alloc_fd(task->process);
-   if(new_fd < 0) {
-      debug_printf("api_dup: too many open files\n");
-      regs->ebx = -1;
-      return;
-   }
-   commit_fd(task->process, new_fd, fs_dup(old_file));
-   regs->ebx = new_fd;
+   process_t *process = get_current_task_state()->process;
+   regs->ebx = process_copy_kobj(process, process, h);
 }
 
+// duplicate file handle to specific stdio slot, closes existing
 void api_dup2(registers_t *regs) {
-   // IN: ebx - old fd
+   // IN: ebx - handle
    // IN: ecx - new fd
    // OUT: ebx - new fd / -1 on error
-   task_state_t *task = get_current_task_state();
+   process_t *process = get_current_task_state()->process;
    int old_fd = regs->ebx;
    int new_fd = regs->ecx;
-   if(old_fd < 0 || old_fd >= task->process->fd_count || new_fd < 0 || new_fd >= PROCESS_MAX_FDS) {
-      debug_printf("api_dup2: invalid fd\n");
-      regs->ebx = -1;
-      return;
-   }
-   if(old_fd == new_fd) { regs->ebx = new_fd; return; }
-   fs_file_t *old_file = task->process->file_descriptors[old_fd];
+   regs->ebx = -1;
+   kobj_handle_t h;
+   kobj_inst_t *inst = api_get_file_inst(old_fd, &h);
+   fs_file_t *old_file = inst ? inst->data : NULL;
    if(!old_file || !old_file->active) {
       debug_printf("api_dup2: old fd inactive\n");
-      regs->ebx = -1;
       return;
    }
-   if(new_fd >= task->process->fd_count) {
-      for(int i = task->process->fd_count; i <= new_fd; i++)
-         task->process->file_descriptors[i] = NULL;
-      task->process->fd_count = new_fd + 1;
+   if(new_fd < 0 || new_fd >= 3) {
+      debug_printf("api_dup2: invalid old fd\n");
+      return;
    }
-   fs_file_t *existing = task->process->file_descriptors[new_fd];
-   if(existing) fs_close(existing);
-   task->process->file_descriptors[new_fd] = fs_dup(old_file);
+   kobj_handle_t new_h = process_copy_kobj(process, process, h);
+   if(new_h < 0) {
+      debug_printf("api_dup2: copy failed\n");
+      return;
+   }
+   if(process->stdio[new_fd] >= 0)
+      process_release_kobj(process, process->stdio[new_fd]);
+   process->stdio[new_fd] = new_h;
    regs->ebx = new_fd;
 }
 
 void api_close(registers_t *regs) {
-   // IN: ebx - fd
+   process_t *p = get_current_task_state()->process;
    int fd = regs->ebx;
-   task_state_t *task = get_current_task_state();
-   if(fd < 0 || fd >= task->process->fd_count) {
-      debug_printf("api_close: invalid fd\n");
-      return;
+   kobj_handle_t h = fd;
+   if(fd >= 0 && fd <= 2) {
+      h = p->stdio[fd];
+      p->stdio[fd] = -1;
    }
-   fs_file_t *file = task->process->file_descriptors[fd];
-   fs_close(file);
-   task->process->file_descriptors[fd] = NULL;
+   regs->ebx = (h >= 0 && process_release_kobj(p, h)) ? 0 : -1;
 }
 
 void api_get_time(registers_t *regs) {

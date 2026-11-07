@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "window_t.h"
+#include "kobj.h"
 
 #define FS_MAX_FILENAME 256
 
@@ -31,8 +32,6 @@ typedef struct {
     void *write_buf;
     size_t write_size;
 } fs_pipe_t;
-
-struct fs_file_t;
 
 typedef struct fs_file_t {
     bool active;
@@ -81,15 +80,14 @@ typedef struct {
 
 uint8_t *fs_read_file_kernel(char *path, int *size);
 
-fs_file_t *fs_open(char *path, int flags);
-fs_file_t *fs_dup(fs_file_t *file);
+kobj_handle_t fs_open(process_t *process, char *path, int flags);
+void fs_free(kobj_inst_t *inst);
 void fs_close_locked(fs_file_t *file);
-void fs_close(fs_file_t *file);
 bool fs_exists(char *path);
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task);
 int fs_read(fs_file_t *file, void *buffer, size_t size, int task);
 bool fs_mkdir(char *path);
-fs_file_t *fs_new(char *path, int flags);
+kobj_handle_t fs_new(process_t *process, char *path, int flags);
 bool fs_unlink(char *path);
 bool fs_rmdir(char *path);
 bool fs_rename(char *oldpath, char *newname);
@@ -98,10 +96,11 @@ void fs_dir_content_free(fs_dir_content_t *content);
 int fs_filesize(fs_file_t *file);
 int fs_filesize_path(char *path);
 int fs_seek(fs_file_t *file, int offset, int type);
-void fs_create_pipe(fs_file_t **read_end, fs_file_t **write_end);
+bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *write_end);
 bool fs_pipe_wake_reader(fs_pipe_t *pipe);
 bool fs_pipe_wake_writer(fs_pipe_t *pipe);
 int fs_truncate(fs_file_t *file, int size);
 void fs_read_window_callback(gui_window_t *window, bool eof);
+bool fs_connect(kobj_ref_t *ref, process_t *process);
 
 #endif

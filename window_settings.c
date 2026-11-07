@@ -92,6 +92,7 @@ void window_settings_pickbgcolour(void *wo, int x, int y) {
    (void)y;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
+   if(popup < 0) return;
    window_settings_t *settings = (window_settings_t*)parent->state;
    uint16_t colour = (uint16_t)hextouint(settings->w_bgcolour_wo->text);
    window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_bgcolour_callback, colour);
@@ -104,6 +105,7 @@ void window_settings_picktxtcolour(void *wo, int x, int y) {
    (void)y;
    gui_window_t *parent = getSelectedWindow();
    int popup = windowmgr_add();
+   if(popup < 0) return;
    window_settings_t *settings = (window_settings_t*)parent->state;
    uint16_t colour = (uint16_t)hextouint(settings->w_txtcolour_wo->text);
    window_popup_colourpicker(getWindow(popup), parent, &window_settings_set_window_txtcolour_callback, colour);

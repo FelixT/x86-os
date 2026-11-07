@@ -556,13 +556,15 @@ static inline int new_file(char *path) {
 }
 
 static inline int close(int fd) {
+   int r;
    asm volatile(
       "int $0x30"
-      :: "a" (73),
+      : "=b" (r)
+      : "a" (73),
       "b" (fd)
       : "cc", "memory"
    );
-   return 0;
+   return r;
 }
 
 static inline bool rename(char *path, char *newname) {
@@ -784,16 +786,20 @@ static inline uint32_t get_tick() {
    return ms;
 }
 
-static inline void pipe(int *readfd, int *writefd) {
+static inline bool pipe(int *readfd, int *writefd) {
+   bool success;
    int rfd, wfd;
    asm volatile(
       "int $0x30"
-      : "=b" (rfd), "=c" (wfd)
+      : "=b" (success),
+      "=c" (rfd),
+      "=d" (wfd)
       : "a" (70)
       : "cc", "memory"
    );
    *readfd = rfd;
    *writefd = wfd;
+   return success;
 }
 
 static inline int dup(int oldfd) {

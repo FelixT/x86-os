@@ -29,9 +29,8 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->page_dir = page_get_kernel_pagedir(); // default to kernel pagedir
    process->window = -1;
    process->no_allocated = 0;
-   process->fd_count = 0;
-   for(int i = 0; i < PROCESS_MAX_FDS; i++)
-      process->file_descriptors[i] = NULL;
+   for(int i = 0; i < 3; i++)
+      process->stdio[i] = -1;
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++)
       process->kobj[i] = NULL;
    process->kobj_count = 0;
@@ -162,7 +161,7 @@ static void task_unmap_stack(task_state_t *task) {
       map(dir, guard, guard, 0, 0, 0);
 }
 
-bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
+bool setup_task_init(int index, bool focus, bool minimised) {
    task_state_t *task = &tasks[index];
 
    // note: tasks created here are always main thread
@@ -178,7 +177,8 @@ bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
    if(window < 0)
       return false;
    
-   task->process->window = window;
+   process_t *process = task->process;
+   process->window = window;
 
    if(focus) {
       windowmgr_focus_swap(NULL);
@@ -187,14 +187,7 @@ bool setup_task_init(int index, bool focus, bool minimised, bool open_fds) {
    }
 
    if(minimised)
-      gui_get_windows()[task->process->window].minimised = true;
-
-   if(open_fds) {
-      task->process->file_descriptors[0] = fs_open("/dev/stdin", FS_FLAG_READONLY);
-      task->process->file_descriptors[1] = fs_open("/dev/stdout", FS_FLAG_WRITEONLY);
-      task->process->file_descriptors[2] = fs_open("/dev/stderr", FS_FLAG_WRITEONLY);
-      task->process->fd_count = 3;
-   }
+      getWindow(process->window)->minimised = true;
 
    task_event_counter++;
    return true;
@@ -204,7 +197,7 @@ bool launch_task(int index, registers_t *regs, bool focus) {
    int old_task = current_task;
    current_task = index;
 
-   if(!setup_task_init(index, focus, false, true)) {
+   if(!setup_task_init(index, focus, false)) {
       current_task = old_task;
       return false;
    }
@@ -397,12 +390,6 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
          if(task->process->prog_size != 0)
             free(task->process->prog_start, task->process->prog_size);
 
-         // free fds
-         for(int i = 0; i < task->process->fd_count; i++) {
-            fs_file_t *fd = task->process->file_descriptors[i];
-            if(fd) fs_close_locked(fd); // safe to call without lock as task owns fd
-         }
-
          task_reset_windows(index);
 
          // free heap
@@ -506,7 +493,7 @@ bool tasks_launch_binary(registers_t *regs, char *path) {
       return false;
    } else if(!regs) {
       // setup but don't launch
-      if(!setup_task_init(index, true, false, true)) {
+      if(!setup_task_init(index, true, false)) {
          debug_printf("tasks_launch_binary: setup failed\n");
          task_discard_entry(index);
          return false;
@@ -518,14 +505,14 @@ bool tasks_launch_binary(registers_t *regs, char *path) {
 }
 
 // doesn't immediately switch, caller is responsible for enabling the task
-int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool copy, bool minimised) {
+int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimised) {
    int fsize;
    uint8_t *prog = fs_read_file_kernel(path, &fsize);
    if(!prog) {
       gui_writestr("Not found\n", 0);
       return -1;
    }
-   int task_index = elf_setup(prog, fsize, argc, args, focus, minimised, !copy);
+   int task_index = elf_setup(prog, fsize, argc, args, focus, minimised);
    if(task_index >= 0) {
       process_t *process = gettasks()[task_index].process;
       strcpy(process->exe_path, path);
@@ -1099,18 +1086,21 @@ void task_write_to_window(int task, char *out, bool children) {
          }
       }
    } else {
-      fs_file_t *fd1 = t->process->file_descriptors[1];
-      if(!fd1) {
+      // write to fd/handle 1 (stdout)
+      kobj_handle_t fd1 = t->process->stdio[1];
+      kobj_ref_t *ref = fd1 >= 0 ? process_get_kobj_type(t->process, fd1, KOBJ_FILE) : NULL;
+      if(!ref) {
          debug_printf("task_write_to_window: no fd1 or main window\n");
          return;
       }
-      if(fd1->type == FS_TYPE_FILE && !get_current_task_state()->in_syscall) {
+      fs_file_t *file = ref->inst->data;
+      if(file->type == FS_TYPE_FILE && !get_current_task_state()->in_syscall) {
          debug_printf("task_write_to_window: can't write to file from irq\n"); // write to file may block
          return;
       }
-      int r = fs_write(fd1, (uint8_t*)out, strlen(out), -1);
-      if(r > 0 && fd1->type == FS_TYPE_PIPE && fd1->pipe)
-         fs_pipe_wake_reader(fd1->pipe);
+      int r = fs_write(file, (uint8_t*)out, strlen(out), -1);
+      if(r > 0 && file->type == FS_TYPE_PIPE && file->pipe)
+         fs_pipe_wake_reader(file->pipe);
    }
 }
 
@@ -1435,6 +1425,14 @@ kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_proc
    return h;
 }
 
+void process_copy_stdio(process_t *send_process, process_t *receive_process) {
+   for(int i = 0; i < 3; i++) {
+      kobj_handle_t h = get_process_stdio(send_process, i);
+      if(h < 0) continue;
+      receive_process->stdio[i] = process_copy_kobj(send_process, receive_process, h);
+   }
+}
+
 uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index) {
    bool rw = ref->rights & KOBJ_RIGHT_WRITE;
    kobj_inst_t *inst = ref->inst;
@@ -1548,3 +1546,24 @@ void process_free_vm(process_t *process) {
 uint32_t get_task_event_counter() {
    return task_event_counter;
 }
+
+kobj_handle_t get_process_stdio(process_t *process, int fd) {
+   if(fd < 0 || fd > 2) return -1;
+   kobj_handle_t h = process->stdio[fd];
+   if(h < 0) {
+      switch(fd) {
+         case 0:
+            h = fs_open(process, "/dev/stdin", FS_FLAG_READONLY);
+            break;
+         case 1:
+            h = fs_open(process, "/dev/stdout", FS_FLAG_WRITEONLY);
+            break;
+         case 2:
+            h = fs_open(process, "/dev/stderr", FS_FLAG_WRITEONLY);
+            break;
+      }
+   }
+   process->stdio[fd] = h;
+   return h;
+}
+

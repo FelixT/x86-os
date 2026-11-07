@@ -3,6 +3,7 @@
 #include "windowmgr.h"
 #include "dma.h"
 #include "shared.h"
+#include "fs.h"
 
 static uint32_t kobj_uid_counter = 1;
 static uint32_t kobj_ref_uid_counter = 1;
@@ -35,6 +36,16 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .stop_func = NULL,
       .connect_func = &shared_connect,
       .map_func = &shared_map,
+      .default_rights = KOBJ_RIGHTS_ALL,
+      .control_func = NULL
+   },
+   [KOBJ_FILE] = {
+      .type = KOBJ_FILE,
+      .free_func = &fs_free,
+      .close_func = NULL,
+      .stop_func = NULL,
+      .connect_func = &fs_connect,
+      .map_func = NULL,
       .default_rights = KOBJ_RIGHTS_ALL,
       .control_func = NULL
    }

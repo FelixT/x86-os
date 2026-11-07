@@ -175,7 +175,7 @@ void wm_launch_thread_main() {
          tasks_launch_binary(NULL, launch.path);
       } else {
          // elf
-         int new_task = tasks_setup_elf(launch.path, launch.argc, launch.args, launch.focus, false, launch.minimised);
+         int new_task = tasks_setup_elf(launch.path, launch.argc, launch.args, launch.focus, launch.minimised);
          if(new_task < 0) {
             debug_printf("wm_launch %s failed\n", launch.path);
             free_launch_args(launch.args, launch.argc);
