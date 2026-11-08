@@ -18,7 +18,7 @@ uint32_t task_uid_counter = 0;
 uint32_t task_event_counter = 0; // incremented on start/end
 
 process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
-   process_t *process = malloc(sizeof(process_t));
+   process_t *process = kmalloc(sizeof(process_t));
    if(!process) return NULL;
    process->uid = process_uid_counter++;
    process->prog_entry = entry;
@@ -53,7 +53,7 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
 static bool create_task_stacks(task_state_t *task) {
    // lazy allocated stacks
    if(!task->stack_base) {
-      void *stack = malloc(TASK_STACK_SIZE - 0x1000); // don't need to allocate physical memory for page guard
+      void *stack = kmalloc(TASK_STACK_SIZE - 0x1000); // don't need to allocate physical memory for page guard
       if(!stack) {
          debug_printf("couldn't allocate stack for task %i\n", task->task_id);
          return false;
@@ -61,7 +61,7 @@ static bool create_task_stacks(task_state_t *task) {
       task->stack_base = (uint32_t)stack;
    }
    if(!task->kernel_stack_top) {
-      void *kernel_stack = malloc(KSTACK_SIZE); // do need to allocate physical memory for page guard (currently)
+      void *kernel_stack = kmalloc(KSTACK_SIZE); // do need to allocate physical memory for page guard (currently)
       if(!kernel_stack) {
          debug_printf("couldn't allocate kernel stack for task %i\n", task->task_id);
          return false;
@@ -223,10 +223,10 @@ void task_discard_entry(int index) {
    if(!process) return;
 
    if(process->prog_size != 0)
-      free(process->prog_start, process->prog_size);
+      kfree((void*)process->prog_start);
    if(process->page_dir != page_get_kernel_pagedir())
       free_page_dir(process->page_dir);
-   free((uint32_t)process, sizeof(process_t));
+   kfree(process);
    tasks[index].process = NULL;
 }
 
@@ -305,7 +305,7 @@ void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr) {
 static void cleanup_checkcmd_args(process_t *process, char *buffer) {
    if(process)
       unshare_heap_page(process->page_dir, (uint32_t)buffer);
-   free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
+   kfree(buffer);
 }
 
 static void free_event_queue(task_state_t *task) {
@@ -389,14 +389,16 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
       if(!remaining_threads) {
          // free task memory
          if(task->process->prog_size != 0)
-            free(task->process->prog_start, task->process->prog_size);
+            kfree((void*)task->process->prog_start);
 
          task_reset_windows(index);
 
          // free heap
          if(task->process->heap_end > task->process->heap_start) {
             for(uint32_t addr = task->process->heap_start; addr < task->process->heap_end; addr+=PAGE_SIZE) {
-               free(page_getphysical(task->process->page_dir, addr), PAGE_SIZE);
+               uint32_t phys = page_getphysical(task->process->page_dir, addr);
+               if(phys != (uint32_t)-1)
+                  kfree((void*)phys);
             }
          }
 
@@ -426,7 +428,7 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
          process_free_vm(task->process);
 
          // free process
-         free((uint32_t)task->process, sizeof(process_t));
+         kfree(task->process);
       } else {
          debug_printf("%i threads couldn't be ended\n", remaining_threads);
       }
@@ -459,7 +461,7 @@ bool end_task(int index, registers_t *regs) {
 }
 
 void tasks_alloc() {
-   tasks = malloc(sizeof(task_state_t) * TOTAL_TASKS);
+   tasks = kmalloc(sizeof(task_state_t) * TOTAL_TASKS);
    for(int i = 0; i < TOTAL_TASKS; i++) {
       tasks[i].enabled = false;
       tasks[i].reserved = false;
@@ -484,7 +486,7 @@ bool tasks_launch_binary(registers_t *regs, char *path) {
    }
    if(create_task_entry(index, (uint32_t)prog, fsize, false, NULL) == -1) {
       debug_printf("tasks_launch_binary: create task entry failed\n");
-      free((uint32_t)prog, fsize);
+      kfree(prog);
       task_unreserve(index);
       return false;
    }
@@ -518,7 +520,7 @@ int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimise
       process_t *process = gettasks()[task_index].process;
       strcpy(process->exe_path, path);
    }
-   free((uint32_t)prog, fsize);
+   kfree(prog);
    return task_index;
 }
 
@@ -757,7 +759,7 @@ void end_kthread(int task) {
    tasks[task].enabled = false;
    tasks[task].reserved = false;
    if(tasks[task].process) {
-      free((uint32_t)tasks[task].process, sizeof(process_t));
+      kfree(tasks[task].process);
       tasks[task].process = NULL;
    }
    if(task == current_task) {
@@ -1164,9 +1166,9 @@ void free_launch_args(char **args, int argc) {
    if(!args) return;
    for(int i = 0; i < argc; i++) {
       if(args[i])
-         free((uint32_t)args[i], strlen(args[i])+1);
+         kfree(args[i]);
    }
-   free((uint32_t)args, sizeof(char*) * (argc+1)); // note alloc includes trailing null str pointer
+   kfree(args);
 }
 
 int current_servicing_task = -1;
@@ -1186,7 +1188,7 @@ bool task_demand_map(process_t *process, uint32_t addr) {
       debug_printf("task_demand_map failed: 0x%h mapped type %i\n", addr, mapping);
       return false;
    }
-   uint8_t *page = malloc(PAGE_SIZE); // returns physical addr
+   uint8_t *page = kmalloc(PAGE_SIZE); // returns physical addr
    if(!page) {
       debug_printf("demand paging: system ran out of physical memory\n");
       return false;
@@ -1195,7 +1197,7 @@ bool task_demand_map(process_t *process, uint32_t addr) {
 
    if(!map(process->page_dir, (uint32_t)page, addr, 1, 1, 0)) {
       debug_printf("demand paging: couldn't map 0x%h\n", addr);
-      free((uint32_t)page, PAGE_SIZE);
+      kfree(page);
       return false;
    }
    invlpg(addr);
@@ -1478,7 +1480,7 @@ vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags,
    if(end < VM_START || end > VM_END)
       return NULL;
    
-   vm_region_t *new = malloc(sizeof(vm_region_t));
+   vm_region_t *new = kmalloc(sizeof(vm_region_t));
    if(!new)
       return NULL;
    new->flags = flags;
@@ -1521,7 +1523,7 @@ bool process_unmap_vm(process_t *process, uint32_t vaddr) {
          else
             process->regions = region->next;
 
-         free((uint32_t)region, sizeof(vm_region_t));
+         kfree(region);
 
          return true;
       }
@@ -1537,7 +1539,7 @@ void process_free_vm(process_t *process) {
    while(region) {
       kobj_release_ref(region->inst);
       vm_region_t *next = region->next;
-      free((uint32_t)region, sizeof(vm_region_t));
+      kfree(region);
       region = next;
    }
 

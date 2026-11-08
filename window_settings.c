@@ -119,7 +119,7 @@ bool window_settings_init(gui_window_t *window, gui_window_t *selected) {
    if(selected->child_count == W_CHILDCOUNT)
       return false;
 
-   window_settings_t *settings = malloc(sizeof(window_settings_t));
+   window_settings_t *settings = kmalloc(sizeof(window_settings_t));
    window->state = (void*)settings;
    window->state_size = sizeof(window_settings_t);
 

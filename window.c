@@ -358,7 +358,7 @@ void window_newline(gui_window_t* window) {
 // windowobj functions
 
 windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text, void (*func)(void *windowobj, int x, int y)) {
-   windowobj_t *button = malloc(sizeof(windowobj_t));
+   windowobj_t *button = kmalloc(sizeof(windowobj_t));
    windowobj_init(button, &window->surface);
    button->type = WO_BUTTON;
    button->x = x;
@@ -366,7 +366,7 @@ windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text
    button->width = 50;
    button->height = 14;
    if(text) {
-      char *newtext = (char*)malloc(strlen(text)+1);
+      char *newtext = (char*)kmalloc(strlen(text)+1);
       strcpy(newtext, text);
       button->text = newtext;
    }
@@ -378,7 +378,7 @@ windowobj_t *window_create_button(gui_window_t *window, int x, int y, char *text
 }
 
 windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text) {
-   windowobj_t *textobj = malloc(sizeof(windowobj_t));
+   windowobj_t *textobj = kmalloc(sizeof(windowobj_t));
    windowobj_init(textobj, &window->surface);
    textobj->type = WO_TEXT;
    textobj->x = x;
@@ -388,9 +388,11 @@ windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text) 
    textobj->colour_bg = window->bgcolour;
    if(text) {
       int len = strlen(text);
-      char *newtext = (char*)malloc(len + 1);
+      int capacity = len + 1 > WO_TEXT_MIN_CAPACITY ? len + 1 : WO_TEXT_MIN_CAPACITY;
+      char *newtext = (char*)kmalloc(capacity);
       strcpy(newtext, text);
       textobj->text = newtext;
+      textobj->text_capacity = capacity;
       textobj->textpos = len;
       textobj->cursor_textpos = len;
    }
@@ -401,7 +403,7 @@ windowobj_t *window_create_text(gui_window_t *window, int x, int y, char *text) 
 }
 
 windowobj_t *window_create_menu(gui_window_t *window, int x, int y, windowobj_menu_t *menuitems, int menuitem_count) {
-   windowobj_t *menu = malloc(sizeof(windowobj_t));
+   windowobj_t *menu = kmalloc(sizeof(windowobj_t));
    windowobj_init(menu, &window->surface);
    menu->type = WO_MENU;
    menu->x = x;
@@ -541,7 +543,7 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    int y = 0;
    int height = window->height - TITLEBAR_HEIGHT;
    
-   windowobj_t *scrollbar = malloc(sizeof(windowobj_t));
+   windowobj_t *scrollbar = kmalloc(sizeof(windowobj_t));
    windowobj_init(scrollbar, &window->surface);
    scrollbar->type = WO_SCROLLBAR;
    scrollbar->x = x;
@@ -554,7 +556,7 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    buf[1] = '\0';
 
    // up button
-   windowobj_t *upbtn = malloc(sizeof(windowobj_t));
+   windowobj_t *upbtn = kmalloc(sizeof(windowobj_t));
    windowobj_init(upbtn, &window->surface);
    upbtn->type = WO_BUTTON;
    upbtn->x = 0;
@@ -562,14 +564,14 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    upbtn->width = 14;
    upbtn->height = 14;
    buf[0] = 0x80; // uparrow
-   char *text = (char*)malloc(2);
+   char *text = (char*)kmalloc(2);
    strcpy(text, buf);
    upbtn->text = text;
    upbtn->parent = scrollbar;
    upbtn->click_func = &window_scroll_up_callback;
 
    // down button
-   windowobj_t *downbtn = malloc(sizeof(windowobj_t));
+   windowobj_t *downbtn = kmalloc(sizeof(windowobj_t));
    windowobj_init(downbtn, &window->surface);
    downbtn->type = WO_BUTTON;
    downbtn->x = 0;
@@ -577,14 +579,14 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    downbtn->width = 14;
    downbtn->height = 14;
    buf[0] = 0x81; // down
-   text = (char*)malloc(2);
+   text = (char*)kmalloc(2);
    strcpy(text, buf);
    downbtn->text = text;
    downbtn->parent = scrollbar;
    downbtn->click_func = &window_scroll_down_callback;
 
    // scroller
-   windowobj_t *scroller = malloc(sizeof(windowobj_t));
+   windowobj_t *scroller = kmalloc(sizeof(windowobj_t));
    windowobj_init(scroller, &window->surface);
    scroller->type = WO_SCROLLER;
    scroller->x = 0;
@@ -601,7 +603,7 @@ windowobj_t *window_create_scrollbar(gui_window_t *window, void (*callback)(int 
    if(scroller->height > scrollareaheight) scroller->height = scrollareaheight;
 
    buf[0] = '=';
-   text = (char*)malloc(2);
+   text = (char*)kmalloc(2);
    strcpy(text, buf);
    scroller->text = text;
    scroller->parent = scrollbar;
@@ -644,7 +646,6 @@ void window_set_scrollable_height(registers_t *regs, gui_window_t *window, int h
             resize = true;
          }
          window->scrollbar->visible = true;
-         windowobj_draw(window->scrollbar);
       } else {
          if(window->scrollbar->visible) {
             resize = true;

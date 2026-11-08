@@ -20,7 +20,7 @@ void events_add(int delta, void (*callback)(void *regs, void *msg), void *msg, i
         events_active = true;
     }
     
-    event_t *event = malloc(sizeof(event_t));
+    event_t *event = kmalloc(sizeof(event_t));
     if(!event) return;
     event->time = timer_i + delta;
     event->callback = callback;
@@ -85,7 +85,7 @@ void events_check(registers_t *regs) {
             && !gettasks()[first_event->task].enabled) {
                 debug_writestr("Event is from an ended task\n");
                 event_t *next = first_event->next;
-                free((uint32_t)first_event, sizeof(event_t));
+                kfree(first_event);
                 first_event = next;
                 continue;
             }
@@ -94,7 +94,7 @@ void events_check(registers_t *regs) {
             first_event = e->next;
             event_fire(regs, e);
 
-            free((uint32_t)e, sizeof(event_t));
+            kfree(e);
         } else {
             return;
         }

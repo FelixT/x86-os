@@ -54,7 +54,7 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
 kobj_inst_t *create_kobj_inst(int type, void *data) {
    if(type < 0 || type >= KOBJ_NONE)
       return NULL;
-   kobj_inst_t *kobj = malloc(sizeof(kobj_inst_t));
+   kobj_inst_t *kobj = kmalloc(sizeof(kobj_inst_t));
    if(!kobj) return NULL;
    
    kobj->uid = kobj_uid_counter++;
@@ -76,11 +76,11 @@ void free_kobj_inst(kobj_inst_t *inst) {
    kobj_stop(inst);
    if(inst->obj->free_func)
       inst->obj->free_func(inst);
-   free((uint32_t)inst, sizeof(kobj_inst_t));
+   kfree(inst);
 }
 
 kobj_ref_t *create_kobj_ref(kobj_inst_t *inst) {
-   kobj_ref_t *ref = malloc(sizeof(kobj_ref_t));
+   kobj_ref_t *ref = kmalloc(sizeof(kobj_ref_t));
    if(!ref) return NULL;
    kobj_add_ref(inst);
    inst->handle_count++;
@@ -119,7 +119,7 @@ bool kobj_release(kobj_ref_t *ref, void *process, bool ending) {
 
    kobj_release_ref(inst);
 
-   free((uint32_t)ref, sizeof(kobj_ref_t));
+   kfree(ref);
 
    return true;
 }

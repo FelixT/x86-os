@@ -160,8 +160,8 @@ void gui_init(void) {
    memcpy(&surface, (void*)surface_boot, sizeof(surface_t));
    main_surface = surface;
 
-   draw_buffer = (uint16_t*)malloc(sizeof(uint16_t) * surface.width * surface.height);
-   font_letter = (int*)malloc(1);
+   draw_buffer = (uint16_t*)kmalloc(sizeof(uint16_t) * surface.width * surface.height);
+   font_letter = (int*)kmalloc(PAGE_SIZE);
 
    // reserve framebuffer memory so malloc can't assign it
    memory_reserve(surface.buffer, gui_get_framebuffer_size());

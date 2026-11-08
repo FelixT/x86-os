@@ -43,14 +43,20 @@
 
 #define V_STACKS_START 0xC0000000 // program stack for each mapped to known location (V_STACKS_START+i*TASK_STACK_SIZE)
 
-typedef struct mem_segment_status_t {
-   bool allocated;
-} mem_segment_status_t;
+typedef enum {
+   MEM_FREE,
+   MEM_SLAB,
+   MEM_HEAP,
+   MEM_HEAPCONT,
+   MEM_RESERVE
+} mem_type_t;
 
 void memory_reserve(uint32_t offset, int bytes);
-void free(uint32_t offset, int bytes);
+void kfree(void *mem);
 void memory_init();
-void *malloc(int bytes);
+void *kmalloc(int bytes);
+void *kmalloc_type(int bytes, mem_type_t type);
+void *page_alloc(int bytes);
 void *resize(uint32_t offset, int oldsize, int newsize);
 void memcpy_fast(void *dest, const void *src, size_t bytes);
 int allocated_blocks();

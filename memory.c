@@ -2,6 +2,7 @@
 
 #include "memory.h"
 #include "gui.h"
+#include "kalloc.h"
 
 // page/'block' allocator
 
@@ -10,12 +11,33 @@
 int head = 0; // block num of first free entry
 
 uint32_t block_bitmap[BLOCK_COUNT/32];
+uint8_t mem_status[BLOCK_COUNT]; // mem_type_t
+
+kcache_t mem16_cache; // 16 bytes
+kcache_t mem32_cache;
+kcache_t mem64_cache;
+kcache_t mem128_cache;
+kcache_t mem256_cache;
+kcache_t mem512_cache;
+
+void memory_init() {
+   // set all to unallocated
+   memset(block_bitmap, 0, sizeof(uint32_t)*(BLOCK_COUNT/32));
+   memset(mem_status, MEM_FREE, BLOCK_COUNT);
+   // setup caches
+   kalloc_init(&mem16_cache, 4, 16);
+   kalloc_init(&mem32_cache, 4, 32);
+   kalloc_init(&mem64_cache, 4, 64);
+   kalloc_init(&mem128_cache, 4, 128);
+   kalloc_init(&mem256_cache, 4, 256);
+   kalloc_init(&mem512_cache, 4, 512);
+}
 
 static inline bool valid_block(int block) {
    return block >= 0 && block < KERNEL_HEAP_SIZE/PAGE_SIZE;
 }
 
-static bool set_blocks(int blockStart, int noBlocks, bool value) {
+static bool set_blocks(int blockStart, int noBlocks, bool value, mem_type_t type) {
    if(noBlocks <= 0 || !valid_block(blockStart) || !valid_block(blockStart+noBlocks-1))
       return false;
    int start = blockStart/32;
@@ -29,6 +51,8 @@ static bool set_blocks(int blockStart, int noBlocks, bool value) {
       else
          block_bitmap[i] &= ~mask;
    }
+   for(int i = blockStart; i < blockStart + noBlocks; i++)
+      mem_status[i] = (type==MEM_HEAP&&i!=blockStart) ? (uint8_t)MEM_HEAPCONT : (uint8_t)type;
    return true;
 }
 
@@ -36,22 +60,48 @@ void memory_reserve(uint32_t offset, int bytes) {
    int noBlocks = (bytes+(PAGE_SIZE-1))/PAGE_SIZE;  // rounding up
    int blockStart = ((int)offset-(int)HEAP_KERNEL)/PAGE_SIZE;
 
-   set_blocks(blockStart, noBlocks, true);
+   set_blocks(blockStart, noBlocks, true, MEM_RESERVE);
 }
 
-void free(uint32_t offset, int bytes) {
-   if(offset == 0 || bytes == 0) return;
+extern void debug_printf(char *format, ...);
 
-   int blockStart = ((int)offset-(int)HEAP_KERNEL)/PAGE_SIZE;
-   int noBlocks = (bytes+(PAGE_SIZE-1))/PAGE_SIZE;
+void kfree(void *mem) {
+   if(!mem) return;
 
-   if(set_blocks(blockStart, noBlocks, false) && blockStart < head)
+   int blockStart = ((int)mem-(int)HEAP_KERNEL)/PAGE_SIZE;
+   if(!valid_block(blockStart)) return;
+   int noBlocks = 0;
+
+   switch(mem_status[blockStart]) {
+      case MEM_FREE:
+      case MEM_RESERVE:
+         debug_printf("Double free detected at 0x%h\n", mem);
+         kernel_panic();
+         break;
+      case MEM_SLAB:
+         if(!kslab_is_allocated(mem)) {
+            debug_printf("Bad/double slab free at 0x%h\n", mem);
+            kernel_panic();
+         }
+         if(kdealloc(mem))
+            noBlocks = 1;
+         break;
+      case MEM_HEAPCONT:
+         debug_printf("Misaligned free at 0x%h\n", mem);
+         kernel_panic();
+         break;
+      case MEM_HEAP:
+         noBlocks++;
+         while(blockStart+noBlocks < BLOCK_COUNT) {
+            if(mem_status[blockStart+noBlocks] != MEM_HEAPCONT)
+               break;
+            noBlocks++;
+         }
+         break;
+   }
+
+   if(noBlocks > 0 && set_blocks(blockStart, noBlocks, false, MEM_FREE) && blockStart < head)
       head = blockStart;
-}
-
-void memory_init() {
-   // set all to unallocated
-   memset(block_bitmap, 0, sizeof(uint32_t)*(BLOCK_COUNT/32));
 }
 
 static inline bool block_used(int n) { return block_bitmap[n/32] & (1u << (n%32)); }
@@ -65,7 +115,7 @@ static int next_free(int n) { // first free block at or after n
    return BLOCK_COUNT;
 }
 
-void *malloc(int bytes) {
+void *kmalloc_type(int bytes, mem_type_t type) {
    if(bytes <= 0) return NULL;
    int noBlocks = (bytes + PAGE_SIZE-1)/PAGE_SIZE;
    int blockStart = 0;
@@ -75,7 +125,7 @@ void *malloc(int bytes) {
       if(block_used(n)) { blockLength = 0; continue; }
       if(blockLength++ == 0) blockStart = n;
       if(blockLength == noBlocks) {
-         set_blocks(blockStart, noBlocks, true);
+         set_blocks(blockStart, noBlocks, true, type);
          if(blockStart == head) head = next_free(blockStart + noBlocks);
          return (void*)(HEAP_KERNEL + blockStart*PAGE_SIZE);
       }
@@ -83,13 +133,40 @@ void *malloc(int bytes) {
    return NULL;
 }
 
+static void *malloc_small(int bytes) {
+   if(bytes <= 0) return NULL;
+   if(bytes > 256)
+      return kalloc(&mem512_cache);
+   if(bytes > 128)
+      return kalloc(&mem256_cache);
+   if(bytes > 64)
+      return kalloc(&mem128_cache);
+   if(bytes > 32)
+      return kalloc(&mem64_cache);
+   if(bytes > 16)
+      return kalloc(&mem32_cache);
+   return kalloc(&mem16_cache);
+}
+
+void *kmalloc(int bytes) {
+   if(bytes <= 512)
+      return malloc_small(bytes);
+
+   return kmalloc_type(bytes, MEM_HEAP);
+}
+
+// guaranteed to be aligned
+void *page_alloc(int bytes) {
+   return kmalloc_type(bytes, MEM_HEAP);
+}
+
 void *resize(uint32_t offset, int oldsize, int newsize) {
-   uint8_t *newaddr = malloc(newsize);
+   uint8_t *newaddr = kmalloc(newsize);
    if(newaddr == NULL)
       return NULL;
    uint8_t *oldaddr = (uint8_t *)offset;
    memcpy(newaddr, oldaddr, oldsize < newsize ? oldsize : newsize);
-   free(offset, oldsize);
+   kfree(oldaddr);
    return newaddr;
 }
 
@@ -108,6 +185,8 @@ int allocated_blocks() {
    }
    return total;
 }
+
+// utility
 
 void memcpy_fast(void *dest, const void *src, size_t bytes) {
    // Use rep movsd for 4-byte blocks, then rep movsb for remaining bytes

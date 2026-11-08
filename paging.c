@@ -62,7 +62,7 @@ bool map(page_dir_entry_t *dir, uint32_t addr, uint32_t vaddr, int user, int rw,
    uint32_t table_index = index%1024;
 
    if(!dir[dir_index].present || !dir[dir_index].address) {
-      page_table_entry_t *page_table = malloc(sizeof(page_table_entry_t) * 1024); // dir
+      page_table_entry_t *page_table = kmalloc(sizeof(page_table_entry_t) * 1024); // dir
       if(!page_table) {
          debug_printf("map: out of physical memory creating page table vaddr 0x%h\n", vaddr);
          return false;
@@ -114,7 +114,7 @@ page_dir_entry_t *new_page() {
 
    // we use malloc here as it satisfies out 4KiB alignment requirement
 
-   page_dir_entry_t *dir = malloc(sizeof(page_dir_entry_t) * 1024);
+   page_dir_entry_t *dir = kmalloc(sizeof(page_dir_entry_t) * 1024);
    if(!dir) {
       debug_printf("new_page: out of physical memory for page directory\n");
       return NULL;
@@ -365,9 +365,10 @@ void free_page_dir(page_dir_entry_t *dir) {
    // free page tables
    for(int i = 0; i < 1024; i++) {
       if(dir[i].present && dir[i].address) {
-         free((dir[i].address << 12) + V_KERNEL_OFFSET, sizeof(page_table_entry_t)*1024);
+         void *mem = (void*)((dir[i].address << 12) + V_KERNEL_OFFSET);
+         kfree(mem);
       }
    }
    // free page dir
-   free((uint32_t)dir, sizeof(page_dir_entry_t)*1024);
+   kfree(dir);
 }

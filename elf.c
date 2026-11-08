@@ -71,7 +71,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       return -1;
    }
 
-   uint8_t *newProg = malloc(vmem_size);
+   uint8_t *newProg = page_alloc(vmem_size);
    if(!newProg) {
       debug_printf("elf_load: out of memory allocating prog memory size %u\n", vmem_size);
       free_page_dir(dir);
@@ -85,7 +85,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
       mapped &= map(dir, (uint32_t)newProg + i, vmem_start + i, 1, 1, 0);
    if(!mapped) {
       debug_printf("elf_load: mapping program fail\n");
-      free((uint32_t)newProg, vmem_size);
+      kfree(newProg);
       free_page_dir(dir);
       task_unreserve(task_index);
       return -1;
@@ -112,7 +112,7 @@ static int elf_load(uint8_t *prog, uint32_t size) {
 
    if(create_task_entry(task_index, elf_header->entry, vmem_size, false, NULL) == -1) {
       debug_printf("elf_load: create task entry failed\n");
-      free((uint32_t)newProg, vmem_size);
+      kfree(newProg);
       free_page_dir(dir);
       task_unreserve(task_index);
       return -1;

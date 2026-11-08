@@ -27,6 +27,7 @@ void windowobj_init(windowobj_t *windowobj, surface_t *window_surface) {
    windowobj->disabled = false;
    windowobj->isstatic = false;
    windowobj->textpos = 0;
+   windowobj->text_capacity = 0;
    windowobj->textvalign = true;
    windowobj->texthalign = true;
    windowobj->underline = false;
@@ -570,6 +571,7 @@ void windowobj_keydown(void *windowobj, uint16_t c) {
    }
 
    if(c == 0) return;
+   if(wo->textpos + 1 >= wo->text_capacity) return; // full
 
    for(int i = wo->textpos; i > wo->cursor_textpos; i--) {
       wo->text[i] = wo->text[i - 1];
@@ -636,7 +638,7 @@ void windowobj_dragged(void *windowobj, int x, int y, int relX, int relY) {
 void windowobj_free(windowobj_t *wo) {
    //free text
    if(wo->text != NULL) {
-      free((uint32_t)wo->text, strlen(wo->text)+1);
+      kfree(wo->text);
       wo->text = NULL;
    }
    // free children
@@ -648,5 +650,5 @@ void windowobj_free(windowobj_t *wo) {
       }
    }
    // free windowobj
-   free((uint32_t)wo, sizeof(windowobj_t));
+   kfree(wo);
 }

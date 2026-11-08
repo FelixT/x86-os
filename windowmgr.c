@@ -509,15 +509,14 @@ void window_close(int windowIndex, bool end) {
 
    window->closed = true;
 
-   for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
-      free((uint32_t)&window->cmd_history[i][0], TEXT_BUFFER_LENGTH);
+   kfree(window->cmd_history[0]);
+   for(int i = 0; i < CMD_HISTORY_LENGTH; i++)
       window->cmd_history[i] = NULL;
-   }
    if(task_state && task_state->process && window->framebuffer) {
       // unmap from process (identity mapped)
       map_size(task_state->process->page_dir, (uint32_t)window->framebuffer, (uint32_t)window->framebuffer, window->framebuffer_size, 0, 1, 0);
    }
-   free((uint32_t)window->framebuffer, window->framebuffer_size);
+   kfree(window->framebuffer);
    window->framebuffer = NULL;
 
    // free window objects
@@ -531,7 +530,7 @@ void window_close(int windowIndex, bool end) {
       if(window->state_free != NULL) {
          window->state_free(window, NULL);
       } else {
-         free((uint32_t)window->state, window->state_size);
+         kfree(window->state);
          window->state = NULL;
       }
    }
@@ -599,7 +598,7 @@ bool window_init(gui_window_t *window) {
    for(int i = 0; i < 20; i++)
       window->window_objects[i] = NULL;
    
-   window->cmd_history[0] = malloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
+   window->cmd_history[0] = kmalloc(CMD_HISTORY_LENGTH*TEXT_BUFFER_LENGTH);
    for(int i = 0; i < CMD_HISTORY_LENGTH; i++) {
       if(i > 0)
          window->cmd_history[i] = window->cmd_history[0] + TEXT_BUFFER_LENGTH*i;
@@ -608,7 +607,7 @@ bool window_init(gui_window_t *window) {
    window->cmd_history_pos = -1;
 
    window->framebuffer_size = window->width*(window->height-TITLEBAR_HEIGHT)*2;
-   window->framebuffer = malloc(window->framebuffer_size);
+   window->framebuffer = page_alloc(window->framebuffer_size);
    if(window->framebuffer == NULL) return false;
    
    surface_t surface;
@@ -1063,8 +1062,8 @@ void windowmgr_init() {
    strcpy(wm_settings.font_path, "/font/7.fon");
 
    // assigned fixed memory for MAX_WINDOWS windows for now for simplicity
-   gui_windows = malloc(sizeof(gui_window_t) * MAX_WINDOWS);
-   outline_buffer = malloc(sizeof(int) * (surface.width + surface.height + 4));
+   gui_windows = kmalloc(sizeof(gui_window_t) * MAX_WINDOWS);
+   outline_buffer = kmalloc(sizeof(int) * (surface.width + surface.height + 4));
    memset(gui_windows, 0, sizeof(gui_window_t) * MAX_WINDOWS);
    for(int i = 0; i < MAX_WINDOWS; i++)
       render_order[i] = NULL;
@@ -1081,12 +1080,12 @@ void windowmgr_init() {
    window_draw(&gui_windows[0], true);
 
    // set up default menu
-   default_menu = (windowobj_t*)malloc(sizeof(windowobj_t));
+   default_menu = (windowobj_t*)kmalloc(sizeof(windowobj_t));
    windowobj_init(default_menu, &surface);
    default_menu->type = WO_MENU;
    default_menu->visible = false;
    default_menu->width = 80;
-   default_menu->menuitems = malloc(sizeof(windowobj_menu_t) * 10);
+   default_menu->menuitems = kmalloc(sizeof(windowobj_menu_t) * 10);
 
    strcpy(default_menu->menuitems[0].text, "About");
    default_menu->menuitems[0].func = &windowmgr_about;
@@ -1108,7 +1107,7 @@ void windowmgr_init() {
    windowobj_menu_resize(default_menu);
 
    // set up app button
-   app_button = (windowobj_t*)malloc(sizeof(windowobj_t));
+   app_button = (windowobj_t*)kmalloc(sizeof(windowobj_t));
    windowobj_init(app_button, &surface);
    app_button->type = WO_BUTTON;
    app_button->x = surface.width - 42;
@@ -2219,7 +2218,7 @@ void desktop_init() {
 
 void desktop_setbgimg(uint8_t *img, int size) {
    if(gui_bgimage)
-      free((uint32_t)gui_bgimage, gui_bgimage_size);
+      kfree(gui_bgimage);
    gui_bgimage = img;
    gui_bgimage_size = size;
    gui_bg = bmp_get_colour(gui_bgimage, 0, 0);
@@ -2359,12 +2358,11 @@ bool window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
    height = min(height, maxheight);
 
    uint16_t *old_framebuffer = window->framebuffer;
-   uint32_t old_framebuffer_size = window->framebuffer_size;
    int old_width = window->surface.width;
    int old_height = window->surface.height;
 
    uint32_t new_framebuffer_size = width*(height-TITLEBAR_HEIGHT)*2;
-   uint16_t *new_framebuffer = malloc(new_framebuffer_size);
+   uint16_t *new_framebuffer = page_alloc(new_framebuffer_size);
    if(!new_framebuffer)
       return false;
 
@@ -2401,7 +2399,7 @@ bool window_resize(registers_t *regs, gui_window_t *window, int width, int heigh
       }
    }
 
-   free((uint32_t)old_framebuffer, old_framebuffer_size);
+   kfree(old_framebuffer);
 
    bool scrollerhidden = false; // scrollbar is now hidden after resize
    if(window->scrollbar != NULL) {

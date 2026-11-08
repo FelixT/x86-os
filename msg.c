@@ -68,7 +68,7 @@ uint32_t create_port(task_state_t *task, char *name, bool client_reserves) {
       return MSG_ERR_NOMEM;
    }
 
-   msg_port_t *port = malloc(sizeof(msg_port_t));
+   msg_port_t *port = kmalloc(sizeof(msg_port_t));
    if(!port)
       return MSG_ERR_NOMEM;
 
@@ -154,7 +154,7 @@ uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid) {
       return MSG_ERR_PORT_FULL;
    }
 
-   msg_channel_t *channel = malloc(sizeof(msg_channel_t));
+   msg_channel_t *channel = kmalloc(sizeof(msg_channel_t));
    if(!channel) {
       debug_printf("port_connect: failed to allocate channel\n");
       return MSG_ERR_NOMEM;
@@ -163,7 +163,7 @@ uint32_t port_connect(task_state_t *task, char *name, uint32_t *port_uid) {
    int c = port_claim_free_channel_index(port);
    if(c < 0) {
       debug_printf("port_connect: failed to claim free channel index\n");
-      free((uint32_t)channel, sizeof(msg_channel_t));
+      kfree(channel);
       return MSG_ERR_PORT_FULL;
    }
    port->channels[c] = channel;
@@ -504,7 +504,7 @@ static msg_copy_receipt_t msg_do_copy(task_state_t *send_task, task_state_t *rec
 static bool msg_check_handles(process_t *process, handle_t *handles, int size) {
    for(int i = 0; i < size; i++) {
       kobj_ref_t *ref = process_get_kobj(process, handles[i]);
-      if(!ref || !ref->inst->obj->connect_func) return false;
+      if(!ref || !(ref->rights & KOBJ_RIGHT_TRANSFER)) return false;
    }
    return true;
 }
@@ -925,7 +925,7 @@ static void msg_free_channel(msg_port_t *port, int c) {
       task_forget_channel(client, channel);
 
    port->channels[c] = NULL;
-   free((uint32_t)channel, sizeof(msg_channel_t));
+   kfree(channel);
 }
 
 bool port_close_connection(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid) {
@@ -1049,7 +1049,7 @@ void destroy_port(registers_t *regs, msg_port_t *port) {
       }
    }
 
-   free((uint32_t)port, sizeof(msg_port_t));
+   kfree(port);
 }
 
 bool close_port(registers_t *regs, task_state_t *task, uint32_t port_uid) {

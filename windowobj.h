@@ -23,6 +23,8 @@ typedef struct windowobj_menu_t {
 
 #define MAX_CHILDREN 32
 
+#define WO_TEXT_MIN_CAPACITY 64
+
 typedef struct windowobj_t {
    enum windowobj_type type;
 
@@ -51,6 +53,7 @@ typedef struct windowobj_t {
    bool underline;
    int textpos; // text length
    int cursor_textpos; // position in text cursor is at
+   int text_capacity; // bytes allocated for text including NULL
    int cursorx;
    int cursory;
    int menuselected;

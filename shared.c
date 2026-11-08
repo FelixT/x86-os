@@ -22,14 +22,14 @@ kobj_handle_t shared_create(process_t *process, uint32_t size) {
    if(size == 0) return -1;
    if(size > VM_END - VM_START) return -1;
 
-   shared_block_t *block = (shared_block_t *)malloc(sizeof(shared_block_t));
+   shared_block_t *block = (shared_block_t *)kmalloc(sizeof(shared_block_t));
    if(!block)
       return -1;
 
    block->size = size;
-   block->paddr = (uint32_t)malloc(size);
+   block->paddr = (uint32_t)kmalloc(size);
    if(!block->paddr) {
-      free((uint32_t)block, sizeof(shared_block_t));
+      kfree(block);
       return -1;
    }
    memset((void*)block->paddr, 0, size); // zero memory
@@ -37,8 +37,8 @@ kobj_handle_t shared_create(process_t *process, uint32_t size) {
    // create kobj
    kobj_inst_t *inst = create_kobj_inst(KOBJ_SHARED, block);
    if(!inst) {
-      free(block->paddr, block->size);
-      free((uint32_t)block, sizeof(shared_block_t));
+      kfree((void*)block->paddr);
+      kfree(block);
       return -1;
    }
    kobj_handle_t h = process_acquire_kobj(process, inst);
@@ -52,6 +52,6 @@ kobj_handle_t shared_create(process_t *process, uint32_t size) {
 
 void shared_free_inst(kobj_inst_t *inst) {
    shared_block_t *block = inst->data;
-   free(block->paddr, block->size);
-   free((uint32_t)block, sizeof(shared_block_t));
+   kfree((void*)block->paddr);
+   kfree(block);
 }

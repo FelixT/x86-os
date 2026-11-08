@@ -24,7 +24,7 @@ void window_popup_dialog_state_free(void *windowp, void *regs) {
    if(dialog == NULL) return;
    if(!dialog->answered && dialog->dismiss_func != NULL)
       dialog->dismiss_func(dialog, regs); // if window is closed
-   free((uint32_t)dialog, window->state_size);
+   kfree(dialog);
    window->state = NULL;
 }
 
@@ -83,7 +83,7 @@ window_popup_dialog_t *window_popup_dialog(gui_window_t *window, gui_window_t *p
    if(window->y + window->height > (int)gui_get_height())
       window->y = gui_get_height() - window->height;
 
-   window_popup_dialog_t *dialog = malloc(sizeof(window_popup_dialog_t));
+   window_popup_dialog_t *dialog = kmalloc(sizeof(window_popup_dialog_t));
    dialog->parent = parent;
    dialog->parent_uid = parent ? parent->uid : 0;
    dialog->callback_func = NULL;
@@ -197,35 +197,35 @@ window_popup_colourpicker_t *window_popup_colourpicker(gui_window_t *window, gui
 
    window->resizable = false;
    window->state_size = sizeof(window_popup_colourpicker_t);
-   window->state = malloc(window->state_size);
+   window->state = kmalloc(window->state_size);
    window_popup_colourpicker_t *cp = (window_popup_colourpicker_t*)window->state;
    cp->callback_func = callback;
    cp->parent = parent;
    cp->parent_uid = parent->uid;
 
    int y = 5;
-   windowobj_t *wo_col = malloc(sizeof(windowobj_t));
+   windowobj_t *wo_col = kmalloc(sizeof(windowobj_t));
    windowobj_init(wo_col, &window->surface);
    wo_col->type = WO_TEXT;
    wo_col->x = 5;
    wo_col->y = y;
    wo_col->width = 190;
    wo_col->height = 16;
-   wo_col->text = malloc(10);
+   wo_col->text = kmalloc(10);
    uinttohexstr(colour, wo_col->text);
    wo_col->texthalign = false;
    wo_col->disabled = true;
    window->window_objects[window->window_object_count++] = wo_col;
 
    // ok button
-   windowobj_t *wo_okbtn = malloc(sizeof(windowobj_t));
+   windowobj_t *wo_okbtn = kmalloc(sizeof(windowobj_t));
    windowobj_init(wo_okbtn, &window->surface);
    wo_okbtn->type = WO_BUTTON;
    wo_okbtn->x = 205;
    wo_okbtn->y = y;
    wo_okbtn->width = 110;
    wo_okbtn->height = 16;
-   wo_okbtn->text = malloc(strlen("OK") + 1);
+   wo_okbtn->text = kmalloc(strlen("OK") + 1);
    strcpy(wo_okbtn->text, "OK");
    wo_okbtn->release_func = &window_popup_colourpicker_return;
    window->window_objects[window->window_object_count++] = wo_okbtn;
@@ -330,13 +330,13 @@ void endtask_debug(void *windowobj, int x, int y) {
    char addrbuffer[10];
    uinttohexstr(eip, addrbuffer);
    int argc = 3;
-   char **args = malloc(sizeof(char*)*(argc+1));  // args includes trailing null str
+   char **args = page_alloc(sizeof(char*)*(argc+1));  // args includes trailing null str
    char *debug_path = "/sys/debug.elf";
-   args[2] = malloc(strlen(addrbuffer)+1);
+   args[2] = page_alloc(strlen(addrbuffer)+1);
    strcpy(args[2], addrbuffer);
-   args[1] = malloc(strlen(exe_path)+1);
+   args[1] = page_alloc(strlen(exe_path)+1);
    strcpy(args[1], exe_path);
-   args[0] = malloc(strlen(debug_path)+1);
+   args[0] = page_alloc(strlen(debug_path)+1);
    args[argc] = NULL;
    strcpy(args[0], debug_path);
    wm_queue_launch(debug_path, true, args, argc, true, false);

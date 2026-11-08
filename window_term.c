@@ -114,7 +114,7 @@ void window_term_return(void *window) {
          if(taskIndex < 0) return;
          task_state_t *task = &gettasks()[taskIndex];
 
-         char *buffer = (char*)malloc(TEXT_BUFFER_LENGTH);
+         char *buffer = (char*)page_alloc(TEXT_BUFFER_LENGTH);
          strcpy_fixed(buffer, selected->text_buffer, selected->text_index);
          buffer[selected->text_index] = '\0';
          uint32_t args[1] = { (uint32_t)buffer };
@@ -122,7 +122,7 @@ void window_term_return(void *window) {
 
          if(!wm_call_subroutine(task, E_CHECKCMD, (uint32_t)selected->checkcmd_func, args, 1)) {
             unshare_heap_page(task->process->page_dir, (uint32_t)buffer);
-            free((uint32_t)buffer, TEXT_BUFFER_LENGTH);
+            kfree(buffer);
          }
       }
    } else {
@@ -362,8 +362,7 @@ void term_cmd_mem(char *arg) {
       window_term_printf("Start %i / 0x%h\n", offset, HEAP_KERNEL+offset*PAGE_SIZE);
 
       for(int i = offset; i < offset+256 && i < KERNEL_HEAP_SIZE/PAGE_SIZE; i++) {
-         uint32_t entry = memory_get_bitmap()[offset/32];
-         bool alloc = ((entry<<(i%32))>>31)&0x1;
+         bool alloc = (memory_get_bitmap()[i/32] >> (i%32)) & 0x1;
          window_term_printf("%c", alloc?'1':'0');
       }
    } else {
@@ -395,7 +394,7 @@ void term_cmd_dmpmem(char *arg) {
       window_term_printf("Whole range not mapped\n");
    }
 
-   char *buf = malloc(rowlen+1);
+   char buf[9];
    buf[rowlen] = '\0';
    for(int i = 0; i < bytes; i++) {
       uint8_t *mem = (uint8_t*)addr;
@@ -412,7 +411,6 @@ void term_cmd_dmpmem(char *arg) {
          gui_drawchar('\n', 0);
       }
    }
-   free((uint32_t)buf, rowlen);
 }
 
 void term_cmd_redrawall() {

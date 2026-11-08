@@ -98,7 +98,7 @@ void api_write_string(registers_t *regs) {
    // truncate long writes
    if(len == -2) {
       truncate = true;
-      char *newout = malloc(API_WRITESTR_MAX_LENGTH+1);
+      char *newout = kmalloc(API_WRITESTR_MAX_LENGTH+1);
       if(!newout) return;
       memcpy(newout, out, API_WRITESTR_MAX_LENGTH);
       newout[API_WRITESTR_MAX_LENGTH] = '\0';
@@ -108,7 +108,7 @@ void api_write_string(registers_t *regs) {
    if((int)regs->ecx == -1) {
       api_write_to_task(out);
       if(truncate)
-         free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
+         kfree(out);
       return;
    }
    // write to specified window
@@ -117,13 +117,13 @@ void api_write_string(registers_t *regs) {
       debug_printf("api_write_string: invalid window index %i\n", regs->ecx);
       api_write_to_task(out);
       if(truncate)
-         free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
+         kfree(out);
       return;
    }
    int windowindex = get_window_index_from_pointer(window);
    window_writestr(out, window->txtcolour, windowindex);
    if(truncate)
-      free((uint32_t)out, API_WRITESTR_MAX_LENGTH+1);
+      kfree(out);
 }
 
 void api_write_uint(registers_t *regs) {
@@ -382,7 +382,7 @@ void api_launch_task(registers_t *regs) {
          return;
       }
 
-      copied_args = malloc(sizeof(char*) * (argc+1)); // args includes training null str
+      copied_args = page_alloc(sizeof(char*) * (argc+1)); // args includes training null str
       if(!copied_args) { regs->ebx = -1; return; }
       memset(copied_args, 0, sizeof(char*) * (argc+1));
       for(int i = 0; i < argc; i++) {
@@ -393,7 +393,7 @@ void api_launch_task(registers_t *regs) {
                copied_args[i] = NULL;
                continue;
             }
-            copied_args[i] = malloc(len + 1);
+            copied_args[i] = page_alloc(len + 1);
             if(!copied_args[i]) {
                free_launch_args(copied_args, argc);
                regs->ebx = -1;
@@ -535,7 +535,7 @@ void api_sbrk(registers_t *regs) {
          uint32_t phys = page_getphysical(task->process->page_dir, virt);
          unmap(task->process->page_dir, virt);
          if(phys != (uint32_t)-1)
-            free(phys, 0x1000);
+            kfree((void*)phys);
       }
    }
 

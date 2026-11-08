@@ -38,7 +38,7 @@ bool fat_get_info() {
    // sanity check the bpb before use in division
    if(bpb->bytesPerSector == 0 || bpb->sectorsPerCluster == 0 || bpb->noTables == 0 || bpb->sectorsPerFat == 0) {
       debug_printf("fat_get_info: invalid bpb\n");
-      free((uint32_t)buf, infoSize);
+      kfree(buf);
       return false;
    }
 
@@ -50,7 +50,7 @@ bool fat_get_info() {
 
    if(sectors <= firstData) {
       debug_printf("fat_get_info: volume too small, %u sectors\n", sectors);
-      free((uint32_t)buf, infoSize);
+      kfree(buf);
       return false;
    }
 
@@ -63,7 +63,7 @@ bool fat_get_info() {
    }
 
    // commit
-   free((uint32_t)fat_bpb, infoSize);
+   kfree(fat_bpb);
    fat_bpb = bpb;
    fat_ebr = (fat_ebr_t*)(&buf[sizeof(fat_bpb_t)]); // immediately after bpb
    noSectors = sectors;
@@ -124,17 +124,17 @@ bool fat_setup() {
    uint8_t *fat_table_buffer = ata_read_exact(true, true, fatTableAddr, newTableSize);
    if(!fat_table_buffer)
       return false;
-   bool *dirty_clusters_new = malloc(sizeof(bool) * newTableSize/sizeof(uint16_t));
+   bool *dirty_clusters_new = kmalloc(sizeof(bool) * newTableSize/sizeof(uint16_t));
    if(!dirty_clusters_new) {
-      free((uint32_t)fat_table_buffer, newTableSize);
+      kfree(fat_table_buffer);
       return false;
    }
    for(int i = 0; i < (int)(newTableSize/sizeof(uint16_t)); i++)
       dirty_clusters_new[i] = false;
    if(fat_table)
-      free((uint32_t)fat_table, tableSize);
+      kfree(fat_table);
    if(dirty_clusters)
-      free((uint32_t)dirty_clusters, sizeof(bool) * tableSize/sizeof(uint16_t));
+      kfree(dirty_clusters);
    fat_table = fat_table_buffer;
    tableSize = newTableSize;
    dirty_clusters = dirty_clusters_new;
@@ -297,13 +297,13 @@ bool fat_find_in_root(char* filename, char* extension, fat_dir_t *dir) {
       if(fat_dir->filename[0] == 0xE5) continue; // deleted entry
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
-         free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
          *dir = *fat_dir;
+         kfree(rootBuf);
          return true;
       }
    }
 
-   free((uint32_t)rootBuf, sizeof(fat_dir_t) * fat_bpb->noRootEntries);
+   kfree(rootBuf);
    return false;
 }
 
@@ -323,7 +323,7 @@ bool fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_di
 
    if(strequ(filename, "..")) {
       *dir = *(fat_dir_t*)(dirBuf + sizeof(fat_dir_t)); // entry 1
-      free((uint32_t)dirBuf, dirSize);
+      kfree(dirBuf);
       return true;
    }
    int entries = dirSize / sizeof(fat_dir_t);
@@ -336,12 +336,12 @@ bool fat_find_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_di
 
       if(fat_entry_matches_filename(fat_dir, filename, extension)) {
          *dir = *fat_dir;
-         free((uint32_t)dirBuf, dirSize);
+         kfree(dirBuf);
          return true;
       }
    }
 
-   free((uint32_t)dirBuf, dirSize);
+   kfree(dirBuf);
    return false;
 }
 
@@ -383,13 +383,13 @@ bool fat_update_in_dir(uint16_t clusterNo, char* filename, char* extension, fat_
          bool ok = ata_write_exact(true, true, dirAddr, dirBuf, bufSize);
          if(!ok)
             debug_printf("Error writing directory entry for '%s'\n", filename);
-         free((uint32_t)dirBuf, bufSize);
+         kfree(dirBuf);
          return ok;
       }
    }
 
    debug_printf("Error: file not found for path '%s'\n", filename);
-   free((uint32_t)dirBuf, bufSize);
+   kfree(dirBuf);
    return false;
 }
 
@@ -475,7 +475,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
       uint8_t *gapBuf;
       if(from == 0) {
          // fast path - entire cluster is overwritten, skip read
-         gapBuf = malloc(bytesPerCluster);
+         gapBuf = kmalloc(bytesPerCluster);
          if(gapBuf)
             memset(gapBuf, 0, bytesPerCluster);
       } else {
@@ -489,7 +489,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
          return -1;
       }
       bool ok = ata_write_exact(true, true, gapAddr, gapBuf, bytesPerCluster);
-      free((uint32_t)gapBuf, bytesPerCluster);
+      kfree(gapBuf);
       if(!ok) {
          debug_printf("Error zeroing cluster %u\n", lastCluster);
          return -1;
@@ -510,7 +510,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    uint16_t origTail = ((uint16_t*)fat_table)[lastCluster];
    uint16_t prev = lastCluster;
    int allocated = 0;
-   uint8_t *zeros = malloc(bytesPerCluster);
+   uint8_t *zeros = kmalloc(bytesPerCluster);
    if(!zeros) {
       return -1;
    }
@@ -525,7 +525,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
          freeCluster++;
       if(freeCluster >= noClusters) {
          debug_printf("FAT: out of free clusters\n");
-         free((uint32_t)zeros, bytesPerCluster);
+         kfree(zeros);
          fat_unwind_chain(lastCluster, origTail);
          return -1; // no free clusters
       }
@@ -539,7 +539,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
       uint32_t clusterAddr = baseAddr + clusterFirstSector * fat_bpb->bytesPerSector;
       if(!ata_write_exact(true, true, clusterAddr, zeros, bytesPerCluster)) {
          debug_printf("Error zeroing new cluster %u\n", freeCluster);
-         free((uint32_t)zeros, bytesPerCluster);
+         kfree(zeros);
          fat_unwind_chain(lastCluster, origTail);
          return -1;
       }
@@ -547,7 +547,7 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
       // mark new cluster as end of chain (0xFFFF) and point prev at it
       if(!fat_table_update_cluster(freeCluster, 0xFFFF) || !fat_table_update_cluster(prev, freeCluster)) {
          debug_printf("Error writing fat table for cluster %u\n", freeCluster);
-         free((uint32_t)zeros, bytesPerCluster);
+         kfree(zeros);
          fat_unwind_chain(lastCluster, origTail);
          return -1;
       }
@@ -556,12 +556,12 @@ int fat_extend_cluster_chain(uint16_t startCluster, uint32_t oldSize, uint32_t n
    }
    if(!fat_table_flush_cache(min, max)) {
       debug_printf("FAT error: failed flushing table for chain from cluster %u\n", startCluster);
-      free((uint32_t)zeros, bytesPerCluster);
+      kfree(zeros);
       fat_unwind_chain(lastCluster, origTail);
       fat_table_flush_cache(min, max); // part of the chain may have reached disk, best effort
       return -1;
    }
-   free((uint32_t)zeros, bytesPerCluster);
+   kfree(zeros);
 
    return allocated;
 }
@@ -642,7 +642,7 @@ bool fat_new_file(char *path) {
       fat_dir_t *fat_dir = (fat_dir_t*)(dirBuf + i * sizeof(fat_dir_t));
       if(memcmp((char*)fat_dir->filename, (char*)filedir.filename, 11) == 0) {
          debug_printf("Error: file already exists\n");
-         free((uint32_t)dirBuf, bufSize);
+         kfree(dirBuf);
          return false;
       }
       if(fat_dir->filename[0] == '\0') {
@@ -673,7 +673,7 @@ bool fat_new_file(char *path) {
       fat_table_flush_cache(freeCluster, freeCluster); // best effort
    }
 
-   free((uint32_t)dirBuf, bufSize);
+   kfree(dirBuf);
 
    return found;
 }
@@ -803,7 +803,7 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
          memcpy(clusterBuf + write_offset, buffer + bytesWritten, consumed);
          write_offset = 0;
          bool ok = ata_write_exact(true, true, sectorAddr, clusterBuf, clusterSize);
-         free((uint32_t)clusterBuf, clusterSize);
+         kfree(clusterBuf);
          if(!ok) {
             debug_printf("Error writing cluster %u\n", curCluster);
             break; // report what did make it to disk
@@ -878,8 +878,8 @@ bool fat_new_dir(char *path) {
    memset(&dir, 0, sizeof(fat_dir_t));
 
    memset(dir.filename, ' ', 11);
-   strcpy_fixed((char*)dir.filename, dirname, 8);
-   dir.filename[8] = ' ';
+   strcpy_fixed((char*)dir.filename, dirname, strlen(dirname));
+   dir.filename[strlen(dirname)] = ' ';
    dir.attributes = 0x10; // directory
    dir.firstClusterNo = 0; // to be set later
    dir.fileSize = 0;
@@ -922,14 +922,14 @@ bool fat_new_dir(char *path) {
    dotdot_entry.fileSize = 0;
 
     // zero new cluster
-   uint8_t *clusterBuf = malloc(clusterSize);
+   uint8_t *clusterBuf = kmalloc(clusterSize);
    memset(clusterBuf, 0, clusterSize);
    // add dot entries
    memcpy(clusterBuf, &dot_entry, sizeof(fat_dir_t));
    memcpy(clusterBuf + sizeof(fat_dir_t), &dotdot_entry, sizeof(fat_dir_t));
 
    bool ok = ata_write_exact(true, true, newDirAddr, clusterBuf, clusterSize);
-   free((uint32_t)clusterBuf, clusterSize);
+   kfree(clusterBuf);
    if(!ok) {
       // zero write failed
       debug_printf("Error writing new directory cluster %u\n", freeCluster);
@@ -1000,7 +1000,7 @@ bool fat_new_dir(char *path) {
    }
 
    if(dirBuf)
-      free((uint32_t)dirBuf, bufSize);
+      kfree(dirBuf);
    return success;
 }
 
@@ -1032,7 +1032,7 @@ int fat_read_file_user(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uin
    }
 
    // read a cluster at a time
-   uint8_t *clusterBuf = (uint8_t*)malloc(clusterSize);
+   uint8_t *clusterBuf = (uint8_t*)kmalloc(clusterSize);
    if(!clusterBuf)
       return -1;
 
@@ -1070,7 +1070,7 @@ int fat_read_file_user(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uin
       kernel_yield_if_blocking();
    }
 
-   free((uint32_t)clusterBuf, clusterSize);
+   kfree(clusterBuf);
    return readBytes > 0 ? (int)readBytes : -1;
 }
 
@@ -1107,7 +1107,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
    uint32_t fileSizeDisk = clusterCount*fat_bpb->sectorsPerCluster*fat_bpb->bytesPerSector; // size on disk
 
    uint32_t allocate = (readEntireFile) ? fileSizeDisk : size;
-   uint8_t *fileContents = malloc(allocate);
+   uint8_t *fileContents = kmalloc(allocate);
    if(!fileContents) {
       return NULL;
    }
@@ -1121,7 +1121,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
       uint8_t *clusterBuf = ata_read_exact(true, true, diskAddr, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
       if(!clusterBuf) {
          debug_printf("fat_read_file: failed reading cluster %u\n", c);
-         free((uint32_t)fileContents, allocate);
+         kfree(fileContents);
          return NULL;
       }
       bool done = false;
@@ -1135,7 +1135,7 @@ uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size) {
             fileContents[byte++] = buf[b];
          }
       }
-      free((uint32_t)clusterBuf, fat_bpb->sectorsPerCluster * fat_bpb->bytesPerSector);
+      kfree(clusterBuf);
       if(done) break;
       kernel_yield_if_blocking();
 
@@ -1216,11 +1216,11 @@ bool fat_rename(char *path, char *filename) {
       bool success = ata_write_exact(true, true, dirAddr, dirBuf, dirSize);
       if(!success)
          debug_printf("fat_rename: Error writing directory\n");
-      free((uint32_t)dirBuf, dirSize);
+      kfree(dirBuf);
       return success;
    } else {
       debug_printf("fat_rename: File not found\n");
-      free((uint32_t)dirBuf, dirSize);
+      kfree(dirBuf);
       return false;
    }
 }
@@ -1391,7 +1391,7 @@ bool fat_delete_dir(char *path) {
       empty = false;
       break;
    }
-   free((uint32_t)dirBuf, clusterSize);
+   kfree(dirBuf);
 
    if(!empty) {
       debug_printf("fat_delete_dir: '%s' is not empty\n", path);

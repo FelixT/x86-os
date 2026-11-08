@@ -14,14 +14,14 @@ bool dma_map(kobj_inst_t *inst, int index, kobj_mapping_t *mapping) {
 
 kobj_handle_t dma_create(int size, process_t *process, uint32_t *paddr) {
    if(size <= 0) return -1;
-   uint8_t *mem = malloc(size); // use kmalloc page allocator as it guarantees continous mem
-   dma_t *dma = malloc(sizeof(dma_t));
+   uint8_t *mem = page_alloc(size); // use kmalloc page allocator as it guarantees continous mem
+   dma_t *dma = kmalloc(sizeof(dma_t));
    kobj_inst_t *inst = dma ? create_kobj_inst(KOBJ_DMA, dma) : NULL;
    if(!mem || !dma || !inst) {
       debug_printf("dma_create failed: ran out of mem\n");
-      if(inst) free((uint32_t)inst, sizeof(kobj_inst_t));
-      if(mem) free((uint32_t)mem, size);
-      if(dma) free((uint32_t)dma, sizeof(dma_t));
+      if(inst) kfree(inst);
+      if(mem) kfree(mem);
+      if(dma) kfree(dma);
       return -1;
    }
    memset(mem, 0, size); // don't leak stale heap contents
@@ -42,6 +42,6 @@ kobj_handle_t dma_create(int size, process_t *process, uint32_t *paddr) {
 void dma_cleanup(kobj_inst_t *inst) {
    dma_t *dma = inst->data;
    if(dma->size)
-      free(dma->paddr, dma->size);
-   free((uint32_t)dma, sizeof(dma_t));
+      kfree((void*)dma->paddr);
+   kfree(dma);
 }

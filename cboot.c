@@ -90,6 +90,13 @@ int get_current_task() {
    return -1;
 }
 
+void kernel_panic() {
+   cboot_writestr("Kernel panic in boot...\n");
+   while(true) {
+      asm volatile("hlt");
+   }
+}
+
 void cboot() {
    memory_init();
 
@@ -132,7 +139,7 @@ void cboot() {
    memcpy_fast((void*)KERNEL_START, bytes, size);
 
    cboot_printf("Freeing");
-   free((uint32_t)bytes, size);
+   kfree(bytes);
 
    cboot_printf("Jumping");
    

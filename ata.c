@@ -34,7 +34,7 @@ static bool ata_check_mbr(void) {
       debug_printf("Found MBR partition %i\n", i);
       uint32_t starting_lba = *(uint32_t*)(e + 0x08);
       uint32_t sectors = *(uint32_t*)(e + 0x0C);
-      if(sectors == 0 || starting_lba >= (1 << 28) || starting_lba + sectors > (1 << 28)) return false;
+      if(sectors == 0 || starting_lba >= (1 << 28) || sectors > (1 << 28) - starting_lba) return false;
       ata_base_lba = starting_lba;
       ata_partition_sectors = sectors;
       return true;
@@ -335,29 +335,29 @@ bool ata_read_exact_into(bool primaryBus, bool masterDrive, uint32_t addr, uint3
       return ata_readwrite(primaryBus, masterDrive, startSector, (uint16_t*)outBuf, (uint16_t)(bytes/ATA_SECTOR_SIZE), false);
    
    // read multiple sectors
-   uint16_t *readBuf = malloc(bytesRequired);
+   uint16_t *readBuf = kmalloc(bytesRequired);
    if(!readBuf) return false;
    
    // read all sectors at once if reasonable, or in chunks
    for(uint32_t i = 0; i < sectorCount; i += ATA_MAX_SECTORS) {
       uint32_t sectorsToRead = (i + ATA_MAX_SECTORS > sectorCount) ? (sectorCount - i) : ATA_MAX_SECTORS;
       if(!ata_readwrite(primaryBus, masterDrive, startSector + i, &readBuf[256*i], (uint16_t)sectorsToRead, false)) {
-         free((uint32_t)readBuf, bytesRequired);
+         kfree(readBuf);
          return false;
       }
    }
    
    // copy only the required bytes
    memcpy_fast(outBuf, ((uint8_t*)readBuf) + offset, bytes);
-   free((uint32_t)readBuf, bytesRequired);
+   kfree(readBuf);
    return true;
 }
 
 uint8_t *ata_read_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint32_t bytes) {
-   uint8_t *outBuf = malloc(bytes);
+   uint8_t *outBuf = kmalloc(bytes);
    if(!outBuf) return NULL;
    if(!ata_read_exact_into(primaryBus, masterDrive, addr, bytes, outBuf)) {
-      free((uint32_t)outBuf, bytes);
+      kfree(outBuf);
       return NULL;
    }
    return outBuf;

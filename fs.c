@@ -77,7 +77,7 @@ static bool fs_open_locked(fs_file_t *file) {
       }
    }
 
-   fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
+   fs_file_data_t *data = (fs_file_data_t*)kmalloc(sizeof(fs_file_data_t));
 
    if(entry.attributes & 0x10) {
       file->type = FS_TYPE_DIR;
@@ -92,7 +92,7 @@ static bool fs_open_locked(fs_file_t *file) {
    if(file->type == FS_TYPE_FILE && (file->flags & FS_FLAG_TRUNCATE) && !(file->flags & FS_FLAG_READONLY) && data->file_size > 0) {
       if(fat_resize_file(file->filename, 0) < 0) {
          debug_printf("FS: failed to truncate %s\n", file->filename);
-         free((uint32_t)file->data, sizeof(fs_file_data_t));
+         kfree(file->data);
          file->data = NULL;
          return false;
       }
@@ -103,7 +103,7 @@ static bool fs_open_locked(fs_file_t *file) {
 }
 
 static fs_file_t *fs_file_alloc(char *path, int flags) {
-   fs_file_t *file = (fs_file_t*)malloc(sizeof(fs_file_t));
+   fs_file_t *file = (fs_file_t*)kmalloc(sizeof(fs_file_t));
    if(!file) return NULL;
    file->window_index = -1;
    file->active = true;
@@ -172,7 +172,7 @@ bool fs_exists(char *path) {
 
 void fs_close(fs_file_t *file) {
    if(file->data)
-      free((uint32_t)file->data, sizeof(fs_file_data_t));
+      kfree(file->data);
    if(file->pipe) {
       if(file->flags & FS_FLAG_WRITEONLY)
          file->pipe->writer_count--;
@@ -197,9 +197,9 @@ void fs_close(fs_file_t *file) {
       if(file->pipe->ref_count > 0)
          file->pipe->ref_count--;
       if(file->pipe->ref_count == 0)
-         free((uint32_t)file->pipe, sizeof(fs_pipe_t));
+         kfree(file->pipe);
    }
-   free((uint32_t)file, sizeof(fs_file_t));
+   kfree(file);
 }
 
 static fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
@@ -257,7 +257,7 @@ static int fs_read_dir_locked(char *path, fs_dir_entry_t *entries, int max, int 
       total++;
    }
 
-   free((uint32_t)items, bytes);
+   kfree(items);
    return total;
 }
 
@@ -636,7 +636,7 @@ int fs_seek(fs_file_t *file, int offset, int type) {
 }
 
 bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *write_end) {
-   fs_pipe_t *pipe = (fs_pipe_t*)malloc(sizeof(fs_pipe_t));
+   fs_pipe_t *pipe = (fs_pipe_t*)kmalloc(sizeof(fs_pipe_t));
    if(!pipe) return false;
    memset(pipe, 0, sizeof(fs_pipe_t));
    pipe->read_waiting_task = -1;
@@ -646,7 +646,7 @@ bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *
 
    fs_file_t *read_file = fs_file_alloc("", 0);
    if(!read_file) {
-      free((uint32_t)pipe, sizeof(fs_pipe_t));
+      kfree(pipe);
       return false;
    }
    read_file->type = FS_TYPE_PIPE;
@@ -654,8 +654,8 @@ bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *
 
    fs_file_t *write_file = fs_file_alloc("", 0);
    if(!write_file) {
-      free((uint32_t)pipe, sizeof(fs_pipe_t));
-      free((uint32_t)read_file, sizeof(fs_file_t));
+      kfree(pipe);
+      kfree(read_file);
       return false;
    }
    write_file->type = FS_TYPE_PIPE;

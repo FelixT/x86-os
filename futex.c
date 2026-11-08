@@ -43,7 +43,7 @@ int futex_wait(void *futex_addr, uint32_t expected) {
    }
 
    task_state_t *task = get_current_task_state();
-   futex_waiter_t *waiter = malloc(sizeof(futex_waiter_t));
+   futex_waiter_t *waiter = kmalloc(sizeof(futex_waiter_t));
    if(!waiter) {
       return FUTEX_WAIT_FAIL;
    }
@@ -88,7 +88,7 @@ void futex_wake(void *regs, void *futex_addr) {
       else
          buckets[hash].w = waiter->next;
       waiter = waiter->next;
-      free((uint32_t)unlinked, sizeof(futex_waiter_t));
+      kfree(unlinked);
 
       if(!stale && match) {
          task_resume(waiter_task);
