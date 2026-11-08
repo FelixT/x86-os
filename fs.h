@@ -14,7 +14,7 @@ typedef struct {
     uint32_t first_cluster;
 } fs_file_data_t;
 
-#define FS_PIPE_BUF_SIZE 4096
+#define FS_PIPE_BUF_SIZE 2048
 
 typedef struct {
     uint8_t buf[FS_PIPE_BUF_SIZE]; // ring buffer
@@ -52,11 +52,6 @@ typedef struct {
     bool hidden;
 } fs_dir_entry_t; // simplified struct for listing directory contents
 
-typedef struct {
-    fs_dir_entry_t *entries;
-    int size;
-} fs_dir_content_t;
-
 #define FS_TYPE_FILE 0
 #define FS_TYPE_DIR 1
 #define FS_TYPE_TERM 2
@@ -82,7 +77,7 @@ uint8_t *fs_read_file_kernel(char *path, int *size);
 
 kobj_handle_t fs_open(process_t *process, char *path, int flags);
 void fs_free(kobj_inst_t *inst);
-void fs_close_locked(fs_file_t *file);
+void fs_close(fs_file_t *file);
 bool fs_exists(char *path);
 int fs_write(fs_file_t *file, uint8_t *buffer, uint32_t size, int task);
 int fs_read(fs_file_t *file, void *buffer, size_t size, int task);
@@ -91,8 +86,7 @@ kobj_handle_t fs_new(process_t *process, char *path, int flags);
 bool fs_unlink(char *path);
 bool fs_rmdir(char *path);
 bool fs_rename(char *oldpath, char *newname);
-fs_dir_content_t *fs_read_dir(char *path);
-void fs_dir_content_free(fs_dir_content_t *content);
+int fs_read_dir(char *path, fs_dir_entry_t *entries, int max, int task);
 int fs_filesize(fs_file_t *file);
 int fs_filesize_path(char *path);
 int fs_seek(fs_file_t *file, int offset, int type);

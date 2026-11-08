@@ -6,6 +6,8 @@
 #include "stdint.h"
 #include "stdbool.h"
 
+#define MAX_PATH 256
+
 typedef struct api_task_t {
    int id;
    uint32_t uid;
@@ -23,8 +25,8 @@ typedef struct api_task_t {
    uint32_t vmem_end;
    int no_allocated;
    bool privileged;
-   char working_dir[256];
-   char exe_path[256];
+   char working_dir[MAX_PATH];
+   char exe_path[MAX_PATH];
    char main_window_name[32];
 } api_task_t;
 

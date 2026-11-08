@@ -34,7 +34,7 @@ static bool ata_check_mbr(void) {
       debug_printf("Found MBR partition %i\n", i);
       uint32_t starting_lba = *(uint32_t*)(e + 0x08);
       uint32_t sectors = *(uint32_t*)(e + 0x0C);
-      if(sectors == 0 || starting_lba + sectors > (1 << 28)) return false;
+      if(sectors == 0 || starting_lba >= (1 << 28) || starting_lba + sectors > (1 << 28)) return false;
       ata_base_lba = starting_lba;
       ata_partition_sectors = sectors;
       return true;

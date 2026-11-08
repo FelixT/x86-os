@@ -357,23 +357,17 @@ void term_cmd_bgimg(char *arg) {
 }
 
 void term_cmd_mem(char *arg) {
-   mem_segment_status_t *status = memory_get_table();
-
    if(strlen(arg) > 0) {
-      int offset = (arg[0]-'0')*400;
+      int offset = (arg[0]-'0')*256;
+      window_term_printf("Start %i / 0x%h\n", offset, HEAP_KERNEL+offset*PAGE_SIZE);
 
-      for(int i = offset; i < offset+400 && i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-         if(status[i].allocated)
-            window_term_printf("1");
-         else
-         window_term_printf("0");
+      for(int i = offset; i < offset+256 && i < KERNEL_HEAP_SIZE/PAGE_SIZE; i++) {
+         uint32_t entry = memory_get_bitmap()[offset/32];
+         bool alloc = ((entry<<(i%32))>>31)&0x1;
+         window_term_printf("%c", alloc?'1':'0');
       }
    } else {
-      int used = 0;
-      for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-         if(status[i].allocated) used++;
-      }
-      window_term_printf("%i/%i pages (%i kb / %i kb) allocated\n", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE, used*MEM_BLOCK_SIZE/1000, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE*MEM_BLOCK_SIZE/1000);
+      window_term_printf("%i/%i pages (%i kb / %i kb) allocated\n", allocated_blocks(), KERNEL_HEAP_SIZE/PAGE_SIZE, allocated_blocks()*PAGE_SIZE/1000, KERNEL_HEAP_SIZE/PAGE_SIZE*PAGE_SIZE/1000);
    }
 }
 
@@ -453,7 +447,7 @@ void term_cmd_taski(char *arg) {
 
    process_t *process = task->process;
    if(process) {
-      window_term_printf("Allocated: %i (%ikb)\n", task->process->no_allocated, task->process->no_allocated*MEM_BLOCK_SIZE/1000);
+      window_term_printf("Allocated: %i (%ikb)\n", task->process->no_allocated, task->process->no_allocated*PAGE_SIZE/1000);
       window_term_printf("Event queue size: %i\n", kqueue_count(&task->event_queue));
       window_term_printf("Process uid: %u, threads: %i, privileged: %i\n", process->uid, process->no_threads, process->privileged);
       window_term_printf("Working dir: %s\n", process->working_dir);

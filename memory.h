@@ -26,7 +26,6 @@
 #define HEAP_KERNEL_END 0x3060000 // HEAP_KERNEL + 0x2000000
 
 #define KERNEL_HEAP_SIZE 0x2000000 // bytes
-#define MEM_BLOCK_SIZE   0x1000 // 4096 bytes (page size) for now (previously 0x200/512 bytes)
 
 // virtual memory layout
 // todo: kernel mapped to highest half of memory (0xC0000000-0xFFFFFFFF)
@@ -54,6 +53,7 @@ void memory_init();
 void *malloc(int bytes);
 void *resize(uint32_t offset, int oldsize, int newsize);
 void memcpy_fast(void *dest, const void *src, size_t bytes);
-mem_segment_status_t *memory_get_table();
+int allocated_blocks();
+uint32_t *memory_get_bitmap();
 
 #endif

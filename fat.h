@@ -56,20 +56,17 @@ typedef struct {
    uint32_t fileSize; // bytes
 } __attribute__((packed)) fat_dir_t;
 
-fat_dir_t *fat_parse_path(char *path, bool isFile);
+bool fat_parse_path(char *path, bool isFile, fat_dir_t *dir);
 uint8_t *fat_read_file(uint16_t clusterNo, uint32_t size);
-fat_dir_t *fat_read_root();
 bool fat_setup();
-bool fat_read_dir(uint16_t clusterNo, fat_dir_t *items);
+fat_dir_t *fat_read_dir(uint16_t clusterNo, uint32_t *bytes);
 void fat_parse_dir_entry(fat_dir_t *fat_dir);
 fat_bpb_t fat_get_bpb();
-int fat_get_dir_size(uint16_t clusterNo);
 bool fat_valid_cluster(uint16_t cluster);
 uint32_t fat_free_clusters();
 uint32_t fat_max_file_size();
 int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t size, int task);
 int fat_resize_file(char *path, uint32_t size);
-fat_dir_t *fat_follow_path_chain(char *pathElement, fat_dir_t *dir);
 bool fat_new_dir(char *path);
 bool fat_new_file(char *path);
 int fat_read_file_user(uint16_t clusterNo, uint8_t *buffer, uint32_t offset, uint32_t size, int task);

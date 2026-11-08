@@ -16,17 +16,14 @@ uint8_t *fs_read_file_kernel(char *path, int *size) {
    if(switching) // may be called before tasks are init
       kmutex_lock(&fs_mutex);
    
-   fat_dir_t *entry = fat_parse_path(path, true);
-   if(!entry || entry->attributes == 0x10) {
-      if(entry)
-         free((uint32_t)entry, sizeof(fat_dir_t));
+   fat_dir_t entry;
+   if(!fat_parse_path(path, true, &entry) || entry.attributes == 0x10) {
       if(switching)
          kmutex_unlock(&fs_mutex);
       return NULL; // not found
    }
-   *size = entry->fileSize;
-   uint8_t *content = fat_read_file(entry->firstClusterNo, entry->fileSize);
-   free((uint32_t)entry, sizeof(fat_dir_t));
+   *size = entry.fileSize;
+   uint8_t *content = fat_read_file(entry.firstClusterNo, entry.fileSize);
 
    if(switching)
       kmutex_unlock(&fs_mutex);
@@ -52,9 +49,8 @@ static bool fs_open_locked(fs_file_t *file);
 
 static bool fs_new_locked(fs_file_t *file) {
    // assumes path already verified
-   fat_dir_t *entry = fat_parse_path(file->filename, true);
-   if(entry) {
-      free((uint32_t)entry, sizeof(fat_dir_t));
+   fat_dir_t entry;
+   if(fat_parse_path(file->filename, true, &entry)) {
       debug_printf("FS: file %s already exists\n", file->filename);
       return false;
    }
@@ -71,8 +67,8 @@ static bool fs_new_locked(fs_file_t *file) {
 static bool fs_open_locked(fs_file_t *file) { 
    // assumes lock already claimed & path is validated
 
-   fat_dir_t *entry = fat_parse_path(file->filename, true);
-   if(!entry) {
+   fat_dir_t entry;
+   if(!fat_parse_path(file->filename, true, &entry)) {
       if(file->flags & FS_FLAG_CREATE) {
          debug_printf("FS: creating new file %s\n", file->filename);
          return fs_new_locked(file);
@@ -83,15 +79,14 @@ static bool fs_open_locked(fs_file_t *file) {
 
    fs_file_data_t *data = (fs_file_data_t*)malloc(sizeof(fs_file_data_t));
 
-   if(entry->attributes & 0x10) {
+   if(entry.attributes & 0x10) {
       file->type = FS_TYPE_DIR;
    } else {
       file->type = FS_TYPE_FILE;
    }
-   data->file_size = entry->fileSize;
-   data->first_cluster = entry->firstClusterNo;
+   data->file_size = entry.fileSize;
+   data->first_cluster = entry.firstClusterNo;
    file->data = data;
-   free((uint32_t)entry, sizeof(fat_dir_t));
 
    // truncate at open
    if(file->type == FS_TYPE_FILE && (file->flags & FS_FLAG_TRUNCATE) && !(file->flags & FS_FLAG_READONLY) && data->file_size > 0) {
@@ -122,7 +117,7 @@ static fs_file_t *fs_file_alloc(char *path, int flags) {
 
 // file teardown
 void fs_free(kobj_inst_t *inst) {
-   fs_close_locked(inst->data);
+   fs_close(inst->data);
 }
 
 bool fs_connect(kobj_ref_t *ref, process_t *process) {
@@ -135,7 +130,7 @@ bool fs_connect(kobj_ref_t *ref, process_t *process) {
 static kobj_handle_t fs_file_handle(process_t *process, fs_file_t *file) {
    kobj_inst_t *inst = create_kobj_inst(KOBJ_FILE, file);
    if(!inst) {
-      fs_close_locked(file);
+      fs_close(file);
       return -1;
    }
    kobj_handle_t h = process_acquire_kobj(process, inst);
@@ -160,7 +155,7 @@ kobj_handle_t fs_open(process_t *process, char *path, int flags) {
    bool success = fs_open_locked(file);
    kmutex_unlock(&fs_mutex);
    if(!success) {
-      fs_close_locked(file);
+      fs_close(file);
       return -1;
    }
    return fs_file_handle(process, file);
@@ -169,15 +164,13 @@ kobj_handle_t fs_open(process_t *process, char *path, int flags) {
 bool fs_exists(char *path) {
    if(path == NULL || strlen(path) == 0 || strlen(path) > 255) return false;
    kmutex_lock(&fs_mutex);
-   fat_dir_t *entry = fat_parse_path(path, true);
-   bool exists = entry != NULL;
-   if(exists)
-      free((uint32_t)entry, sizeof(fat_dir_t));
+   fat_dir_t entry;
+   bool exists = fat_parse_path(path, true, &entry);
    kmutex_unlock(&fs_mutex);
    return exists;
 }
 
-void fs_close_locked(fs_file_t *file) {
+void fs_close(fs_file_t *file) {
    if(file->data)
       free((uint32_t)file->data, sizeof(fs_file_data_t));
    if(file->pipe) {
@@ -209,7 +202,7 @@ void fs_close_locked(fs_file_t *file) {
    free((uint32_t)file, sizeof(fs_file_t));
 }
 
-fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
+static fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
    fs_dir_entry_t entry;
    char fileName[9];
    char extension[4];
@@ -231,103 +224,50 @@ fs_dir_entry_t fs_get_dir_entry(fat_dir_t *item) {
    return entry;
 }
 
-static fs_dir_content_t *fs_read_dir_locked(char *path) {
-   fs_dir_content_t *content = (fs_dir_content_t*)malloc(sizeof(fs_dir_content_t));
-   content->entries = NULL;
-   content->size = 0;
-
-   if(strequ(path, "/") || strequ(path, "")) {
-      // root
-
-      fat_dir_t *items = fat_read_root();
-      if(!items) {
-         debug_printf("FS: failed reading root directory\n");
-         free((uint32_t)content, sizeof(fs_dir_content_t));
-         return NULL;
-      }
-      fat_bpb_t fat_bpb = fat_get_bpb();
-      content->size = 0;
-      for(int i = 0; i < fat_bpb.noRootEntries; i++) {
-         if(items[i].filename[0] == 0) break;
-         if(items[i].filename[0] == 0xE5) continue; // deleted entry
-         content->size++;
-      }
-      content->entries = (fs_dir_entry_t*)malloc(sizeof(fs_dir_entry_t) * content->size);
-      int out = 0;
-      for(int i = 0; i < fat_bpb.noRootEntries && out < content->size; i++) {
-         if(items[i].filename[0] == 0) break;
-         if(items[i].filename[0] == 0xE5) continue; // deleted entry
-         content->entries[out++] = fs_get_dir_entry(&items[i]);
-      }
-      free((uint32_t)items, sizeof(fat_dir_t) * fat_bpb.noRootEntries);
-      return content;
-   } else {
-      // not root
-
-      fat_dir_t *entry = (fat_dir_t*)fat_parse_path(path, true);
-      if(entry == NULL) {
-         // not found
-         free((uint32_t)content, sizeof(fs_dir_content_t));
-         return NULL;
-      }
-
-      if(entry->attributes & 0x10) {
-         int size = fat_get_dir_size((uint16_t) entry->firstClusterNo);
-         if(size < 0) {
-            debug_printf("FS: failed reading directory '%s'\n", path);
-            free((uint32_t)entry, sizeof(fat_dir_t));
-            free((uint32_t)content, sizeof(fs_dir_content_t));
-            return NULL;
-         }
-         fat_dir_t *items = NULL;
-         if(size > 0) {
-            items = malloc(size*sizeof(fat_dir_t));
-            if(!items || !fat_read_dir(entry->firstClusterNo, items)) {
-               debug_printf("FS: failed reading directory '%s'\n", path);
-               if(items)
-                  free((uint32_t)items, size*sizeof(fat_dir_t));
-               free((uint32_t)entry, sizeof(fat_dir_t));
-               free((uint32_t)content, sizeof(fs_dir_content_t));
-               return NULL;
-            }
-         }
-         content->size = size;
-         for(int i = 0; i < size; i++) {
-            if(items[i].filename[0] == 0) {
-               content->size = i;
-               break;
-            }
-         }
-         content->entries = (fs_dir_entry_t*)malloc(sizeof(fs_dir_entry_t) * content->size);
-         for(int i = 0; i < content->size; i++) {
-            fs_dir_entry_t *entry = &content->entries[i];
-            *entry = fs_get_dir_entry(&items[i]);
-         }
-         if(items)
-            free((uint32_t)items, size*sizeof(fat_dir_t));
-      } else {
-         // not a dir
-         free((uint32_t)entry, sizeof(fat_dir_t));
-         return content;
-      }
-      free((uint32_t)entry, sizeof(fat_dir_t));
-      return content;
+static int fs_read_dir_locked(char *path, fs_dir_entry_t *entries, int max, int task) {
+   uint16_t cluster = 0; // root
+   if(!strequ(path, "/") && !strequ(path, "")) {
+      fat_dir_t dir;
+      if(!fat_parse_path(path, true, &dir))
+         return -1; // not found
+      if(!(dir.attributes & 0x10))
+         return 0; // not a dir
+      cluster = dir.firstClusterNo;
    }
+
+   uint32_t bytes;
+   fat_dir_t *items = fat_read_dir(cluster, &bytes);
+   if(!items) {
+      debug_printf("FS: failed reading directory '%s'\n", path);
+      return -1;
+   }
+
+   int total = 0;
+   int slots = bytes / sizeof(fat_dir_t);
+   for(int i = 0; i < slots; i++) {
+      if(items[i].filename[0] == 0) break; // end of directory
+      if(items[i].filename[0] == 0xE5) continue; // deleted entry
+      if(total < max) {
+         fs_dir_entry_t entry = fs_get_dir_entry(&items[i]);
+         if(copy_to_task(task, &entries[total], &entry, sizeof(entry)) != sizeof(entry)) {
+            total = -1; // bad buffer
+            break;
+         }
+      }
+      total++;
+   }
+
+   free((uint32_t)items, bytes);
+   return total;
 }
 
-fs_dir_content_t *fs_read_dir(char *path) {
+// returns total entries in directory or -1 for error
+int fs_read_dir(char *path, fs_dir_entry_t *entries, int max, int task) {
+   if(path == NULL || strlen(path) > 255 || max < 0) return -1;
    kmutex_lock(&fs_mutex);
-   fs_dir_content_t *content = fs_read_dir_locked(path);
+   int result = fs_read_dir_locked(path, entries, max, task);
    kmutex_unlock(&fs_mutex);
-   return content;
-}
-
-void fs_dir_content_free(fs_dir_content_t *content) {
-   if(content) {
-      if(content->entries)
-         free((uint32_t)content->entries, sizeof(fs_dir_entry_t) * content->size);
-      free((uint32_t)content, sizeof(fs_dir_content_t));
-   }
+   return result;
 }
 
 bool fs_mkdir(char *path) {
@@ -356,7 +296,7 @@ kobj_handle_t fs_new(process_t *process, char *path, int flags) {
    bool success = fs_new_locked(file);
    kmutex_unlock(&fs_mutex);
    if(!success) {
-      fs_close_locked(file);
+      fs_close(file);
       return -1;
    }
    return fs_file_handle(process, file);
@@ -493,14 +433,13 @@ void fs_read_window_callback(gui_window_t *window, bool eof) {
       task->registers.ebx = FS_EOF;
    } else {
       int buf_size = window->text_index+1;
-      char *buffer = (char*)malloc(buf_size);
+      char buffer[TEXT_BUFFER_LENGTH+1];
       strcpy_fixed(buffer, window->text_buffer, buf_size-1);
       buffer[buf_size-1] = '\0';
       int copy = buf_size;
       if(window->read_size < copy)
          copy = window->read_size;
       copy = copy_to_task(task->task_id, user_buffer, buffer, copy);
-      free((uint32_t)buffer, buf_size);
 
       task->registers.ebx = copy==buf_size?buf_size-1:copy;
    }
@@ -659,12 +598,11 @@ int fs_filesize(fs_file_t *file) {
 
 int fs_filesize_path(char *path) {
    kmutex_lock(&fs_mutex);
-   fat_dir_t *entry = fat_parse_path(path, true);
+   fat_dir_t entry;
+   bool found = fat_parse_path(path, true, &entry);
    kmutex_unlock(&fs_mutex);
-   if(!entry) return -1;
-   int size = entry->fileSize;
-   free((uint32_t)entry, sizeof(fat_dir_t));
-   return size;
+   if(!found) return -1;
+   return entry.fileSize;
 }
 
 int fs_seek(fs_file_t *file, int offset, int type) {
@@ -726,7 +664,7 @@ bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *
 
    kobj_handle_t read_h = fs_file_handle(process, read_file);
    if(read_h < 0) {
-      fs_close_locked(write_file);
+      fs_close(write_file);
       return false;
    }
 

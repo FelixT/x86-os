@@ -125,12 +125,8 @@ void cboot() {
       cboot_printf("FATAL: failed reading kernel from disk");
       while(true) {} // hang
    }
-   int used = 0;
-   for(int i = 0; i < KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE; i++) {
-      if(memory_get_table()[i].allocated) used++;
-   }
    cboot_printf("Loaded at 0x%h", bytes);
-   cboot_printf("Allocated %i/%i", used, KERNEL_HEAP_SIZE/MEM_BLOCK_SIZE);
+   cboot_printf("Allocated %i/%i", allocated_blocks(), KERNEL_HEAP_SIZE/PAGE_SIZE);
 
    cboot_printf("Copying to 0x%h", KERNEL_START);
    memcpy_fast((void*)KERNEL_START, bytes, size);

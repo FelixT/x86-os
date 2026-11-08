@@ -530,32 +530,12 @@ void api_sbrk(registers_t *regs) {
    if(new_end < old_end) {
       // shrink
       int delta_pages = (old_end - new_end) / 0x1000;
-      
-      uint32_t *physical_addrs = NULL;
-      if(delta_pages > 0) {
-         physical_addrs = malloc(delta_pages * sizeof(uint32_t));
-         if(physical_addrs) {
-            for(int i = 0; i < delta_pages; i++) {
-               uint32_t virt = old_end - (i + 1) * 0x1000;
-               physical_addrs[i] = page_getphysical(task->process->page_dir, virt);
-            }
-         }
-      }
-      
-      // unmap pages from old_end downward
       for(int i = 0; i < delta_pages; i++) {
-         uint32_t virt_addr = old_end - (i + 1) * 0x1000;
-         unmap(task->process->page_dir, virt_addr);
-      }
-      
-      // free physical memory
-      if(physical_addrs) {
-         for(int i = 0; i < delta_pages; i++) {
-            if(physical_addrs[i]) {
-               free(physical_addrs[i], 0x1000);
-            }
-         }
-         free((uint32_t)physical_addrs, delta_pages * sizeof(uint32_t));
+         uint32_t virt = old_end - (i + 1) * 0x1000;
+         uint32_t phys = page_getphysical(task->process->page_dir, virt);
+         unmap(task->process->page_dir, virt);
+         if(phys != (uint32_t)-1)
+            free(phys, 0x1000);
       }
    }
 
@@ -694,37 +674,19 @@ void api_read_dir(registers_t *regs) {
    // IN: edx - fs_dir_entry_t *buffer
    // OUT: ebx - total number of entries
    char *path = (char*)regs->ebx;
-   int entries = regs->ecx;
-   if(entries > 10000) { // stop size overflow
-      regs->ebx = -1;
-      return;
-   }
+   int count = regs->ecx;
    fs_dir_entry_t *out = (fs_dir_entry_t *)regs->edx;
-   if(api_validate_str(path, 256) < 0) {
+   if(count < 0 || count > 10000 || api_validate_str(path, 256) < 0) {
       regs->ebx = -1;
       return;
    }
-   fs_dir_content_t *content = fs_read_dir(path);
-   if(!content) {
-      regs->ebx = -1;
-      return;
-   }
-   uint32_t entries_size = sizeof(fs_dir_entry_t)*entries;
+   uint32_t entries_size = sizeof(fs_dir_entry_t)*count;
    if(!api_validate_mem(out, entries_size, true)) {
       debug_printf("api_read_dir: mem at 0x%h needed to be >= %u\n", out, entries_size);
-      fs_dir_content_free(content);
       regs->ebx = -1;
       return;
    }
-   int copy = entries;
-   if(content->size < copy)
-      copy = content->size;
-   for(int i = 0; i < copy; i++)
-      out[i] = content->entries[i];
-
-   int size = content->size;
-   fs_dir_content_free(content);
-   regs->ebx = size;
+   regs->ebx = fs_read_dir(path, out, count, get_current_task());
 }
 
 void api_write(registers_t *regs) {
@@ -1363,18 +1325,16 @@ void api_get_tasks(registers_t *regs) {
    regs->ebx = read;
 }
 
-typedef struct {
-   int task_id;
-   uint32_t task_uid;
-} api_sleep_msg_t;
-
 void api_sleep_callback(void *regs, void *msg) {
-   api_sleep_msg_t sleep_msg = *(api_sleep_msg_t*)msg;
-   free((uint32_t)msg, sizeof(api_sleep_msg_t));
-   task_state_t *task = &gettasks()[sleep_msg.task_id];
-   if(!task->enabled || task->task_uid != sleep_msg.task_uid) return;
-   task_resume(task);
-   switch_to_task(task->task_id, regs); // wake
+   uint32_t task_uid = (uint32_t)msg;
+   task_state_t *tasks = gettasks();
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      task_state_t *task = &tasks[i];
+      if(!task->enabled || task->task_uid != task_uid) continue;
+      task_resume(task);
+      switch_to_task(task->task_id, regs); // wake
+      return;
+   }
 }
 
 void api_sleep(registers_t *regs) {
@@ -1384,10 +1344,7 @@ void api_sleep(registers_t *regs) {
    int ticks = (timer_hz * ms) / 1000;
    task_state_t *task = get_current_task_state();
    task_pause(task, PAUSE_SLEEP);
-   api_sleep_msg_t *msg = malloc(sizeof(api_sleep_msg_t));
-   msg->task_id = task->task_id;
-   msg->task_uid = task->task_uid;
-   events_add(ticks, &api_sleep_callback, msg, -1);
+   events_add(ticks, &api_sleep_callback, (void*)task->task_uid, -1);
    switch_task(regs, false); // yield
 }
 
@@ -1472,7 +1429,7 @@ void api_dup2(registers_t *regs) {
       return;
    }
    if(new_fd < 0 || new_fd >= 3) {
-      debug_printf("api_dup2: invalid old fd\n");
+      debug_printf("api_dup2: invalid new fd\n");
       return;
    }
    kobj_handle_t new_h = process_copy_kobj(process, process, h);

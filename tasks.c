@@ -19,6 +19,7 @@ uint32_t task_event_counter = 0; // incremented on start/end
 
 process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process_t *process = malloc(sizeof(process_t));
+   if(!process) return NULL;
    process->uid = process_uid_counter++;
    process->prog_entry = entry;
    process->prog_start = entry;
@@ -1087,7 +1088,7 @@ void task_write_to_window(int task, char *out, bool children) {
       }
    } else {
       // write to fd/handle 1 (stdout)
-      kobj_handle_t fd1 = t->process->stdio[1];
+      kobj_handle_t fd1 = get_process_stdio(t->process, 1); // opens if not already
       kobj_ref_t *ref = fd1 >= 0 ? process_get_kobj_type(t->process, fd1, KOBJ_FILE) : NULL;
       if(!ref) {
          debug_printf("task_write_to_window: no fd1 or main window\n");
