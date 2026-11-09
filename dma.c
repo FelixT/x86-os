@@ -29,7 +29,7 @@ kobj_handle_t dma_create(int size, process_t *process, uint32_t *paddr) {
    dma->paddr = (uint32_t)mem;
    dma->size = size;
    
-   kobj_handle_t h = process_acquire_kobj(process, inst);
+   kobj_handle_t h = process_acquire_kobj(process, inst, KOBJ_RIGHT_SAME);
    if(h < 0) {
       free_kobj_inst(inst); // dma_cleanup frees mem+dma_t
       return -1;

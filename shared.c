@@ -11,12 +11,6 @@ bool shared_map(kobj_inst_t *inst, int index, kobj_mapping_t *mapping) {
    return true;
 }
 
-bool shared_connect(kobj_ref_t *ref, process_t *process) {
-   (void)ref;
-   (void)process;
-   return true; // mapping deferred to shared_map
-}
-
 kobj_handle_t shared_create(process_t *process, uint32_t size) {
    size = page_align_up(size);
    if(size == 0) return -1;
@@ -41,7 +35,7 @@ kobj_handle_t shared_create(process_t *process, uint32_t size) {
       kfree(block);
       return -1;
    }
-   kobj_handle_t h = process_acquire_kobj(process, inst);
+   kobj_handle_t h = process_acquire_kobj(process, inst, KOBJ_RIGHT_SAME);
    if(h < 0) {
       free_kobj_inst(inst);
       return -1;

@@ -16,7 +16,7 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .stop_func = NULL,
       .connect_func = NULL,
       .map_func = &dma_map,
-      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE|KOBJ_RIGHT_DUPLICATE,
       .control_func = NULL
    },
    [KOBJ_PCI] = {
@@ -26,7 +26,7 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .stop_func = &pci_stop,
       .connect_func = NULL,
       .map_func = &pci_map,
-      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE|KOBJ_RIGHT_CONTROL,
       .control_func = &pci_control
    },
    [KOBJ_SHARED] = {
@@ -34,9 +34,9 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .free_func = &shared_free_inst,
       .close_func = NULL,
       .stop_func = NULL,
-      .connect_func = &shared_connect,
+      .connect_func = NULL,
       .map_func = &shared_map,
-      .default_rights = KOBJ_RIGHTS_ALL,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE|KOBJ_RIGHT_TRANSFER|KOBJ_RIGHT_DUPLICATE,
       .control_func = NULL
    },
    [KOBJ_FILE] = {
@@ -44,9 +44,9 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .free_func = &fs_free,
       .close_func = NULL,
       .stop_func = NULL,
-      .connect_func = &fs_connect,
+      .connect_func = NULL,
       .map_func = NULL,
-      .default_rights = KOBJ_RIGHTS_ALL,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE|KOBJ_RIGHT_TRANSFER|KOBJ_RIGHT_DUPLICATE,
       .control_func = NULL
    }
 };
@@ -79,7 +79,7 @@ void free_kobj_inst(kobj_inst_t *inst) {
    kfree(inst);
 }
 
-kobj_ref_t *create_kobj_ref(kobj_inst_t *inst) {
+kobj_ref_t *create_kobj_ref(kobj_inst_t *inst, uint32_t rights) {
    kobj_ref_t *ref = kmalloc(sizeof(kobj_ref_t));
    if(!ref) return NULL;
    kobj_add_ref(inst);
@@ -88,7 +88,7 @@ kobj_ref_t *create_kobj_ref(kobj_inst_t *inst) {
    if(!KOBJ_HANDLE_CHECK(ref->uid)) // skip uid that causes blank checkbits (i.e. bare index handles)
       ref->uid = kobj_ref_uid_counter++;
    ref->inst = inst;
-   ref->rights = inst->obj->default_rights;
+   ref->rights = inst->obj->default_rights & rights;
    ref->data = NULL;
    return ref;
 }

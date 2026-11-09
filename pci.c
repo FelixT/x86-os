@@ -123,7 +123,7 @@ kobj_handle_t pci_connect(process_t *process, uint16_t vendor, uint16_t device_i
       return -1;
    }
 
-   kobj_handle_t h = process_acquire_kobj(process, inst);
+   kobj_handle_t h = process_acquire_kobj(process, inst, KOBJ_RIGHT_SAME);
    if(h < 0) {
       pci_config_write32(device->bus, device->slot, device->func, 0x04, cmd); // restore
       inst->stopped = true; // never started

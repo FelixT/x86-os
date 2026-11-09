@@ -88,7 +88,7 @@ void _start(int argc, char **args) {
       exit(1);
 
    write_str("Connected\n");
-   handle_t handles[1] = {h};
+   msg_handle_t handles[1] = {MSG_HANDLE(h)};
    msg_send_t msg = {.buffer = NULL, .size = 0, .handles = handles, .handle_count = 1};
    if(MSG_IS_ERR(msg_sync_reply_obj(call_uid, &msg)))
       exit(1);

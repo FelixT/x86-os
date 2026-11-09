@@ -524,6 +524,12 @@ int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimise
    return task_index;
 }
 
+// abort & cleanup tasks_setup_elf
+void task_abort_setup(int index) {
+   tasks[index].enabled = true; // must be enabled for end_task
+   end_task(index, NULL);
+}
+
 void tasks_init(registers_t *regs) {
    // enable preemptive multitasking
 
@@ -1366,7 +1372,7 @@ kobj_ref_t *process_get_kobj_type(process_t *process, kobj_handle_t h, kobj_type
    return ref;
 }
 
-kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst) {
+kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst, uint32_t rights) {
    // take first free slot
    kobj_handle_t h = 0;
    while(h < PROCESS_MAX_KOBJ && process->kobj[h])
@@ -1375,7 +1381,7 @@ kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst) {
       debug_printf("Process %u hit max kobj limit\n", process->uid);
       return -1;
    }
-   kobj_ref_t *ref = create_kobj_ref(kobj_inst);
+   kobj_ref_t *ref = create_kobj_ref(kobj_inst, rights);
    if(!ref) return -1;
    process->kobj[h] = ref;
    process->kobj_count++;
@@ -1409,18 +1415,23 @@ void process_release_kobjs(process_t *process) {
    }
 }
 
+bool kobj_ref_can_copy(kobj_ref_t *ref, bool same_process, uint32_t rights) {
+   uint32_t needed = same_process ? KOBJ_RIGHT_DUPLICATE : KOBJ_RIGHT_TRANSFER;
+   return (ref->rights & needed) && (ref->rights & rights);
+}
+
 // duplicate handle into receive_process's kobjs
-kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle) {
+kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle, uint32_t rights) {
    kobj_ref_t *ref = process_get_kobj(send_process, handle);
-   if(!ref) return -1;
-   kobj_inst_t *inst = ref->inst;
-   if(!inst->obj->connect_func)
+   if(!ref || !kobj_ref_can_copy(ref, send_process == receive_process, rights))
       return -1;
-   kobj_handle_t h = process_acquire_kobj(receive_process, inst); // new handle
+   uint32_t new_rights = ref->rights & rights;
+   kobj_inst_t *inst = ref->inst;
+   kobj_handle_t h = process_acquire_kobj(receive_process, inst, new_rights); // new handle
    if(h < 0)
       return -2;
    kobj_ref_t *new_ref = process_get_kobj(receive_process, h);
-   bool success = inst->obj->connect_func(new_ref, receive_process);
+   bool success = !inst->obj->connect_func || inst->obj->connect_func(new_ref, receive_process);
    if(!success) {
       process_release_kobj(receive_process, h);
       return -1;
@@ -1428,15 +1439,20 @@ kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_proc
    return h;
 }
 
-void process_copy_stdio(process_t *send_process, process_t *receive_process) {
+bool process_copy_stdio(process_t *send_process, process_t *receive_process) {
    for(int i = 0; i < 3; i++) {
       kobj_handle_t h = get_process_stdio(send_process, i);
       if(h < 0) continue;
-      receive_process->stdio[i] = process_copy_kobj(send_process, receive_process, h);
+      h = process_copy_kobj(send_process, receive_process, h, KOBJ_RIGHT_SAME);
+      if(h < 0) return false;
+      receive_process->stdio[i] = h;
    }
+   return true;
 }
 
 uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index) {
+   if(!(ref->rights & KOBJ_RIGHT_READ))
+      return 0; // READ required for map
    bool rw = ref->rights & KOBJ_RIGHT_WRITE;
    kobj_inst_t *inst = ref->inst;
    kobj_mapping_t mapping;
@@ -1567,6 +1583,13 @@ kobj_handle_t get_process_stdio(process_t *process, int fd) {
       }
    }
    process->stdio[fd] = h;
+   return h;
+}
+
+// respects stdio aliases
+kobj_handle_t process_resolve_handle(process_t *process, kobj_handle_t h) {
+   if(h >= 0 && h <= 2)
+      return get_process_stdio(process, h);
    return h;
 }
 

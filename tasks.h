@@ -172,6 +172,7 @@ void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
 bool tasks_launch_binary(registers_t *regs, char *path);
 int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimised);
+void task_abort_setup(int index);
 void unshare_heap_page(page_dir_entry_t *dir, uint32_t addr);
 uint32_t get_task_event_counter();
 
@@ -219,14 +220,16 @@ bool task_demand_map(process_t *process, uint32_t addr);
 int copy_to_task(int task, void *dest, void *src, size_t size);
 int copy_from_task(int task, void *dest, void *src, size_t size);
 
-kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst);
+kobj_handle_t process_acquire_kobj(process_t *process, kobj_inst_t *kobj_inst, uint32_t rights);
 kobj_ref_t *process_get_kobj(process_t *process, kobj_handle_t h);
 kobj_ref_t *process_get_kobj_type(process_t *process, kobj_handle_t h, kobj_type_t type);
 bool process_release_kobj(process_t *process, kobj_handle_t h);
 void process_release_kobjs(process_t *process);
-kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle);
-void process_copy_stdio(process_t *send_process, process_t *receive_process);
+bool kobj_ref_can_copy(kobj_ref_t *ref, bool same_process, uint32_t rights);
+kobj_handle_t process_copy_kobj(process_t *send_process, process_t *receive_process, kobj_handle_t handle, uint32_t rights);
+bool process_copy_stdio(process_t *send_process, process_t *receive_process);
 kobj_handle_t get_process_stdio(process_t *process, int fd);
+kobj_handle_t process_resolve_handle(process_t *process, kobj_handle_t h);
 
 vm_region_t *process_alloc_vm(process_t *process, uint32_t size, uint32_t flags, kobj_inst_t *inst);
 bool process_unmap_vm(process_t *process, uint32_t vaddr);

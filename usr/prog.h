@@ -802,15 +802,35 @@ static inline bool pipe(int *readfd, int *writefd) {
    return success;
 }
 
-static inline int dup(int oldfd) {
-   int new_fd;
+static inline handle_t hdup(handle_t h, uint32_t rights) {
+   handle_t out;
    asm volatile(
       "int $0x30"
-      : "=b" (new_fd)
-      : "a" (74), "b" (oldfd)
+      : "=b" (out)
+      : "a" (74), "b" (h), "c" (rights)
       : "cc", "memory"
    );
-   return new_fd;
+   return out;
+}
+
+static inline int dup(int fd) {
+   return hdup(fd, KOBJ_RIGHT_SAME);
+}
+
+static inline bool hinfo(handle_t h, kobj_type_t *type, uint32_t *rights) {
+   int t;
+   uint32_t r;
+   asm volatile(
+      "int $0x30"
+      : "=b" (t), "=c" (r)
+      : "a" (5), "b" (h)
+      : "cc", "memory"
+   );
+   if(t < 0)
+      return false;
+   *type = t;
+   *rights = r;
+   return true;
 }
 
 static inline void dup2(int oldfd, int newfd) {
@@ -1018,6 +1038,9 @@ static inline void override_msg(void (*msg_func)(uint32_t port_uid, uint32_t cha
       : "cc", "memory"
    );
 }
+
+// wrap handle in msg_handle_t with default rights/flags
+#define MSG_HANDLE(h) ((msg_handle_t){ (h), KOBJ_RIGHT_SAME, 0 })
 
 // send msg_t obj (currently doesn't support handles)
 static inline int msg_send_obj(uint32_t port_uid, uint32_t channel_uid, msg_send_t *msg, uint32_t flags) {

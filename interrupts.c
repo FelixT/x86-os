@@ -169,7 +169,9 @@ void software_handler(registers_t *regs) {
       case 4:
          api_control_handle(regs);
          break;
-      //case 5:
+      case 5:
+         api_handle_info(regs);
+         break;
       case 6:
          api_write_uint(regs);
          break;
@@ -349,7 +351,7 @@ void software_handler(registers_t *regs) {
          api_close(regs);
          break;
       case 74:
-         api_dup(regs);
+         api_dup_handle(regs);
          break;
       case 75:
          api_get_time(regs);

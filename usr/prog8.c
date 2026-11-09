@@ -52,7 +52,7 @@ void _start(int argc, char **args) {
          printf("couldn't connect to channel\n");
          exit(0);
       }
-      handle_t handles[] = {shared};
+      msg_handle_t handles[] = {MSG_HANDLE(shared)};
       uint8_t cmd = 1; // 1 = redraw, 0 = quit
       msg_send_t send_msg = {.buffer = &cmd, .size = 1, .handle_count = 1, .handles = handles};
       uint8_t buf[1];

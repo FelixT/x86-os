@@ -429,13 +429,20 @@ void api_launch_task(registers_t *regs) {
    task_state_t *task = &gettasks()[new_task];
 
    if(copy) {
-      process_copy_stdio(parenttask->process, task->process);
+      bool stdio_copied = process_copy_stdio(parenttask->process, task->process);
       strcpy(task->process->working_dir, parenttask->process->working_dir);
       int child_win = task->process->window;
       window_close(child_win, false);
       task->process->window = -1;
       if(get_window_checked(oldwindow, oldwindow_uid)) // tasks_setup_elf can yield, so it may have closed
          setSelectedWindowIndex(oldwindow);
+      if(!stdio_copied) {
+         debug_printf("api_launch_task: stdio handle(s) can't be transferred\n");
+         task_abort_setup(new_task); // free's args
+         regs->ebx = -1;
+         gui_redrawall();
+         return;
+      }
    }
 
    // map args to new task
@@ -543,13 +550,17 @@ void api_sbrk(registers_t *regs) {
    regs->ebx = old_heap_end;
 }
 
-static kobj_inst_t *api_get_file_inst(kobj_handle_t h, kobj_handle_t *out) {
+static kobj_inst_t *api_get_file_inst(kobj_handle_t h, uint32_t any_of, kobj_handle_t *out) {
    process_t *process = get_current_task_state()->process;
-   if(h >= 0 && h <= 2) // stdio
-      h = get_process_stdio(process, h);
+   h = process_resolve_handle(process, h);
    if(h < 0) return NULL;
    kobj_ref_t *ref = process_get_kobj_type(process, h, KOBJ_FILE);
    if(!ref) return NULL;
+   // check ref rights match any of provided
+   if(any_of && !(ref->rights & any_of)) {
+      debug_printf("handle %u lacks rights 0x%h", h, any_of);
+      return NULL;
+   }
    if(out)
       *out = h;
    return ref->inst;
@@ -587,7 +598,7 @@ void api_truncate(registers_t *regs) {
 
    regs->ebx = -1;
 
-   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   kobj_inst_t *inst = api_get_file_inst(handle, KOBJ_RIGHT_WRITE, NULL);
    fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_truncate: fd inactive\n");
@@ -618,7 +629,7 @@ void api_read(registers_t *regs) {
    regs->ebx = -1;
    if(count < 0) return;
    
-   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   kobj_inst_t *inst = api_get_file_inst(handle, KOBJ_RIGHT_READ, NULL);
    fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_read: fd inactive\n");
@@ -705,7 +716,7 @@ void api_write(registers_t *regs) {
       return;
    }
 
-   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   kobj_inst_t *inst = api_get_file_inst(handle, KOBJ_RIGHT_WRITE, NULL);
    fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_write: fd inactive\n");
@@ -740,7 +751,7 @@ void api_fsize(registers_t *regs) {
    // OUT: ebx - filesize
    int handle = regs->ebx;
    regs->ebx = -1;
-   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   kobj_inst_t *inst = api_get_file_inst(handle, KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE, NULL);
    fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_fsize: fd inactive\n");
@@ -834,7 +845,7 @@ void api_seek(registers_t *regs) {
    int offset = regs->ecx;
    int type = regs->edx;
    regs->ebx = -1;
-   kobj_inst_t *inst = api_get_file_inst(handle, NULL);
+   kobj_inst_t *inst = api_get_file_inst(handle, KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE, NULL);
    fs_file_t *file = inst ? inst->data : NULL;
    if(!file || !file->active) {
       debug_printf("api_seek: fd inactive\n");
@@ -1395,21 +1406,35 @@ void api_unpause(registers_t *regs) {
    switch_to_task(task_id, regs);
 }
 
-// duplicate file handle
-void api_dup(registers_t *regs) {
-   // IN: ebx - old fd
-   // OUT: ebx - new fd / -1 on error
-   int old_fd = regs->ebx;
+// duplicate handle - hdup
+void api_dup_handle(registers_t *regs) {
+   // IN: ebx - handle
+   // IN: ecx - rights mask
+   // OUT: ebx - new handle / -1 on error
+   handle_t h = regs->ebx;
+   uint32_t mask = regs->ecx;
    regs->ebx = -1;
-   kobj_handle_t h;
-   kobj_inst_t *inst = api_get_file_inst(old_fd, &h);
-   fs_file_t *old_file = inst ? inst->data : NULL;
-   if(!old_file || !old_file->active) {
-      debug_printf("api_dup: old fd inactive\n");
-      return;
-   }
    process_t *process = get_current_task_state()->process;
-   regs->ebx = process_copy_kobj(process, process, h);
+   h = process_resolve_handle(process, h);
+   if(h < 0 || !mask) return;
+   handle_t new_h = process_copy_kobj(process, process, h, mask);
+   regs->ebx = new_h < 0 ? -1 : new_h;
+}
+
+// hinfo
+void api_handle_info(registers_t *regs) {
+   // IN: ebx handle
+   // OUT: ebx type (-1 for not found)
+   // OUT: ecx rights
+   handle_t h = regs->ebx;
+   regs->ebx = -1;
+   process_t *process = get_current_task_state()->process;
+   h = process_resolve_handle(process, h);
+   if(h < 0) return;
+   kobj_ref_t *ref = process_get_kobj(process, h);
+   if(!ref) return;
+   regs->ebx = ref->inst->obj->type;
+   regs->ecx = ref->rights;
 }
 
 // duplicate file handle to specific stdio slot, closes existing
@@ -1422,7 +1447,7 @@ void api_dup2(registers_t *regs) {
    int new_fd = regs->ecx;
    regs->ebx = -1;
    kobj_handle_t h;
-   kobj_inst_t *inst = api_get_file_inst(old_fd, &h);
+   kobj_inst_t *inst = api_get_file_inst(old_fd, 0, &h);
    fs_file_t *old_file = inst ? inst->data : NULL;
    if(!old_file || !old_file->active) {
       debug_printf("api_dup2: old fd inactive\n");
@@ -1432,7 +1457,7 @@ void api_dup2(registers_t *regs) {
       debug_printf("api_dup2: invalid new fd\n");
       return;
    }
-   kobj_handle_t new_h = process_copy_kobj(process, process, h);
+   kobj_handle_t new_h = process_copy_kobj(process, process, h, KOBJ_RIGHT_SAME);
    if(new_h < 0) {
       debug_printf("api_dup2: copy failed\n");
       return;
@@ -1534,7 +1559,7 @@ void api_control_handle(registers_t *regs) {
    process_t *process = get_current_task_state()->process;
    kobj_ref_t *ref = process_get_kobj(process, h);
    if(!ref) return;
-   if(!(ref->rights & KOBJ_RIGHT_WRITE)) return;
+   if(!(ref->rights & KOBJ_RIGHT_CONTROL)) return;
    kobj_inst_t *inst = ref->inst;
    if(!inst->obj->control_func) return;
    uint32_t out = 0;

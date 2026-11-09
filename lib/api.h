@@ -54,12 +54,15 @@ typedef enum {
 #define MSG_MAX_HANDLES 4
 
 // per message flags (msg_send/msg_read)
-#define MSG_EXPECT_REPLY 1 // on client_reserves, client sends with this will reserve a reply slot so the server isn't blocked responding
-#define MSG_LAST_MSG 2 // reading last message in queue (msg_read)
-#define MSG_REPLY 4 // send is reply to MSG_EXPECT_REPLY request - releases the reserved slot
+#define MSG_EXPECT_REPLY (1u<<0) // on client_reserves, client sends with this will reserve a reply slot so the server isn't blocked responding
+#define MSG_LAST_MSG (1u<<1) // reading last message in queue (msg_read)
+#define MSG_REPLY (1u<<2) // send is reply to MSG_EXPECT_REPLY request - releases the reserved slot
 
 // channel notification flags
-#define MSG_FLAG_CLOSED 1
+#define MSG_FLAG_CLOSED (1u<<0)
+
+// msg per handle flags
+#define MSG_HANDLE_MOVE (1u<<0) // releases senders handle on success
 
 typedef enum {
    MSG_READ_EMPTY = 0,
@@ -88,15 +91,22 @@ typedef enum {
    MSG_ERR_PEER_INVALID_BUF = -23,
    MSG_ERR_INVALID_HANDLES = -24,
    MSG_ERR_PEER_INVALID_HANDLES = -25,
-   MSG_ERR_PEER_INVALID_MSG = -26 // receiver's msg_recv_t* became invalid
+   MSG_ERR_PEER_INVALID_MSG = -26, // receiver's msg_recv_t* became invalid
+   MSG_ERR_PEER_TOO_MANY_HANDLES = -27 // peer sent more handles than could be delivered, e.g. receive handle_count too small for a MSG_HANDLE_MOVE
 } msg_err_t;
 
 typedef int handle_t;
 
+typedef struct msg_handle_t {
+   handle_t handle;
+   uint32_t rights; // rights mask
+   uint32_t flags; // MSG_HANDLE_MOVE
+} msg_handle_t;
+
 typedef struct msg_send_t {
    void *buffer;
    int size;
-   handle_t *handles;
+   msg_handle_t *handles;
    int handle_count;
 } msg_send_t;
 
@@ -147,9 +157,19 @@ typedef enum {
    PCI_CTRL_DMA, // arg: enable (1/0)
 } pci_ctrl_t;
 
-#define KOBJ_RIGHT_TRANSFER (1u<<0)
-#define KOBJ_RIGHT_READ (1u<<1)
-#define KOBJ_RIGHT_WRITE (1u<<2)
-#define KOBJ_RIGHTS_ALL 0xFFFFFFFFu
+typedef enum {
+   KOBJ_DMA,
+   KOBJ_PCI, // pci device
+   KOBJ_SHARED,
+   KOBJ_FILE, // open file instance
+   KOBJ_NONE // must be at end
+} kobj_type_t;
+
+#define KOBJ_RIGHT_TRANSFER (1u<<0) // sent to other process
+#define KOBJ_RIGHT_DUPLICATE (1u<<1) // dup within process
+#define KOBJ_RIGHT_READ (1u<<2)
+#define KOBJ_RIGHT_WRITE (1u<<3)
+#define KOBJ_RIGHT_CONTROL (1u<<4) // hcontrol
+#define KOBJ_RIGHT_SAME ((uint32_t)-1)
 
 #endif

@@ -59,7 +59,7 @@ void api_sleep(registers_t *regs);
 void api_get_timer_tick(registers_t *regs);
 void api_pipe(registers_t *regs);
 void api_unpause(registers_t *regs);
-void api_dup(registers_t *regs);
+void api_dup_handle(registers_t *regs);
 void api_dup2(registers_t *regs);
 void api_close(registers_t *regs);
 void api_get_time(registers_t *regs);
@@ -89,5 +89,6 @@ void api_get_taskid(registers_t *regs);
 void api_unmap(registers_t *regs);
 void api_get_task_event_count(registers_t *regs);
 void api_control_handle(registers_t *regs);
+void api_handle_info(registers_t *regs);
 
 #endif

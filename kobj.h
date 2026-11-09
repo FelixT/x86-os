@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "ksync.h"
+#include "lib/api.h" // kobj_type_t
 
 // resources/objects that the kernel knows how to handle
 
@@ -12,14 +13,6 @@ typedef int kobj_handle_t; // bits 0-15: index into process->kobj[], bits 16-30:
 
 #define KOBJ_HANDLE_INDEX(h) ((h) & 0xFFFF)
 #define KOBJ_HANDLE_CHECK(uid) ((uid) & 0x7FFF) // bit 31 is clear so handles remain non negative
-
-typedef enum {
-    KOBJ_DMA,
-    KOBJ_PCI, // pci device
-    KOBJ_SHARED,
-    KOBJ_FILE, // open file instance
-    KOBJ_NONE // must be at end
-} kobj_type_t;
 
 typedef struct kobj_mapping_t {
     uint32_t paddr;
@@ -33,9 +26,9 @@ typedef struct process_t process_t;
 
 typedef struct kobj_t {
     kobj_type_t type;
-    uint32_t default_rights;
+    uint32_t default_rights; // rights can only shrink
     
-    bool (*connect_func)(kobj_ref_t *ref, process_t *process); // called when duplicating handle, NULL if only one ref possible
+    bool (*connect_func)(kobj_ref_t *ref, process_t *process); // called when duplicating handle
     void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd)
     void (*close_func)(kobj_ref_t *ref, process_t *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
     void (*free_func)(kobj_inst_t *inst); // called when last ref is closed
@@ -60,7 +53,7 @@ typedef struct kobj_ref_t {
 } kobj_ref_t;
 
 kobj_inst_t *create_kobj_inst(int type, void *data);
-kobj_ref_t *create_kobj_ref(kobj_inst_t *inst); // reference to an instance
+kobj_ref_t *create_kobj_ref(kobj_inst_t *inst, uint32_t rights); // reference to an instance
 void free_kobj_inst(kobj_inst_t *inst);
 void kobj_add_ref(kobj_inst_t *inst); // increment ref count
 void kobj_release_ref(kobj_inst_t *inst); // decrease ref count + free inst if last ref

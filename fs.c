@@ -120,12 +120,6 @@ void fs_free(kobj_inst_t *inst) {
    fs_close(inst->data);
 }
 
-bool fs_connect(kobj_ref_t *ref, process_t *process) {
-   (void)ref;
-   (void)process;
-   return true; // allow file inst to have multiple refs (via process copy)
-}
-
 // wrap opened file in a handle - closes on failure
 static kobj_handle_t fs_file_handle(process_t *process, fs_file_t *file) {
    kobj_inst_t *inst = create_kobj_inst(KOBJ_FILE, file);
@@ -133,7 +127,10 @@ static kobj_handle_t fs_file_handle(process_t *process, fs_file_t *file) {
       fs_close(file);
       return -1;
    }
-   kobj_handle_t h = process_acquire_kobj(process, inst);
+   uint32_t rights = KOBJ_RIGHT_SAME; // mask
+   if(file->flags & FS_FLAG_READONLY) rights &= ~KOBJ_RIGHT_WRITE;
+   if(file->flags & FS_FLAG_WRITEONLY) rights &= ~KOBJ_RIGHT_READ;
+   kobj_handle_t h = process_acquire_kobj(process, inst, rights);
    if(h < 0) free_kobj_inst(inst); // fs_free closes file
    return h;
 }
@@ -644,7 +641,7 @@ bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *
    pipe->writer_count = 1;
    pipe->ref_count = 2;
 
-   fs_file_t *read_file = fs_file_alloc("", 0);
+   fs_file_t *read_file = fs_file_alloc("", FS_FLAG_READONLY);
    if(!read_file) {
       kfree(pipe);
       return false;
@@ -652,7 +649,7 @@ bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *
    read_file->type = FS_TYPE_PIPE;
    read_file->pipe = pipe;
 
-   fs_file_t *write_file = fs_file_alloc("", 0);
+   fs_file_t *write_file = fs_file_alloc("", FS_FLAG_WRITEONLY);
    if(!write_file) {
       kfree(pipe);
       kfree(read_file);
@@ -660,7 +657,6 @@ bool fs_create_pipe(process_t *process, kobj_handle_t *read_end, kobj_handle_t *
    }
    write_file->type = FS_TYPE_PIPE;
    write_file->pipe = pipe;
-   write_file->flags = FS_FLAG_WRITEONLY;
 
    kobj_handle_t read_h = fs_file_handle(process, read_file);
    if(read_h < 0) {

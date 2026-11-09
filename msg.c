@@ -424,7 +424,27 @@ static bool msg_write_receipt(task_state_t *task, msg_recv_t *user_recv_msg, msg
 static msg_copy_receipt_t msg_do_copy(task_state_t *send_task, task_state_t *receive_task, msg_send_t *send_msg, msg_recv_t *recv_msg, msg_recv_t *recv_msg_user, uint32_t call_uid) {
    // copy from send_msg -> recv_msg, then write the receipt to recv_msg_user
    msg_copy_receipt_t r = {.bytes = 0, .handles = 0, .receiver_status = 0, .sender_status = 0};
+   msg_handle_t sent[MSG_MAX_HANDLES];
    handle_t handles[MSG_MAX_HANDLES];
+   int send_handles = send_msg->handle_count;
+   int copy_handles = min(send_handles, recv_msg->handle_count);
+   if(send_handles > 0) {
+      // copy into handles
+      int read_sz = send_handles*sizeof(msg_handle_t);
+      if(msg_copy_from_sender(send_task, sent, send_msg->handles, read_sz) != read_sz) {
+         r.sender_status = MSG_ERR_INVALID_HANDLES;
+         return r;
+      }
+
+      // check truncated handles
+      for(int i = copy_handles; i < send_handles; i++) {
+         if(sent[i].flags & MSG_HANDLE_MOVE) {
+            // fail whole send if any truncated handles have move flag
+            r.sender_status = MSG_ERR_TOO_MANY_HANDLES;
+            return r;
+         }
+      }
+   }
 
    // copy message (buffer)
    void *send_buffer = send_msg->buffer;
@@ -453,19 +473,12 @@ static msg_copy_receipt_t msg_do_copy(task_state_t *send_task, task_state_t *rec
    }
    
    // copy handles
-   int copy_handles = min(send_msg->handle_count, recv_msg->handle_count);
    if(copy_handles > 0) {
-      int sz = copy_handles*sizeof(handle_t);
-
-      // copy into handles
-      if(msg_copy_from_sender(send_task, handles, send_msg->handles, sz) != sz) {
-         r.sender_status = MSG_ERR_INVALID_HANDLES;
-         return r;
-      }
+      int write_sz = copy_handles*sizeof(handle_t);
 
       // copy kobjs into recv task and update handles
       for(int i = 0; i < copy_handles; i++) {
-         handle_t h = process_copy_kobj(send_task->process, receive_task->process, handles[i]);
+         handle_t h = process_copy_kobj(send_task->process, receive_task->process, sent[i].handle, sent[i].rights);
          if(h < 0) {
             msg_free_handles(receive_task->process, handles, i);
             if(h == -2) { // receiver had too many handles
@@ -480,7 +493,7 @@ static msg_copy_receipt_t msg_do_copy(task_state_t *send_task, task_state_t *rec
       }
 
       // copy handles into recv task
-      if(copy_to_task(receive_task->task_id, recv_msg->handles, handles, sz) != sz) {
+      if(copy_to_task(receive_task->task_id, recv_msg->handles, handles, write_sz) != write_sz) {
          msg_free_handles(receive_task->process, handles, copy_handles);
          r.sender_status = MSG_ERR_PEER_INVALID_HANDLES;
          r.receiver_status = MSG_ERR_INVALID_HANDLES;
@@ -498,13 +511,19 @@ static msg_copy_receipt_t msg_do_copy(task_state_t *send_task, task_state_t *rec
       return r;
    }
 
+   // sent successfully - close handles with move flag
+   for(int i = 0; i < r.handles; i++) {
+      if(sent[i].flags & MSG_HANDLE_MOVE)
+         process_release_kobj(send_task->process, sent[i].handle);
+   }
+
    return r;
 }
 
-static bool msg_check_handles(process_t *process, handle_t *handles, int size) {
+static bool msg_check_handles(process_t *process, bool same_process, msg_handle_t *handles, int size) {
    for(int i = 0; i < size; i++) {
-      kobj_ref_t *ref = process_get_kobj(process, handles[i]);
-      if(!ref || !(ref->rights & KOBJ_RIGHT_TRANSFER)) return false;
+      kobj_ref_t *ref = process_get_kobj(process, handles[i].handle);
+      if(!ref || !kobj_ref_can_copy(ref, same_process, handles[i].rights)) return false;
    }
    return true;
 }
@@ -556,7 +575,7 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_se
       return MSG_ERR_PEER_DISCONNECTED;
    }
 
-   if(!msg_check_handles(task->process, send_msg->handles, send_msg->handle_count)) {
+   if(!msg_check_handles(task->process, task->process->uid == port->owner_uid, send_msg->handles, send_msg->handle_count)) {
       debug_printf("msg_call: invalid handle\n");
       return MSG_ERR_INVALID_HANDLES;
    }
@@ -621,7 +640,7 @@ int msg_validate_send(msg_send_t *msg) {
       return MSG_ERR_TOO_MANY_HANDLES;
    if(msg->handle_count < 0)
       return MSG_ERR_INVALID_MSG;
-   if(!task_validate_mem(task, msg->handles, sizeof(handle_t)*msg->handle_count, 0))
+   if(!task_validate_mem(task, msg->handles, sizeof(msg_handle_t)*msg->handle_count, 0))
       return MSG_ERR_INVALID_HANDLES;
    return 0;
 }
@@ -704,7 +723,8 @@ static msg_err_t msg_get_peer_error(msg_err_t err) {
       return MSG_ERR_PEER_INVALID_BUF;
    else if(err == MSG_ERR_INVALID_HANDLES)
       return MSG_ERR_PEER_INVALID_HANDLES;
-   
+   else if(err == MSG_ERR_TOO_MANY_HANDLES)
+      return MSG_ERR_PEER_TOO_MANY_HANDLES;
    return MSG_ERR_PEER_INVALID_MSG;
 }
 
@@ -753,7 +773,7 @@ int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send
       return MSG_ERR_TOO_LONG;
    }
 
-   if(!msg_check_handles(task->process, send_msg->handles, send_msg->handle_count)) {
+   if(!msg_check_handles(task->process, task->process == client_task->process, send_msg->handles, send_msg->handle_count)) {
       debug_printf("msg_reply: invalid handle\n");
       client_regs->ebx = MSG_ERR_PEER_INVALID_HANDLES;
       task_resume(client_task);

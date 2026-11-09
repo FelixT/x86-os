@@ -95,6 +95,5 @@ bool fs_pipe_wake_reader(fs_pipe_t *pipe);
 bool fs_pipe_wake_writer(fs_pipe_t *pipe);
 int fs_truncate(fs_file_t *file, int size);
 void fs_read_window_callback(gui_window_t *window, bool eof);
-bool fs_connect(kobj_ref_t *ref, process_t *process);
 
 #endif

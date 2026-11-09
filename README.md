@@ -2,9 +2,9 @@
 
 custom 32-bit x86 OS project in C, NASM, C++
 
-<img width="49%" src="https://felixt.github.io/img/OS7.png">
+<img width="49%" src="https://felixt.github.io/img/OS8.png">
 
-targets i686 (FPU not required)
+targets i686 (FPU/SMP not required)
 
 ### features
 
@@ -74,7 +74,7 @@ Initial/boot kernel stack (identity mapped): 0x160000 - 0x164000
 
 Per task program stack (vmem): 0xC0000000 + slot * 0x4000, slot is the thread number within a process (or the task id for binaries)
 
-Shared memory vmapped to each process: 0xA0000000 - 0xB0000000
+Per process VM regions (vmem): 0xA0000000 - 0xC0000000. Shared memory, DMA buffers & PCI devices (MMIO) are mapped here via handles.
 
 MMIO memory vmapped to each process: 0xB0000000 - 0xC0000000
 
@@ -86,7 +86,7 @@ interrupts.c includes handlers for timer, PS/2 keyboard, PS/2 mouse and software
 
 Preemptive multitasking utilises the timer, implementing a round robin scheduler as well as supporting a yield syscall.
 
-Tasks are loaded from ELF32 binaries. I/O (e.g. keypress, mouse move) is processed by the window manager and surfaced to applications via callbacks on the main thread. These are queued if the application is already in a callback/subroutine, functioning as an event loop.
+Tasks are loaded from ELF32 binaries. I/O (e.g. keypress, mouse move) is processed by the window manager's event thread and surfaced to applications via callbacks on the main thread. These are queued if the application is already in a callback/subroutine, functioning as an event loop.
 
 Tasks interact with kernel subsystems via syscalls, available calls are defined in api.h.
 
