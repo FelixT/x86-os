@@ -553,6 +553,8 @@ uint32_t delayed_ticks = 0;
 void timer_handler(registers_t *regs) {
    timer_i++;
    events_check(regs);
+   tasks_tick();
+
    if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
       // don't preempt when interrupting kernel
 

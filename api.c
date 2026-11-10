@@ -1309,6 +1309,7 @@ void api_get_tasks(registers_t *regs) {
       api_task->uid = task_state->task_uid;
       api_task->enabled = task_state->enabled;
       api_task->paused = task_state->paused;
+      api_task->ticks = task_state->ticks;
       if(!task_state->process || task_state->process->no_threads == 0)
          continue;
       api_task->parentid = task_state->process->threads[0]->task_id;
@@ -1743,7 +1744,11 @@ void api_port_connect(registers_t *regs) {
 
 void api_override_msg(registers_t *regs) {
    // IN: ebx - msg func
-   get_current_task_state()->msg_func = (void*)regs->ebx;
+   void *callback = (void*)regs->ebx;
+   task_state_t *task = get_current_task_state();
+   task->msg_func = callback;
+   // check for queued msgs
+   msg_dispatch_queued(task);
 }
 
 void api_msg_read(registers_t *regs) {
@@ -1784,10 +1789,7 @@ void api_msg_send(registers_t *regs) {
    // OUT: ebx - return (0 success)
    uint32_t port_uid = regs->ebx;
    uint32_t channel_uid = regs->ecx;
-   msg_send_t *msg = (msg_send_t*)regs->edx;
-   regs->ebx = msg_validate_send(msg);
-   if((int)regs->ebx < 0)
-      return;
+   msg_send_t *msg = (msg_send_t*)regs->edx; // validated by port_send
    uint32_t flags = regs->esi;
    task_state_t *task = get_current_task_state();
    int r = port_send(regs, task, port_uid, channel_uid, msg, flags);
@@ -1861,12 +1863,7 @@ void api_msg_call(registers_t *regs) {
    uint32_t channel_uid = regs->ebx;
    msg_send_t *send_msg = (msg_send_t*)regs->ecx;
    msg_recv_t *recv_msg = (msg_recv_t*)regs->edx;
-   regs->ebx = msg_validate_send(send_msg);
-   if((int)regs->ebx < 0)
-      return;
-   regs->ebx = msg_validate_recv(recv_msg);
-   if((int)regs->ebx < 0)
-      return;
+   // validated by msg_call
    task_state_t *task = get_current_task_state();
    int r = msg_call(regs, task, channel_uid, send_msg, recv_msg);
    if(r < 0)
@@ -1880,10 +1877,7 @@ void api_msg_receive(registers_t *regs) {
    // OUT: ebx - bytes read, errors negative
    // OUT: recv_msg - call_uid, bytes_received, sent_size, handles_sent, handles_received written on receive
    uint32_t port_uid = regs->ebx;
-   msg_recv_t *recv_msg = (msg_recv_t*)regs->ecx;
-   regs->ebx = msg_validate_recv(recv_msg);
-   if((int)regs->ebx < 0)
-      return;
+   msg_recv_t *recv_msg = (msg_recv_t*)regs->ecx; // validated by msg_receive
    task_state_t *task = get_current_task_state();
    int r = msg_receive(regs, task, port_uid, recv_msg);
    if(r < 0)
@@ -1898,7 +1892,7 @@ void api_msg_reply(registers_t *regs) {
    uint32_t call_uid = regs->ebx;
    msg_send_t *send_msg = (msg_send_t*)regs->ecx;
    task_state_t *task = get_current_task_state();
-   // msg_validate_send performed from msg_reply
+   // validated by msg_reply
    int r = msg_reply(regs, task, call_uid, send_msg);
    if(r < 0)
       regs->ebx = r;

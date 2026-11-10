@@ -298,6 +298,11 @@ void term_cmd_tasks() {
       } else {
          window_term_printf(" child");
       }
+
+      int tmp = getSelectedWindow()->txtcolour;
+      getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
+      window_term_printf(" %i ticks", tasks[i].ticks);
+      getSelectedWindow()->txtcolour = tmp;
    }
 }
 

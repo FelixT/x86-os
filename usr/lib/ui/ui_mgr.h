@@ -20,6 +20,7 @@ typedef struct ui_mgr_t {
    wo_t *default_menu; // right click menu
    wo_t *shown_menu; // currently shown menu
    int scrolled_y;
+   bool closed; // window was closed by a callback, its surface is gone
 } ui_mgr_t;
 
 ui_mgr_t *ui_init(surface_t *surface, int window);

@@ -17,7 +17,7 @@ void resize() {
 
 void _start() {
    set_window_size(160, 25, -1);
-   set_window_position(get_surface_w(-2).width - 160 - 10, 10, -1);
+   set_window_position(get_surface_w(-2).width - 162, 10, -1);
    set_window_title("Clock");
 
    s = get_surface();

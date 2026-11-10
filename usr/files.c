@@ -20,6 +20,7 @@ uint16_t *file_icon;
 uint16_t *elf_icon;
 uint16_t *font_icon;
 uint16_t *folder_icon;
+uint16_t *bmp_icon;
 volatile int offset;
 fs_dir_entry_t *dir_entries;
 int dir_size;
@@ -141,6 +142,8 @@ void display_items() {
             icon_data->data = elf_icon;
          } else if(strendswith(entry->filename, ".fon")) {
             icon_data->data = font_icon;
+         } else if(strendswith(entry->filename, ".bmp")) {
+            icon_data->data = bmp_icon;
          } else {
             icon_data->data = file_icon;
          }
@@ -369,7 +372,7 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          launch_task(fullpath, 0, NULL, false, false);
       }
 
-      if(strequ(extension, "txt") || strequ(extension, "c")) {
+      if(strequ(extension, "txt") || strequ(extension, "c") || strequ(extension, "lnk")) {
          char **args = (char**)malloc(2*sizeof(char*));
          char elfpath[32] = "/sys/text.elf";
          args[0] = malloc(strlen(elfpath)+1);
@@ -820,6 +823,11 @@ void _start(int argc, char **args) {
    folder_icon = dialog_load_icon("/bmp/folder20.bmp", NULL, NULL);
    if(!folder_icon) {
       write_str("Folder icon not found\n");
+      exit(0);
+   }
+   bmp_icon = dialog_load_icon("/bmp/bmp20.bmp", NULL, NULL);
+   if(!bmp_icon) {
+      write_str("BMP icon not found\n");
       exit(0);
    }
 

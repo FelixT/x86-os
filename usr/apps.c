@@ -32,7 +32,6 @@ void app_launch(wo_t *label) {
    strcpy(path, "/sys/");
    strcat(path, label_data->label);
    strcat(path, ".elf");
-   debug_println(path);
    redraw();
    launch_task(path, 0, NULL, false, false);
 }

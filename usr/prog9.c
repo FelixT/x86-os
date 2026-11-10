@@ -8,6 +8,12 @@
 
 static uint32_t child_channel_uid = (uint32_t)-1; // used by sender to periodically wake child process
 
+// async ipc test processes
+// 'client' thread sends msgs 'test', 'test2' and sends 'echo test' with msg_request (MSG_EXPECT_REPLY / reserved reply queue slot)
+// it waits until the request is read by the server before sleeping 2s and repeating
+// server process echo's back requests (MSG_EXPECT_REPLY) to the sender
+// 'child' client process sends msg 'child' to the server and waits until it receives a msg from the server (via snooze) repeatedly
+
 void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
    if(flags & MSG_FLAG_CLOSED) {
       printf("server: channel %u closed by client\n", channel_uid);
@@ -86,7 +92,7 @@ void client_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
    end_subroutine();
 }
 
-void client_start() {
+void client_main() {
    override_msg(&client_msg_func);
 
    uint32_t port_uid;
@@ -102,112 +108,64 @@ void client_start() {
       // send message to server
       int r = msg_send(port_uid, channel_uid, "test", 4);
       if(r < 0)
-         printf("msg_send2 failed, code %i\n", r);
+         printf("msg_send failed, code %i\n", r);
 
       r = msg_send(port_uid, channel_uid, "test2", 5);
       if(r < 0)
-         printf("msg_send3 failed, code %i\n", r);
+         printf("msg_send 2 failed, code %i\n", r);
 
       // the only message the server replies to, so the only one that reserves a reply slot
       r = msg_request(port_uid, channel_uid, "echo test", strlen("echo test"));
       if(r < 0)
-         printf("msg_send4 failed, code %i\n", r);
+         printf("msg_request failed, code %i\n", r);
 
       msg_wait_for_read(port_uid, channel_uid);
 
-      sleep(1000);
+      sleep(800);
    }
 }
 
-void sync_thread() {
-   printf("Prog9 sync thread\n");
+void child_main() {
+   printf("Prog9 child process\n");
+   set_window_title("Prog9 Child");
 
-   uint32_t port_uid;
-   uint32_t channel_uid;
-   channel_uid = port_connect("/prog9/sync", &port_uid);
-
-   char buf[64];
-   strcpy(buf, "synctest");
-   char recv_buf[64];
+   // wait for server - todo autowait func
+   uint32_t serverport;
+   uint32_t channel;
    while(true) {
-      printf("Sync child msging server\n");
+      printf("connecting\n");
+      channel = port_connect("/prog9", &serverport);
+      if(!MSG_IS_ERR(channel))
+         break;
 
-      int r = msg_sync_send(channel_uid, (uint8_t*)buf, 64, (uint8_t*)recv_buf, 64);
-      printf("child send status %i\n", r);
+      sleep(100);
+   }
+
+   printf("child connected to server on port %u channel %u\n", serverport, channel);
+
+   char buf[10];
+   strcpy(buf, "child");
+   int r = msg_send(serverport, channel, buf, 5);
+   if(r < 0)
+      printf("child process send failed error %i\n", r);
+
+   while(true) {
+      // wait to be woken by msg
+      uint32_t channel_flags;
+      uint32_t msg_flags;
+      int r = msg_read(serverport, channel, buf, 10, &channel_flags, &msg_flags);
+      if(r == MSG_READ_EMPTY)
+         printf("read: queue empty\n");
+      if(r < 0)
+         printf("read: error\n");
       if(r > 0)
-         printf("child received response '%s'\n", recv_buf);
-
-      sleep(2000);
+         printf("msg: %s\n", buf);
+      snooze();
    }
 }
 
-void _start(int argc, char **args) {
-   if(argc > 0 && strequ(args[0], "sync")) {
-      // third, sync call testing subprog
-      printf("Prog9 sync process\n");
-      set_window_title("Prog9 Sync");
 
-      uint32_t port = create_port("/prog9/sync", false);
-      create_thread(&sync_thread);
-
-      char buf[64];
-      uint32_t call_id;
-
-      while(true) {
-         printf("receiving\n");
-         int r = msg_sync_receive(port, (uint8_t*)buf, 64, &call_id);
-         printf("server read status %i id %u\n", r, call_id);
-         if(r > 0) {
-            printf("server received msg '%s'\n", buf);
-            // reply
-            r = msg_sync_reply(call_id, (uint8_t*)buf, 64);
-            printf("server reply status %i\n", r);
-         }
-      }
-   }
-
-   if(argc > 0 && strequ(args[0], "child")) {
-      // child process client
-      printf("Prog9 child process\n");
-      set_window_title("Prog9 Child");
-
-      // wait for server - todo autowait func
-      uint32_t serverport;
-      uint32_t channel;
-      while(true) {
-         printf("connecting\n");
-         channel = port_connect("/prog9", &serverport);
-         if(!MSG_IS_ERR(channel))
-            break;
-
-         sleep(100);
-      }
-
-      printf("child connected to server on port %u channel %u\n", serverport, channel);
-
-      char buf[10];
-      strcpy(buf, "child");
-      int r = msg_send(serverport, channel, buf, 5);
-      if(r < 0)
-         printf("child process send failed error %i\n", r);
-
-      while(true) {
-         // wait to be woken by msg
-         uint32_t channel_flags;
-         uint32_t msg_flags;
-         int r = msg_read(serverport, channel, buf, 10, &channel_flags, &msg_flags);
-         if(r == MSG_READ_EMPTY)
-            printf("read: queue empty\n");
-         if(r < 0)
-            printf("read: error\n");
-         if(r > 0)
-            printf("msg: %s\n", buf);
-         snooze();
-      }
-
-   }
-
-   // server
+void server_main() {
    set_window_title("Prog9 Server");
    char *childargs[1];
    childargs[0] = malloc(strlen("child")+1);
@@ -232,7 +190,93 @@ void _start(int argc, char **args) {
 
    override_msg(&server_msg_func);
 
-   create_thread(&client_start);
+   create_thread(&client_main);
 
    while(true) { snooze(); }
+}
+
+// process for testing sync ipc
+// client thread sends 'synctest' to server every 2s
+// server echoes msg back to client
+
+void sync_thread() {
+   // 'sync' client thread
+   printf("Prog9 sync thread\n");
+
+   uint32_t port_uid;
+   uint32_t channel_uid;
+   channel_uid = port_connect("/prog9/sync", &port_uid);
+
+   char buf[32] = "synctest";
+   char buf2[32] = "asynctest";
+   char recv_buf[64];
+   int i = 0;
+   while(true) {
+      if((i%8) == 0) {
+         // send async msg. if client is waited it is delivered instantly
+         bool ending = i == 8*14;
+         if(ending)
+            strcpy(buf2, "ending");
+         int r = msg_send(port_uid, channel_uid, buf2, 32);
+         if(r < 0)
+            printf("child async send status %i\n", r);
+         if(ending)
+            exit(1); // 'ending' msg should be delivered, then flag port disconnect (separately)
+      }
+
+      int r = msg_sync_send(channel_uid, (uint8_t*)buf, 64, (uint8_t*)recv_buf, 32);
+      if(r > 0)
+         printf("child received response '%s'\n", recv_buf);
+      else
+         printf("child send/recv status %i\n", r);
+
+      sleep(800);
+
+      i++;
+   }
+}
+
+void sync_main() {
+   printf("Prog9 sync process\n");
+   set_window_title("Prog9 Sync");
+
+   uint32_t port = create_port("/prog9/sync", false);
+   create_thread(&sync_thread);
+
+   char buf[64];
+   uint32_t call_id;
+
+   while(true) {
+      uint32_t channel_flags;
+      int r = msg_sync_receive(port, (uint8_t*)buf, 64, &call_id, &channel_flags);
+      if(r == 0) {
+         // flags
+         printf("server read flags %u\n", channel_flags);
+         if(channel_flags & MSG_FLAG_CLOSED)
+            exit(1);
+      }
+      if(r > 0) {
+         printf("server received msg '%s'\n", buf);
+         if(call_id) {
+            // reply
+            r = msg_sync_reply(call_id, (uint8_t*)buf, 64);
+            if(r < 0)
+               printf("server reply status %i\n", r);
+         } // otherwise async/notif
+      }
+   }
+}
+
+void _start(int argc, char **args) {
+   if(argc > 0 && strequ(args[0], "sync")) {
+      sync_main();
+   }
+
+   if(argc > 0 && strequ(args[0], "child")) {
+      // child process client
+      child_main();
+   }
+
+   // server
+   server_main();
 }

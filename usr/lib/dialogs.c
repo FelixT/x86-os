@@ -83,6 +83,7 @@ void dialog_close(wo_t *wo, int window) {
       return;
    }
    dialog->active = false;
+   dialog->ui->closed = true;
    map_free(&dialog->wo_map);
    close_window(window);
    if(window == -1)
@@ -141,10 +142,10 @@ void dialog_keypress(int c, int window) {
       end_subroutine();
    }
    ui_keypress(dialog->ui, c);
-   if(c == 0x1B) {
+   if(dialog->active && c == 0x1B) {
       dialog_close(NULL, window);
    }
-   if(!dialog->ui->focused) {
+   if(dialog->active && !dialog->ui->focused) {
       if(c == 0x100) {
          dialog->ui->scrolled_y -= 15;
          if(dialog->ui->scrolled_y < 0)
@@ -159,6 +160,21 @@ void dialog_keypress(int c, int window) {
          scroll_to(dialog->ui->scrolled_y, window);
       }
    }
+
+   if(c == 128)
+      dialog->ctrl_held = true;
+
+   end_subroutine();
+}
+
+void dialog_keyrelease(int c, int window) {
+   dialog_t *dialog = dialog_from_window(window);
+   if(!dialog) {
+      debug_println("Couldn't find dialog for window %i\n", window);
+      end_subroutine();
+   }
+   if(c == 128)
+      dialog->ctrl_held = false;
 
    end_subroutine();
 }
@@ -197,9 +213,11 @@ bool dialog_init(dialog_t *dialog, int window) {
    dialog->surface = get_surface_w(window);
    dialog->ui = ui_init(&dialog->surface, window);
    dialog->active = true;
+   dialog->type = DIALOG_CUSTOM;
    dialog->callback = NULL;
    dialog->state = NULL;
    dialog->content_height = 0;
+   dialog->ctrl_held = false;
    map_init(&dialog->wo_map, 64);
    strcpy(dialog->title, "Window");
    dialog_init_overrides(window);
@@ -285,12 +303,11 @@ void dialog_complete(wo_t *wo, int window) {
 }
 
 int dialog_yesno(char *title, char *text, void *return_func) {
-   if(dialog_count == MAX_DIALOGS) {
-      debug_println("Can't create dialog\n");
+   int index = get_free_dialog();
+   if(index < 0) {
+      debug_println("Can't create dialog");
       return -1;
    }
-   int index = get_free_dialog();
-   if(index < 0) return -1;
    dialog_t *dialog = dialogs[index];
    if(!dialog_init(dialog, create_window(260, 100)))
       return -1;
@@ -331,12 +348,11 @@ int dialog_yesno(char *title, char *text, void *return_func) {
 }
 
 int dialog_input(char *text, void *return_func) {
-   if(dialog_count == MAX_DIALOGS) {
-      debug_println("Can't create dialog\n");
+   int index = get_free_dialog();
+   if(index < 0) {
+      debug_println("Can't create dialog");
       return -1;
    }
-   int index = get_free_dialog();
-   if(index < 0) return -1;
    dialog_t *input = dialogs[index];
    if(!dialog_init(input, create_window(260, 100)))
       return -1;
@@ -1287,6 +1303,7 @@ void dialog_init_overrides(int window) {
    wm_override(WM_MOUSERELEASE, &dialog_release, window);
    wm_override(WM_DRAG, &dialog_drag, window);
    wm_override(WM_KEYPRESS, &dialog_keypress, window);
+   wm_override(WM_KEYRELEASE, &dialog_keyrelease, window);
    wm_override(WM_CLOSE, &dialog_window_close, window);
    wm_override(WM_RESIZE, &dialog_resize, window);
    wm_override(WM_RIGHTCLICK, &dialog_rightclick, window);

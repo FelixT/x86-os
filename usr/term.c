@@ -40,7 +40,7 @@ void term_cmd_default(char *command) {
 void term_cmd_help() {
    // todo: mouse, tasks, prog1, prog2, files, viewbmp, test, desktop, mem, bg, bgimg, padding, redrawall, windowbg, windowtxt
    write_str("\n");
-   printf(" CLEAR, EXIT\n");
+   printf(" CLEAR, EXIT, ECHO <str>\n");
    printf(" LAUNCH<W> path, TASKS\n");
    printf(" FILES <path>, TEXT <path>\n");
    printf(" FAPPEND path buffer\n");
@@ -57,6 +57,10 @@ void term_cmd_clear() {
    clear();
    printf("User Terminal at %s\n", path);
    redraw();
+}
+
+void term_cmd_echo(char *arg) {
+   printf("%s\n", arg);
 }
 
 void term_cmd_files(char *arg) {
@@ -601,6 +605,8 @@ void checkcmd(char *buffer) {
       term_cmd_tasks();
    else if(strequ(command, "EXIT"))
       term_cmd_exit();
+   else if(strequ(command, "ECHO"))
+      term_cmd_echo(arg);
    else
       term_cmd_default(command);
 

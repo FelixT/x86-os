@@ -328,7 +328,7 @@ void mouse_update(int *relX, int *relY) {
       // clamp
       if(gui_mouse_x < 0) gui_mouse_x = 0;
       if(gui_mouse_y < 0) gui_mouse_y = 0;
-      if(gui_mouse_x >= surface.width - 4) gui_mouse_x = surface.width - 5;
+      if(gui_mouse_x >= surface.width - 2) gui_mouse_x = surface.width - 3;
       if(gui_mouse_y >= surface.height) gui_mouse_y = surface.height - 1;
    }
 

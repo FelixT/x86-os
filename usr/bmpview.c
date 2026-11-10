@@ -790,6 +790,12 @@ void _start(int argc, char **args) {
    drawbg();
    redraw();
 
+   int index = get_free_dialog();
+   dialog = get_dialog(index);
+   if(!dialog_init(dialog, -1))
+      exit(1);
+   dialog_set_title(dialog, "BMP Viewer");
+
    if(argc == 2) {
       if(*args[1] != '\0') {
          if(args[1][0] != '/') {
@@ -809,12 +815,6 @@ void _start(int argc, char **args) {
       // no file provided
       new_image(NULL, 0, 0);
    }
-
-   int index = get_free_dialog();
-   dialog = get_dialog(index);
-   if(!dialog_init(dialog, -1))
-      exit(1);
-   dialog_set_title(dialog, "BMP Viewer");
 
    wm_override(WM_CLICK, &click, -1);
    wm_override(WM_DRAG, &click, -1);

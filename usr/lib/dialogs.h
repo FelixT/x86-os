@@ -15,6 +15,7 @@
 #include "map.h"
 
 typedef enum {
+   DIALOG_CUSTOM,
    DIALOG_MSG,
    DIALOG_INPUT,
    DIALOG_COLOURPICKER,
@@ -43,6 +44,8 @@ typedef struct dialog_t {
    uint16_t *folder_icon_data;
    // window settings specific
    int parentWindow;
+
+   bool ctrl_held;
 
    void *state; // for extending dialog functionality
 } dialog_t;
@@ -76,6 +79,7 @@ uint16_t *dialog_load_icon(char *path, int *width, int *height);
 void dialog_close(wo_t *wo, int window);
 void dialog_init_scroll(dialog_t *dialog);
 void dialog_resize(uint16_t *fb, int width, int height, int window);
+void dialog_keypress(int c, int window);
 
 #define MAX_DIALOGS 10
 

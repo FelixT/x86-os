@@ -16,6 +16,7 @@ ui_mgr_t *ui_init(surface_t *surface, int window) {
    ui->default_menu = NULL;
    ui->shown_menu = NULL;
    ui->scrolled_y = 0;
+   ui->closed = false;
    return ui;
 }
 
@@ -101,9 +102,6 @@ static wo_t *ui_wo_at(ui_mgr_t *ui, int x, int y) {
 bool hid_menu = false;
 
 static void ui_finish_click(ui_mgr_t *ui) {
-   // a click that never got its release, e.g. the click handler opened a
-   // new window, which became selected and was sent the release instead.
-   // finish it the way ui_release would have
    wo_t *wo = ui->clicked;
    if(!wo) return;
    wo->clicked = false;
@@ -125,6 +123,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          ui->shown_menu->click_func(ui->shown_menu, context, x - ui->shown_menu->x, y - ui->shown_menu->y);
          menu_clicked = true;
       }
+      if(ui->closed) return menu_clicked;
       ui->shown_menu->visible = false;
       ui->shown_menu = NULL;
       clear_w(ui->window);
@@ -150,6 +149,7 @@ bool ui_click(ui_mgr_t *ui, int x, int y) {
          wo->click_func(wo, context, x - wo->x, y - wo->y);
       else if(wo->draw_func)
          wo->draw_func(wo, context);
+      if(ui->closed) return clicked;
 
       if(wo->click_func || wo->draw_func)
          ui_redraw_wo(ui, wo);
@@ -201,6 +201,7 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
          // call release func
          if(wo->release_func) {
             wo->release_func(wo, context, x - wo->x, y - wo->y);
+            if(ui->closed) return;
             ui_redraw_wo(ui, wo);
          } else if(wo->focusable && wo->draw_func) {
             wo->draw_func(wo, context);
@@ -211,9 +212,6 @@ void ui_release(ui_mgr_t *ui, int x, int y) {
       }
    }
 
-   // released outside the clicked wo, so it didn't get focus. this is also
-   // the case when the press went to another window: the first click on an
-   // inactive window only activates it, but its release still comes here
    wo_t *clicked = ui->clicked;
    if(clicked && clicked != ui->focused && clicked->focusable
    && clicked->enabled && clicked->visible) {
@@ -256,6 +254,7 @@ void ui_keypress(ui_mgr_t *ui, uint16_t c) {
       draw_context_t context = ui_get_context(ui);
       if(wo->keypress_func)
          wo->keypress_func(wo, c, ui->window);
+      if(ui->closed) return;
       if(wo->draw_func)
          wo->draw_func(wo, context);
 

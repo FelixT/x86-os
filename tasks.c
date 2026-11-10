@@ -118,6 +118,7 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].mutex_next_waiter = NULL;
    tasks[index].owned_mutexes = NULL;
    tasks[index].kernel_esp = 0;
+   tasks[index].ticks = 0;
    
    tasks[index].registers.eip = entry;
    tasks[index].process->no_threads++;
@@ -1593,3 +1594,7 @@ kobj_handle_t process_resolve_handle(process_t *process, kobj_handle_t h) {
    return h;
 }
 
+void tasks_tick() {
+   if(!switching) return;
+   get_current_task_state()->ticks++;   
+}

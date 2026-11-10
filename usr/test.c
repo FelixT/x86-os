@@ -12,20 +12,10 @@ void test_func(int func(void), char *name) {
 
    // time function and print output
    uint32_t start_time = get_tick();
-   //uint32_t start_heap = (uint32_t)sbrk(0);
-   uint32_t start_mem = used_blocks();
    int result = func();
    uint32_t end_time = get_tick();
-   //uint32_t end_heap = (uint32_t)sbrk(0);
-   uint32_t end_mem = used_blocks();
    uint32_t delta_time = end_time - start_time;
-   //uint32_t delta_heap = end_heap - start_heap;
-   uint32_t delta_mem = end_mem - start_mem;
-
    printf("Test '%s' %s (result %i) after %u ms", name, result>=0?"passed":"failed!", result, delta_time);
-   if(delta_mem) {
-      printf(" - Leaked %u blocks!", delta_mem);
-   }
    printf("\n");
 }
 

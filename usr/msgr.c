@@ -162,7 +162,7 @@ void _start() {
    wm_override(WM_CHECKCMD, &checkcmd, -1);
    override_msg(&msg_func);
 
-   while(true) { yield(); }
+   while(true) { snooze(); }
 
    exit(0);
 }

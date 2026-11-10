@@ -20,7 +20,7 @@
 
 #define TASK_STACK_SIZE 0x0004000
 
-#define TOTAL_TASKS 16
+#define TOTAL_TASKS 32
 #define MAX_TASK_THREADS 4
 
 #define USR_CODE_SEG (8*3)
@@ -143,6 +143,8 @@ typedef struct task_state_t {
    bool in_syscall;
    uint16_t syscall_no;
 
+   uint32_t ticks;
+
    kqueue_t event_queue;
    task_event_t event_buf[EVENT_QUEUE_SIZE];
 
@@ -237,5 +239,6 @@ void process_free_vm(process_t *process);
 vm_region_t *process_find_vm(process_t *process, uint32_t vaddr);
 uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index);
 
+void tasks_tick();
 
 #endif

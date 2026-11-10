@@ -1186,11 +1186,13 @@ static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg) 
    return bytes_read;
 }
 
-static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid) {
+static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid, uint32_t *channel_flags) {
    msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
    int r = msg_sync_receive_obj(port_uid, &recv_msg);
-   if(r >= 0)
+   if(r >= 0) {
       *call_uid = recv_msg.call_uid;
+      *channel_flags = recv_msg.channel_flags;
+   }
    return r;
 }
 

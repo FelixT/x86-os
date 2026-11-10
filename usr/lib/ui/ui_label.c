@@ -24,11 +24,11 @@ int ui_string_height(char *txt, int width) {
          height += get_font_info().height + get_font_info().padding;
          x = 0;
       } else {
-         x += get_font_info().width + get_font_info().padding;
-         if(x + get_font_info().width + get_font_info().padding > width) {
+         if(x > 0 && x + get_font_info().width + get_font_info().padding > width) {
             height += get_font_info().height + get_font_info().padding;
             x = 0;
          }
+         x += get_font_info().width + get_font_info().padding;
       }
    }
    return height;
@@ -67,7 +67,6 @@ void draw_label(wo_t *label, draw_context_t context) {
 
    // text 
    int text_width = ui_string_width(label_data->label);
-   int text_height = ui_string_height(label_data->label, width);
    char display_label[sizeof(label_data->label)];
 
    if(text_width > width) {
@@ -90,6 +89,8 @@ void draw_label(wo_t *label, draw_context_t context) {
       display_label[sizeof(display_label) - 1] = '\0';
    }
 
+   int text_height = ui_string_height(display_label, width);
+
    // center text
    int text_x = x + (label_data->halign ? (width - text_width) / 2 : label_data->padding_left);
    int text_y = y + (label_data->valign ? (height - text_height) / 2 : 0);
@@ -100,16 +101,16 @@ void draw_label(wo_t *label, draw_context_t context) {
          text_width = ui_string_width(display_label+i+1);
          text_x = x + (label_data->halign ? (width - text_width) / 2 : label_data->padding_left);
       } else {
+         if(text_x > x && text_x + get_font_info().width + get_font_info().padding > x + width) {
+            text_y += get_font_info().height + get_font_info().padding;
+            text_x = x;
+         }
          // somewhat inefficient
          char buf[2] = {display_label[i], '\0'};
          if(label_data->bordered)
             write_strat_w(buf, text_x, text_y+1, light, context.window); // shadow
          write_strat_w(buf, text_x, text_y, txt, context.window);
          text_x += get_font_info().width + get_font_info().padding;
-         if(text_x + get_font_info().width + get_font_info().padding > x + width) {
-            text_y += get_font_info().height + get_font_info().padding;
-            text_x = x;
-         }
       }
    }
 }

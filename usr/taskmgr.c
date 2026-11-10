@@ -33,8 +33,7 @@ void task_show_info(int index) {
    }
 
    label_t *label_memory = dialog_get(dialog, "info_label_memory")->data;
-   int kb = task->no_allocated*0x1000/1000;
-   snprintf(label_memory->label, sizeof(label_memory->label), "Kmalloc: %i pages (%i kb)\nHeap size: %i", task->no_allocated, kb, task->heap_end - task->heap_start);
+   snprintf(label_memory->label, sizeof(label_memory->label), "Heap size: %i\nTicks: %u", task->heap_end - task->heap_start, task->ticks);
 
    ui_redraw(dialog->ui);
 }
@@ -120,6 +119,112 @@ void close_callback(wo_t *wo, int window) {
    (void)wo;
    close_window(window);
    exit(0);
+}
+
+void get_key(uint32_t uid, char out[5]) {
+   snprintf(out, 5, "%h", uid);
+}
+
+static bool monitor_open(dialog_t *m_dialog, int w, int tid) {
+   return m_dialog->active && m_dialog->window == w && (int)m_dialog->state == tid;
+}
+
+void monitor_thread() {
+   int w = create_window(360, 220);
+   if(w < 0) _exit(1);
+   int index = get_free_dialog();
+   if(index < 0) {
+      close_window(w);
+      _exit(1);
+   }
+   dialog_t *m_dialog = get_dialog(index);
+   if(!dialog_init(m_dialog, w)) {
+      close_window(w);
+      _exit(1);
+   }
+   int tid = get_taskid();
+   m_dialog->state = (void*)tid; // set after dialog_init, which resets state
+   dialog_set_title(m_dialog, "Task Monitor");
+
+   int t = get_tasks(NULL, 0);
+   api_task_t *tasks = malloc(sizeof(api_task_t)*t);
+   int read = min(t, get_tasks(tasks, t));
+   map_t map; // task uid->api_task_t*
+   map_init(&map, read*2);
+   for(int i = 0; i < read; i++) {
+      if(!tasks[i].enabled) continue;
+      char key[9];
+      get_key(tasks[i].uid, key);
+      map_insert(&map, key, &tasks[i]);
+   }
+
+   while(true) {
+      sleep(1000);
+      if(!monitor_open(m_dialog, w, tid))
+         break;
+
+      t = get_tasks(NULL, 0);
+      api_task_t *new_tasks = malloc(sizeof(api_task_t)*t);
+      int new_read = min(t, get_tasks(new_tasks, t));
+      clear_w(w);
+      for(int i = 0; i < new_read; i++) {
+         if(!new_tasks[i].enabled) continue;
+
+         char key[9];
+         get_key(new_tasks[i].uid, key);
+
+         api_task_t *old = map_lookup(&map, key);
+         char buf[54];
+         buf[52] = '\n';
+         buf[53] = '\0';
+         memset(buf, ' ', 52);
+         char buf1[4];
+         if(old)
+            strcpy(buf1, "Old");
+         else
+            strcpy(buf1, "New");
+
+         char buf2[32];
+         snprintf(buf2, 31, "%s task: %u %s", buf1, new_tasks[i].uid, new_tasks[i].main_window_name);
+
+         char buf3[16];
+         uint32_t ticks = old ? new_tasks[i].ticks - old->ticks : new_tasks[i].ticks;
+         snprintf(buf3, 15, "ticks: %u", ticks);
+
+         memcpy(buf, buf2, strlen(buf2));
+         memcpy(buf + 32, buf3, strlen(buf3));
+
+         write_str_w(buf, w);
+      }
+
+      free(tasks);
+      tasks = new_tasks;
+      map_free(&map);
+      read = new_read;
+      map_init(&map, read*2);
+
+      for(int i = 0; i < read; i++) {
+         if(!tasks[i].enabled) continue;
+         char key[9];
+         get_key(tasks[i].uid, key);
+         map_insert(&map, key, &tasks[i]);
+      }
+   }
+
+   free(tasks);
+   map_free(&map);
+   _exit(0);
+}
+
+void keypress(uint16_t c, int w) {
+   if(dialog->ctrl_held) {
+      if(c == 'r')
+         refresh_callback(NULL, -1);
+      if(c == 'm')
+         create_thread(&monitor_thread);
+   }
+   dialog_keypress(c, w);
+   end_subroutine();
 }
 
 void _start() {
@@ -208,6 +313,8 @@ void _start() {
    show_tasks();
    clear();
    ui_redraw(dialog->ui);
+
+   wm_override(WM_KEYPRESS, &keypress, -1);
 
    while(true) {
       snooze();

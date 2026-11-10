@@ -13,6 +13,7 @@ typedef struct api_task_t {
    uint32_t uid;
    bool enabled;
    bool paused;
+   uint32_t ticks;
    int parentid;
    // for processes
    uint32_t process_uid;
@@ -121,6 +122,9 @@ typedef struct msg_recv_t {
    int handles_sent;
    int handles_received;
    uint32_t call_uid; // set on receive
+   uint32_t channel_flags;
+   uint32_t channel_uid; // channel the message or flags came from
+   uint32_t message_flags;
 } msg_recv_t;
 
 typedef enum { // callback args:

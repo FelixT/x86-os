@@ -46,6 +46,7 @@ typedef struct msg_channel_t {
    bool server_notify_pending;
    // sync
    uint32_t call_uid;
+   bool call_pending; // client_send_msg holds a call the server hasn't received yet
    msg_send_t client_send_msg; // store sent msg until server receives
    msg_recv_t client_recv_msg; // stored reply msg until server replies
    msg_recv_t *client_recv_msg_user; // client's msg_recv_t* (in its address space), receipt written on reply
@@ -80,6 +81,7 @@ typedef struct msg_copy_receipt_t {
    int handles; // handles copied
    int sender_status; // 0 for no error, < 0 for msg_err_t
    int receiver_status; // 0 for no error
+   uint32_t channel_uid;
 } msg_copy_receipt_t;
 
 uint32_t create_port(task_state_t *task, char *name, bool client_reserves);
@@ -96,7 +98,8 @@ bool msg_notif_is_stale(task_state_t *task, uint32_t port_uid, uint32_t channel_
 int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_send_t *send_msg, msg_recv_t *recv_msg);
 int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_recv_t *recv_msg);
 int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send_t *send_msg);
-int msg_validate_send(msg_send_t *msg);
-int msg_validate_recv(msg_recv_t *msg);
+int msg_validate_send(task_state_t *task, msg_send_t *msg);
+int msg_validate_recv(task_state_t *task, msg_recv_t *msg);
+bool msg_dispatch_queued(task_state_t *task);
 
 #endif

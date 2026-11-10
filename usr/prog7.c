@@ -84,7 +84,8 @@ void _start(int argc, char **args) {
    // wait for process to send
    uint8_t buf;
    uint32_t call_uid;
-   if(MSG_IS_ERR(msg_sync_receive(port, &buf, 1, &call_uid)))
+   uint32_t channel_flags;
+   if(MSG_IS_ERR(msg_sync_receive(port, &buf, 1, &call_uid, &channel_flags)))
       exit(1);
 
    write_str("Connected\n");
