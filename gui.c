@@ -121,9 +121,9 @@ void gui_init_thread() {
    // kthread_exit
 }
 
-void gui_init_meat(void *regs, void *msg) {
-   // needs to be run from interrupt routine with interrupts disabled
-   (void)msg;
+// final init step - doesn't return (launches straight into idle)
+void gui_init_complete() {
+   asm volatile("cli"); // disable interrupts
    gui_writestr("Enabling ATA HD\n", COLOUR_ORANGE);
    ata_identify(true, true);
    gui_writestr("Enabling FAT\n", COLOUR_ORANGE);
@@ -135,19 +135,23 @@ void gui_init_meat(void *regs, void *msg) {
    page_init();
    gui_writestr("Enabling desktop\n", COLOUR_ORANGE);
    desktop_init();
-   gui_writestr("Enabling tasks\n", COLOUR_ORANGE);
-   tasks_init((registers_t*)regs);
    gui_writestr("Set up timer\n", COLOUR_ORANGE);
    timer_set_hz(1000);
    gui_writestr("Enabling mouse\n", COLOUR_ORANGE);
    mouse_enable();
 
+   gettasks()[0].reserved = true; // reserved for idle
    LAUNCH_KTHREAD(&gui_init_thread, false);
+
    gui_writestr("\nInit complete\n", COLOUR_CYAN);
+
+   gui_writestr("Enabling tasks\n", COLOUR_ORANGE);
 
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
    setSelectedWindowIndex(-1);
+
+   tasks_init();
 }
 
 void gui_init(void) {
@@ -171,8 +175,6 @@ void gui_init(void) {
    windowmgr_init();
 
    debug_printf("Launched GUI with %ix%i framebuffer at 0x%h\n", surface.width, surface.height, surface.buffer);
-
-   events_add(1, &gui_init_meat, NULL, -1);
 }
 
 void gui_redrawall() { // may yield

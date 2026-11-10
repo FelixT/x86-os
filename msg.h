@@ -70,6 +70,7 @@ typedef struct msg_port_t {
    msg_channel_t *channels[MSG_MAX_CHANNELS];
    int channel_count;
    bool client_reserves; // clients sending MSG_EXPECT_REPLY are required to reserve a queue spot for the response (ie to stop the server being blocked)
+   uint32_t signal_flags;
    // sync
    msg_waiter_t waiters[MAX_TASK_THREADS];
    
@@ -101,5 +102,7 @@ int msg_reply(registers_t *regs, task_state_t *task, uint32_t call_uid, msg_send
 int msg_validate_send(task_state_t *task, msg_send_t *msg);
 int msg_validate_recv(task_state_t *task, msg_recv_t *msg);
 bool msg_dispatch_queued(task_state_t *task);
+int port_signal(msg_port_t *port, uint32_t flag);
+msg_port_t *find_port_by_uid(uint32_t uid);
 
 #endif

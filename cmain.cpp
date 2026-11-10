@@ -31,6 +31,8 @@ void cmain_gui_init() {
    register_irq(12, mouse_handler);
    register_irq(14, ata_interrupt); // acknowledge
    register_irq(16, software_handler);
+
+   gui_init_complete();
 }
 
 void cmain_cli_init() {

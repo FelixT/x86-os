@@ -17,10 +17,8 @@ static void kmutex_wait(kmutex_t *mutex) {
       mutex->waiters = task;
    mutex->waiters_tail = task;
 
-   debug_printf("kmutex_wait: pausing task\n");
    task_pause(task, PAUSE_KSYNC);
    kernel_block();
-   debug_printf("kmutex_wait: resumed\n");
    while(task->mutex) {
       debug_printf("kmutex_wait: resumed outside of ksync\n");
       task_pause(task, PAUSE_KSYNC);

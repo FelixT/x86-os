@@ -15,7 +15,7 @@ static uint32_t child_channel_uid = (uint32_t)-1; // used by sender to periodica
 // 'child' client process sends msg 'child' to the server and waits until it receives a msg from the server (via snooze) repeatedly
 
 void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
-   if(flags & MSG_FLAG_CLOSED) {
+   if(channel_uid && flags & MSG_FLAG_CLOSED) {
       printf("server: channel %u closed by client\n", channel_uid);
       end_subroutine();
    }
@@ -247,12 +247,12 @@ void sync_main() {
    uint32_t call_id;
 
    while(true) {
-      uint32_t channel_flags;
-      int r = msg_sync_receive(port, (uint8_t*)buf, 64, &call_id, &channel_flags);
+      uint32_t channel_uid, flags;
+      int r = msg_sync_receive(port, (uint8_t*)buf, 64, &call_id, &channel_uid, &flags);
       if(r == 0) {
          // flags
-         printf("server read flags %u\n", channel_flags);
-         if(channel_flags & MSG_FLAG_CLOSED)
+         printf("server read flags %u\n", flags);
+         if(channel_uid && flags & MSG_FLAG_CLOSED)
             exit(1);
       }
       if(r > 0) {

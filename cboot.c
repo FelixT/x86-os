@@ -75,14 +75,13 @@ void gui_printf(char *format, uint16_t colour, ...) {
    cboot_writestr(buffer);
 }
 
-bool kernel_yield_if_blocking() {
+void kernel_yield_if_blocking() {
    // can't yield during boot
-   return false;
 }
 
-bool kernel_exit_resume(registers_t *regs, int next) {
-   (void)regs;
-   (void)next;
+bool task_interrupt_set(int taskid, bool replace) {
+   (void)taskid;
+   (void)replace;
    return false;
 }
 

@@ -1,5 +1,4 @@
 #include "api.h"
-#include "lib/api.h" // shared header
 
 #include "tasks.h"
 #include "window.h"
@@ -17,6 +16,104 @@
 #include "pci.h"
 #include "msg.h"
 #include "dma.h"
+
+static void (*const api_handlers[API_RESERVED_END])(registers_t*) = {
+   [API_WRITE_STRING] = &api_write_string,
+   [API_GET_TASK_EVENT_COUNT] = &api_get_task_event_count,
+   [API_YIELD] = &api_yield,
+   [API_CONTROL_HANDLE] = &api_control_handle,
+   [API_HANDLE_INFO] = &api_handle_info,
+   [API_WRITE_UINT] = &api_write_uint,
+   [API_RETURN_FRAMEBUFFER] = &api_return_framebuffer,
+   [API_REDRAW_WINDOW] = &api_redraw_window,
+   [API_END_TASK] = &api_end_task,
+   [API_WM_OVERRIDE] = &api_wm_override,
+   [API_END_SUBROUTINE] = &api_end_subroutine,
+   [API_RETURN_WINDOW_WIDTH] = &api_return_window_width,
+   [API_RETURN_WINDOW_HEIGHT] = &api_return_window_height,
+   [API_SET_WINDOW_SETTING] = &api_set_window_setting,
+   [API_GET_WINDOW_SETTING] = &api_get_window_setting,
+   [API_SET_WINDOW_POSITION] = &api_set_window_position,
+   [API_DRAW_BMP] = &api_draw_bmp,
+   [API_WRITE_STRING_AT] = &api_write_string_at,
+   [API_CLEAR_WINDOW] = &api_clear_window,
+   [API_SET_WINDOW_MINIMISED] = &api_set_window_minimised,
+   [API_READ_DIR] = &api_read_dir,
+   [API_GET_WINDOW_POSITION] = &api_get_window_position,
+   [API_QUEUE_EVENT] = &api_queue_event,
+   [API_SLEEP] = &api_sleep,
+   [API_LAUNCH_TASK] = &api_launch_task,
+   [API_GET_SETTING] = &api_get_setting,
+   [API_SET_SETTING] = &api_set_setting,
+   [API_REDRAW_REGION] = &api_redraw_region,
+   [API_NEW_FILE] = &api_new_file,
+   [API_SET_WINDOW_TITLE] = &api_set_window_title,
+   [API_SET_WORKING_DIR] = &api_set_working_dir,
+   [API_GET_WORKING_DIR] = &api_get_working_dir,
+   [API_READ] = &api_read,
+   [API_SEEK] = &api_seek,
+   [API_DEBUG_WRITE_STR] = &api_debug_write_str,
+   [API_MKDIR] = &api_mkdir,
+   [API_SBRK] = &api_sbrk,
+   [API_OPEN] = &api_open,
+   [API_WRITE] = &api_write,
+   [API_CREATE_SCROLLBAR] = &api_create_scrollbar,
+   [API_SET_SCROLLABLE_HEIGHT] = &api_set_scrollable_height,
+   [API_SCROLL_TO] = &api_scroll_to,
+   [API_GET_TIMER_TICK] = &api_get_timer_tick,
+   [API_RENAME] = &api_rename,
+   [API_FSIZE] = &api_fsize,
+   [API_SET_WINDOW_SIZE] = &api_set_window_size,
+   [API_GET_FONT_INFO] = &api_get_font_info,
+   [API_CREATE_WINDOW] = &api_create_window,
+   [API_CLOSE_WINDOW] = &api_close_window,
+   [API_UNMAP] = &api_unmap,
+   [API_CREATE_THREAD] = &api_create_thread,
+   [API_GET_TASKS] = &api_get_tasks,
+   [API_KILL_TASK] = &api_kill_task,
+   [API_UNLINK] = &api_unlink,
+   [API_RMDIR] = &api_rmdir,
+   [API_PIPE] = &api_pipe,
+   [API_UNPAUSE] = &api_unpause,
+   [API_DUP2] = &api_dup2,
+   [API_CLOSE] = &api_close,
+   [API_DUP_HANDLE] = &api_dup_handle,
+   [API_GET_TIME] = &api_get_time,
+   [API_FUTEX_WAIT] = &api_futex_wait,
+   [API_FUTEX_WAKE] = &api_futex_wake,
+   [API_SHARED_CREATE] = &api_shared_create,
+   [API_FOCUS_TASK] = &api_focus_task,
+   [API_MAP] = &api_map,
+   [API_GET_TASKID] = &api_get_taskid,
+   [API_PCI_CONNECT] = &api_pci_connect,
+   [API_PCI_EXISTS] = &api_pci_exists,
+   [API_DMA] = &api_dma,
+   [API_CLOSE_HANDLE] = &api_close_handle,
+   [API_ESCALATE] = &api_escalate,
+   [API_FPSIZE] = &api_fpsize,
+   [API_TRUNCATE] = &api_truncate,
+   [API_CREATE_PORT] = &api_create_port,
+   [API_PORT_CONNECT] = &api_port_connect,
+   [API_OVERRIDE_MSG] = &api_override_msg,
+   [API_MSG_SEND] = &api_msg_send,
+   [API_MSG_READ] = &api_msg_read,
+   [API_WAIT_ON_RECEIVE] = &api_wait_on_receive,
+   [API_SNOOZE] = &api_snooze,
+   [API_PORT_CLOSE] = &api_port_close,
+   [API_PORT_DISCONNECT] = &api_port_disconnect,
+   [API_MSG_CALL] = &api_msg_call,
+   [API_MSG_RECEIVE] = &api_msg_receive,
+   [API_MSG_REPLY] = &api_msg_reply,
+};
+
+// route syscall to handler
+void api_route(uint32_t call, registers_t *regs) {
+   if(call == 0 || call >= API_RESERVED_END || !api_handlers[call]) {
+      debug_printf("Unknown syscall %i\n", call);
+      return;
+   }
+   api_handlers[call](regs);
+}
 
 // helper funcs
 
@@ -131,10 +228,6 @@ void api_write_uint(registers_t *regs) {
    api_printf("%u", regs->ebx);
 }
 
-void api_write_newline() {
-   api_printf("\n");
-}
-
 void api_write_string_at(registers_t *regs) {
    // IN: ebx = string address
    // IN: ecx = x
@@ -155,8 +248,7 @@ void api_write_string_at(registers_t *regs) {
 void api_yield(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    if(!task_execute_queued_subroutine(regs, task->task_id)) { // launch queued routine if any
-      task->in_syscall = false; // set early as switch_task may not return
-      switch_task(regs, true);
+      task_interrupt_set(-1, true); // yield once the syscall finishes
    }
 }
 
@@ -666,7 +758,7 @@ void api_read(registers_t *regs) {
          file->pipe->read_size = maxsize;
       }
       task_pause(task, PAUSE_READ);
-      switch_task(regs, false); // yield
+      task_interrupt_set(-1, true); // yield once the syscall finishes
    }
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
       int writer_task = file->pipe->write_waiting_task;
@@ -732,7 +824,7 @@ void api_write(registers_t *regs) {
       file->pipe->write_buf = buffer;
       file->pipe->write_size = maxsize;
       task_pause(task, PAUSE_READ);
-      switch_task(regs, false); // yield
+      task_interrupt_set(-1, true); // yield once the syscall finishes
    }
 
    if(result > 0 && file->type == FS_TYPE_PIPE && file->pipe) {
@@ -1338,13 +1430,14 @@ void api_get_tasks(registers_t *regs) {
 }
 
 void api_sleep_callback(void *regs, void *msg) {
+   (void)regs;
    uint32_t task_uid = (uint32_t)msg;
    task_state_t *tasks = gettasks();
    for(int i = 0; i < TOTAL_TASKS; i++) {
       task_state_t *task = &tasks[i];
       if(!task->enabled || task->task_uid != task_uid) continue;
       task_resume(task);
-      switch_to_task(task->task_id, regs); // wake
+      task_interrupt_set(i, true); // wake
       return;
    }
 }
@@ -1357,7 +1450,7 @@ void api_sleep(registers_t *regs) {
    task_state_t *task = get_current_task_state();
    task_pause(task, PAUSE_SLEEP);
    events_add(ticks, &api_sleep_callback, (void*)task->task_uid, -1);
-   switch_task(regs, false); // yield
+   task_interrupt_set(-1, true); // yield once the syscall finishes
 }
 
 void api_get_timer_tick(registers_t *regs) {
@@ -1495,7 +1588,7 @@ void api_futex_wait(registers_t *regs) {
    if(result == FUTEX_WAIT_BLOCK) {
       task_pause(get_current_task_state(), PAUSE_FUTEX);
       regs->ebx = 0;
-      switch_task(regs, false);
+      task_interrupt_set(-1, true); // yield once the syscall finishes
    }
    if(result == FUTEX_WAIT_FAIL) {
       debug_printf("futex_wait: failed to read futex value\n");
@@ -1710,7 +1803,7 @@ void api_escalate(registers_t *regs) {
    window_minimise(getWindow(popup), false);
 
    task_pause(task, PAUSE_ESCALATE);
-   switch_task(regs, false); // yield
+   task_interrupt_set(-1, true); // yield once the syscall finishes
 }
 
 void api_create_port(registers_t *regs) {
@@ -1808,7 +1901,7 @@ void api_snooze(registers_t *regs) {
    if(task_execute_queued_subroutine(regs, get_current_task()))
       return;
    if(task->crashed) {
-      switch_task(regs, false);
+      task_interrupt_set(-1, true); // yield once the syscall finishes
       return; // task crashed executing subroutine
    }
    if(task->wake_pending) {
@@ -1816,7 +1909,7 @@ void api_snooze(registers_t *regs) {
       return;
    }
    task_pause(task, PAUSE_SNOOZE);
-   switch_task(regs, false); // yield
+   task_interrupt_set(-1, true); // yield once the syscall finishes
 }
 
 void api_wait_on_receive(registers_t *regs) {
@@ -1830,7 +1923,7 @@ void api_wait_on_receive(registers_t *regs) {
    bool success = msg_wait_on_receive(task, port_uid, channel_uid);
    regs->ebx = success;
    if(success)
-      switch_task(regs, false); // yield
+      task_interrupt_set(-1, true); // yield once the syscall finishes
 }
 
 void api_port_close(registers_t *regs) {

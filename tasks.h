@@ -8,7 +8,6 @@
 #include "gui.h"
 #include "fat.h"
 #include "memory.h"
-#include "gdt.h"
 #include "interrupts.h"
 #include "registers_t.h"
 #include "elf.h"
@@ -142,6 +141,7 @@ typedef struct task_state_t {
    task_event_type_t routine;
    bool in_syscall;
    uint16_t syscall_no;
+   bool allow_irq; // while true, interrupts can run on this task stack
 
    uint32_t ticks;
 
@@ -169,9 +169,10 @@ void task_discard_entry(int index);
 void free_launch_args(char **args, int argc);
 bool end_task(int index, registers_t *regs);
 void tasks_alloc();
-void tasks_init(registers_t *regs);
+void tasks_init();
 void switch_task(registers_t *regs, bool resume);
 bool switch_to_task(int index, registers_t *regs);
+void switch_from_user(registers_t *regs, int index);
 bool tasks_launch_binary(registers_t *regs, char *path);
 int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimised);
 void task_abort_setup(int index);
@@ -181,13 +182,14 @@ uint32_t get_task_event_counter();
 void pause_task(int index, registers_t *regs); // freeze task after crash
 bool kernel_yield();
 void kernel_block();
-bool kernel_yield_if_blocking();
+void kernel_yield_if_blocking();
 bool kernel_yield_to(int next_index);
+bool kernel_yield_parking();
+bool kernel_yield_to_parking(int next_index);
 bool launch_kthread(void *func, char *name, bool run);
 bool is_kthread(task_state_t *task);
 #define LAUNCH_KTHREAD(func, run) launch_kthread(func, #func, run)
 void end_kthread(int task);
-bool kernel_exit_resume(registers_t *regs, int task);
 
 task_state_t *gettasks();
 
@@ -240,5 +242,8 @@ vm_region_t *process_find_vm(process_t *process, uint32_t vaddr);
 uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index);
 
 void tasks_tick();
+void task_interrupt_save();
+void task_interrupt_complete(registers_t *regs);
+bool task_interrupt_set(int taskid, bool replace);
 
 #endif

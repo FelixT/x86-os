@@ -232,6 +232,7 @@ void term_cmd_help() {
    window_term_printf("  BG colour, BGIMG path\n");
    window_term_printf("  PADDING size, REDRAWALL\n");
    window_term_printf("  PCI, TASKI <task>, CHANNELS\n");
+   window_term_printf("  SIGNAL <port> <flag>\n");
    window_term_printf("  HANDLES <task>\n");
 }
 
@@ -266,6 +267,12 @@ void term_cmd_tasks() {
       window_term_printf("<w%i:%s>", w, w > -1 ? getWindow(w)->title : process->exe_path);
       if(is_kthread(task)) {
          window_term_printf(" kthread");
+         if(i == 0) {
+            int tmp = getSelectedWindow()->txtcolour;
+            getSelectedWindow()->txtcolour = rgb16(140, 140, 140);
+            window_term_printf(" %i ticks", tasks[i].ticks);
+            getSelectedWindow()->txtcolour = tmp;
+         }
          continue;
       }
 
@@ -476,6 +483,23 @@ void term_cmd_channels() {
    }
 }
 
+void term_cmd_signal(char *arg) {
+   char c_uid[9], c_flag[9];
+   if(!strsplit(c_uid, c_flag, arg, ' ')) {
+      window_term_printf("Invalid args\n");
+      return;
+   }
+   uint32_t uid = window_term_argtouint(c_uid);
+   uint32_t flag = window_term_argtouint(c_flag);
+   msg_port_t *port = find_port_by_uid(uid);
+   if(!port) {
+      window_term_printf("Port not found %u\n", uid);
+      return;
+   }
+   int r = port_signal(port, flag);
+   window_term_printf("Sent signal %u to port %u - status %i\n", flag, uid, r);
+}
+
 void term_cmd_mtrr() {
    mtrr_print();
 }
@@ -566,6 +590,8 @@ void window_term_checkcmd(void *window) {
       term_cmd_taski((char*)arg);
    else if(strequ(command, "CHANNELS"))
       term_cmd_channels();
+   else if(strequ(command, "SIGNAL"))
+      term_cmd_signal(arg);
    else if(strequ(command, "MTRR"))
       term_cmd_mtrr();
    else if(strequ(command, "HANDLES"))

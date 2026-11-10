@@ -8,7 +8,6 @@ export FLAGS="-ffreestanding -nostartfiles -nostdlib -mgeneral-regs-only -Wall -
 # asm raw binaries
 nasm usr/prog1.asm -f bin -o o/prog1.bin
 nasm usr/prog2.asm -f bin -o o/prog2.bin
-nasm usr/progidle.asm -f bin -o o/progidle.bin
 
 # elf binaries
 
@@ -52,7 +51,6 @@ $GCC $FLAGS usr/desktop.c -o o/desktop.elf $DIALOGS_LIB
 # copy programs to fs
 cp o/prog1.bin fs_root/sys/prog1.bin
 cp o/prog2.bin fs_root/sys/prog2.bin
-cp o/progidle.bin fs_root/sys/progidle.bin
 cp o/prog3.elf fs_root/sys/prog3.elf
 cp o/prog4.elf fs_root/sys/prog4.elf
 cp o/files.elf fs_root/sys/files.elf

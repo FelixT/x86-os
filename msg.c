@@ -18,7 +18,7 @@
 // todo: large messages use shared memory (cow)
 
 uint32_t msg_uid_counter = 0;
-uint32_t channel_uid_counter = 0;
+uint32_t channel_uid_counter = 1;
 uint32_t call_uid_counter = 1;
 
 msg_port_t *ports = NULL;
@@ -85,6 +85,7 @@ uint32_t create_port(task_state_t *task, char *name, bool client_reserves) {
    for(int i = 0; i < MAX_TASK_THREADS; i++)
       port->waiters[i].active = false;
    port->client_reserves = client_reserves;
+   port->signal_flags = 0;
    port->next = ports;
    ports = port;
    return port->uid;
@@ -206,12 +207,12 @@ typedef enum {
    MSG_NOTIFY_DROPPED // msg_func couldn't be queued - retry
 } msg_notify_status_t;
 
-static msg_notify_status_t call_msg_func(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint32_t channel_flags) {
+static msg_notify_status_t call_msg_func(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
    if(!task->msg_func) {
       task_wake(task);
       return MSG_NOTIFY_NO_CALLBACK;
    }
-   uint32_t args[3] = { port_uid, channel_uid, channel_flags };
+   uint32_t args[3] = { port_uid, channel_uid, flags };
    bool delivered;
    if(regs)
       delivered = task_call_subroutine(regs, task, E_MSG, (uint32_t)task->msg_func, args, 3);
@@ -239,7 +240,7 @@ static task_state_t *msg_get_task(int task_id, uint32_t task_uid) {
 
 static int msg_find_waiter(msg_port_t *port);
 static int msg_deliver_queued(registers_t *regs, task_state_t *task, msg_port_t *port, msg_channel_t *channel, msg_recv_t *recv_msg, msg_recv_t *recv_msg_user);
-static int msg_deliver_flags(registers_t *regs, task_state_t *task, msg_channel_t *channel, msg_recv_t *recv_msg);
+static int msg_deliver_flags(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint32_t flags, msg_recv_t *recv_msg);
 
 // deliver async send to paused waiter
 static bool msg_deliver_to_waiter(msg_port_t *port, msg_channel_t *channel) {
@@ -250,12 +251,15 @@ static bool msg_deliver_to_waiter(msg_port_t *port, msg_channel_t *channel) {
    if(!task) return false;
 
    int r;
-   if(channel->queues[0].count > 0)
+   if(channel->queues[0].count > 0) {
       r = msg_deliver_queued(&task->registers, task, port, channel, &waiter->recv_msg, waiter->recv_msg_user);
-   else if(channel->server_flags)
-      r = msg_deliver_flags(&task->registers, task, channel, waiter->recv_msg_user);
-   else
+   } else if(channel->server_flags) {
+      r = msg_deliver_flags(&task->registers, task, channel->uid, channel->server_flags, waiter->recv_msg_user);
+      if(r >= 0)
+         channel->server_flags = 0;
+   } else {
       return false;
+   }
 
    if(r < 0)
       task->registers.ebx = r;
@@ -380,6 +384,38 @@ int port_send(registers_t *regs, task_state_t *task, uint32_t port_uid, uint32_t
    return 0; // success
 }
 
+// set event flags & wake task
+int port_signal(msg_port_t *port, uint32_t flag) {
+   port->signal_flags |= flag; // stays set even if delivery failure is returned
+   int w = msg_find_waiter(port);
+   // no waiters
+   if(w < 0) {
+      task_state_t *task = msg_get_task(port->owner_taskid, port->owner_taskuid);
+      if(!task) return MSG_ERR_INVALID_TASK;
+      msg_notify_status_t notified = call_msg_func(NULL, task, port->uid, 0, port->signal_flags); // queue msg
+      if(notified == MSG_NOTIFY_DROPPED) { // queue full
+         debug_printf("port_signal: dropped\n");
+         return MSG_ERR_QUEUE_FULL;
+      }
+      if(notified == MSG_NOTIFY_DELIVERED)
+         port->signal_flags = 0;
+
+      return 0; // success
+   }
+
+   msg_waiter_t *waiter = &port->waiters[w];
+   task_state_t *waiter_task = msg_get_task(waiter->task_id, waiter->task_uid);
+   if(!waiter_task) {
+      return MSG_ERR_INVALID_TASK;
+   }
+   int r = msg_deliver_flags(&waiter_task->registers, waiter_task, 0, port->signal_flags, waiter->recv_msg_user);
+   if(r >= 0)
+      port->signal_flags = 0;
+   waiter_task->registers.ebx = r;
+   waiter->active = false;
+   task_resume(waiter_task);
+   return r;
+}
 
 static bool msg_add_waiter(msg_port_t *port, task_state_t *task, msg_recv_t *recv_msg) {
    // add to waiter list
@@ -440,15 +476,15 @@ static int msg_copy_from_sender(task_state_t *send_task, void *dest, void *src, 
    return copy_from_task(send_task->task_id, dest, src, size);
 }
 
-// write kernel fields to receiver's  msg_recv_t*
-static bool msg_write_receipt(task_state_t *task, msg_recv_t *user_recv_msg, msg_send_t *send_msg, msg_copy_receipt_t *receipt, uint32_t call_uid, uint32_t channel_flags, uint32_t message_flags) {
+// write kernel fields to receiver's msg_recv_t*
+static bool msg_write_receipt(task_state_t *task, msg_recv_t *user_recv_msg, msg_send_t *send_msg, msg_copy_receipt_t *receipt, uint32_t call_uid, uint32_t flags, uint32_t message_flags) {
    msg_recv_t out;
    out.bytes_received = receipt->bytes;
    out.sent_size = send_msg->size;
    out.handles_sent = send_msg->handle_count;
    out.handles_received = receipt->handles;
    out.call_uid = call_uid;
-   out.channel_flags = channel_flags;
+   out.flags = flags;
    out.channel_uid = receipt->channel_uid;
    out.message_flags = message_flags;
    size_t off = offsetof(msg_recv_t, bytes_received);
@@ -627,7 +663,7 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_se
       channel->client_send_msg = *send_msg;
       channel->call_pending = true;
       task_pause(task, PAUSE_MSG_CALL); // task is paused until server replies
-      switch_task(regs, false); // yield
+      task_interrupt_set(-1, true); // yield once the syscall finishes
       return 0;
    }
 
@@ -664,6 +700,8 @@ int msg_call(registers_t *regs, task_state_t *task, uint32_t channel_uid, msg_se
 }
 
 // validate usermode msg_send_t*
+// called from msg.c's entry points (port_send, msg_call, msg_reply), not the api layer,
+// because msg_reply has to fail the waiting client as well when the reply is invalid
 int msg_validate_send(task_state_t *task, msg_send_t *msg) {
    if(!task_validate_mem(task, msg, sizeof(msg_send_t), 0))
       return MSG_ERR_INVALID_MSG;
@@ -749,13 +787,12 @@ static int msg_deliver_queued(registers_t *regs, task_state_t *task, msg_port_t 
    return 0;
 }
 
-static int msg_deliver_flags(registers_t *regs, task_state_t *task, msg_channel_t *channel, msg_recv_t *recv_msg) {
-   msg_copy_receipt_t r = {.bytes = 0, .handles = 0, .receiver_status = 0, .sender_status = 0, .channel_uid = channel->uid};
+static int msg_deliver_flags(registers_t *regs, task_state_t *task, uint32_t channel_uid, uint32_t flags, msg_recv_t *recv_msg) {
+   msg_copy_receipt_t r = {.bytes = 0, .handles = 0, .receiver_status = 0, .sender_status = 0, .channel_uid = channel_uid};
    msg_send_t send_msg = {.size = 0, .handle_count = 0};
-   if(!msg_write_receipt(task, recv_msg, &send_msg, &r, 0, channel->server_flags, 0))
+   if(!msg_write_receipt(task, recv_msg, &send_msg, &r, 0, flags, 0))
       return MSG_ERR_INVALID_MSG; // invalid recv_msg
    // success
-   channel->server_flags = 0;
    regs->ebx = 0;
    return 0;
 }
@@ -774,6 +811,14 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_re
 
    if(task->process->uid != port->owner_uid)
       return MSG_ERR_DENIED; // any thread of server process can receive
+
+   // check port signal flags
+   if(port->signal_flags) {
+      int r = msg_deliver_flags(regs, task, 0, port->signal_flags, recv_msg);
+      if(r >= 0)
+         port->signal_flags = 0;
+      return r;
+   }
 
    // check for stored send
    for(int i = 0; i < port->channel_count; i++) {
@@ -814,8 +859,12 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_re
       }
 
       // check channel flags
-      if(channel->server_flags)
-         return msg_deliver_flags(regs, task, channel, recv_msg);
+      if(channel->server_flags) {
+         int r = msg_deliver_flags(regs, task, channel->uid, channel->server_flags, recv_msg);
+         if(r >= 0)
+            channel->server_flags = 0;
+         return r;
+      }
    }
 
    // nothing to receive yet, wait until call
@@ -824,7 +873,7 @@ int msg_receive(registers_t *regs, task_state_t *task, uint32_t port_uid, msg_re
       return MSG_ERR_LIMIT;
    }
    task_pause(task, PAUSE_MSG_RECEIVE);
-   switch_task(regs, false); // yield
+   task_interrupt_set(-1, true); // yield once the syscall finishes
 
    return 0;
 }

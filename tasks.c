@@ -8,14 +8,82 @@
 #include "msg.h"
 #include "ksync.h"
 #include "cpu.h"
+#include "gdt.h"
 
 task_state_t *tasks;
+static int saved_task = -1; // task at start of interrupt
+static int next_task = -1; // next task to switch to after interrupt (-1 for yield, -2 for no switch)
 int current_task = -1;
 bool switching = false; // preemptive multitasking
 
 uint32_t process_uid_counter = 0;
 uint32_t task_uid_counter = 0;
 uint32_t task_event_counter = 0; // incremented on start/end
+
+// can be swapped to after interrupt finishes
+bool task_can_be_swapped_to(int index) {
+   if(index < 0 || index >= TOTAL_TASKS)
+      return false;
+   if(!tasks[index].enabled || tasks[index].paused)
+      return false;
+   return true;
+}
+
+// set task to switch to after interrupt
+bool task_interrupt_set(int taskid, bool replace) {
+   if(taskid == -1) {
+      // yield
+      if(next_task == -2 || replace) {
+         next_task = -1;
+         return true;
+      }
+      return false;
+   }
+
+   if(!task_can_be_swapped_to(taskid))
+      return false;
+   if(next_task == -2 || replace) {
+      //debug_printf("warning: overwriting next task from %i to %i\n", current_task, taskid);
+      next_task = taskid;
+      return true;
+   }
+   return false;
+}
+
+// called at start of interrupt
+void task_interrupt_save() {
+   saved_task = current_task;
+   next_task = -2; // none (ie keep current)
+}
+
+// do task switch after interrupt
+void task_interrupt_complete(registers_t *regs) {
+   if(!switching) return;
+   if(next_task == -2 || current_task != saved_task) {
+      // task_interrupt_set never called or task already switched (ie software interrupt)
+      // don't need to do anything
+      return;
+   }
+
+   bool int_kernel = !(regs->cs & 3); // interrupted kernel
+
+   bool yield = next_task == -1;
+   task_state_t *next_task_state = task_can_be_swapped_to(next_task) ? &tasks[next_task] : NULL;
+   if(!yield && !next_task_state) return;
+
+   if(int_kernel) {
+      if(yield)
+         kernel_yield_parking();
+      else
+         kernel_yield_to_parking(next_task);
+      return; // returns here when this task is resumed
+   }
+
+   if(yield)
+      switch_task(regs, true);
+   else
+      switch_from_user(regs, next_task);
+}
 
 process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process_t *process = kmalloc(sizeof(process_t));
@@ -119,6 +187,7 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].owned_mutexes = NULL;
    tasks[index].kernel_esp = 0;
    tasks[index].ticks = 0;
+   tasks[index].allow_irq = false;
    
    tasks[index].registers.eip = entry;
    tasks[index].process->no_threads++;
@@ -531,46 +600,50 @@ void task_abort_setup(int index) {
    end_task(index, NULL);
 }
 
-void tasks_init(registers_t *regs) {
+static void idle_thread_main() {
+   while(true) {
+      if(!kernel_yield()) { // no other tasks to run
+         tasks[0].allow_irq = true;
+         asm volatile("sti; hlt; cli" ::: "memory");
+         tasks[0].allow_irq = false;
+      }
+   }
+}
+
+extern tss_t tss_start;
+extern void resume_kernel(uint32_t esp);
+
+void tasks_init() {
    // enable preemptive multitasking
 
-   setSelectedWindowIndex(0);
-
    // launch idle process
-   if(!tasks_launch_binary(regs, "/sys/progidle.bin")) {
-      debug_printf("tasks_init: failed to launch idle program\n");
-      kernel_panic(); // unable to init tasks at all
-   }
-   
-   gui_get_windows()[tasks[current_task].process->window].minimised = true;
-   gui_get_windows()[tasks[current_task].process->window].draw_func = NULL;
-   strcpy(gui_get_windows()[tasks[current_task].process->window].title, "Idle Process");
+   task_state_t *idle = &tasks[0];
+   idle->reserved = false;
 
+   LAUNCH_KTHREAD(&idle_thread_main, false); // task 0
+   current_task = 0;
    switching = true;
+
+   tss_start.esp0 = idle->kernel_stack_top;
+   uint32_t esp = idle->kernel_esp;
+   idle->kernel_esp = 0;
+   resume_kernel(esp); // immediately launch
 }
 
 static inline bool task_resumable(task_state_t *task, bool resume_kernel) {
    return task->enabled && !task->paused && (resume_kernel || !task->kernel_esp);
 }
 
-// returns -1 for none available
-int next_task(bool resume_kernel) {
+static int find_next_task(bool resume_kernel) {
    // find next enabled task (round robin)
    int task = current_task;
-   do {
-      task++;
-      task%=TOTAL_TASKS;
-
-      if(task == current_task && !task_resumable(&tasks[task], resume_kernel)) {
-         // no tasks
-         return -1;
-      }
-   } while(!task_resumable(&tasks[task], resume_kernel));
-   return task;
+   for(int i = 0; i < TOTAL_TASKS; i++) {
+      task = (task + 1) % TOTAL_TASKS;
+      if(task != 0 && task_resumable(&tasks[task], resume_kernel))
+         return task;
+   }
+   return 0; // idle
 }
-
-extern tss_t tss_start;
-extern void resume_kernel(uint32_t esp);
 
 void switch_task(registers_t *regs, bool resume) {
    if(!switching)
@@ -578,15 +651,7 @@ void switch_task(registers_t *regs, bool resume) {
 
    int old_task = current_task;
 
-   current_task = next_task(resume);
-   if(current_task == -1) {
-      // no tasks, launch idle process
-      debug_printf("No tasks found\n");
-      // save registers
-      tasks[old_task].registers = *regs;
-      tasks_init(regs);
-      old_task = current_task; // launch_task already swapped regs/pagedir/esp0
-   }
+   current_task = find_next_task(resume);
 
    task_state_t *task = get_current_task_state();
    if(task->process->page_dir != page_get_current())
@@ -611,7 +676,6 @@ void switch_task(registers_t *regs, bool resume) {
 }
 
 bool switch_to_task(int index, registers_t *regs) {
-   //debug_printf("Switching from task %i to %i\n", current_task, index);
    if(index < 0 || index >= TOTAL_TASKS) {
       debug_printf("Invalid task %i\n", index);
       return false;
@@ -651,10 +715,27 @@ bool switch_to_task(int index, registers_t *regs) {
    return true;
 }
 
+// switch away from task interrupted in user mode - discards its kernel stack
+void switch_from_user(registers_t *regs, int index) {
+   task_state_t *next = &tasks[index];
+   tasks[current_task].registers = *regs;
+   current_task = index;
+   tss_start.esp0 = next->kernel_stack_top;
+   if(next->process->page_dir != page_get_current())
+      swap_pagedir(next->process->page_dir);
+
+   if(next->kernel_esp) {
+      uint32_t esp = next->kernel_esp;
+      next->kernel_esp = 0;
+      resume_kernel(esp); // doesn't return
+   }
+   *regs = next->registers;
+}
+
 static bool can_park(void) {
    // check that current_task is in syscall (ie not irq)
    // sanity check current kstack matches current_task's kstack
-   if(!switching || current_task < 0 || !tasks[current_task].in_syscall)
+   if(!switching || current_task < 0 || !tasks[current_task].in_syscall || tasks[current_task].allow_irq)
       return false;
    uint32_t esp = read_esp();
    uint32_t top = tasks[current_task].kernel_stack_top;
@@ -664,14 +745,14 @@ static bool can_park(void) {
 extern void yield_to_user(registers_t *regs, uint32_t *old_esp);
 extern void yield_to_kernel(uint32_t esp, uint32_t *old_esp);
 
-// yield to specific task
-bool kernel_yield_to(int next_index) {
-   if(!can_park()) return false;
+bool kernel_yield_to_parking(int next_index) {
    task_state_t *cur = get_current_task_state();
    if(next_index < 0 || next_index >= TOTAL_TASKS || next_index == cur->task_id) return false;
    if(!task_resumable(&tasks[next_index], true)) return false;
 
    task_state_t *next = &tasks[next_index];
+
+   int parked_saved = saved_task, parked_next = next_task;
 
    current_task = next_index;
    tss_start.esp0 = next->kernel_stack_top;
@@ -702,14 +783,24 @@ bool kernel_yield_to(int next_index) {
       yield_to_kernel(esp, &cur->kernel_esp);
    }
 
+   // resumed
+   saved_task = parked_saved;
+   next_task = parked_next;
+
    return true;
 }
 
-bool kernel_yield() {
-   int next = next_task(true);
+// yield to specific task
+bool kernel_yield_to(int next_index) {
+   if(!can_park()) return false;
+   return kernel_yield_to_parking(next_index);
+}
+
+bool kernel_yield_parking() {
+   int next = find_next_task(true);
    while(next >= 0) {
-      if(!kernel_yield_to(next)) {
-         int next2 = next_task(true);
+      if(!kernel_yield_to_parking(next)) {
+         int next2 = find_next_task(true);
          if(next == next2) return false;
          next = next2;
          continue; // may have crashed while attempting to resume/execute queued routine
@@ -719,46 +810,29 @@ bool kernel_yield() {
    return false;
 }
 
+bool kernel_yield() {
+   if(!can_park()) return false;
+   return kernel_yield_parking();
+}
+
 void kernel_block() {
    if(!kernel_yield()) {
-      debug_printf("kernel_block failed\n"); // i.e. no other tasks available
+      debug_printf("kernel_block: can't park task %i\n", current_task);
       kernel_panic();
    }
 }
 
-bool kernel_yield_if_blocking() {
-   if(!can_park()) return false;
-   
-   // check for pending interrupt
-   outb(0x20, 0x0A); // read pic irr
-   if(!(inb(0x20) & 1))
-      return false;
-
-   return kernel_yield();
-}
-
-bool kernel_exit_resume(registers_t *regs, int task) {
-   // used to exit an irq and run a kthread
-   // eoi must already be sent
-   if(!(regs->cs & 3) || current_task < 0) return false;
-   if(!tasks[task].enabled || tasks[task].paused || !tasks[task].kernel_esp)
-      return false;
-      
-   if(current_task >= 0) {
-      // save registers
-      tasks[current_task].registers = *regs;
-   }
-
-   current_task = task;
-   if(tasks[task].process->page_dir != page_get_current())
-      swap_pagedir(tasks[task].process->page_dir);
-
-   tss_start.esp0 = tasks[task].kernel_stack_top;
-
-   uint32_t esp = tasks[task].kernel_esp;
-   tasks[task].kernel_esp = 0;
-   resume_kernel(esp);
-   return true; // never hit
+// let pending irqs run on the current task stack
+void kernel_yield_if_blocking() {
+   if(!can_park()) return;
+   task_state_t *task = get_current_task_state();
+   // irqs run with their own saved/next tasks so save task's
+   int outer_saved = saved_task, outer_next = next_task;
+   task->allow_irq = true;
+   asm volatile("sti; nop; cli" ::: "memory"); // 'nop' needed as sti only takes effect after following op
+   task->allow_irq = false;
+   saved_task = outer_saved;
+   next_task = outer_next;
 }
 
 void end_kthread(int task) {

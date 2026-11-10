@@ -147,7 +147,8 @@ void wm_thread_wake() {
       return;
    wm_thread.paused_task = get_current_task();
    task_resume(wm_thread.task);
-   kernel_yield_to(wm_thread.task->task_id);
+   if(!kernel_yield_to(wm_thread.task->task_id))
+      task_interrupt_set(wm_thread.task->task_id, true); // in irq, resume after
 }
 
 void wm_draw() {
@@ -296,14 +297,8 @@ void wm_event_thread_wake() {
       return;
    wm_event_thread.paused_task = get_current_task();
    task_resume(wm_event_thread.task);
-   kernel_yield_to(wm_event_thread.task->task_id);
-}
-
-// wm_events are queued from irqs so can't yield
-// instead, immediately invoke the wm_event thread at the end of the handler
-void wm_event_thread_exit_resume(registers_t *regs) {
-   if(!wm_event_thread.task || kqueue_empty(&wm_event_queue)) return;
-   kernel_exit_resume(regs, wm_event_thread.task->task_id);
+   if(!kernel_yield_to(wm_event_thread.task->task_id))
+      task_interrupt_set(wm_event_thread.task->task_id, true); // in irq, resume after
 }
 
 void wm_event(wm_event_type_t type, int x, int y, int relX, int relY, uint16_t c) {

@@ -151,290 +151,11 @@ void register_irq(int index, void (*handler)(registers_t *regs)) {
 }
 
 void software_handler(registers_t *regs) {
-
    task_state_t *task = &gettasks()[get_current_task()];
    task->in_syscall = true;
    task->syscall_no = regs->eax;
 
-   switch(regs->eax) {
-      case 1:
-         api_write_string(regs);
-         break;
-      case 2:
-         api_get_task_event_count(regs);
-         break;
-      case 3:
-         api_yield(regs);
-         break;
-      case 4:
-         api_control_handle(regs);
-         break;
-      case 5:
-         api_handle_info(regs);
-         break;
-      case 6:
-         api_write_uint(regs);
-         break;
-      case 7:
-         api_return_framebuffer(regs);
-         break;
-      case 8:
-         api_write_newline();
-         break;
-      case 9:
-         api_redraw_window(regs);
-         break;
-      case 10:
-         api_end_task(regs);
-         break;
-      case 11:
-         api_wm_override(regs);
-         break;
-      case 12:
-         api_end_subroutine(regs);
-         break;
-      //case 13:
-      case 14:
-         api_return_window_width(regs);
-         break;
-      case 15:
-         api_return_window_height(regs);
-         break;
-      //case 16:
-      //case 17:
-      case 18:
-         api_set_window_setting(regs);
-         break;
-      case 19:
-         api_get_window_setting(regs);
-         break;
-      case 20:
-         api_set_window_position(regs);
-         break;
-      case 21:
-         api_draw_bmp(regs);
-         break;
-      case 22:
-         api_write_string_at(regs);
-         break;
-      case 23:
-         api_clear_window(regs);
-         break;
-      case 24:
-         api_set_window_minimised(regs);
-         break;
-      case 25:
-         api_read_dir(regs);
-         break;
-      case 26:
-         api_get_window_position(regs);
-         break;
-      //case 27: 
-      //case 28:
-      //case 29:
-      case 30:
-         api_queue_event(regs);
-         break;
-      case 31:
-         api_sleep(regs);
-         break;
-      case 32:
-         api_launch_task(regs);
-         break;
-      case 33:
-         api_get_setting(regs);
-         break;
-      //case 34:
-      case 35:
-         api_set_setting(regs);
-         break;
-      //case 36:
-      case 37:
-         api_redraw_region(regs);
-         break;
-      //case 38:
-      //case 39:
-      //case 40:
-      case 41:
-         api_new_file(regs);
-         break;
-      case 42:
-         api_set_window_title(regs);
-         break;
-      case 43:
-         api_set_working_dir(regs);
-         break;
-      case 44:
-         api_get_working_dir(regs);
-         break;
-      //case 45:
-      //case 46:
-      case 47:
-         api_read(regs);
-         break;
-      case 48:
-         api_seek(regs);
-         break;
-      case 49:
-         api_debug_write_str(regs);
-         break;
-      case 50:
-         api_mkdir(regs);
-         break;
-      case 51:
-         api_sbrk(regs);
-         break;
-      case 52:
-         api_open(regs);
-         break;
-      case 53:
-         api_write(regs);
-         break;
-      case 54:
-         api_create_scrollbar(regs);
-         break;
-      case 55:
-         api_set_scrollable_height(regs);
-         break;
-      case 56:
-         api_scroll_to(regs);
-         break;
-      case 57:
-         api_get_timer_tick(regs);
-         break;
-      case 58:
-         api_rename(regs);
-         break;
-      case 59:
-         api_fsize(regs);
-         break;
-      case 60:
-         api_set_window_size(regs);
-         break;
-      case 61:
-         api_get_font_info(regs);
-         break;
-      case 62:
-         api_create_window(regs);
-         break;
-      case 63:
-         api_close_window(regs);
-         break;
-      case 64:
-         api_unmap(regs);
-         break;
-      case 65:
-         api_create_thread(regs);
-         break;
-      case 66:
-         api_get_tasks(regs);
-         break;
-      case 67:
-         api_kill_task(regs);
-         break;
-      case 68:
-         api_unlink(regs);
-         break;
-      case 69:
-         api_rmdir(regs);
-         break;
-      case 70:
-         api_pipe(regs);
-         break;
-      case 71:
-         api_unpause(regs);
-         break;
-      case 72:
-         api_dup2(regs);
-         break;
-      case 73:
-         api_close(regs);
-         break;
-      case 74:
-         api_dup_handle(regs);
-         break;
-      case 75:
-         api_get_time(regs);
-         break;
-      case 76:
-         api_futex_wait(regs);
-         break;
-      case 77:
-         api_futex_wake(regs);
-         break;
-      case 78:
-         api_shared_create(regs);
-         break;
-      case 79:
-         api_focus_task(regs);
-         break;
-      case 80:
-         api_map(regs);
-         break;
-      case 81:
-         api_get_taskid(regs);
-         break;
-      case 82:
-         api_pci_connect(regs);
-         break;
-      case 83:
-         api_pci_exists(regs);
-         break;
-      case 84:
-         api_dma(regs);
-         break;
-      case 85:
-         api_close_handle(regs);
-         break;
-      case 86:
-         api_escalate(regs);
-         break;
-      case 87:
-         api_fpsize(regs);
-         break;
-      case 88:
-         api_truncate(regs);
-         break;
-      case 89:
-         api_create_port(regs);
-         break;
-      case 90:
-         api_port_connect(regs);
-         break;
-      case 91:
-         api_override_msg(regs);
-         break;
-      case 92:
-         api_msg_send(regs);
-         break;
-      case 93:
-         api_msg_read(regs);
-         break;
-      case 94:
-         api_wait_on_receive(regs);
-         break;
-      case 95:
-         api_snooze(regs);
-         break;
-      case 96:
-         api_port_close(regs);
-         break;
-      case 97:
-         api_port_disconnect(regs);
-         break;
-      case 98:
-         api_msg_call(regs);
-         break;
-      case 99:
-         api_msg_receive(regs);
-         break;
-      case 100:
-         api_msg_reply(regs);
-         break;
-      default:
-         debug_printf("Unknown syscall %i\n", regs->eax);
-         break;
-   }
+   api_route(regs->eax, regs);
 
    task->in_syscall = false;
    if(task->kill_pending) {
@@ -444,6 +165,7 @@ void software_handler(registers_t *regs) {
 }
 
 void keyboard_handler(registers_t *regs) {
+   (void)regs;
    unsigned char scan_code = inb(0x60);
 
    if(videomode == 0) {
@@ -457,7 +179,7 @@ void keyboard_handler(registers_t *regs) {
 
    } else {
       gui_keypress(scan_code);
-      wm_event_thread_exit_resume(regs);
+      wm_event_thread_wake();
    }
 
 }
@@ -469,6 +191,7 @@ extern bool mouse_enabled;
 extern bool mouse_scrolling_enabled;
 
 void mouse_handler(registers_t *regs) {
+   (void)regs;
    if(!mouse_enabled) return;
 
    uint8_t status = inb(0x64);
@@ -519,7 +242,7 @@ void mouse_handler(registers_t *regs) {
 
       mouse_cycle = 0;
 
-      wm_event_thread_exit_resume(regs);
+      wm_event_thread_wake();
    }
 }
 
@@ -555,11 +278,8 @@ void timer_handler(registers_t *regs) {
    events_check(regs);
    tasks_tick();
 
-   if(timer_i%3 == 0 && (regs->cs & 3) != 0) {
-      // don't preempt when interrupting kernel
-
-      // note: immediately swaps if new task was parked in kernel
-      switch_task(regs, true);
+   if(timer_i%3 == 0) {
+      task_interrupt_set(-1, false);
    }
 
 #if DEBUG_DELAYS
@@ -734,9 +454,12 @@ void exception_handler(int int_no, registers_t *regs) {
          debug_writestr(buffer);
       }
    } else {
+      task_interrupt_save();
       irqs[irq_no](regs);
+      task_interrupt_complete(regs); // not guaranteed to return
    }
 
+   // check for queued subroutine on current task
    if((regs->cs & 3) && get_current_task() >= 0) {
       if(!task_execute_queued_subroutine(regs, get_current_task()) && get_current_task_state()->crashed)
          switch_task(regs, false);
@@ -767,7 +490,7 @@ __attribute__((noreturn)) void kernel_panic(void) {
    gui_window_t *popup_window = getWindow(popup);
    window_popup_dialog(popup_window, NULL, "f3sys has crashed");
    popup_window->x = 5;
-   popup_window->y = 5;
+   popup_window->y = MENUBAR_HEIGHT + 5;
    strcpy(popup_window->title, "kernel panic");
    popup_window->window_objects[1]->visible = false; // ok btn
    popup_window->window_objects[0]->y += 14; // txt

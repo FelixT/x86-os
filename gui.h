@@ -85,6 +85,7 @@ typedef enum {
 #define COLOUR_RED gui_rgb16(220, 40, 40)
 
 void gui_init();
+void gui_init_complete();
 void gui_clear(uint16_t colour);
 void gui_drawchar(char c, uint16_t colour);
 void gui_writenumat(int num, uint16_t colour, int x, int y);

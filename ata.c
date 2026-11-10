@@ -199,14 +199,11 @@ void ata_yield() {
    if(prev != -1)
       debug_printf("ata: %i was paused, now %i\n", prev, cur);
    paused_task = cur;
-   if(!kernel_yield_if_blocking()) {
+   kernel_yield_if_blocking();
+   if(paused_task == cur)
       paused_task = prev;
-   } else {
-      if(paused_task != get_current_task())
-         debug_printf("ata: %i was paused after yield of %i\n", paused_task, cur);
-      else
-         paused_task = -1;
-   }
+   else
+      debug_printf("ata: %i was paused after yield of %i\n", paused_task, cur);
 }
 
 bool ata_readwrite(bool primaryBus, bool masterDrive, uint32_t lba, uint16_t *buf, uint16_t sectors, bool write) {
@@ -389,11 +386,12 @@ bool ata_write_exact(bool primaryBus, bool masterDrive, uint32_t addr, uint8_t *
 }
 
 void ata_interrupt(registers_t *regs) {
+   (void)regs;
    // read status
    uint16_t ioPort;
    ioPort = ATA_PORT_PRIMARY;
 
    inb(ioPort + ATA_REG_STATUS);
    if(paused_task != -1 && get_current_task() != paused_task)
-      kernel_exit_resume(regs, paused_task); // ends irq
+      task_interrupt_set(paused_task, true);
 }

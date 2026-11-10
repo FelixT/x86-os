@@ -16,7 +16,7 @@ static inline uint16_t rgb16(uint8_t r, uint8_t g, uint8_t b) {
 static inline void write_str_w(char *str, int window) {
    asm volatile(
       "int $0x30"
-      :: "a" (1),
+      :: "a" (API_WRITE_STRING),
       "b" ((uint32_t)str),
       "c" (window)
       : "cc", "memory"
@@ -30,7 +30,7 @@ static inline void write_str(char *str) {
 static inline void yield() {
    asm volatile(
       "int $0x30"
-      :: "a" (3)
+      :: "a" (API_YIELD)
       : "cc", "memory"
    );
 }
@@ -38,7 +38,7 @@ static inline void yield() {
 static inline void write_uint(uint32_t num) {
    asm volatile(
       "int $0x30"
-      :: "a" (6),
+      :: "a" (API_WRITE_UINT),
       "b" (num)
       : "cc", "memory"
    );
@@ -49,7 +49,7 @@ static inline surface_t get_surface_w(int window) {
    asm volatile (
       "int $0x30"
       : "=b" (surface.buffer), "=c" (surface.width), "=d" (surface.height)
-      : "a" (7),
+      : "a" (API_RETURN_FRAMEBUFFER),
       "b" (window)
       : "cc", "memory"
    );
@@ -61,18 +61,10 @@ static inline surface_t get_surface() {
    return get_surface_w(-1);
 }
 
-static inline void write_newline() {
-   asm volatile(
-      "int $0x30"
-      :: "a" (8)
-      : "cc", "memory"
-   );
-}
-
 static inline void redraw_w(int w) {
    asm volatile(
       "int $0x30"
-      :: "a" (9),
+      :: "a" (API_REDRAW_WINDOW),
       "b" (w)
       : "cc", "memory"
    );
@@ -85,7 +77,7 @@ static inline void redraw() {
 static inline void redraw_region(int x, int y, int width, int height, int window) {
    asm volatile(
       "int $0x30"
-      :: "a" (37),
+      :: "a" (API_REDRAW_REGION),
       "b" ((uint32_t)x),
       "c" ((uint32_t)y),
       "d" ((uint32_t)width),
@@ -99,7 +91,7 @@ static inline void redraw_region(int x, int y, int width, int height, int window
 static inline __attribute__((noreturn)) void _exit(int status) {
    asm volatile(
       "int $0x30"
-      :: "a" (10),
+      :: "a" (API_END_TASK),
       "b" (status)
       : "cc", "memory"
    );
@@ -117,7 +109,7 @@ static inline __attribute__((noreturn)) void exit(int status) {
 static inline void end_subroutine() {
    asm volatile(
       "int $0x30"
-      :: "a" (12)
+      :: "a" (API_END_SUBROUTINE)
       : "cc", "memory"
    );
 }
@@ -127,7 +119,7 @@ static inline uint32_t get_task_event_count() {
    asm volatile(
       "int $0x30"
       : "=b" (event_count)
-      : "a" (2)
+      : "a" (API_GET_TASK_EVENT_COUNT)
       : "cc", "memory"
    );
    return event_count;
@@ -138,7 +130,7 @@ static inline bool wm_override(wm_action_t action, void *callback, int window) {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (11),
+      : "a" (API_WM_OVERRIDE),
       "b" (action),
       "c" ((uint32_t)callback),
       "d" (window)
@@ -153,7 +145,7 @@ static inline int get_width_w(int window) {
    asm volatile (
       "int $0x30;"
       : "=b" (output)
-      : "a" (14),
+      : "a" (API_RETURN_WINDOW_WIDTH),
       "b" (window)
       : "cc", "memory"
    );
@@ -171,7 +163,7 @@ static inline int get_height_w(int window) {
    asm volatile (
       "int $0x30"
       : "=b" (output)
-      : "a" (15),
+      : "a" (API_RETURN_WINDOW_HEIGHT),
       "b" (window)
       : "cc", "memory"
    );
@@ -188,7 +180,7 @@ static inline bool mkdir(char *path) {
    asm volatile (
       "int $0x30"
       : "=b" (success)
-      : "a" (50),
+      : "a" (API_MKDIR),
       "b" ((uint32_t)path)
       : "cc", "memory"
    );
@@ -200,7 +192,7 @@ static inline bool unlink(char *path) {
    asm volatile (
       "int $0x30"
       : "=b" (success)
-      : "a" (68),
+      : "a" (API_UNLINK),
       "b" ((uint32_t)path)
       : "cc", "memory"
    );
@@ -212,7 +204,7 @@ static inline bool rmdir(char *path) {
    asm volatile (
       "int $0x30"
       : "=b" (success)
-      : "a" (69),
+      : "a" (API_RMDIR),
       "b" ((uint32_t)path)
       : "cc", "memory"
    );
@@ -224,7 +216,7 @@ static inline int seek(int fd, int offset, int type) {
    asm volatile (
       "int $0x30"
       : "=b" (pos)
-      : "a" (48),
+      : "a" (API_SEEK),
       "b" (fd),
       "c" (offset),
       "d" (type)
@@ -236,7 +228,7 @@ static inline int seek(int fd, int offset, int type) {
 static inline void bmp_draw(uint8_t *bmp, int x, int y, int scale, bool white_is_transparent) {
    asm volatile (
       "int $0x30;"
-      :: "a" (21),
+      :: "a" (API_DRAW_BMP),
       "b" ((uint32_t)bmp),
       "c" ((uint32_t)x),
       "d" ((uint32_t)y),
@@ -250,7 +242,7 @@ static inline void write_strat_w(char *str, int x, int y, int colour, int window
    // colour=-1 for window text colour
    asm volatile(
       "int $0x30"
-      :: "a" (22),
+      :: "a" (API_WRITE_STRING_AT),
       "b" ((uint32_t)str),
       "c" ((uint32_t)x),
       "d" ((uint32_t)y),
@@ -267,7 +259,7 @@ static inline void write_strat(char *str, int x, int y, int colour) {
 static inline void clear_w(int w) {
    asm volatile(
       "int $0x30"
-      :: "a" (23),
+      :: "a" (API_CLEAR_WINDOW),
       "b" (w)
       : "cc", "memory"
    );
@@ -299,7 +291,7 @@ static inline int read_dir(char *path, fs_dir_entry_t *entries, int count) {
    asm volatile (
       "int $0x30"
       : "=b" (result)
-      : "a" (25),
+      : "a" (API_READ_DIR),
       "b" ((uint32_t)path),
       "c" (count),
       "d" ((uint32_t)entries)
@@ -312,7 +304,7 @@ static inline int read_dir(char *path, fs_dir_entry_t *entries, int count) {
 static inline void debug_write_str(char *str) {
    asm volatile(
       "int $0x30"
-      :: "a" (49),
+      :: "a" (API_DEBUG_WRITE_STR),
       "b" (str)
       : "cc", "memory"
    );
@@ -321,7 +313,7 @@ static inline void debug_write_str(char *str) {
 static inline void queue_event(void *callback, int delta, void *msg) {
    asm volatile(
       "int $0x30"
-      :: "a" (30),
+      :: "a" (API_QUEUE_EVENT),
       "b" ((uint32_t)callback),
       "c" ((uint32_t)delta),
       "d" ((uint32_t)msg)
@@ -335,7 +327,7 @@ static inline int launch_task(char *path, int argc, char **args, bool copy, bool
    asm volatile (
       "int $0x30;"
       : "=b" (id)
-      : "a" (32),
+      : "a" (API_LAUNCH_TASK),
       "b" ((uint32_t)path),
       "c" ((uint32_t)argc),
       "d" ((uint32_t)args),
@@ -351,7 +343,7 @@ static inline bool unpause_task(int id) {
    asm volatile (
       "int $0x30;"
       : "=b" (success)
-      : "a" (71),
+      : "a" (API_UNPAUSE),
       "b" ((uint32_t)id)
       : "cc", "memory"
    );
@@ -361,7 +353,7 @@ static inline bool unpause_task(int id) {
 static inline void end_task(int id) {
    asm volatile (
       "int $0x30;"
-      :: "a" (67),
+      :: "a" (API_KILL_TASK),
       "b" ((uint32_t)id)
       : "cc", "memory"
    );
@@ -372,7 +364,7 @@ static inline bool set_setting(api_setting_t setting, uint32_t value) {
    asm volatile (
       "int $0x30;"
       : "=b" (out)
-      : "a" (35),
+      : "a" (API_SET_SETTING),
       "b" ((uint32_t)setting),
       "c" ((uint32_t)value)
       : "cc", "memory"
@@ -386,7 +378,7 @@ static inline uint32_t get_setting(api_setting_t setting, char *out) {
    asm volatile (
       "int $0x30;"
       : "=b" (value)
-      : "a" (33),
+      : "a" (API_GET_SETTING),
       "b" ((uint32_t)setting),
       "c" ((uint32_t)out)
       : "cc", "memory"
@@ -399,7 +391,7 @@ static inline bool set_window_setting(int setting, uint32_t value, int window) {
    asm volatile (
       "int $0x30;"
       : "=b" (out)
-      : "a" (18),
+      : "a" (API_SET_WINDOW_SETTING),
       "b" ((uint32_t)setting),
       "c" ((uint32_t)value),
       "d" ((uint32_t)window)
@@ -413,7 +405,7 @@ static inline uint32_t get_window_setting(int setting, int window) {
    asm volatile (
       "int $0x30;"
       : "=b" (value)
-      : "a" (19),
+      : "a" (API_GET_WINDOW_SETTING),
       "b" ((uint32_t)setting),
       "c" ((uint32_t)window)
       : "cc", "memory"
@@ -424,7 +416,7 @@ static inline uint32_t get_window_setting(int setting, int window) {
 static inline void set_window_title(char *title) {
    asm volatile (
       "int $0x30;"
-      :: "a" (42),
+      :: "a" (API_SET_WINDOW_TITLE),
       "b" ((uint32_t)title),
       "c" ((uint32_t)-1)
       : "cc", "memory"
@@ -434,7 +426,7 @@ static inline void set_window_title(char *title) {
 static inline void set_window_title_w(int window, char *title) {
    asm volatile (
       "int $0x30;"
-      :: "a" (42),
+      :: "a" (API_SET_WINDOW_TITLE),
       "b" ((uint32_t)title),
       "c" ((uint32_t)window)
       : "cc", "memory"
@@ -444,7 +436,7 @@ static inline void set_window_title_w(int window, char *title) {
 static inline void chdir(char *path) {
    asm volatile (
       "int $0x30;"
-      :: "a" (43),
+      :: "a" (API_SET_WORKING_DIR),
       "b" ((uint32_t)path)
       : "cc", "memory"
    );
@@ -453,7 +445,7 @@ static inline void chdir(char *path) {
 static inline void getwd(char *buf) {
    asm volatile (
       "int $0x30;"
-      :: "a" (44),
+      :: "a" (API_GET_WORKING_DIR),
       "b" ((uint32_t)buf)
       : "cc", "memory"
    );
@@ -470,7 +462,7 @@ static inline int open(char *path, int flag) {
    asm volatile (
       "int $0x30"
       : "=b" (fd)
-      : "a" (52),
+      : "a" (API_OPEN),
       "b" ((uint32_t)path),
       "c" (flag)
       : "cc", "memory"
@@ -483,7 +475,7 @@ static inline int fsize(int fd) {
    asm volatile (
       "int $0x30"
       : "=b" (size)
-      : "a" (59),
+      : "a" (API_FSIZE),
       "b" ((uint32_t)fd)
       : "cc", "memory"
    );
@@ -495,7 +487,7 @@ static inline int fpsize(char *path) {
    asm volatile (
       "int $0x30"
       : "=b" (size)
-      : "a" (87),
+      : "a" (API_FPSIZE),
       "b" ((uint32_t)path)
       : "cc", "memory"
    );
@@ -507,7 +499,7 @@ static inline int ftruncate(int fd, int size) {
    asm volatile (
       "int $0x30"
       : "=b" (result)
-      : "a" (88),
+      : "a" (API_TRUNCATE),
       "b" ((uint32_t)fd),
       "c" ((uint32_t)size)
       : "cc", "memory"
@@ -520,7 +512,7 @@ static inline int read(int fd, char *buf, size_t count) {
    asm volatile (
       "int $0x30"
       : "=b" (c)
-      : "a" (47),
+      : "a" (API_READ),
       "b" ((uint32_t)fd),
       "c" ((uint32_t)buf),
       "d" ((uint32_t)count)
@@ -534,7 +526,7 @@ static inline int write(int fd, char *buf, size_t count) {
    asm volatile (
       "int $0x30"
       : "=b" (c)
-      : "a" (53),
+      : "a" (API_WRITE),
       "b" ((uint32_t)fd),
       "c" ((uint32_t)buf),
       "d" ((uint32_t)count)
@@ -548,7 +540,7 @@ static inline int new_file(char *path) {
    asm volatile (
       "int $0x30"
       : "=b" (fd)
-      : "a" (41),
+      : "a" (API_NEW_FILE),
       "b" ((uint32_t)path)
       : "cc", "memory"
    );
@@ -560,7 +552,7 @@ static inline int close(int fd) {
    asm volatile(
       "int $0x30"
       : "=b" (r)
-      : "a" (73),
+      : "a" (API_CLOSE),
       "b" (fd)
       : "cc", "memory"
    );
@@ -572,7 +564,7 @@ static inline bool rename(char *path, char *newname) {
    asm volatile (
       "int $0x30"
       : "=b" (success)
-      : "a" (58),
+      : "a" (API_RENAME),
       "b" ((uint32_t)path),
       "c" ((uint32_t)newname)
       : "cc", "memory"
@@ -586,7 +578,7 @@ static inline void *sbrk(uint32_t increment) {
    asm volatile (
       "int $0x30"
       : "=b" (addr)
-      : "a" (51),
+      : "a" (API_SBRK),
       "b" ((uint32_t)increment)
       : "cc", "memory"
    );
@@ -597,7 +589,7 @@ static inline void *sbrk(uint32_t increment) {
 static inline void create_scrollbar(void (*callback)(int deltaY, int offsetY, int window), int window) {
    asm volatile (
       "int $0x30"
-      :: "a" (54),
+      :: "a" (API_CREATE_SCROLLBAR),
       "b" ((uint32_t)callback),
       "c" ((uint32_t)window)
       : "cc", "memory"
@@ -609,7 +601,7 @@ static inline uint32_t set_content_height(uint32_t height, int window) {
    asm volatile (
       "int $0x30"
       : "=b" (width)
-      : "a" (55),
+      : "a" (API_SET_SCROLLABLE_HEIGHT),
       "b" (height),
       "c" (window)
       : "cc", "memory"
@@ -621,7 +613,7 @@ static inline uint32_t set_content_height(uint32_t height, int window) {
 static inline void scroll_to(uint32_t y, int window) {
    asm volatile (
       "int $0x30"
-      :: "a" (56),
+      :: "a" (API_SCROLL_TO),
       "b" (y),
       "c" (window)
       : "cc", "memory"
@@ -631,7 +623,7 @@ static inline void scroll_to(uint32_t y, int window) {
 static inline void set_window_size(int width, int height, int w) {
    asm volatile (
       "int $0x30"
-      :: "a" (60),
+      :: "a" (API_SET_WINDOW_SIZE),
       "b" (width),
       "c" (height),
       "d" (w)
@@ -642,7 +634,7 @@ static inline void set_window_size(int width, int height, int w) {
 static inline void focus_task(int taskid) {
    asm volatile (
       "int $0x30"
-      :: "a" (79),
+      :: "a" (API_FOCUS_TASK),
       "b" (taskid)
       : "cc", "memory"
    );
@@ -653,7 +645,7 @@ static inline int get_taskid() {
    asm volatile (
       "int $0x30"
       : "=b" (taskid)
-      : "a" (81)
+      : "a" (API_GET_TASKID)
       : "cc", "memory"
    );
    return taskid;
@@ -662,7 +654,7 @@ static inline int get_taskid() {
 static inline void set_window_position(int x, int y, int window) {
    asm volatile (
       "int $0x30"
-      :: "a" (20),
+      :: "a" (API_SET_WINDOW_POSITION),
       "b" (x),
       "c" (y),
       "d" (window)
@@ -682,7 +674,7 @@ static inline coord_t get_window_position(int window) {
       "int $0x30"
       : "=b" (x),
       "=c" (y)
-      : "a" (26),
+      : "a" (API_GET_WINDOW_POSITION),
       "b" (window)
       : "cc", "memory"
    );
@@ -693,7 +685,7 @@ static inline coord_t get_window_position(int window) {
 static inline void set_window_minimised(bool minimised, int window) {
    asm volatile (
       "int $0x30"
-      :: "a" (24),
+      :: "a" (API_SET_WINDOW_MINIMISED),
       "b" (minimised),
       "c" (window)
       : "cc", "memory"
@@ -711,7 +703,7 @@ static inline font_info_t get_font_info() {
       asm volatile (
       "int $0x30"
       : "=b" (info.width), "=c" (info.height), "=d" (info.padding)
-      : "a" (61)
+      : "a" (API_GET_FONT_INFO)
       : "cc", "memory"
    );
    return info;
@@ -722,7 +714,7 @@ static inline int create_window(int width, int height) {
       asm volatile (
       "int $0x30"
       : "=b" (index)
-      : "a" (62),
+      : "a" (API_CREATE_WINDOW),
       "b" (width),
       "c" (height)
       : "cc", "memory"
@@ -735,7 +727,7 @@ static inline bool close_window(int index) {
    asm volatile (
       "int $0x30"
       : "=b" (success)
-      : "a" (63),
+      : "a" (API_CLOSE_WINDOW),
       "b" (index)
       : "cc", "memory"
    );
@@ -747,7 +739,7 @@ static inline int create_thread(void (*func)()) {
    asm volatile(
       "int $0x30"
       : "=b" (id)
-      : "a" (65),
+      : "a" (API_CREATE_THREAD),
       "b" ((uint32_t)func)
       : "cc", "memory"
    );
@@ -759,7 +751,7 @@ static inline int get_tasks(api_task_t *tasks, int count) {
    asm volatile (
       "int $0x30;"
       : "=b" (size)
-      : "a" (66),
+      : "a" (API_GET_TASKS),
       "b" ((uint32_t)tasks),
       "c" (count)
       : "cc", "memory"
@@ -770,7 +762,7 @@ static inline int get_tasks(api_task_t *tasks, int count) {
 static inline void sleep(uint32_t ms) {
    asm volatile(
       "int $0x30"
-      :: "a" (31),
+      :: "a" (API_SLEEP),
       "b" (ms)
       : "cc", "memory"
    );
@@ -781,7 +773,7 @@ static inline uint32_t get_tick() {
    asm volatile(
       "int $0x30"
       : "=b" (ms)
-      : "a" (57)
+      : "a" (API_GET_TIMER_TICK)
    );
    return ms;
 }
@@ -794,7 +786,7 @@ static inline bool pipe(int *readfd, int *writefd) {
       : "=b" (success),
       "=c" (rfd),
       "=d" (wfd)
-      : "a" (70)
+      : "a" (API_PIPE)
       : "cc", "memory"
    );
    *readfd = rfd;
@@ -807,7 +799,7 @@ static inline handle_t hdup(handle_t h, uint32_t rights) {
    asm volatile(
       "int $0x30"
       : "=b" (out)
-      : "a" (74), "b" (h), "c" (rights)
+      : "a" (API_DUP_HANDLE), "b" (h), "c" (rights)
       : "cc", "memory"
    );
    return out;
@@ -823,7 +815,7 @@ static inline bool hinfo(handle_t h, kobj_type_t *type, uint32_t *rights) {
    asm volatile(
       "int $0x30"
       : "=b" (t), "=c" (r)
-      : "a" (5), "b" (h)
+      : "a" (API_HANDLE_INFO), "b" (h)
       : "cc", "memory"
    );
    if(t < 0)
@@ -836,7 +828,7 @@ static inline bool hinfo(handle_t h, kobj_type_t *type, uint32_t *rights) {
 static inline void dup2(int oldfd, int newfd) {
    asm volatile(
       "int $0x30"
-      :: "a" (72),
+      :: "a" (API_DUP2),
       "b" (oldfd),
       "c" (newfd)
       : "cc", "memory"
@@ -848,7 +840,7 @@ static inline uint32_t get_time() {
    asm volatile(
       "int $0x30"
       : "=b" (time)
-      : "a" (75)
+      : "a" (API_GET_TIME)
       : "cc", "memory"
    );
    return time;
@@ -859,7 +851,7 @@ static inline int futex_wait(void *addr, uint32_t expected) {
    asm volatile(
       "int $0x30"
       : "=b" (result)
-      : "a" (76),
+      : "a" (API_FUTEX_WAIT),
       "b" ((uint32_t)addr),
       "c" (expected)
       : "cc", "memory"
@@ -870,7 +862,7 @@ static inline int futex_wait(void *addr, uint32_t expected) {
 static inline void futex_wake(void *addr) {
    asm volatile(
       "int $0x30"
-      :: "a" (77),
+      :: "a" (API_FUTEX_WAKE),
       "b" ((uint32_t)addr)
       : "cc", "memory"
    );
@@ -882,7 +874,7 @@ static inline handle_t shared_create(int size) {
    asm volatile(
       "int $0x30"
       : "=b" (h)
-      : "a" (78),
+      : "a" (API_SHARED_CREATE),
       "b" ((uint32_t)size)
       : "cc", "memory"
    );
@@ -894,7 +886,7 @@ static inline void *map(handle_t handle, int index) {
    asm volatile(
       "int $0x30"
       : "=b" (addr)
-      : "a" (80),
+      : "a" (API_MAP),
       "b" ((uint32_t)handle),
       "c" (index)
       : "cc", "memory"
@@ -907,7 +899,7 @@ static inline bool unmap(uint32_t addr) {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (64),
+      : "a" (API_UNMAP),
       "b" (addr)
       : "cc", "memory"
    );
@@ -921,7 +913,7 @@ static inline bool hcontrol(handle_t h, int operation, uint32_t arg, uint32_t *o
       "int $0x30"
       : "=b" (success),
       "=c" (out_val)
-      : "a" (4),
+      : "a" (API_CONTROL_HANDLE),
       "b" (h),
       "c" (operation),
       "d" (arg)
@@ -938,7 +930,7 @@ static inline handle_t pci_connect(uint16_t vendor, uint16_t device_id) {
    asm volatile(
       "int $0x30"
       : "=b" (h)
-      : "a" (82),
+      : "a" (API_PCI_CONNECT),
       "b" ((uint32_t)vendor),
       "c" ((uint32_t)device_id)
       : "cc", "memory"
@@ -951,7 +943,7 @@ static inline bool pci_exists(uint16_t vendor, uint16_t device_id) {
    asm volatile(
       "int $0x30"
       : "=b" (exists)
-      : "a" (83),
+      : "a" (API_PCI_EXISTS),
       "b" ((uint32_t)vendor),
       "c" ((uint32_t)device_id)
       : "cc", "memory"
@@ -967,7 +959,7 @@ static inline handle_t dma(uint32_t size, uint32_t *paddr) {
       "int $0x30"
       : "=b" (h),
       "=c" (p)
-      : "a" (84),
+      : "a" (API_DMA),
       "b" (size)
       : "cc", "memory"
    );
@@ -982,7 +974,7 @@ static inline uint32_t hrelease(handle_t handle) {
    asm volatile (
       "int $0x30;"
       : "=b" (success)
-      : "a" (85),
+      : "a" (API_CLOSE_HANDLE),
       "b" (handle)
       : "cc", "memory"
    );
@@ -994,7 +986,7 @@ static inline bool escalate() {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (86)
+      : "a" (API_ESCALATE)
       : "cc", "memory"
    );
    return success;
@@ -1006,7 +998,7 @@ static inline uint32_t create_port(char *name, bool client_reserves) {
    asm volatile(
       "int $0x30"
       : "=b" (port)
-      : "a" (89),
+      : "a" (API_CREATE_PORT),
       "b" ((uint32_t)name),
       "c" (client_reserves)
       : "cc", "memory"
@@ -1022,7 +1014,7 @@ static inline uint32_t port_connect(char *name, uint32_t *port) {
       "int $0x30"
       : "=b" (channel),
       "=c" (port_uid)
-      : "a" (90),
+      : "a" (API_PORT_CONNECT),
       "b" ((uint32_t)name)
       : "cc", "memory"
    );
@@ -1033,7 +1025,7 @@ static inline uint32_t port_connect(char *name, uint32_t *port) {
 static inline void override_msg(void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags)) {
    asm volatile(
       "int $0x30"
-      :: "a" (91),
+      :: "a" (API_OVERRIDE_MSG),
       "b" ((uint32_t)msg_func)
       : "cc", "memory"
    );
@@ -1048,7 +1040,7 @@ static inline int msg_send_obj(uint32_t port_uid, uint32_t channel_uid, msg_send
    asm volatile(
       "int $0x30"
       : "=b" (status)
-      : "a" (92),
+      : "a" (API_MSG_SEND),
       "b" (port_uid),
       "c" (channel_uid),
       "d" ((uint32_t)msg),
@@ -1086,7 +1078,7 @@ static inline int msg_read(uint32_t port_uid, uint32_t channel_uid, void *buffer
       : "=b" (status),
       "=c" (channel_flags_val),
       "=d" (msg_flags_val)
-      : "a" (93),
+      : "a" (API_MSG_READ),
       "b" (port_uid),
       "c" (channel_uid),
       "d" ((uint32_t)buffer),
@@ -1107,7 +1099,7 @@ static inline bool msg_wait_for_read(uint32_t port_uid, uint32_t channel_uid) {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (94),
+      : "a" (API_WAIT_ON_RECEIVE),
       "b" (port_uid),
       "c" (channel_uid)
       : "cc", "memory"
@@ -1120,7 +1112,7 @@ static inline bool snooze() {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (95)
+      : "a" (API_SNOOZE)
       : "cc", "memory"
    );
    return success;
@@ -1131,7 +1123,7 @@ static inline bool port_close(uint32_t port_uid) {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (96),
+      : "a" (API_PORT_CLOSE),
       "b" (port_uid)
       : "cc", "memory"
    );
@@ -1143,7 +1135,7 @@ static inline bool port_disconnect(uint32_t port_uid, uint32_t channel_uid) {
    asm volatile(
       "int $0x30"
       : "=b" (success)
-      : "a" (97),
+      : "a" (API_PORT_DISCONNECT),
       "b" (port_uid),
       "c" (channel_uid)
       : "cc", "memory"
@@ -1157,7 +1149,7 @@ static inline int msg_sync_send_obj(uint32_t channel_uid, msg_send_t *send_msg, 
    asm volatile(
       "int $0x30;"
       : "=b" (read_size)
-      : "a" (98),
+      : "a" (API_MSG_CALL),
       "b" (channel_uid),
       "c" ((uint32_t)send_msg),
       "d" ((uint32_t)recv_msg)
@@ -1178,7 +1170,7 @@ static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg) 
    asm volatile(
       "int $0x30;"
       : "=b" (bytes_read)
-      : "a" (99),
+      : "a" (API_MSG_RECEIVE),
       "b" (port_uid),
       "c" ((uint32_t)recv_msg)
       : "cc", "memory"
@@ -1186,12 +1178,13 @@ static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg) 
    return bytes_read;
 }
 
-static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid, uint32_t *channel_flags) {
+static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid, uint32_t *channel_uid, uint32_t *flags) {
    msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
    int r = msg_sync_receive_obj(port_uid, &recv_msg);
    if(r >= 0) {
+      *channel_uid = recv_msg.channel_uid;
       *call_uid = recv_msg.call_uid;
-      *channel_flags = recv_msg.channel_flags;
+      *flags = recv_msg.flags;
    }
    return r;
 }
@@ -1201,7 +1194,7 @@ static inline int msg_sync_reply_obj(uint32_t call_uid, msg_send_t *send_msg) {
    asm volatile(
       "int $0x30;"
       : "=b" (sent_bytes)
-      : "a" (100),
+      : "a" (API_MSG_REPLY),
       "b" (call_uid),
       "c" ((uint32_t)send_msg)
       : "cc", "memory"
