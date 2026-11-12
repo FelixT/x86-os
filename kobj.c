@@ -4,6 +4,7 @@
 #include "dma.h"
 #include "shared.h"
 #include "fs.h"
+#include "msg.h"
 
 static uint32_t kobj_uid_counter = 1;
 static uint32_t kobj_ref_uid_counter = 1;
@@ -48,6 +49,24 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .map_func = NULL,
       .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE|KOBJ_RIGHT_TRANSFER|KOBJ_RIGHT_DUPLICATE,
       .control_func = NULL
+   },
+   [KOBJ_PORT] = {
+      .type = KOBJ_PORT,
+      .free_func = &port_free,
+      .close_func = NULL,
+      .stop_func = &port_stop,
+      .connect_func = NULL,
+      .map_func = NULL,
+      .default_rights = KOBJ_RIGHT_READ//|KOBJ_RIGHT_TRANSFER
+   },
+   [KOBJ_CHANNEL_CONN] = {
+      .type = KOBJ_CHANNEL_CONN,
+      .free_func = &port_free_connection,
+      .close_func = NULL,
+      .stop_func = &port_stop_connection,
+      .connect_func = NULL,
+      .map_func = NULL,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE//|KOBJ_RIGHT_DUPLICATE|KOBJ_RIGHT_TRANSFER
    }
 };
 

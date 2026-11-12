@@ -473,31 +473,30 @@ void term_cmd_channels() {
    extern msg_port_t *ports;
    msg_port_t *cur = ports;
    while(cur) {
-      window_term_printf("Port %s uid %u (owner task %i), %i channels\n", cur->name, cur->uid, cur->owner_taskid, cur->channel_count);
+      window_term_printf("Port %s (owner task %i), %i channels\n", cur->name, cur->owner_taskid, cur->channel_count);
       for(int i = 0; i < cur->channel_count; i++) {
          msg_channel_t *channel = cur->channels[i];
          if(!channel) continue;
-         window_term_printf("Channel %u (server %i %s / client %i %s)\n", channel->uid, channel->server_taskid, channel->server_connected ? "connected" : "disconnected", channel->client_taskid, channel->client_connected ? "connected" : "disconnected");
+         window_term_printf("Channel (handles %u/%u) (server %i %s / client %i %s)\n", channel->conns[0].handle, channel->conns[1].handle, channel->conns[0].taskid, channel->conns[0].connected ? "connected" : "disconnected", channel->conns[1].taskid, channel->conns[1].connected ? "connected" : "disconnected");
       }
       cur = cur->next;
    }
 }
 
 void term_cmd_signal(char *arg) {
-   char c_uid[9], c_flag[9];
-   if(!strsplit(c_uid, c_flag, arg, ' ')) {
+   char name[32], c_flag[9];
+   if(!strsplit(name, c_flag, arg, ' ')) {
       window_term_printf("Invalid args\n");
       return;
    }
-   uint32_t uid = window_term_argtouint(c_uid);
    uint32_t flag = window_term_argtouint(c_flag);
-   msg_port_t *port = find_port_by_uid(uid);
+   msg_port_t *port = find_port_by_name(name);
    if(!port) {
-      window_term_printf("Port not found %u\n", uid);
+      window_term_printf("Port %s not found\n", name);
       return;
    }
    int r = port_signal(port, flag);
-   window_term_printf("Sent signal %u to port %u - status %i\n", flag, uid, r);
+   window_term_printf("Sent signal %u to port %s - status %i\n", flag, name, r);
 }
 
 void term_cmd_mtrr() {

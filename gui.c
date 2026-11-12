@@ -145,8 +145,6 @@ void gui_init_complete() {
 
    gui_writestr("\nInit complete\n", COLOUR_CYAN);
 
-   gui_writestr("Enabling tasks\n", COLOUR_ORANGE);
-
    getSelectedWindow()->minimised = true;
    getSelectedWindow()->active = false;
    setSelectedWindowIndex(-1);

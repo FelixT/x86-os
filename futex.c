@@ -63,7 +63,7 @@ int futex_wait(void *futex_addr, uint32_t expected) {
    return FUTEX_WAIT_BLOCK;
 }
 
-void futex_wake(void *regs, void *futex_addr) {
+void futex_wake(void *futex_addr) {
    task_state_t *task = get_current_task_state(); // waker
    uint32_t pid;
    uint32_t addr = futex_key(task->process, (uint32_t)futex_addr, &pid);
@@ -92,8 +92,24 @@ void futex_wake(void *regs, void *futex_addr) {
 
       if(!stale && match) {
          task_resume(waiter_task);
-         switch_to_task(waiter_task->task_id, regs);
+         task_interrupt_set(waiter_task->task_id, true); // run waiter once the syscall finishes
          return; // wake only one waiter
+      }
+   }
+}
+
+// remove a dying task's waiters
+void futex_cleanup_task(task_state_t *task) {
+   for(int i = 0; i < 256; i++) {
+      futex_waiter_t **link = &buckets[i].w;
+      while(*link) {
+         futex_waiter_t *waiter = *link;
+         if(waiter->task_id == task->task_id && waiter->task_uid == task->task_uid) {
+            *link = waiter->next;
+            kfree(waiter);
+         } else {
+            link = &waiter->next;
+         }
       }
    }
 }

@@ -992,37 +992,37 @@ static inline bool escalate() {
    return success;
 }
 
-// returns a port uid, or a msg_err_t - test with MSG_IS_ERR (lib/api.h)
-static inline uint32_t create_port(char *name, bool client_reserves) {
-   uint32_t port;
+static inline int create_port(char *name, bool client_reserves, handle_t *port_h) {
+   int status;
+   handle_t port;
    asm volatile(
       "int $0x30"
-      : "=b" (port)
+      : "=b" (status), "=c" (port)
       : "a" (API_CREATE_PORT),
       "b" ((uint32_t)name),
       "c" (client_reserves)
       : "cc", "memory"
    );
-   return port;
+   *port_h = port;
+   return status;
 }
 
-// returns a channel uid, or a msg_err_t - test with MSG_IS_ERR (lib/api.h)
-static inline uint32_t port_connect(char *name, uint32_t *port) {
-   uint32_t port_uid;
-   uint32_t channel;
+static inline int port_connect(char *name, handle_t *conn_h) {
+   int status;
+   handle_t channel;
    asm volatile(
       "int $0x30"
-      : "=b" (channel),
-      "=c" (port_uid)
+      : "=b" (status),
+      "=c" (channel)
       : "a" (API_PORT_CONNECT),
       "b" ((uint32_t)name)
       : "cc", "memory"
    );
-   *port = port_uid;
-   return channel;
+   *conn_h = channel;
+   return status;
 }
 
-static inline void override_msg(void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags)) {
+static inline void override_msg(void (*msg_func)(handle_t conn_h, uint32_t flags)) {
    asm volatile(
       "int $0x30"
       :: "a" (API_OVERRIDE_MSG),
@@ -1035,41 +1035,40 @@ static inline void override_msg(void (*msg_func)(uint32_t port_uid, uint32_t cha
 #define MSG_HANDLE(h) ((msg_handle_t){ (h), KOBJ_RIGHT_SAME, 0 })
 
 // send msg_t obj (currently doesn't support handles)
-static inline int msg_send_obj(uint32_t port_uid, uint32_t channel_uid, msg_send_t *msg, uint32_t flags) {
+static inline int msg_send_obj(handle_t conn_h, msg_send_t *msg, uint32_t flags) {
    int status;
    asm volatile(
       "int $0x30"
       : "=b" (status)
       : "a" (API_MSG_SEND),
-      "b" (port_uid),
-      "c" (channel_uid),
-      "d" ((uint32_t)msg),
-      "S" (flags)
+      "b" (conn_h),
+      "c" ((uint32_t)msg),
+      "d" (flags)
       : "cc", "memory"
    );
    return status;
 }
 
-static inline int msg_send_flags(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length, uint32_t flags) {
+static inline int msg_send_flags(handle_t conn_h, void *buffer, int length, uint32_t flags) {
    msg_send_t msg = {.buffer = buffer, .size = length, .handle_count = 0};
-   return msg_send_obj(port_uid, channel_uid, &msg, flags);
+   return msg_send_obj(conn_h, &msg, flags);
 }
 
-static inline int msg_send(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
-   return msg_send_flags(port_uid, channel_uid, buffer, length, 0);
+static inline int msg_send(handle_t conn_h, void *buffer, int length) {
+   return msg_send_flags(conn_h, buffer, length, 0);
 }
 
 // send a request the receiver is expected to reply to. client_reserves reserved a slot in the reply queue
-static inline int msg_request(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
-   return msg_send_flags(port_uid, channel_uid, buffer, length, MSG_EXPECT_REPLY);
+static inline int msg_request(handle_t conn_h, void *buffer, int length) {
+   return msg_send_flags(conn_h, buffer, length, MSG_EXPECT_REPLY);
 }
 
 // answer MSG_EXPECT_REPLY (frees a reserved slot in senders queue)
-static inline int msg_reply(uint32_t port_uid, uint32_t channel_uid, void *buffer, int length) {
-   return msg_send_flags(port_uid, channel_uid, buffer, length, MSG_REPLY);
+static inline int msg_reply(handle_t conn_h, void *buffer, int length) {
+   return msg_send_flags(conn_h, buffer, length, MSG_REPLY);
 }
 
-static inline int msg_read(uint32_t port_uid, uint32_t channel_uid, void *buffer, int size, uint32_t *channel_flags, uint32_t *msg_flags) {
+static inline int msg_read(handle_t conn_h, void *buffer, int size, uint32_t *channel_flags, uint32_t *msg_flags) {
    int status;
    uint32_t channel_flags_val;
    uint32_t msg_flags_val;
@@ -1079,10 +1078,9 @@ static inline int msg_read(uint32_t port_uid, uint32_t channel_uid, void *buffer
       "=c" (channel_flags_val),
       "=d" (msg_flags_val)
       : "a" (API_MSG_READ),
-      "b" (port_uid),
-      "c" (channel_uid),
-      "d" ((uint32_t)buffer),
-      "S" (size)
+      "b" (conn_h),
+      "c" ((uint32_t)buffer),
+      "d" (size)
       : "cc", "memory"
    );
    if(status < 0) {
@@ -1094,17 +1092,16 @@ static inline int msg_read(uint32_t port_uid, uint32_t channel_uid, void *buffer
    return status;
 }
 
-static inline bool msg_wait_for_read(uint32_t port_uid, uint32_t channel_uid) {
-   bool success;
+static inline int msg_wait_for_read(handle_t conn_h) {
+   int status;
    asm volatile(
       "int $0x30"
-      : "=b" (success)
+      : "=b" (status)
       : "a" (API_WAIT_ON_RECEIVE),
-      "b" (port_uid),
-      "c" (channel_uid)
+      "b" (conn_h)
       : "cc", "memory"
    );
-   return success;
+   return status;
 }
 
 static inline bool snooze() {
@@ -1118,39 +1115,14 @@ static inline bool snooze() {
    return success;
 }
 
-static inline bool port_close(uint32_t port_uid) {
-   bool success;
-   asm volatile(
-      "int $0x30"
-      : "=b" (success)
-      : "a" (API_PORT_CLOSE),
-      "b" (port_uid)
-      : "cc", "memory"
-   );
-   return success;
-}
-
-static inline bool port_disconnect(uint32_t port_uid, uint32_t channel_uid) {
-   bool success;
-   asm volatile(
-      "int $0x30"
-      : "=b" (success)
-      : "a" (API_PORT_DISCONNECT),
-      "b" (port_uid),
-      "c" (channel_uid)
-      : "cc", "memory"
-   );
-   return success;
-}
-
 // updates recv_msg
-static inline int msg_sync_send_obj(uint32_t channel_uid, msg_send_t *send_msg, msg_recv_t *recv_msg) {
+static inline int msg_sync_send_obj(handle_t conn_h, msg_send_t *send_msg, msg_recv_t *recv_msg) {
    int read_size;
    asm volatile(
       "int $0x30;"
       : "=b" (read_size)
       : "a" (API_MSG_CALL),
-      "b" (channel_uid),
+      "b" (conn_h),
       "c" ((uint32_t)send_msg),
       "d" ((uint32_t)recv_msg)
       : "cc", "memory"
@@ -1158,53 +1130,54 @@ static inline int msg_sync_send_obj(uint32_t channel_uid, msg_send_t *send_msg, 
    return read_size;
 }
 
-static inline int msg_sync_send(uint32_t channel_uid, uint8_t *send_buffer, int send_size, uint8_t *receive_buffer, int receive_size) {
+static inline int msg_sync_send(handle_t conn_h, uint8_t *send_buffer, int send_size, uint8_t *receive_buffer, int receive_size) {
    msg_send_t send_msg = {.buffer = send_buffer, .size = send_size, .handle_count = 0};
    msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
-   return msg_sync_send_obj(channel_uid, &send_msg, &recv_msg);
+   return msg_sync_send_obj(conn_h, &send_msg, &recv_msg);
 }
 
 // updates recv_msg
-static inline int msg_sync_receive_obj(uint32_t port_uid, msg_recv_t *recv_msg) {
+static inline int msg_sync_receive_obj(handle_t port_h, msg_recv_t *recv_msg) {
    int bytes_read;
    asm volatile(
       "int $0x30;"
       : "=b" (bytes_read)
       : "a" (API_MSG_RECEIVE),
-      "b" (port_uid),
+      "b" (port_h),
       "c" ((uint32_t)recv_msg)
       : "cc", "memory"
    );
    return bytes_read;
 }
 
-static inline int msg_sync_receive(uint32_t port_uid, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid, uint32_t *channel_uid, uint32_t *flags) {
+static inline int msg_sync_receive(handle_t port_h, uint8_t *receive_buffer, int receive_size, uint32_t *call_uid, handle_t *conn_h, uint32_t *flags) {
    msg_recv_t recv_msg = {.buffer = receive_buffer, .buffer_size = receive_size, .handle_count = 0};
-   int r = msg_sync_receive_obj(port_uid, &recv_msg);
+   int r = msg_sync_receive_obj(port_h, &recv_msg);
    if(r >= 0) {
-      *channel_uid = recv_msg.channel_uid;
+      *conn_h = recv_msg.conn_h;
       *call_uid = recv_msg.call_uid;
       *flags = recv_msg.flags;
    }
    return r;
 }
 
-static inline int msg_sync_reply_obj(uint32_t call_uid, msg_send_t *send_msg) {
+static inline int msg_sync_reply_obj(handle_t conn_h, uint32_t call_uid, msg_send_t *send_msg) {
    int sent_bytes;
    asm volatile(
       "int $0x30;"
       : "=b" (sent_bytes)
       : "a" (API_MSG_REPLY),
-      "b" (call_uid),
-      "c" ((uint32_t)send_msg)
+      "b" (conn_h),
+      "c" (call_uid),
+      "d" ((uint32_t)send_msg)
       : "cc", "memory"
    );
    return sent_bytes;
 }
 
-static inline int msg_sync_reply(uint32_t call_uid, uint8_t *send_buffer, int send_size) {
+static inline int msg_sync_reply(handle_t conn_h, uint32_t call_uid, uint8_t *send_buffer, int send_size) {
    msg_send_t send_msg = {.buffer = send_buffer, .size = send_size, .handle_count = 0};
-   return msg_sync_reply_obj(call_uid, &send_msg);
+   return msg_sync_reply_obj(conn_h, call_uid, &send_msg);
 }
 
 #endif

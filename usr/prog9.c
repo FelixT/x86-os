@@ -6,7 +6,7 @@
 #include "../lib/string.h"
 #include "../lib/api.h"
 
-static uint32_t child_channel_uid = (uint32_t)-1; // used by sender to periodically wake child process
+static handle_t child_conn_h = 0; // connection to child process - used by sender to periodically wake child process
 
 // async ipc test processes
 // 'client' thread sends msgs 'test', 'test2' and sends 'echo test' with msg_request (MSG_EXPECT_REPLY / reserved reply queue slot)
@@ -14,18 +14,17 @@ static uint32_t child_channel_uid = (uint32_t)-1; // used by sender to periodica
 // server process echo's back requests (MSG_EXPECT_REPLY) to the sender
 // 'child' client process sends msg 'child' to the server and waits until it receives a msg from the server (via snooze) repeatedly
 
-void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
-   if(channel_uid && flags & MSG_FLAG_CLOSED) {
-      printf("server: channel %u closed by client\n", channel_uid);
+void server_msg_func(handle_t conn_h, uint32_t flags) {
+   if(conn_h && flags & MSG_FLAG_CLOSED) {
+      printf("server: channel closed by client\n");
       end_subroutine();
    }
 
    // drain messages
    char buf[256];
    while(true) {
-      uint32_t channel_flags;
-      uint32_t msg_flags;
-      int r = msg_read(port_uid, channel_uid, buf, 256, &channel_flags, &msg_flags);
+      uint32_t channel_flags, msg_flags;
+      int r = msg_read(conn_h, buf, 256, &channel_flags, &msg_flags);
       if(r <= 0) {
          if(r < 0)
             printf("server read error %i\n", r);
@@ -33,22 +32,22 @@ void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
          return;
       }
       buf[r] = '\0';
-      printf("server received msg: '%s' from channel %u\n", buf, channel_uid);
+      printf("server received msg: '%s' from conn %u\n", buf, conn_h);
       flags |= channel_flags;
       if(flags)
          printf("server received flags: %u\n", flags);
 
       if(strequ(buf, "child"))
-         child_channel_uid = channel_uid;
+         child_conn_h = conn_h;
 
       if(msg_flags & MSG_EXPECT_REPLY) {
          // echo back to client
-         r = msg_reply(port_uid, channel_uid, buf, r);
+         r = msg_reply(conn_h, buf, r);
          if(r < 0)
             printf("server send failed error %i\n", r);
          // wake child
-         if(child_channel_uid != (uint32_t)-1) {
-            r = msg_send(port_uid, child_channel_uid, buf, strlen(buf));
+         if(child_conn_h) {
+            r = msg_send(child_conn_h, buf, strlen(buf));
             if(r < 0)
                printf("server wake child failed with code %i\n", r);
          }
@@ -61,18 +60,17 @@ void server_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
    end_subroutine();
 }
 
-void client_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
+void client_msg_func(handle_t conn_h, uint32_t flags) {
    if(flags & MSG_FLAG_CLOSED) {
-      printf("server: channel %u closed by client\n", channel_uid);
+      printf("server: channel closed by client\n");
       end_subroutine();
    }
 
    // drain messages
    char buf[256];
    while(true) {
-      uint32_t channel_flags;
-      uint32_t msg_flags;
-      int r = msg_read(port_uid, channel_uid, buf, 256, &channel_flags, &msg_flags);
+      uint32_t channel_flags, msg_flags;
+      int r = msg_read(conn_h, buf, 256, &channel_flags, &msg_flags);
       if(r <= 0) {
          if(r < 0)
             printf("client read error %i\n", r);
@@ -95,31 +93,31 @@ void client_msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
 void client_main() {
    override_msg(&client_msg_func);
 
-   uint32_t port_uid;
-   uint32_t channel_uid = port_connect("/prog9", &port_uid);
-   if(MSG_IS_ERR(channel_uid)) {
-      printf("Failed to connect to port, error %i\n", (int)channel_uid);
+   handle_t conn_h;
+   int r = port_connect("/prog9", &conn_h);
+   if(r < 0) {
+      printf("Failed to connect to port, error %i\n", r);
       exit(1);
    }
 
-   printf("client connected to port %u via channel %u\n", port_uid, channel_uid);
+   printf("client connected to port\n");
 
    while(true) {
       // send message to server
-      int r = msg_send(port_uid, channel_uid, "test", 4);
+      int r = msg_send(conn_h, "test", 4);
       if(r < 0)
          printf("msg_send failed, code %i\n", r);
 
-      r = msg_send(port_uid, channel_uid, "test2", 5);
+      r = msg_send(conn_h, "test2", 5);
       if(r < 0)
          printf("msg_send 2 failed, code %i\n", r);
 
       // the only message the server replies to, so the only one that reserves a reply slot
-      r = msg_request(port_uid, channel_uid, "echo test", strlen("echo test"));
+      r = msg_request(conn_h, "echo test", strlen("echo test"));
       if(r < 0)
          printf("msg_request failed, code %i\n", r);
 
-      msg_wait_for_read(port_uid, channel_uid);
+      msg_wait_for_read(conn_h);
 
       sleep(800);
    }
@@ -130,30 +128,28 @@ void child_main() {
    set_window_title("Prog9 Child");
 
    // wait for server - todo autowait func
-   uint32_t serverport;
-   uint32_t channel;
+   handle_t conn_h;
    while(true) {
       printf("connecting\n");
-      channel = port_connect("/prog9", &serverport);
-      if(!MSG_IS_ERR(channel))
+      int r = port_connect("/prog9", &conn_h);
+      if(r >= 0)
          break;
 
       sleep(100);
    }
 
-   printf("child connected to server on port %u channel %u\n", serverport, channel);
+   printf("child connected to server on conn handle %u\n", conn_h);
 
    char buf[10];
    strcpy(buf, "child");
-   int r = msg_send(serverport, channel, buf, 5);
+   int r = msg_send(conn_h, buf, 5);
    if(r < 0)
       printf("child process send failed error %i\n", r);
 
    while(true) {
       // wait to be woken by msg
-      uint32_t channel_flags;
-      uint32_t msg_flags;
-      int r = msg_read(serverport, channel, buf, 10, &channel_flags, &msg_flags);
+      uint32_t channel_flags, msg_flags;
+      int r = msg_read(conn_h, buf, 10, &channel_flags, &msg_flags);
       if(r == MSG_READ_EMPTY)
          printf("read: queue empty\n");
       if(r < 0)
@@ -181,12 +177,13 @@ void server_main() {
    }
    free(childargs[0]);
 
-   uint32_t port = create_port("/prog9", true);
-   if(MSG_IS_ERR(port)) {
-      printf("Failed to create port, error %i\n", (int)port);
+   handle_t port_h;
+   int r = create_port("/prog9", true, &port_h);
+   if(r < 0) {
+      printf("Failed to create port, error %i\n", r);
       exit(1);
    }
-   printf("Created port %u\n", port);
+   printf("Created port %u\n", port_h);
 
    override_msg(&server_msg_func);
 
@@ -203,9 +200,12 @@ void sync_thread() {
    // 'sync' client thread
    printf("Prog9 sync thread\n");
 
-   uint32_t port_uid;
-   uint32_t channel_uid;
-   channel_uid = port_connect("/prog9/sync", &port_uid);
+   handle_t conn_h;
+   int r = port_connect("/prog9/sync", &conn_h);
+   if(r < 0) {
+      printf("sync connect failed: %i\n", r);
+      exit(1);
+   }
 
    char buf[32] = "synctest";
    char buf2[32] = "asynctest";
@@ -217,14 +217,16 @@ void sync_thread() {
          bool ending = i == 8*14;
          if(ending)
             strcpy(buf2, "ending");
-         int r = msg_send(port_uid, channel_uid, buf2, 32);
+         int r = msg_send(conn_h, buf2, 32);
          if(r < 0)
             printf("child async send status %i\n", r);
-         if(ending)
-            exit(1); // 'ending' msg should be delivered, then flag port disconnect (separately)
+         if(ending) {
+            hrelease(conn_h); // 'ending' msg should be delivered, then flag port disconnect (separately)
+            exit(1);
+         }
       }
 
-      int r = msg_sync_send(channel_uid, (uint8_t*)buf, 64, (uint8_t*)recv_buf, 32);
+      int r = msg_sync_send(conn_h, (uint8_t*)buf, 64, (uint8_t*)recv_buf, 32);
       if(r > 0)
          printf("child received response '%s'\n", recv_buf);
       else
@@ -240,26 +242,32 @@ void sync_main() {
    printf("Prog9 sync process\n");
    set_window_title("Prog9 Sync");
 
-   uint32_t port = create_port("/prog9/sync", false);
+   handle_t port_h;
+   int r = create_port("/prog9/sync", false, &port_h);
+   if(r < 0) {
+      printf("create port failed: %i\n", r);
+      exit(1);
+   }
    create_thread(&sync_thread);
 
    char buf[64];
    uint32_t call_id;
 
    while(true) {
-      uint32_t channel_uid, flags;
-      int r = msg_sync_receive(port, (uint8_t*)buf, 64, &call_id, &channel_uid, &flags);
+      uint32_t flags;
+      handle_t conn_h;
+      int r = msg_sync_receive(port_h, (uint8_t*)buf, 64, &call_id, &conn_h, &flags);
       if(r == 0) {
          // flags
          printf("server read flags %u\n", flags);
-         if(channel_uid && flags & MSG_FLAG_CLOSED)
+         if(conn_h && flags & MSG_FLAG_CLOSED)
             exit(1);
       }
       if(r > 0) {
          printf("server received msg '%s'\n", buf);
          if(call_id) {
             // reply
-            r = msg_sync_reply(call_id, (uint8_t*)buf, 64);
+            r = msg_sync_reply(conn_h, call_id, (uint8_t*)buf, 64);
             if(r < 0)
                printf("server reply status %i\n", r);
          } // otherwise async/notif

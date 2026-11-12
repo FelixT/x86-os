@@ -75,8 +75,6 @@ typedef enum {
 } task_pause_reason_t;
 
 #define PROCESS_MAX_KOBJ 64
-#define PROCESS_MAX_PORTS 16
-#define TASK_MAX_CHANNELS 16
 
 #define VM_FLAG_WRITE 1
 #define VM_FLAG_NO_CACHE 2
@@ -112,8 +110,6 @@ typedef struct process_t {
    int no_allocated; // mapped pages (via process_map_kobj)
    uint32_t heap_start; // heap/end of ds (vmem location)
    uint32_t heap_end; // 'break point'
-   struct msg_port_t *ports[PROCESS_MAX_PORTS]; // ports owned by process
-   int port_count;
    char **launch_args;
    int launch_argc;
 
@@ -148,9 +144,7 @@ typedef struct task_state_t {
    kqueue_t event_queue;
    task_event_t event_buf[EVENT_QUEUE_SIZE];
 
-   void (*msg_func)(uint32_t port_uid, uint32_t channel_uid, uint32_t flags);
-   struct msg_channel_t *msg_channels[TASK_MAX_CHANNELS];
-   int msg_channel_count;
+   void (*msg_func)(handle_t conn_h, uint32_t flags);
    bool msg_notify_pending; // msg event callback was dropped, requeue when slot opens
 
    // sync info

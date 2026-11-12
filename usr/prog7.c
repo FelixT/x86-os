@@ -8,13 +8,16 @@ volatile uint32_t flag = 0;
 void process() {
    // second process
    write_str("Process launched\n");
-   uint32_t port;
-   uint32_t channel = port_connect("/prog7", &port);
+   handle_t conn_h;
+   int r = port_connect("/prog7", &conn_h);
+   if(r < 0)
+      exit(1);
    uint8_t buf = 0;
    msg_send_t send_msg = {.buffer = &buf, .size = 1, .handles = NULL, .handle_count = 0};
    handle_t handles[1];
    msg_recv_t recv_msg = {.buffer = NULL, .buffer_size = 0, .handles = handles, .handle_count = 1};
-   if(MSG_IS_ERR(msg_sync_send_obj(channel, &send_msg, &recv_msg)))
+   r = msg_sync_send_obj(conn_h, &send_msg, &recv_msg);
+   if(r < 0)
       exit(1);
    
    uint32_t *futex = map(handles[0], 0);
@@ -74,8 +77,9 @@ void _start(int argc, char **args) {
 
    *futex = 0;
 
-   uint32_t port = create_port("/prog7", false);
-   if(MSG_IS_ERR(port))
+   handle_t port_h;
+   int r = create_port("/prog7", false, &port_h);
+   if(r < 0)
       exit(1);
    
    if(!unpause_task(t))
@@ -83,14 +87,17 @@ void _start(int argc, char **args) {
 
    // wait for process to send
    uint8_t buf;
-   uint32_t call_uid, channel_uid, flags;
-   if(MSG_IS_ERR(msg_sync_receive(port, &buf, 1, &call_uid, &channel_uid, &flags)))
+   uint32_t call_uid, flags;
+   handle_t conn_h;
+   r = msg_sync_receive(port_h, &buf, 1, &call_uid, &conn_h, &flags);
+   if(r < 0)
       exit(1);
 
    write_str("Connected\n");
    msg_handle_t handles[1] = {MSG_HANDLE(h)};
    msg_send_t msg = {.buffer = NULL, .size = 0, .handles = handles, .handle_count = 1};
-   if(MSG_IS_ERR(msg_sync_reply_obj(call_uid, &msg)))
+   r = msg_sync_reply_obj(conn_h, call_uid, &msg);
+   if(r < 0)
       exit(1);
    
    while(true) {

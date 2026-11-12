@@ -7,8 +7,7 @@
 typedef struct connection_t {
    bool connected;
    char name[MSG_PORT_NAME_LEN];
-   uint32_t port_uid;
-   uint32_t channel_uid;
+   handle_t handle;
 } connection_t;
 
 #define MAX_CONNECTIONS 16
@@ -23,10 +22,10 @@ int find_connection(char *name) {
    return -1;
 }
 
-int find_connection_by_uid(uint32_t port_uid, uint32_t channel_uid) {
+int find_connection_by_handle(handle_t conn_h) {
    for(int i = 0; i < MAX_CONNECTIONS; i++) {
       if(!connections[i].connected) continue;
-      if(connections[i].port_uid == port_uid && connections[i].channel_uid == channel_uid)
+      if(connections[i].handle == conn_h)
          return i;
    }
    return -1;
@@ -53,10 +52,10 @@ void checkcmd(char *buf) {
 
    if(strstartswith(buf, "connect ")) {
       char *name = buf + strlen("connect ");
-      uint32_t port_uid;
-      uint32_t channel_uid = port_connect(name, &port_uid);
-      if(MSG_IS_ERR(channel_uid)) {
-         printf("connect: error %i\n", (int)channel_uid);
+      handle_t conn_h;
+      int r = port_connect(name, &conn_h);
+      if(r < 0) {
+         printf("connect: error %i\n", r);
          end_subroutine();
          return;
       }
@@ -69,10 +68,9 @@ void checkcmd(char *buf) {
       }
 
       connections[c].connected = true;
-      connections[c].port_uid = port_uid;
-      connections[c].channel_uid = channel_uid;
+      connections[c].handle = conn_h;
       strncpy(connections[c].name, name, sizeof(connections[c].name)-1);
-      printf("connect: connected to port %u channel %u index %i\n", port_uid, channel_uid, c);
+      printf("connect: connected to port %s conn handle %u index %i\n", name, conn_h, c);
    }
 
    if(strstartswith(buf, "sendi ")) {
@@ -100,7 +98,7 @@ void checkcmd(char *buf) {
          msg += strlen("echo ");
       }
 
-      int r = msg_send_flags(connections[c].port_uid, connections[c].channel_uid, msg, strlen(msg), flags);
+      int r = msg_send_flags(connections[c].handle, msg, strlen(msg), flags);
       if(r < 0) {
          printf("sendi: msg_send failed, code %i\n", r);
       }
@@ -116,8 +114,8 @@ void checkcmd(char *buf) {
          return;
       }
 
-      if(!port_disconnect(connections[c].port_uid, connections[c].channel_uid)) {
-         printf("closei: port_disconnect failed for index %i\n", c);
+      if(!hrelease(connections[c].handle)) {
+         printf("closei: port disconnect failed for index %i\n", c);
          end_subroutine();
          return;
       }
@@ -128,13 +126,13 @@ void checkcmd(char *buf) {
    end_subroutine();
 }
 
-void msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
+void msg_func(handle_t conn_h, uint32_t flags) {
    // drain messages
    char buf[256];
    while(true) {
       uint32_t channel_flags;
       uint32_t msg_flags;
-      int r = msg_read(port_uid, channel_uid, buf, 256, &channel_flags, &msg_flags);
+      int r = msg_read(conn_h, buf, 256, &channel_flags, &msg_flags);
       if(r <= 0) {
          if(r < 0)
             printf("msg_read failed, code %i\n", r);
@@ -142,9 +140,9 @@ void msg_func(uint32_t port_uid, uint32_t channel_uid, uint32_t flags) {
       }
       buf[r] = '\0';
 
-      int i = find_connection_by_uid(port_uid, channel_uid);
+      int i = find_connection_by_handle(conn_h);
       if(i < 0) {
-         printf("msg_func: received msg for unknown connection port %u channel %u\n", port_uid, channel_uid);
+         printf("msg_func: received msg for unknown handle %u\n", conn_h);
          end_subroutine();
       }
       printf("%s (%i): '%s'", connections[i].name, i, buf);

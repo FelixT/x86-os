@@ -29,7 +29,7 @@ typedef struct kobj_t {
     uint32_t default_rights; // rights can only shrink
     
     bool (*connect_func)(kobj_ref_t *ref, process_t *process); // called when duplicating handle
-    void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd)
+    void (*stop_func)(kobj_inst_t *inst); // disable device (before resources are free'd) - called when last handle is closed (guaranteed to be before free_func)
     void (*close_func)(kobj_ref_t *ref, process_t *process, bool ending); // called when a ref is closed (ending = closing as process is ending)
     void (*free_func)(kobj_inst_t *inst); // called when last ref is closed
     bool (*map_func)(kobj_inst_t *inst, int index, kobj_mapping_t *mapping);

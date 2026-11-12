@@ -7,6 +7,7 @@
 #include "shared.h"
 #include "msg.h"
 #include "ksync.h"
+#include "futex.h"
 #include "cpu.h"
 #include "gdt.h"
 
@@ -103,7 +104,6 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    for(int i = 0; i < PROCESS_MAX_KOBJ; i++)
       process->kobj[i] = NULL;
    process->kobj_count = 0;
-   process->port_count = 0;
    strcpy(process->working_dir, "/sys");
    strcpy(process->exe_path, "");
    process->no_threads = 0;
@@ -180,7 +180,6 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].checkcmd_buffer = NULL;
    tasks[index].in_syscall = false;
    tasks[index].msg_func = NULL;
-   tasks[index].msg_channel_count = 0;
    tasks[index].msg_notify_pending = false;
    tasks[index].mutex = NULL;
    tasks[index].mutex_next_waiter = NULL;
@@ -387,6 +386,49 @@ static void free_event_queue(task_state_t *task) {
    }
 }
 
+static void end_process(registers_t *regs, process_t *process) {
+   task_state_t *main_thread = process->threads[0];
+   task_reset_windows(main_thread->task_id);
+
+   // free program memory
+   if(process->prog_size != 0)
+      kfree((void*)process->prog_start);
+
+   // free heap
+   if(process->heap_end > process->heap_start) {
+      for(uint32_t addr = process->heap_start; addr < process->heap_end; addr+=PAGE_SIZE) {
+         uint32_t phys = page_getphysical(process->page_dir, addr);
+         if(phys != (uint32_t)-1)
+            kfree((void*)phys);
+      }
+   }
+
+   // free kernel objs
+   process_release_kobjs(process);
+
+   // switch pagedir before freeing
+   if(process->page_dir == page_get_current()) {
+      if(regs)
+         switch_task(regs, false); // all process threads are ended
+      else
+         swap_pagedir(page_get_kernel_pagedir());
+   }
+
+   // free page dir
+   if(process->page_dir != page_get_kernel_pagedir())
+      free_page_dir(process->page_dir);
+   else // binary task - page dir persists, so undo main thread stack mapping
+      task_unmap_stack(main_thread);
+
+   // free launch args
+   free_launch_args(process->launch_args, process->launch_argc);
+
+   process_free_vm(process);
+
+   // free process
+   kfree(process);
+}
+
 static bool end_task_helper(int index, registers_t *regs, bool child) {
    if(index < 0 || index >= TOTAL_TASKS) return false;
    if(index == 0) {
@@ -429,11 +471,11 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
    task->enabled = false;
 
-   // free channels
-   msg_cleanup_task(task);
-
    // release held mutexes, remove task from any waiter queues
    ksync_cleanup_task(task);
+
+   // free futex waiters
+   futex_cleanup_task(task);
 
    // free task event queue
    free_event_queue(task);
@@ -451,54 +493,13 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
          if(!end_task_helper(thread->task_id, NULL, true)) {
             task->process->threads[i] = NULL;
             task->process->threads[remaining_threads++] = thread;
-         }
-         else
+         } else {
             thread->process = NULL;
+         }
       }
 
       if(!remaining_threads) {
-         // free task memory
-         if(task->process->prog_size != 0)
-            kfree((void*)task->process->prog_start);
-
-         task_reset_windows(index);
-
-         // free heap
-         if(task->process->heap_end > task->process->heap_start) {
-            for(uint32_t addr = task->process->heap_start; addr < task->process->heap_end; addr+=PAGE_SIZE) {
-               uint32_t phys = page_getphysical(task->process->page_dir, addr);
-               if(phys != (uint32_t)-1)
-                  kfree((void*)phys);
-            }
-         }
-
-         // free kernel objs
-         process_release_kobjs(task->process);
-
-         // free ports
-         msg_cleanup_process(task->process);
-
-         // switch pagedir before freeing
-         if(task->process->page_dir == page_get_current()) {
-            if(regs)
-               switch_task(regs, false); // all process threads are ended
-            else
-               swap_pagedir(page_get_kernel_pagedir());
-         }
-
-         // free page dir
-         if(task->process->page_dir != page_get_kernel_pagedir())
-            free_page_dir(task->process->page_dir);
-         else // binary task - page dir persists, so undo stack mapping
-            task_unmap_stack(task);
-
-         // free launch args
-         free_launch_args(task->process->launch_args, task->process->launch_argc);
-
-         process_free_vm(task->process);
-
-         // free process
-         kfree(task->process);
+         end_process(regs, task->process);
       } else {
          debug_printf("%i threads couldn't be ended\n", remaining_threads);
       }
@@ -1018,9 +1019,11 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
          return false; // queue is empty
 
       // skip stale msgs to avoid extra wakeups
-      // if channel flags are set the notification isn't skipped
-      bool stale = event->type == E_MSG && event->args[2] == 0 && msg_notif_is_stale(task, event->args[0], event->args[1]);
-
+      // if flags are set the notification isn't skipped
+      // matches call_msg_func
+      handle_t conn_h = event->args[0]; // 0 = port signal (never stale)
+      uint32_t flags = event->args[1];
+      bool stale = event->type == E_MSG && conn_h && !flags && msg_notif_is_stale(task, conn_h);
       if(!stale) {
          if(!switch_to_task(taskid, regs)) return false;
          if(!task_execute_subroutine(regs, event->type, event->addr, event->args, event->argc)) {

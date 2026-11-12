@@ -103,8 +103,8 @@ typedef enum {
    API_MSG_READ,
    API_WAIT_ON_RECEIVE,
    API_SNOOZE,
-   API_PORT_CLOSE,
-   API_PORT_DISCONNECT,
+   API_RESERVED_16,
+   API_RESERVED_17,
    API_MSG_CALL,
    API_MSG_RECEIVE,
    API_MSG_REPLY,
@@ -198,7 +198,10 @@ typedef enum {
    MSG_ERR_INVALID_HANDLES = -24,
    MSG_ERR_PEER_INVALID_HANDLES = -25,
    MSG_ERR_PEER_INVALID_MSG = -26, // receiver's msg_recv_t* became invalid
-   MSG_ERR_PEER_TOO_MANY_HANDLES = -27 // peer sent more handles than could be delivered, e.g. receive handle_count too small for a MSG_HANDLE_MOVE
+   MSG_ERR_PEER_TOO_MANY_HANDLES = -27, // peer sent more handles than could be delivered, e.g. receive handle_count too small for a MSG_HANDLE_MOVE
+   MSG_ERR_HANDLE_FAIL = -28, // invalid handle/couldn't create handle
+   MSG_ERR_PEER_HANDLE_FAIL = -29, // invalid handle/couldn't create handle for peer
+   MSG_ERR_INVALID_CALLID = -30
 } msg_err_t;
 
 typedef int handle_t;
@@ -227,8 +230,8 @@ typedef struct msg_recv_t {
    int handles_sent;
    int handles_received;
    uint32_t call_uid; // set on receive
-   uint32_t flags; // channel flags if channel_uid > 0, otherwise signal flags
-   uint32_t channel_uid; // channel the message or flags came from
+   uint32_t flags; // channel flags if conn_h != 0, otherwise signal flags
+   handle_t conn_h; // conn handle the message or flags came from (0 for none/signal)
    uint32_t message_flags;
 } msg_recv_t;
 
@@ -271,6 +274,8 @@ typedef enum {
    KOBJ_PCI, // pci device
    KOBJ_SHARED,
    KOBJ_FILE, // open file instance
+   KOBJ_PORT, // msg port
+   KOBJ_CHANNEL_CONN, // msg channel connection
    KOBJ_NONE // must be at end
 } kobj_type_t;
 

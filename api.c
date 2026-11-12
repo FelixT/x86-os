@@ -99,8 +99,6 @@ static void (*const api_handlers[API_RESERVED_END])(registers_t*) = {
    [API_MSG_READ] = &api_msg_read,
    [API_WAIT_ON_RECEIVE] = &api_wait_on_receive,
    [API_SNOOZE] = &api_snooze,
-   [API_PORT_CLOSE] = &api_port_close,
-   [API_PORT_DISCONNECT] = &api_port_disconnect,
    [API_MSG_CALL] = &api_msg_call,
    [API_MSG_RECEIVE] = &api_msg_receive,
    [API_MSG_REPLY] = &api_msg_reply,
@@ -764,7 +762,7 @@ void api_read(registers_t *regs) {
       int writer_task = file->pipe->write_waiting_task;
       if(writer_task >= 0) {
          if(fs_pipe_wake_writer(file->pipe))
-            switch_to_task(writer_task, regs);
+            task_interrupt_set(writer_task, true); // run writer once the syscall finishes
       }
    }
 
@@ -831,7 +829,7 @@ void api_write(registers_t *regs) {
       int reader_task = file->pipe->read_waiting_task;
       if(reader_task >= 0) {
          if(fs_pipe_wake_reader(file->pipe))
-            switch_to_task(reader_task, regs);
+            task_interrupt_set(reader_task, true); // run reader once the syscall finishes
       }
    }
 
@@ -1052,7 +1050,10 @@ void api_close_window(registers_t *regs) {
    // OUT ebx: bool success
    int cindex = regs->ebx;
    gui_window_t *mainwindow = api_get_window();
-   if(!mainwindow) return;
+   if(!mainwindow) {
+      regs->ebx = 0;
+      return;
+   }
    int w = get_current_task_state()->process->window;
    if(cindex == -1) {
       // close main window and all children without killing task
@@ -1497,7 +1498,7 @@ void api_unpause(registers_t *regs) {
       return;
    }
    task_resume(task);
-   switch_to_task(task_id, regs);
+   task_interrupt_set(task_id, true); // run it once the syscall finishes
 }
 
 // duplicate handle - hdup
@@ -1601,7 +1602,7 @@ void api_futex_wait(registers_t *regs) {
 
 void api_futex_wake(registers_t *regs) {
    // IN: ebx - addr
-   futex_wake(regs, (void*)regs->ebx);
+   futex_wake((void*)regs->ebx);
 }
 
 void api_shared_create(registers_t *regs) {
@@ -1809,30 +1810,39 @@ void api_escalate(registers_t *regs) {
 void api_create_port(registers_t *regs) {
    // IN: ebx - name
    // IN: ecx - client reserves queue slot for response from server (no blocks)
-   // OUT: ebx - port uid, -1 on fail
+   // OUT: ebx - status (0 for succes)
+   // OUT: ecx - port handle, -1 on fail
    char *name = (char*)regs->ebx;
    bool client_reserves = regs->ecx;
+   regs->ecx = -1;
    if(api_validate_str(name, MSG_PORT_NAME_LEN) < 0) {
       regs->ebx = MSG_ERR_INVALID_BUF;
       return;
    }
-   regs->ebx = create_port(get_current_task_state(), name, client_reserves);
+   kobj_handle_t h;
+   int status = create_port(get_current_task_state(), name, client_reserves, &h);
+   regs->ebx = status;
+   if(status < 0)
+      return;
+   regs->ecx = h;
 }
 
 void api_port_connect(registers_t *regs) {
    // IN: ebx - name
-   // OUT: ebx - channel uid
-   // OUT: ecx - port uid
+   // OUT: ebx - status
+   // OUT: ecx - channel handle
    char *name = (char*)regs->ebx;
    if(api_validate_str(name, MSG_PORT_NAME_LEN) < 0) {
       regs->ebx = MSG_ERR_INVALID_BUF;
       regs->ecx = 0;
       return;
    }
-   uint32_t port = 0;
-   uint32_t channel = port_connect(get_current_task_state(), name, &port);
-   regs->ebx = channel;
-   regs->ecx = port;
+   kobj_handle_t h;
+   int status = port_connect(get_current_task_state(), name, &h);
+   regs->ebx = status;
+   if(status < 0)
+      return;
+   regs->ecx = h;
 }
 
 void api_override_msg(registers_t *regs) {
@@ -1845,15 +1855,15 @@ void api_override_msg(registers_t *regs) {
 }
 
 void api_msg_read(registers_t *regs) {
-   // IN: ebx - port uid
-   // IN: ecx - channel uid
-   // IN: edx - receive buffer
-   // IN: esi - buffer size
+   // IN: ebx - conn handle
+   // IN: ecx - receive buffer
+   // IN: edx - buffer size
    // OUT: ebx - bytes read, 0 if queue is empty, negative error code on fail
-   uint32_t port_uid = regs->ebx;
-   uint32_t channel_uid = regs->ecx;
-   uint8_t *buffer = (uint8_t*)regs->edx;
-   uint32_t size = regs->esi;
+   // OUT: ecx - channel flags
+   // OUT: edx - msg flags
+   handle_t h = regs->ebx;
+   uint8_t *buffer = (uint8_t*)regs->ecx;
+   uint32_t size = regs->edx;
    task_state_t *task = get_current_task_state();
    if(!api_validate_mem(buffer, size, true)) {
       debug_printf("api_msg_read: validation failed\n");
@@ -1863,29 +1873,28 @@ void api_msg_read(registers_t *regs) {
 
    uint32_t channel_flags;
    uint32_t msg_flags;
-   int r = port_receive(task, port_uid, channel_uid, buffer, size, &channel_flags, &msg_flags);
+   int r = port_receive(task, h, buffer, size, &channel_flags, &msg_flags);
    registers_t *write_regs = api_write_regs(regs, task);
    write_regs->ebx = r;
-   write_regs->ecx = 0;
-   write_regs->edx = 0;
    if(r >= 0) {
       write_regs->ecx = channel_flags;
       write_regs->edx = msg_flags;
+   } else {
+      write_regs->ecx = 0;
+      write_regs->edx = 0;
    }
 }
 
 void api_msg_send(registers_t *regs) {
-   // IN: ebx - port uid
-   // IN: ecx - channel uid
-   // IN: edx - msg_send_t *msg
-   // IN: esi - flags (MSG_EXPECT_REPLY)
+   // IN: ebx - conn handle
+   // IN: ecx - msg_send_t *msg
+   // IN: edx - flags (MSG_EXPECT_REPLY)
    // OUT: ebx - return (0 success)
-   uint32_t port_uid = regs->ebx;
-   uint32_t channel_uid = regs->ecx;
-   msg_send_t *msg = (msg_send_t*)regs->edx; // validated by port_send
-   uint32_t flags = regs->esi;
+   handle_t h = regs->ebx;
+   msg_send_t *msg = (msg_send_t*)regs->ecx; // validated by port_send
+   uint32_t flags = regs->edx;
    task_state_t *task = get_current_task_state();
-   int r = port_send(regs, task, port_uid, channel_uid, msg, flags);
+   int r = port_send(regs, task, h, msg, flags);
    api_write_regs(regs, task)->ebx = r;
 }
 
@@ -1914,79 +1923,59 @@ void api_snooze(registers_t *regs) {
 
 void api_wait_on_receive(registers_t *regs) {
    // wait until slot opens in queue for writing, aka last 'blocking' message is received
-   // IN: ebx - port uid
-   // IN: ecx - channel uid
+   // IN: ebx - conn handle
    // OUT: ebx - bool result
-   uint32_t port_uid = regs->ebx;
-   uint32_t channel_uid = regs->ecx;
+   handle_t h = regs->ebx;
    task_state_t *task = get_current_task_state();
-   bool success = msg_wait_on_receive(task, port_uid, channel_uid);
-   regs->ebx = success;
-   if(success)
+   int r = msg_wait_on_receive(task, h); // > 0 when paused, < 0 msg_err_t
+   regs->ebx = r;
+   if(r > 0)
       task_interrupt_set(-1, true); // yield once the syscall finishes
-}
-
-void api_port_close(registers_t *regs) {
-   // IN: ebx - port uid
-   // OUT: ebx - bool result
-   uint32_t port_uid = regs->ebx;
-   task_state_t *task = get_current_task_state();
-   bool success = close_port(regs, task, port_uid);
-   api_write_regs(regs, task)->ebx = success;
-}
-
-void api_port_disconnect(registers_t *regs) {
-   // IN: ebx - port uid
-   // IN: ecx - channel uid
-   // OUT: ebx - bool result
-   uint32_t port_uid = regs->ebx;
-   uint32_t channel_uid = regs->ecx;
-   task_state_t *task = get_current_task_state();
-   bool success = port_disconnect(regs, task, port_uid, channel_uid);
-   api_write_regs(regs, task)->ebx = success;
 }
 
 // sync call into server
 void api_msg_call(registers_t *regs) {
-   // IN: ebx - channel uid
+   // IN: ebx - conn handle
    // IN: ecx - msg_send_t *send_msg
    // IN: edx - msg_recv_t *recv_msg
    // OUT: ebx - read size (< 0 - error)
    // OUT: recv_msg - bytes_received, sent_size, handles_sent, handles_received written on reply
-   uint32_t channel_uid = regs->ebx;
+   handle_t conn_h = regs->ebx;
    msg_send_t *send_msg = (msg_send_t*)regs->ecx;
    msg_recv_t *recv_msg = (msg_recv_t*)regs->edx;
    // validated by msg_call
    task_state_t *task = get_current_task_state();
-   int r = msg_call(regs, task, channel_uid, send_msg, recv_msg);
+   int r = msg_call(task, conn_h, send_msg, recv_msg);
    if(r < 0)
       regs->ebx = r;
    // otherwise regs written on reply (and unpause)
 }
 
 void api_msg_receive(registers_t *regs) {
-   // IN: ebx - port uid
+   // IN: ebx - port handle
    // IN: ecx - msg_recv_t *recv_msg
    // OUT: ebx - bytes read, errors negative
    // OUT: recv_msg - call_uid, bytes_received, sent_size, handles_sent, handles_received written on receive
-   uint32_t port_uid = regs->ebx;
+   handle_t h = regs->ebx;
    msg_recv_t *recv_msg = (msg_recv_t*)regs->ecx; // validated by msg_receive
    task_state_t *task = get_current_task_state();
-   int r = msg_receive(regs, task, port_uid, recv_msg);
+   int r = msg_receive(regs, task, h, recv_msg);
    if(r < 0)
       regs->ebx = r;
    // otherwise regs written on call (and unpause)
 }
 
 void api_msg_reply(registers_t *regs) {
-   // IN: ebx - call uid
-   // IN: ecx - msg_send_t *send_msg
+   // IN: ebx - conn handle
+   // IN: ecx - call uid
+   // IN: edx - msg_send_t *send_msg
    // OUT: ebx - bytes written, < 0 for failure
-   uint32_t call_uid = regs->ebx;
-   msg_send_t *send_msg = (msg_send_t*)regs->ecx;
+   handle_t h = regs->ebx;
+   uint32_t call_uid = regs->ecx;
+   msg_send_t *send_msg = (msg_send_t*)regs->edx;
    task_state_t *task = get_current_task_state();
    // validated by msg_reply
-   int r = msg_reply(regs, task, call_uid, send_msg);
+   int r = msg_reply(regs, task, h, call_uid, send_msg);
    if(r < 0)
       regs->ebx = r;
    // otherwise regs written by msg_reply

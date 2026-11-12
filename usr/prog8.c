@@ -46,11 +46,11 @@ void _start(int argc, char **args) {
          exit(1);
       }
 
-      uint32_t port;
-      uint32_t channel = port_connect("/prog8", &port);
-      if(MSG_IS_ERR(channel)) {
+      handle_t conn_h;
+      int r = port_connect("/prog8", &conn_h);
+      if(r < 0) {
          printf("couldn't connect to channel\n");
-         exit(0);
+         exit(1);
       }
       msg_handle_t handles[] = {MSG_HANDLE(shared)};
       uint8_t cmd = 1; // 1 = redraw, 0 = quit
@@ -61,7 +61,7 @@ void _start(int argc, char **args) {
       memcpy(shared_mem, img1, img1_size);
 
       // notify server
-      int r = msg_sync_send_obj(channel, &send_msg, &recv_msg);
+      r = msg_sync_send_obj(conn_h, &send_msg, &recv_msg);
       if(r < 0) {
          printf("send fail %i\n", r);
          exit(1);
@@ -91,7 +91,7 @@ void _start(int argc, char **args) {
          }
          img = !img;
          sleep(1000);
-         int r = msg_sync_send_obj(channel, &send_msg, &recv_msg);
+         int r = msg_sync_send_obj(conn_h, &send_msg, &recv_msg);
          if(r < 0) {
             printf("send fail %i\n", r);
             break;
@@ -103,7 +103,10 @@ void _start(int argc, char **args) {
    }
 
    // parent/server
-   uint32_t port = create_port("/prog8", false);
+   handle_t port_h;
+   int r = create_port("/prog8", false, &port_h);
+   if(r < 0)
+      exit(1);
 
    char *cargs[1] = { "child" };
    int task = launch_task("/sys/prog8.elf", 1, cargs, false, true);
@@ -113,7 +116,7 @@ void _start(int argc, char **args) {
    msg_recv_t recv_msg = {.buffer_size = 0, .buffer = NULL, .handle_count = 1, .handles = &handle};
 
    while(true) {
-      int r = msg_sync_receive_obj(port, &recv_msg);
+      int r = msg_sync_receive_obj(port_h, &recv_msg);
       if(r < 0) {
          printf("receive fail %i\n", r);
          break;
@@ -122,7 +125,7 @@ void _start(int argc, char **args) {
          printf("no handles received\n");
          // reply so client isn't left blocked in its call
          uint8_t msg[1] = {0};
-         msg_sync_reply(recv_msg.call_uid, msg, 1);
+         msg_sync_reply(recv_msg.conn_h, recv_msg.call_uid, msg, 1);
          continue;
       }
       uint8_t *mem = map(handle, 0);
@@ -131,14 +134,14 @@ void _start(int argc, char **args) {
 
       // reply to client
       uint8_t msg[1] = {1};
-      r = msg_sync_reply(recv_msg.call_uid, msg, 1);
+      r = msg_sync_reply(recv_msg.conn_h, recv_msg.call_uid, msg, 1);
       if(r < 0) {
          printf("reply fail %i\n", r);
          break;
       }
       msg_recv_t cmd_msg = {.buffer_size = 1, .buffer = msg, .handle_count = 0};
       while(true) {
-         r = msg_sync_receive_obj(port, &cmd_msg);
+         r = msg_sync_receive_obj(port_h, &cmd_msg);
          if(r < 0) {
             printf("receive fail %i\n", r);
             break;
@@ -147,13 +150,13 @@ void _start(int argc, char **args) {
             // quit cmd (or empty msg)
             printf("received quit cmd\n");
             msg[0] = 0;
-            msg_sync_reply(cmd_msg.call_uid, msg, 1); // don't leave client blocked in its call
+            msg_sync_reply(cmd_msg.conn_h, cmd_msg.call_uid, msg, 1); // don't leave client blocked in its call
             break;
          }
          // redraw cmd
          bmp_draw(mem, 0, 0, 1, false);
          redraw();
-         r = msg_sync_reply(cmd_msg.call_uid, msg, 1);
+         r = msg_sync_reply(cmd_msg.conn_h, cmd_msg.call_uid, msg, 1);
          if(r < 0) {
             printf("reply fail %i\n", r);
             break;
