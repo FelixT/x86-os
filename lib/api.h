@@ -201,7 +201,8 @@ typedef enum {
    MSG_ERR_PEER_TOO_MANY_HANDLES = -27, // peer sent more handles than could be delivered, e.g. receive handle_count too small for a MSG_HANDLE_MOVE
    MSG_ERR_HANDLE_FAIL = -28, // invalid handle/couldn't create handle
    MSG_ERR_PEER_HANDLE_FAIL = -29, // invalid handle/couldn't create handle for peer
-   MSG_ERR_INVALID_CALLID = -30
+   MSG_ERR_INVALID_CALLID = -30,
+   MSG_ERR_CHANNEL_BUSY = -31
 } msg_err_t;
 
 typedef int handle_t;

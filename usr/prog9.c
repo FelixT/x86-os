@@ -7,28 +7,34 @@
 #include "../lib/api.h"
 
 static handle_t child_conn_h = 0; // connection to child process - used by sender to periodically wake child process
+static volatile handle_t client_conn_h = 0; // client thread's conn to our own port, set once connected
 
 // async ipc test processes
 // 'client' thread sends msgs 'test', 'test2' and sends 'echo test' with msg_request (MSG_EXPECT_REPLY / reserved reply queue slot)
-// it waits until the request is read by the server before sleeping 2s and repeating
+// it waits until the request is read by the server before sleeping 0.8s and repeating
 // server process echo's back requests (MSG_EXPECT_REPLY) to the sender
 // 'child' client process sends msg 'child' to the server and waits until it receives a msg from the server (via snooze) repeatedly
+// msg_func belongs to the process and always runs on the main thread, so the server and
+// the in-process client share one callback (msg_func) that dispatches on conn_h
 
-void server_msg_func(handle_t conn_h, uint32_t flags) {
-   if(conn_h && flags & MSG_FLAG_CLOSED) {
+static void server_handle(handle_t conn_h, uint32_t flags) {
+   if(!conn_h) {
+      printf("server: port signal flags %u\n", flags);
+      return;
+   }
+   if(flags & MSG_FLAG_CLOSED) {
       printf("server: channel closed by client\n");
-      end_subroutine();
+      return;
    }
 
    // drain messages
    char buf[256];
    while(true) {
       uint32_t channel_flags, msg_flags;
-      int r = msg_read(conn_h, buf, 256, &channel_flags, &msg_flags);
+      int r = msg_read(conn_h, buf, 255, &channel_flags, &msg_flags);
       if(r <= 0) {
          if(r < 0)
             printf("server read error %i\n", r);
-         end_subroutine();
          return;
       }
       buf[r] = '\0';
@@ -56,25 +62,22 @@ void server_msg_func(handle_t conn_h, uint32_t flags) {
       if(msg_flags & MSG_LAST_MSG)
          break;
    }
-
-   end_subroutine();
 }
 
-void client_msg_func(handle_t conn_h, uint32_t flags) {
+static void client_handle(handle_t conn_h, uint32_t flags) {
    if(flags & MSG_FLAG_CLOSED) {
-      printf("server: channel closed by client\n");
-      end_subroutine();
+      printf("client: channel closed by server\n");
+      return;
    }
 
    // drain messages
    char buf[256];
    while(true) {
       uint32_t channel_flags, msg_flags;
-      int r = msg_read(conn_h, buf, 256, &channel_flags, &msg_flags);
+      int r = msg_read(conn_h, buf, 255, &channel_flags, &msg_flags);
       if(r <= 0) {
          if(r < 0)
             printf("client read error %i\n", r);
-         end_subroutine();
          return;
       }
       buf[r] = '\0';
@@ -82,23 +85,29 @@ void client_msg_func(handle_t conn_h, uint32_t flags) {
       flags |= channel_flags;
       if(flags)
          printf("client received flags: %u\n", flags);
-      
+
       if(msg_flags & MSG_LAST_MSG)
          break;
    }
+}
 
+void msg_func(handle_t conn_h, uint32_t flags) {
+   if(conn_h && conn_h == client_conn_h)
+      client_handle(conn_h, flags);
+   else
+      server_handle(conn_h, flags);
    end_subroutine();
 }
 
 void client_main() {
-   override_msg(&client_msg_func);
-
+   // runs on a second thread, its notifications arrive through msg_func on the main thread
    handle_t conn_h;
    int r = port_connect("/prog9", &conn_h);
    if(r < 0) {
       printf("Failed to connect to port, error %i\n", r);
       exit(1);
    }
+   client_conn_h = conn_h;
 
    printf("client connected to port\n");
 
@@ -117,7 +126,9 @@ void client_main() {
       if(r < 0)
          printf("msg_request failed, code %i\n", r);
 
-      msg_wait_for_read(conn_h);
+      r = msg_wait_for_read(conn_h);
+      if(r < 0 && r != MSG_ERR_EMPTY_MSG) // empty: the server already read everything
+         printf("msg_wait_for_read failed, code %i\n", r);
 
       sleep(800);
    }
@@ -185,7 +196,7 @@ void server_main() {
    }
    printf("Created port %u\n", port_h);
 
-   override_msg(&server_msg_func);
+   override_msg(&msg_func);
 
    create_thread(&client_main);
 

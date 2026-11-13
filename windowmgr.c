@@ -123,13 +123,14 @@ void wm_thread_main() {
    wm_thread.task = get_current_task_state();
 
    while(true) {
-      if(wm_thread.redrawall_pending) {
-         wm_thread.redrawall_pending = false;
-         wm_thread.draw_pending = false;
-         windowmgr_redrawall();
-      }
+      while(wm_thread.redrawall_pending || wm_thread.draw_pending) {
+         if(wm_thread.redrawall_pending) {
+            wm_thread.redrawall_pending = false;
+            wm_thread.draw_pending = false;
+            windowmgr_redrawall();
+            continue;
+         }
 
-      if(wm_thread.draw_pending) {
          wm_thread.draw_pending = false;
          windowmgr_draw();
       }
@@ -1322,9 +1323,11 @@ static void windowmgr_quitselected() {
    int w = get_task_window(task);
    if(w < 0) {
       end_task(task, NULL);
+      gui_redrawall();
       return;
    }
    window_close(w, true);
+   gui_redrawall();
 }
 
 static gui_window_t *window_menu_targets[MENUBAR_MAX_MENU_SIZE];

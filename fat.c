@@ -747,11 +747,18 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
       return -1;
    }
 
+   uint8_t *clusterBuf = kmalloc(clusterSize);
+   if(!clusterBuf) {
+      debug_printf("fat_write_file_at: couldn't allocate cluster buffer\n");
+      return -4;
+   }
+
    uint32_t newsize = offset + size;
    if(newsize > oldsize) {
       int allocated = fat_extend_cluster_chain(clusterNo, oldsize, newsize);
       if(allocated < 0) {
          debug_printf("Error extending cluster chain\n");
+         kfree(clusterBuf);
          return -2;
       }
    }
@@ -763,6 +770,7 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
       uint16_t next = ((uint16_t*)fat_table)[curCluster];
       if(!fat_valid_cluster(next)) {
          debug_printf("fat_write_file_at: hit eof/bad cluster before offset");
+         kfree(clusterBuf);
          return -3;
       }
       curCluster = next;
@@ -783,33 +791,22 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
       if(consumed > bytesRemaining)
          consumed = bytesRemaining;
       if(write_offset > 0 || bytesRemaining < clusterSize) {
-         uint8_t *clusterBuf = ata_read_exact(true, true, sectorAddr, clusterSize);
-         if(clusterBuf == NULL) {
+         // partial cluster
+         if(!ata_read_exact_into(true, true, sectorAddr, clusterSize, clusterBuf)) {
             debug_printf("Error reading cluster %u\n", curCluster);
+            kfree(clusterBuf);
             return -4;
          }
-         int written = copy_from_task(task, clusterBuf + write_offset, buffer + bytesWritten, consumed);
-         if(written != (int)consumed) {
-            debug_printf("Error reading from task buffer\n");
-            kfree(clusterBuf);
-            break;
-         }
-         write_offset = 0;
-         bool ok = ata_write_exact(true, true, sectorAddr, clusterBuf, clusterSize);
-         kfree(clusterBuf);
-         if(!ok) {
-            debug_printf("Error writing cluster %u\n", curCluster);
-            break; // report what did make it to disk
-         }
-      } else {
-         if(task >= 0 && !task_validate_mem(&gettasks()[task], buffer + bytesWritten, clusterSize, false)) {
-            debug_printf("fat_write_file_at: task %i's buffer no longer mapped\n", task);
-            break; // partial write
-         }
-         if(!ata_write_exact(true, true, sectorAddr, buffer + bytesWritten, clusterSize)) {
-            debug_printf("Error writing cluster %u\n", curCluster);
-            break;
-         }
+      }
+      int copied = copy_from_task(task, clusterBuf + write_offset, buffer + bytesWritten, consumed);
+      if(copied != (int)consumed) {
+         debug_printf("fat_write_file_at: task %i's buffer no longer mapped\n", task);
+         break; // partial write
+      }
+      write_offset = 0;
+      if(!ata_write_exact(true, true, sectorAddr, clusterBuf, clusterSize)) {
+         debug_printf("Error writing cluster %u\n", curCluster);
+         break; // report what did make it to disk
       }
 
       bytesRemaining -= consumed;
@@ -823,6 +820,8 @@ int fat_write_file_at(char *path, uint8_t *buffer, uint32_t offset, uint32_t siz
       curCluster = next;
       kernel_yield_if_blocking();
    }
+
+   kfree(clusterBuf);
 
    if(offset + bytesWritten > oldsize) {
       // update the file size in the directory entry

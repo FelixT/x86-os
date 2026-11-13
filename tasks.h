@@ -113,6 +113,9 @@ typedef struct process_t {
    char **launch_args;
    int launch_argc;
 
+   void (*msg_func)(handle_t conn_h, uint32_t flags);
+   bool msg_notify_pending; // msg event callback was dropped, requeue when slot opens
+
    task_state_t *threads[MAX_TASK_THREADS];
    int no_threads;
 } process_t;
@@ -143,9 +146,6 @@ typedef struct task_state_t {
 
    kqueue_t event_queue;
    task_event_t event_buf[EVENT_QUEUE_SIZE];
-
-   void (*msg_func)(handle_t conn_h, uint32_t flags);
-   bool msg_notify_pending; // msg event callback was dropped, requeue when slot opens
 
    // sync info
    struct kmutex_t *mutex; // mutex this task is waiting on
@@ -209,10 +209,10 @@ void tss_df_init();
 void task_write_to_window(int task, char *out, bool children);
 void task_reset_windows(int task);
 
-bool task_addr_demand_paged(task_state_t *task, uint32_t addr);
-int task_validate_str(task_state_t *task, char *str, int maxlen);
-bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw);
-int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw);
+bool task_addr_demand_paged(process_t *process, uint32_t addr);
+int task_validate_str(process_t *process, char *str, int maxlen);
+bool task_validate_mem(process_t *process, void *mem, int len, bool rw);
+int task_validate_maxsize(process_t *process, void *mem, int max, bool rw);
 bool task_demand_map(process_t *process, uint32_t addr);
 
 int copy_to_task(int task, void *dest, void *src, size_t size);

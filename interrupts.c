@@ -314,27 +314,35 @@ void crash_task(int int_no, registers_t *regs, int task) {
 
 extern int current_servicing_task;
 
-bool page_fault_handler(registers_t *regs) {
-   uint32_t addr = read_cr2();
+static task_state_t *page_fault_task() {
+   if(current_servicing_task != -1)
+      return &gettasks()[current_servicing_task];
+   return get_current_task_state();
+}
 
-   // page error
-   task_state_t *task = get_current_task_state();
-   if(current_servicing_task != -1) {
-      task = &gettasks()[current_servicing_task];
-   }
+// returns true if handled via demand paging
+static bool page_fault_handle() {
+   uint32_t addr = read_cr2();
+   task_state_t *task = page_fault_task();
    process_t *process = task->process;
    if(!process) return false;
+   // check if within heap
+   if(task_addr_demand_paged(process, addr))
+      return task_demand_map(process, addr);
+   return false;
+}
+
+// not within heap, show error
+static void page_fault_error(registers_t *regs) {
+   uint32_t addr = read_cr2();
+   task_state_t *task = page_fault_task();
+   process_t *process = task->process;
+   if(!process) return;
    page_dir_entry_t *dir = task->process->page_dir;
 
-   // demand paging/lazy allocation: check if within heap
    if(dir != page_get_current()) {
       debug_printf("int 14 - task page directory isn't current...\n");
    }
-
-   if(task_addr_demand_paged(task, addr)) // task_addr_demand_paged()
-      return task_demand_map(process, addr);
-
-   // not within heap, show error and pause task
 
    window_writestr("Page fault at ", gui_rgb16(255, 100, 100), 0);
    debug_printf("0x%h", addr);
@@ -377,8 +385,6 @@ bool page_fault_handler(registers_t *regs) {
 
    debug_printf("\nHeap 0x%h - 0x%h\n", process->heap_start, process->heap_end);
    debug_printf("Stack 0x%h - 0x%h\n", task->v_stack_start+0x1000, task->v_stack_start+TASK_STACK_SIZE);
-
-   return false;
 }
 
 typedef enum {
@@ -513,11 +519,11 @@ void err_exception_handler(int int_no, registers_t *regs) {
 
    // https://wiki.osdev.org/Exceptions
 
-   if(int_no == 14) {
-      if(page_fault_handler(regs)) {
-         return; // demand paging
-      }
-   }
+   if(int_no == 14 && page_fault_handle())
+      return;
+
+   if(int_no == 14)
+      page_fault_error(regs); // print err details
 
    window_writestr("Exception ", gui_rgb16(255, 100, 100), 0);
    window_writeuint(int_no, 0, 0);

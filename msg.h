@@ -30,12 +30,13 @@ typedef struct msg_channel_t msg_channel_t;
 
 typedef struct msg_channel_conn_t {
    bool server; // server or client
-   int taskid;
-   uint32_t taskuid;
+   process_t *process;
    msg_channel_t *channel; // shared channel obj
    bool connected; // closing (stop) disconnects, including port close
    bool released; // released when user explicitly releases handle
-   bool blocked;
+   bool blocked; // async waiting on read (wait_on_receive)
+   int blocked_taskid;
+   uint32_t blocked_taskuid;
    uint32_t flags;
    bool notify_pending;
    msg_queue_t queue; // inbound
@@ -55,6 +56,8 @@ typedef struct msg_channel_t {
    msg_send_t client_send_msg; // store sent msg until server receives
    msg_recv_t client_recv_msg; // stored reply msg until server replies
    msg_recv_t *client_recv_msg_user; // client's msg_recv_t* (in its address space), receipt written on reply
+   int caller_taskid;
+   uint32_t caller_taskuid;
 } msg_channel_t;
 
 typedef struct msg_waiter_t {
@@ -68,9 +71,7 @@ typedef struct msg_waiter_t {
 // a port represents a message queue
 typedef struct msg_port_t {
    char name[MSG_PORT_NAME_LEN];
-   uint32_t owner_uid; // server process uid
-   uint32_t owner_taskid;
-   uint32_t owner_taskuid;
+   process_t *owner; // server process
    msg_channel_t *channels[MSG_MAX_CHANNELS];
    int channel_count;
    bool client_reserves; // clients sending MSG_EXPECT_REPLY are required to reserve a queue spot for the response (ie to stop the server being blocked)
@@ -90,23 +91,23 @@ typedef struct msg_copy_receipt_t {
 } msg_copy_receipt_t;
 
 msg_port_t *find_port_by_name(char *name);
-int create_port(task_state_t *task, char *name, bool client_reserves, handle_t *port_h);
+int create_port(process_t *process, char *name, bool client_reserves, handle_t *port_h);
 void port_free(kobj_inst_t *inst);
 void port_stop(kobj_inst_t *inst);
-int port_connect(task_state_t *task, char *name, handle_t *conn_h);
+int port_connect(process_t *process, char *name, handle_t *conn_h);
 int port_send(registers_t *regs, task_state_t *task, handle_t conn_h, msg_send_t *send_msg, uint32_t flags);
-int port_receive(task_state_t *task, handle_t conn_h, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags);
+int port_receive(process_t *process, handle_t conn_h, uint8_t *buffer, uint32_t size, uint32_t *channel_flags, uint32_t *msg_flags);
 int msg_wait_on_receive(task_state_t *task, handle_t conn_h);
 void port_stop_connection(kobj_inst_t *inst);
 void port_free_connection(kobj_inst_t *inst);
-void msg_retry_task_notifications(task_state_t *task);
+void msg_retry_notifications(process_t *process);
 bool msg_notif_is_stale(task_state_t *task, handle_t conn_h);
 int msg_call(task_state_t *task, handle_t conn_h, msg_send_t *send_msg, msg_recv_t *recv_msg);
 int msg_receive(registers_t *regs, task_state_t *task, handle_t port_h, msg_recv_t *recv_msg);
 int msg_reply(registers_t *regs, task_state_t *task, handle_t conn_h, uint32_t call_uid, msg_send_t *send_msg);
-int msg_validate_send(task_state_t *task, msg_send_t *msg);
-int msg_validate_recv(task_state_t *task, msg_recv_t *msg);
-bool msg_dispatch_queued(task_state_t *task);
+int msg_validate_send(process_t *process, msg_send_t *msg);
+int msg_validate_recv(process_t *process, msg_recv_t *msg);
+bool msg_dispatch_queued(process_t *process);
 int port_signal(msg_port_t *port, uint32_t flag);
 
 #endif

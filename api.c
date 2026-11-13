@@ -149,15 +149,15 @@ gui_window_t *api_get_cwindow(int cindex) {
 }
 
 static inline int api_validate_str(char *str, int maxlen) {
-   return task_validate_str(get_current_task_state(), str, maxlen);
+   return task_validate_str(get_current_task_state()->process, str, maxlen);
 }
 
 static inline bool api_validate_mem(void *mem, int len, bool rw) {
-   return task_validate_mem(get_current_task_state(), mem, len, rw);
+   return task_validate_mem(get_current_task_state()->process, mem, len, rw);
 }
 
 static inline int api_validate_maxsize(void *mem, int max, bool rw) {
-   return task_validate_maxsize(get_current_task_state(), mem, max, rw);
+   return task_validate_maxsize(get_current_task_state()->process, mem, max, rw);
 }
 
 // write to correct registers even after potential task switch
@@ -1820,7 +1820,8 @@ void api_create_port(registers_t *regs) {
       return;
    }
    kobj_handle_t h;
-   int status = create_port(get_current_task_state(), name, client_reserves, &h);
+   process_t *process = get_current_task_state()->process;
+   int status = create_port(process, name, client_reserves, &h);
    regs->ebx = status;
    if(status < 0)
       return;
@@ -1838,7 +1839,8 @@ void api_port_connect(registers_t *regs) {
       return;
    }
    kobj_handle_t h;
-   int status = port_connect(get_current_task_state(), name, &h);
+   process_t *process = get_current_task_state()->process;
+   int status = port_connect(process, name, &h);
    regs->ebx = status;
    if(status < 0)
       return;
@@ -1848,10 +1850,10 @@ void api_port_connect(registers_t *regs) {
 void api_override_msg(registers_t *regs) {
    // IN: ebx - msg func
    void *callback = (void*)regs->ebx;
-   task_state_t *task = get_current_task_state();
-   task->msg_func = callback;
+   process_t *process = get_current_task_state()->process;
+   process->msg_func = callback;
    // check for queued msgs
-   msg_dispatch_queued(task);
+   msg_dispatch_queued(process);
 }
 
 void api_msg_read(registers_t *regs) {
@@ -1873,7 +1875,7 @@ void api_msg_read(registers_t *regs) {
 
    uint32_t channel_flags;
    uint32_t msg_flags;
-   int r = port_receive(task, h, buffer, size, &channel_flags, &msg_flags);
+   int r = port_receive(task->process, h, buffer, size, &channel_flags, &msg_flags);
    registers_t *write_regs = api_write_regs(regs, task);
    write_regs->ebx = r;
    if(r >= 0) {

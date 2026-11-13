@@ -14,6 +14,7 @@
 #include "pci.h"
 #include "msg.h"
 #include "fs.h"
+#include "time.h"
 
 // default terminal behaviour
 // implement kernel mode terminal for debugging
@@ -473,11 +474,11 @@ void term_cmd_channels() {
    extern msg_port_t *ports;
    msg_port_t *cur = ports;
    while(cur) {
-      window_term_printf("Port %s (owner task %i), %i channels\n", cur->name, cur->owner_taskid, cur->channel_count);
+      window_term_printf("Port %s (owner process %u), %i channels\n", cur->name, cur->owner->uid, cur->channel_count);
       for(int i = 0; i < cur->channel_count; i++) {
          msg_channel_t *channel = cur->channels[i];
          if(!channel) continue;
-         window_term_printf("Channel (handles %u/%u) (server %i %s / client %i %s)\n", channel->conns[0].handle, channel->conns[1].handle, channel->conns[0].taskid, channel->conns[0].connected ? "connected" : "disconnected", channel->conns[1].taskid, channel->conns[1].connected ? "connected" : "disconnected");
+         window_term_printf("Channel (handles %u/%u) (server %s / client %s)\n", channel->conns[0].handle, channel->conns[1].handle, channel->conns[0].connected ? "connected" : "disconnected", channel->conns[1].connected ? "connected" : "disconnected");
       }
       cur = cur->next;
    }
@@ -533,6 +534,11 @@ void term_cmd_handles(char *arg) {
       window_term_printf("Region 0x%h size 0x%h inst %u type %u\n", region->vaddr, region->size, region->inst->uid, region->inst->obj->type);
       region = region->next;
    }
+}
+
+void term_cmd_time() {
+   time_t t = get_time();
+   window_term_printf("%i/%i/%i %i:%i:%i\n", t.day, t.month, t.year, t.hours, t.minutes, t.seconds);
 }
 
 void term_cmd_default(char *command) {
@@ -595,6 +601,8 @@ void window_term_checkcmd(void *window) {
       term_cmd_mtrr();
    else if(strequ(command, "HANDLES"))
       term_cmd_handles((char*)arg);
+   else if(strequ(command, "TIME"))
+      term_cmd_time();
    else
       term_cmd_default((char*)command);
    

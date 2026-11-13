@@ -114,6 +114,8 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->launch_argc = 0;
    process->launch_args = NULL;
    process->regions = NULL;
+   process->msg_func = NULL;
+   process->msg_notify_pending = false;
    
    return process;
 }
@@ -179,8 +181,6 @@ int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged,
    tasks[index].routine = E_NONE;
    tasks[index].checkcmd_buffer = NULL;
    tasks[index].in_syscall = false;
-   tasks[index].msg_func = NULL;
-   tasks[index].msg_notify_pending = false;
    tasks[index].mutex = NULL;
    tasks[index].mutex_next_waiter = NULL;
    tasks[index].owned_mutexes = NULL;
@@ -1033,7 +1033,7 @@ bool task_execute_queued_subroutine(void *regs, int taskid) {
       }
 
       kqueue_drop(&task->event_queue);
-      msg_retry_task_notifications(task); // free'd queue entry so check for dropped messages
+      msg_retry_notifications(task->process); // free'd queue entry so check for dropped messages
 
       if(!stale) return true;
    }
@@ -1069,14 +1069,14 @@ bool task_queue_subroutine(task_state_t *task, task_event_type_t type, uint32_t 
          }
          return true;
       }
-   } else if(type == E_MSG) {
-      // coalesce msg events
+   } else if(type == E_MSG && argc == 2) {
+      // coalesce msg events, args are (conn_h, flags)
       for(int i = 0; i < kqueue_count(&task->event_queue); i++) {
          task_event_t *existing = kqueue_at(&task->event_queue, i);
          if(existing->addr != addr) continue;
-         if(existing->type != type) continue;
-         if(existing->args[0] != args[0] || existing->args[1] != args[1]) continue; // only coalesce msgs on same port & channel
-         existing->args[2] |= args[2]; // OR together flags
+         if(existing->type != type || existing->argc != 2) continue;
+         if(existing->args[0] != args[0]) continue; // only coalesce msgs on same conn
+         existing->args[1] |= args[1]; // OR together flags
          return true;
       }
    }
@@ -1151,7 +1151,8 @@ void task_subroutine_end(registers_t *regs) {
    task_execute_queued_subroutine(regs, current_task);
 
    // queue notifications that were dropped while event queue was full
-   msg_retry_task_notifications(&tasks[current_task]);
+   if(&tasks[current_task] == tasks[current_task].process->threads[0])
+      msg_retry_notifications(tasks[current_task].process);
 
    if(tasks[current_task].paused) {
       switch_task(regs, false); // yield
@@ -1257,9 +1258,8 @@ void free_launch_args(char **args, int argc) {
 
 int current_servicing_task = -1;
 
-bool task_addr_demand_paged(task_state_t *task, uint32_t addr) {
+bool task_addr_demand_paged(process_t *process, uint32_t addr) {
    // check if addr is within demand paged regions (currently heap only)
-   process_t *process = task->process;
    return addr >= process->heap_start && addr < process->heap_end;
 }
 
@@ -1288,10 +1288,10 @@ bool task_demand_map(process_t *process, uint32_t addr) {
    return true;
 }
 
-static int task_prefault(task_state_t *task, void *mem, int size) {
+static int task_prefault(process_t *process, void *mem, int size) {
    // map lazy allocated pages to avoid fauling mid operation
    uint32_t vaddr = (uint32_t)mem;
-   page_dir_entry_t *page_dir = task->process->page_dir;
+   page_dir_entry_t *page_dir = process->page_dir;
 
    uint32_t base = vaddr & ~PAGE_MASK;
    int pages = (size+(vaddr&PAGE_MASK)+(PAGE_SIZE-1))/PAGE_SIZE;
@@ -1299,20 +1299,20 @@ static int task_prefault(task_state_t *task, void *mem, int size) {
       uint32_t page_addr = base + i*PAGE_SIZE;
       int mapping = page_checkmapping(page_dir, page_addr);
       if(mapping == PAGE_USERRW) continue;
-      if(!task_addr_demand_paged(task, page_addr)
-      || !task_demand_map(task->process, page_addr))
+      if(!task_addr_demand_paged(process, page_addr)
+      || !task_demand_map(process, page_addr))
          return i == 0 ? 0 : (int)(page_addr - vaddr);
    }
    return size;
 }
 
-int task_validate_str(task_state_t *task, char *str, int maxlen) {
+int task_validate_str(process_t *process, char *str, int maxlen) {
    // validate str provided by user before kernel uses/reads it
    // out: len on success, -1 on invalid
    if(maxlen < 0) return -1;
    if(maxlen == 0) return 0;
    uint32_t vaddr = (uint32_t)str;
-   page_dir_entry_t *page_dir = task->process->page_dir;
+   page_dir_entry_t *page_dir = process->page_dir;
 
    // check mapping
    uint32_t base = vaddr & ~PAGE_MASK;
@@ -1335,12 +1335,12 @@ int task_validate_str(task_state_t *task, char *str, int maxlen) {
    return len;
 }
 
-bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw) {
+bool task_validate_mem(process_t *process, void *mem, int len, bool rw) {
    // check size len is mapped to user at addr
    if(len < 0) return false;
    if(len == 0) return true;
    uint32_t vaddr = (uint32_t)mem;
-   page_dir_entry_t *page_dir = task->process->page_dir;
+   page_dir_entry_t *page_dir = process->page_dir;
 
    int check = rw ? PAGE_USERRW : PAGE_USERREAD;
    // check mapping
@@ -1349,19 +1349,19 @@ bool task_validate_mem(task_state_t *task, void *mem, int len, bool rw) {
    for(int i = 0; i < maxpages; i++) {
       uint32_t page_addr = base + i*PAGE_SIZE;
       if(page_checkmapping(page_dir, page_addr) < check
-      && !(rw && task_addr_demand_paged(task, page_addr))) { // for writes allow lazy mapped mem - reads aren't allowed to allocate memory
+      && !(rw && task_addr_demand_paged(process, page_addr))) { // for writes allow lazy mapped mem - reads aren't allowed to allocate memory
          return false;
       }
    }
    return true;
 }
 
-int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw) {
+int task_validate_maxsize(process_t *process, void *mem, int max, bool rw) {
    // get maximum mapped size of user provided area up to max - allows for partial read/writes
    if(max < 0) return -1;
    if(max == 0) return 0;
    uint32_t vaddr = (uint32_t)mem;
-   page_dir_entry_t *page_dir = task->process->page_dir;
+   page_dir_entry_t *page_dir = process->page_dir;
 
    int check = rw ? PAGE_USERRW : PAGE_USERREAD;
    // check mapping
@@ -1370,7 +1370,7 @@ int task_validate_maxsize(task_state_t *task, void *mem, int max, bool rw) {
    for(int i = 0; i < maxpages; i++) {
       uint32_t page_addr = base + i*PAGE_SIZE;
       if(page_checkmapping(page_dir, page_addr) < check
-      && !(rw && task_addr_demand_paged(task, page_addr))) { // for writes allow lazy mapped mem - reads aren't allowed to allocate memory
+      && !(rw && task_addr_demand_paged(process, page_addr))) { // for writes allow lazy mapped mem - reads aren't allowed to allocate memory
          maxpages = i;
          break;
       }
@@ -1390,9 +1390,9 @@ int copy_to_task(int task, void *dest, void *src, size_t size) {
    }
    
    task_state_t *task_state = &gettasks()[task];
-   int maxsize = task_validate_maxsize(task_state, dest, size, 1);
+   int maxsize = task_validate_maxsize(task_state->process, dest, size, 1);
    if(maxsize < 0 || (size > 0 && maxsize == 0)) return -1; // invalid buffer/size
-   maxsize = task_prefault(task_state, dest, maxsize);
+   maxsize = task_prefault(task_state->process, dest, maxsize);
    if(size > 0 && maxsize == 0) return -1; // out of memory
 
    int prev = current_servicing_task;
@@ -1415,7 +1415,7 @@ int copy_from_task(int task, void *dest, void *src, size_t size) {
    }
 
    task_state_t *task_state = &gettasks()[task];
-   int maxsize = task_validate_maxsize(task_state, src, size, 0);
+   int maxsize = task_validate_maxsize(task_state->process, src, size, 0);
    if(maxsize < 0 || (size > 0 && maxsize == 0)) return -1; // invalid buffer/size
 
    int prev = current_servicing_task;
