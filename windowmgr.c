@@ -470,8 +470,8 @@ void window_close(int windowIndex, bool end) {
    bool do_callback = false;
    int cindex = task_state ? get_cindex_from_window(task_state, window) : -2;
    if(ending_task) {
-      if(!end_task(task, NULL))
-         return; // keep window open so the task can be closed
+      if(end_task(task, NULL, END_STATUS_KILLED_WINDOW) != END_DONE)
+         return; // failed or deferred: keep window open, the task still uses it
    } else {
       if(task_state && get_current_task_state()->process != task_state->process)
          do_callback = true; // don't notify for windows task itself closed
@@ -1322,7 +1322,7 @@ static void windowmgr_quitselected() {
    if(task < 0) return;
    int w = get_task_window(task);
    if(w < 0) {
-      end_task(task, NULL);
+      end_task(task, NULL, END_STATUS_KILLED);
       gui_redrawall();
       return;
    }

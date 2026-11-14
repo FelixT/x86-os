@@ -74,7 +74,7 @@ void term_cmd_files(char *arg) {
    char **launch_args = malloc(sizeof(char*)*launch_argc);
    launch_args[0] = exe_path;
    launch_args[1] = path_arg;
-   launch_task(exe_path, launch_argc, launch_args, false, false);
+   launch_task(exe_path, launch_argc, launch_args, false, false, NULL);
    free(launch_args);
 }
 
@@ -108,7 +108,7 @@ void term_cmd_font(char *arg) {
 void term_cmd_viewbmp(char *arg) {
    char **args = (char**)malloc(sizeof(char*) * 1);
    args[0] = arg;
-   launch_task("/sys/bmpview.elf", 1, args, false, false);
+   launch_task("/sys/bmpview.elf", 1, args, false, false, NULL);
    free(args);
 }
 
@@ -202,7 +202,7 @@ void term_cmd_launch(char *arg, bool copy) {
       strcpy(arglist[argc], fullpath);
       argc++;
       term_get_args(args, arglist, &argc);
-      launch_task(fullpath, argc, arglist, copy, false);
+      launch_task(fullpath, argc, arglist, copy, false, NULL);
       for(int i = 0; i < argc; i++)
          free(arglist[i]);
       free(arglist);
@@ -211,7 +211,7 @@ void term_cmd_launch(char *arg, bool copy) {
       char **arglist = (char**)malloc(sizeof(char*) * 1);
       arglist[0] = (char*)malloc(strlen(fullpath) + 1);
       strcpy(arglist[0], fullpath);
-      launch_task(fullpath, 1, arglist, copy, false);
+      launch_task(fullpath, 1, arglist, copy, false, NULL);
       free(arglist[0]);
       free(arglist);
    }
@@ -227,7 +227,7 @@ void term_cmd_text(char *arg) {
       strcpy(path_arg, arg);
    args[0] = exe_path;
    args[1] = path_arg;
-   launch_task(exe_path, 2, args, false, false);
+   launch_task(exe_path, 2, args, false, false, NULL);
    free(args);
 }
 
@@ -447,10 +447,12 @@ void term_cmd_tasks() {
       api_task_t *task = &tasks[i];
       if(!task->enabled) continue;
       printf("\nTask %i: ", task->id);
-      if(task->parentid == task->id)
-         printf("%s (allc %i pages / heap size 0x%h)", task->main_window_name, task->no_allocated, task->heap_end - task->heap_start);
-      else
+      if(task->parentid == task->id) {
+         char *name = strlen(task->main_window_name) > 0 ? task->main_window_name : task->exe_path;
+         printf("%s (allc %i pages / heap size 0x%h) ", name, task->no_allocated, task->heap_end - task->heap_start);
+      } else {
          printf("(parent %i) ", task->parentid);
+      }
       if(task->paused)
          printf("paused");
    }
@@ -501,7 +503,8 @@ void term_pipe(char *arg1, char *arg2) {
 
    int saved_stdout = dup(1);
    dup2(fds[1], 1); // redirect stdout to pipe write end
-   int prog1_id = launch_task(path1, argc1, args1, true, true);
+   handle_t h1;
+   int prog1_id = launch_task(path1, argc1, args1, true, true, &h1);
    for(int i = 0; i < argc1; i++) free(args1[i]);
    free(args1);
    if(prog1_id < 0) {
@@ -521,11 +524,14 @@ void term_pipe(char *arg1, char *arg2) {
 
    int saved_stdin = dup(0);
    dup2(fds[0], 0); // redirect stdin to pipe read end
-   int prog2_id = launch_task(path2, argc2, args2, true, true);
+   handle_t h2;
+   int prog2_id = launch_task(path2, argc2, args2, true, true, &h2);
    for(int i = 0; i < argc2; i++) free(args2[i]);
    free(args2);
    if(prog2_id < 0) {
       printf("Failed to launch %s\n", path2);
+      end_task(prog1_id, h1);
+      hrelease(h1);
       return;
    }
    // restore stdin
@@ -537,8 +543,10 @@ void term_pipe(char *arg1, char *arg2) {
    }
    close(fds[0]);
 
-   unpause_task(prog1_id);
-   unpause_task(prog2_id);
+   unpause_task(prog1_id, h1);
+   unpause_task(prog2_id, h2);
+   hrelease(h1);
+   hrelease(h2);
 }
 
 void checkcmd(char *buffer) {

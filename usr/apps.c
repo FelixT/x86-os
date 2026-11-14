@@ -33,7 +33,7 @@ void app_launch(wo_t *label) {
    strcat(path, label_data->label);
    strcat(path, ".elf");
    redraw();
-   launch_task(path, 0, NULL, false, false);
+   launch_task(path, 0, NULL, false, false, NULL);
 }
 
 int sort_filename(const void *v1, const void *v2) {

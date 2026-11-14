@@ -116,7 +116,8 @@ process_t *create_process(uint32_t entry, uint32_t size, bool privileged) {
    process->regions = NULL;
    process->msg_func = NULL;
    process->msg_notify_pending = false;
-   
+   process->obj_inst = NULL; // lazy allocated
+
    return process;
 }
 
@@ -285,6 +286,9 @@ bool launch_task(int index, registers_t *regs, bool focus) {
    return true;
 }
 
+static void process_detach_obj(process_t *process, int exit_code);
+static void process_set_main_thread(process_t *process);
+
 // undo create_task_entry (launch/init failed)
 void task_discard_entry(int index) {
    tasks[index].reserved = false;
@@ -295,6 +299,7 @@ void task_discard_entry(int index) {
       kfree((void*)process->prog_start);
    if(process->page_dir != page_get_kernel_pagedir())
       free_page_dir(process->page_dir);
+   process_detach_obj(process, END_STATUS_CREATE_FAILED);
    kfree(process);
    tasks[index].process = NULL;
 }
@@ -386,7 +391,7 @@ static void free_event_queue(task_state_t *task) {
    }
 }
 
-static void end_process(registers_t *regs, process_t *process) {
+static void end_process(registers_t *regs, process_t *process, int status) {
    task_state_t *main_thread = process->threads[0];
    task_reset_windows(main_thread->task_id);
 
@@ -425,21 +430,17 @@ static void end_process(registers_t *regs, process_t *process) {
 
    process_free_vm(process);
 
+   process_detach_obj(process, status);
+
    // free process
    kfree(process);
 }
 
-static bool end_task_helper(int index, registers_t *regs, bool child) {
-   if(index < 0 || index >= TOTAL_TASKS) return false;
-   if(index == 0) {
-      debug_printf("Can't kill idle process\n");
-      return false;
-   }
- 
-   task_state_t *task = &tasks[index];
+static end_result_t end_task_helper(task_state_t *task, registers_t *regs, int status, bool child) {
+   int index = task->task_id;
    if(!task->enabled) {
       debug_printf("Task %u already ended\n", index);
-      return true;
+      return END_DONE;
    }
 
    if(!regs && !child && get_current_task() == index) {
@@ -449,11 +450,14 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
    }
 
    if(task->kernel_esp) {
-      if(is_kthread(task))
+      if(is_kthread(task)) {
          debug_printf("Can't end kthread %i\n", index);
-      else
+         return END_FAILED;
+      } else {
          task->kill_pending = true; // usermode parked in kernel, wait until end of syscall
-      return false;
+         task->pending_kill_status = status;
+         return END_DEFERRED;
+      }
    }
 
    if(task->process->window >= 0)
@@ -490,18 +494,21 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
       for(int i = 1; i < MAX_TASK_THREADS; i++) {
          task_state_t *thread = task->process->threads[i];
          if(!thread) continue;
-         if(!end_task_helper(thread->task_id, NULL, true)) {
+         if(end_task_helper(thread, NULL, status, true) != END_DONE) {
             task->process->threads[i] = NULL;
             task->process->threads[remaining_threads++] = thread;
          } else {
+            // ended
             thread->process = NULL;
          }
       }
 
       if(!remaining_threads) {
-         end_process(regs, task->process);
+         end_process(regs, task->process, status);
       } else {
          debug_printf("%i threads couldn't be ended\n", remaining_threads);
+         task->process->no_threads--; // this (main) thread
+         process_set_main_thread(task->process);
       }
       task->process = NULL;
    } else {
@@ -524,11 +531,20 @@ static bool end_task_helper(int index, registers_t *regs, bool child) {
 
    task_event_counter++;
 
-   return true;
+   return END_DONE;
 }
 
-bool end_task(int index, registers_t *regs) {
-   return end_task_helper(index, regs, false);
+// status < 0 are kernel statuses
+end_result_t end_task(int index, registers_t *regs, int status) {
+   if(index < 0 || index >= TOTAL_TASKS) return END_FAILED;
+   if(index == 0) {
+      debug_printf("Can't kill idle process\n");
+      return END_FAILED;
+   }
+   task_state_t *task = &gettasks()[index];
+   if(task->crashed) status = END_STATUS_KILLED_CRASHED; // overrides other statuses
+
+   return end_task_helper(task, regs, status, false);
 }
 
 void tasks_alloc() {
@@ -598,7 +614,7 @@ int tasks_setup_elf(char *path, int argc, char **args, bool focus, bool minimise
 // abort & cleanup tasks_setup_elf
 void task_abort_setup(int index) {
    tasks[index].enabled = true; // must be enabled for end_task
-   end_task(index, NULL);
+   end_task(index, NULL, END_STATUS_CREATE_FAILED);;
 }
 
 static void idle_thread_main() {
@@ -1674,4 +1690,62 @@ kobj_handle_t process_resolve_handle(process_t *process, kobj_handle_t h) {
 void tasks_tick() {
    if(!switching) return;
    get_current_task_state()->ticks++;   
+}
+
+static kobj_inst_t *process_get_obj_inst(process_t *process) {
+   if(!process->obj_inst) {
+      // lazy allocate
+      process_obj_t *obj = kmalloc(sizeof(process_obj_t));
+      if(!obj) return NULL;
+      obj->state = PROCESS_STATE_RUNNING;
+      obj->process = process;
+      obj->exit_code = 0;
+      obj->process_uid = process->uid;
+      obj->task_id = process->threads[0]->task_id; // main thread taskid
+      kobj_inst_t *inst = create_kobj_inst(KOBJ_PROCESS, obj);
+      if(!inst) {
+         kfree(obj);
+         return NULL;
+      }
+      kobj_add_ref(inst); // held by kernel
+      process->obj_inst = inst;
+   }
+   return process->obj_inst;
+}
+
+// main thread changed (via deferred end_task)
+static void process_set_main_thread(process_t *process) {
+   if(!process->obj_inst) return;
+   process_obj_t *obj = process->obj_inst->data;
+   obj->task_id = process->threads[0]->task_id;
+}
+
+// called on process end (teardown)
+static void process_detach_obj(process_t *process, int exit_code) {
+   kobj_inst_t *inst = process->obj_inst;
+   if(!inst) return;
+   process_obj_t *obj = inst->data;
+   obj->process = NULL;
+   obj->exit_code = exit_code;
+   obj->state = PROCESS_STATE_ENDED;
+   process->obj_inst = NULL;
+   kobj_release_ref(inst); // release kernel's ref
+}
+
+handle_t create_process_handle(process_t *owner, process_t *process) {
+   kobj_inst_t *inst = process_get_obj_inst(process);
+   return inst ? process_acquire_kobj(owner, inst, KOBJ_RIGHT_SAME) : -1;
+}
+
+void free_process_handle(kobj_inst_t *inst) {
+   process_obj_t *process_obj = inst->data;
+   kfree(process_obj);
+}
+
+bool check_process_handle_access(process_t *process, process_t *target, handle_t h) {
+   kobj_ref_t *ref = process_get_kobj_type(process, h, KOBJ_PROCESS);
+   if(!ref) return false;
+   if(!(ref->rights & KOBJ_RIGHT_CONTROL)) return false;
+   process_obj_t *process_obj = ref->inst->data;
+   return process_obj->process == target && process_obj->process_uid == target->uid;
 }

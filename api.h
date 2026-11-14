@@ -7,7 +7,6 @@
 void api_route(uint32_t call, registers_t *regs);
 
 void api_write_string(registers_t *regs);
-void api_write_uint(registers_t *regs); // deprecated
 void api_write_string_at(registers_t *regs);
 void api_yield(registers_t *regs);
 void api_return_framebuffer(registers_t *regs);

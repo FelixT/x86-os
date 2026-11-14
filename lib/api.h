@@ -13,18 +13,18 @@ typedef enum {
    API_YIELD,
    API_CONTROL_HANDLE,
    API_HANDLE_INFO,
-   API_WRITE_UINT, // deprecated
+   API_RESERVED_2, // deprecated
    API_RETURN_FRAMEBUFFER,
-   API_RESERVED_2,
+   API_RESERVED_3,
    API_REDRAW_WINDOW,
    API_END_TASK,
    API_WM_OVERRIDE,
    API_END_SUBROUTINE,
-   API_RESERVED_3,
+   API_RESERVED_4,
    API_RETURN_WINDOW_WIDTH,
    API_RETURN_WINDOW_HEIGHT,
-   API_RESERVED_4,
    API_RESERVED_5,
+   API_RESERVED_6,
    API_SET_WINDOW_SETTING,
    API_GET_WINDOW_SETTING,
    API_SET_WINDOW_POSITION,
@@ -34,26 +34,26 @@ typedef enum {
    API_SET_WINDOW_MINIMISED,
    API_READ_DIR,
    API_GET_WINDOW_POSITION,
-   API_RESERVED_6,
    API_RESERVED_7,
    API_RESERVED_8,
+   API_RESERVED_9,
    API_QUEUE_EVENT,
    API_SLEEP,
    API_LAUNCH_TASK,
    API_GET_SETTING,
-   API_RESERVED_9,
-   API_SET_SETTING,
    API_RESERVED_10,
-   API_REDRAW_REGION,
+   API_SET_SETTING,
    API_RESERVED_11,
+   API_REDRAW_REGION,
    API_RESERVED_12,
    API_RESERVED_13,
+   API_RESERVED_14,
    API_NEW_FILE,
    API_SET_WINDOW_TITLE,
    API_SET_WORKING_DIR,
    API_GET_WORKING_DIR,
-   API_RESERVED_14,
    API_RESERVED_15,
+   API_RESERVED_16,
    API_READ,
    API_SEEK,
    API_DEBUG_WRITE_STR,
@@ -103,8 +103,8 @@ typedef enum {
    API_MSG_READ,
    API_WAIT_ON_RECEIVE,
    API_SNOOZE,
-   API_RESERVED_16,
    API_RESERVED_17,
+   API_RESERVED_18,
    API_MSG_CALL,
    API_MSG_RECEIVE,
    API_MSG_REPLY,
@@ -135,6 +135,15 @@ typedef struct api_task_t {
    char exe_path[MAX_PATH];
    char main_window_name[32];
 } api_task_t;
+
+typedef struct api_launch_task_t {
+   char *path;
+   int argc;
+   char **args;
+   bool copy; // copy environment of current task (use same wd & copy handles)
+   bool paused; // start paused
+   bool handle; // return handle
+} api_launch_task_t;
 
 typedef enum {
    SETTING_WIN_BGCOLOUR,
@@ -277,6 +286,7 @@ typedef enum {
    KOBJ_FILE, // open file instance
    KOBJ_PORT, // msg port
    KOBJ_CHANNEL_CONN, // msg channel connection
+   KOBJ_PROCESS, // allows handles to processes
    KOBJ_NONE // must be at end
 } kobj_type_t;
 

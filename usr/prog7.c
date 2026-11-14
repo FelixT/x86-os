@@ -61,7 +61,8 @@ void _start(int argc, char **args) {
    }
 
    char *new_args[1] = {"child"};
-   int t = launch_task("/sys/prog7.elf", 1, new_args, true, true);
+   handle_t prog_h;
+   int t = launch_task("/sys/prog7.elf", 1, new_args, true, true, &prog_h);
 
    set_window_title("Prog7");
    create_thread(&thread);
@@ -82,8 +83,9 @@ void _start(int argc, char **args) {
    if(r < 0)
       exit(1);
    
-   if(!unpause_task(t))
+   if(!unpause_task(t, prog_h))
       exit(1);
+   hrelease(prog_h);
 
    // wait for process to send
    uint8_t buf;

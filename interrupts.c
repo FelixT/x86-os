@@ -160,7 +160,7 @@ void software_handler(registers_t *regs) {
    task->in_syscall = false;
    if(task->kill_pending) {
       debug_printf("Killed after syscall %i\n", task->syscall_no);
-      end_task(task->task_id, regs);
+      end_task(task->task_id, regs, task->pending_kill_status);
    }
 }
 

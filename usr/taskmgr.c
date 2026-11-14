@@ -84,7 +84,7 @@ void show_tasks() {
 void launch_task_return(char *out, int window) {
    dialog_t *dialog = dialog_from_window(window);
    dialog->active = false;
-   launch_task(out, 0, NULL, false, false);
+   launch_task(out, 0, NULL, false, false, NULL);
    close_window(window);
 }
 
@@ -94,10 +94,15 @@ void launch_task_callback(wo_t *wo, int window) {
    dialog_filepicker("/sys", &launch_task_return);
 }
 
+static bool escalated = false;
+
 void end_task_callback(wo_t *wo, int window) {
    (void)wo;
    (void)window;
-   end_task(selected_task);
+   if(!escalated)
+      escalated = escalate();
+   if(!escalated) return;
+   end_task(selected_task, -1);
    show_tasks();
    clear();
    ui_redraw(dialog->ui);
@@ -185,7 +190,8 @@ void monitor_thread() {
             strcpy(buf1, "New");
 
          char buf2[32];
-         snprintf(buf2, 31, "%s task: %u %s", buf1, new_tasks[i].uid, new_tasks[i].main_window_name);
+         char *name = strlen(new_tasks[i].main_window_name) > 0 ? new_tasks[i].main_window_name : new_tasks[i].exe_path;
+         snprintf(buf2, 31, "%s task: %u %s", buf1, new_tasks[i].uid, name);
 
          char buf3[16];
          uint32_t ticks = old ? new_tasks[i].ticks - old->ticks : new_tasks[i].ticks;

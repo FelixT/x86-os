@@ -23,7 +23,6 @@ static void (*const api_handlers[API_RESERVED_END])(registers_t*) = {
    [API_YIELD] = &api_yield,
    [API_CONTROL_HANDLE] = &api_control_handle,
    [API_HANDLE_INFO] = &api_handle_info,
-   [API_WRITE_UINT] = &api_write_uint,
    [API_RETURN_FRAMEBUFFER] = &api_return_framebuffer,
    [API_REDRAW_WINDOW] = &api_redraw_window,
    [API_END_TASK] = &api_end_task,
@@ -221,11 +220,6 @@ void api_write_string(registers_t *regs) {
       kfree(out);
 }
 
-void api_write_uint(registers_t *regs) {
-   // write ebx
-   api_printf("%u", regs->ebx);
-}
-
 void api_write_string_at(registers_t *regs) {
    // IN: ebx = string address
    // IN: ecx = x
@@ -325,9 +319,12 @@ void api_redraw_region(registers_t *regs) {
 
 void api_end_task(registers_t *regs) {
    // return with status ebx
-   api_printf("Ending with status %i\n", regs->ebx);
+   int status = regs->ebx;
+   api_printf("Ending with status %i\n", status);
+   if(status < 0)
+      status = END_STATUS_EXIT_INVALID; // negative codes reserved for kernel
 
-   end_task(get_current_task(), regs);
+   end_task(get_current_task(), regs, status);
 }
 
 void api_wm_override(registers_t *regs) {
@@ -438,46 +435,46 @@ void api_queue_event(registers_t *regs) {
 
 #define API_LAUNCH_MAX_ARGS 32
 void api_launch_task(registers_t *regs) {
-   // IN: ebx = path
-   // IN: ecx = argc
-   // IN: edx = args
-   // IN: esi = copy environment of current task (use same wd & copy handles)
-   // IN: edi = paused
+   // IN: ebx = api_launch_task_t launch info
    // OUT: ebx = pid (-1 for failure)
+   // OUT: ecx - handle
+   api_launch_task_t *user_info = (api_launch_task_t*)regs->ebx;
+   regs->ebx = -1;
+   regs->ecx = -1;
 
-   char *path = (char*)regs->ebx;
-   int argc = (int)regs->ecx;
-   char **args = (char**)regs->edx;
-   bool copy = (bool)regs->esi;
-   bool paused = (bool)regs->edi;
-
-   if(argc > API_LAUNCH_MAX_ARGS) {
-      debug_printf("api_launch_task: max %u args\n", API_LAUNCH_MAX_ARGS);
-      regs->ebx = -1;
+   if(!api_validate_mem(user_info, sizeof(api_launch_task_t), false)) {
+      debug_printf("api_launch_task: invalid info\n");
       return;
    }
 
-   if(api_validate_str(path, 256) < 0) {
+   api_launch_task_t info_copy; // copy: task_setup_elf may yield
+   memcpy(&info_copy, user_info, sizeof(api_launch_task_t));
+   api_launch_task_t *info = &info_copy;
+
+   if(info->argc > API_LAUNCH_MAX_ARGS) {
+      debug_printf("api_launch_task: max %u args\n", API_LAUNCH_MAX_ARGS);
+      return;
+   }
+
+   if(api_validate_str(info->path, MAX_PATH) < 0) {
       debug_printf("api_launch_task: invalid path\n");
-      regs->ebx = -1;
       return;
    }
 
    // copy args
    char **copied_args = NULL;
-   if(argc > 0 && args != NULL) {
-      if(!api_validate_mem(args, argc*sizeof(char*), false)) {
+   if(info->argc > 0 && info->args != NULL) {
+      if(!api_validate_mem(info->args, info->argc*sizeof(char*), false)) {
          debug_printf("api_launch_task: invalid args\n");
-         regs->ebx = -1;
          return;
       }
 
-      copied_args = page_alloc(sizeof(char*) * (argc+1)); // args includes training null str
-      if(!copied_args) { regs->ebx = -1; return; }
-      memset(copied_args, 0, sizeof(char*) * (argc+1));
-      for(int i = 0; i < argc; i++) {
-         if(args[i] != NULL) {
-            int len = api_validate_str(args[i], 0x1000);
+      copied_args = page_alloc(sizeof(char*) * (info->argc+1)); // args includes training null str
+      if(!copied_args) return;
+      memset(copied_args, 0, sizeof(char*) * (info->argc+1));
+      for(int i = 0; i < info->argc; i++) {
+         if(info->args[i] != NULL) {
+            int len = api_validate_str(info->args[i], 0x1000);
             if(len < 0) {
                debug_printf("api_launch_task: arg %u is invalid\n", i);
                copied_args[i] = NULL;
@@ -485,21 +482,19 @@ void api_launch_task(registers_t *regs) {
             }
             copied_args[i] = page_alloc(len + 1);
             if(!copied_args[i]) {
-               free_launch_args(copied_args, argc);
-               regs->ebx = -1;
+               free_launch_args(copied_args, info->argc);
                return;
             }
-            strcpy(copied_args[i], args[i]);
+            strcpy(copied_args[i], info->args[i]);
          } else {
             copied_args[i] = NULL;
          }
       }
-      copied_args[argc] = NULL;
+      copied_args[info->argc] = NULL;
    }
-
    // copy path
    char pathbuf[256];
-   strcpy(pathbuf, path);
+   strcpy(pathbuf, info->path);
 
    int calling_task = get_current_task();
    task_state_t *parenttask = &gettasks()[calling_task];
@@ -507,18 +502,16 @@ void api_launch_task(registers_t *regs) {
    uint32_t oldwindow_uid = oldwindow>=0 ? getWindow(oldwindow)->uid : 0;
 
    // set up the new task without switching context
-   int new_task = tasks_setup_elf(pathbuf, argc, copied_args, !copy, false);
+   int new_task = tasks_setup_elf(pathbuf, info->argc, copied_args, !info->copy, false);
    if(new_task < 0) {
-      free_launch_args(copied_args, argc);
+      free_launch_args(copied_args, info->argc);
       debug_printf("api_launch_task failed\n");
-      regs->ebx = -1;
       return;
    }
 
-   regs->ebx = new_task;
    task_state_t *task = &gettasks()[new_task];
 
-   if(copy) {
+   if(info->copy) {
       bool stdio_copied = process_copy_stdio(parenttask->process, task->process);
       strcpy(task->process->working_dir, parenttask->process->working_dir);
       int child_win = task->process->window;
@@ -529,15 +522,27 @@ void api_launch_task(registers_t *regs) {
       if(!stdio_copied) {
          debug_printf("api_launch_task: stdio handle(s) can't be transferred\n");
          task_abort_setup(new_task); // free's args
-         regs->ebx = -1;
          gui_redrawall();
          return;
       }
    }
 
+   if(info->handle) {
+      // create handle
+      handle_t h = create_process_handle(parenttask->process, task->process);
+      if(h < 0) {
+         debug_printf("api_launch_task: create handle failed\n");
+         task_abort_setup(new_task);
+         return;
+      }
+      regs->ecx = h;
+   }
+
+   regs->ebx = new_task;
+
    // map args to new task
-   if(argc > 0 && copied_args != NULL) {
-      for(int i = 0; i < argc; i++) {
+   if(info->argc > 0 && copied_args != NULL) {
+      for(int i = 0; i < info->argc; i++) {
          if(copied_args[i] != NULL)
             map(task->process->page_dir, (uint32_t)copied_args[i], (uint32_t)copied_args[i], 1, 1, 0);
       }
@@ -545,15 +550,15 @@ void api_launch_task(registers_t *regs) {
    }
 
    task->enabled = true;
-   if(paused)
+   if(info->paused)
       task_pause(task, PAUSE_LAUNCH);
    else
       task_resume(task);
-   if(paused) {
+   if(info->paused) {
       if(get_current_task() == new_task)
          switch_task(regs, false); // yield
    }
-   if(copy)
+   if(info->copy)
       gui_redrawall();
 }
 
@@ -561,7 +566,8 @@ void api_set_window_title(registers_t *regs) {
    // IN: ebx = title
    // IN: ecx = window child index
    int cindex = regs->ecx;
-   char *title = (char*)regs->ebx;
+   process_t *process = get_current_task_state()->process;
+   char *title = (char*)(regs->ebx + (process->vmem_start ? 0 : process->prog_entry)); // binary prog compatability
    if(api_validate_str(title, 20) < 0) return;
 
    gui_window_t *window = api_get_cwindow(cindex);
@@ -1118,9 +1124,20 @@ void api_create_thread(registers_t *regs) {
 }
 
 void api_kill_task(registers_t *regs) {
-   // todo: check permission
    // IN: ebx: task index
-   end_task(regs->ebx, regs);
+   // IN: ecx: handle or -1 (escalated)
+   // OUT: ebx: bool success
+   task_state_t *caller = get_current_task_state();
+   int index = regs->ebx;
+   handle_t h = regs->ecx;
+   regs->ebx = 0;
+   task_state_t *task = index >= 0 && index < TOTAL_TASKS ? &gettasks()[index] : NULL;
+   if(!task || !task->enabled) return;
+   // check permission
+   if(task->process != caller->process && !caller->process->privileged && !check_process_handle_access(caller->process, task->process, h))
+      return;
+   end_result_t r = end_task(index, regs, END_STATUS_KILLED_SYSCALL);
+   api_write_regs(regs, caller)->ebx = r != END_FAILED; // done or deferred (ends after its syscall). allows ending current task (end_task switched task)
 }
 
 void api_set_setting(registers_t *regs) {
@@ -1479,8 +1496,8 @@ void api_pipe(registers_t *regs) {
 
 void api_unpause(registers_t *regs) {
    // IN: ebx - task id
+   // IN: ecx - process handle
    // OUT: ebx - task is unpaused or pause is pending
-   // todo: check if child of calling process or called by root process
    int task_id = regs->ebx;
    regs->ebx = 0;
    if(task_id < 0 || task_id >= TOTAL_TASKS) {
@@ -1492,6 +1509,12 @@ void api_unpause(registers_t *regs) {
       debug_printf("Couldn't unpause task %i - paused for reason %i\n", task->task_id, task->pause_reason);
       return;
    }
+   task_state_t *caller = get_current_task_state();
+   handle_t h = regs->ecx;
+   // check permission
+   if(task->process != caller->process && !caller->process->privileged && !check_process_handle_access(caller->process, task->process, h))
+      return;
+
    regs->ebx = 1;
    if(!task->paused) {
       task->wake_pending = true; // latch it for the next snooze

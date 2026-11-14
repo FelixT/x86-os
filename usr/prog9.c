@@ -177,12 +177,12 @@ void server_main() {
    char *childargs[1];
    childargs[0] = malloc(strlen("child")+1);
    strcpy(childargs[0], "child");
-   int t = launch_task("/sys/prog9.elf", 1, childargs, false, false);
+   int t = launch_task("/sys/prog9.elf", 1, childargs, false, false, NULL);
    if(t < 0) {
       printf("child process launch failed\n");
    }
    strcpy(childargs[0], "sync");
-   t = launch_task("/sys/prog9.elf", 1, childargs, false, false);
+   t = launch_task("/sys/prog9.elf", 1, childargs, false, false, NULL);
    if(t < 0) {
       printf("sync process launch failed\n");
    }

@@ -537,8 +537,17 @@ void term_cmd_handles(char *arg) {
 }
 
 void term_cmd_time() {
+   char names[7][12] = {
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+   };
    time_t t = get_time();
-   window_term_printf("%i/%i/%i %i:%i:%i\n", t.day, t.month, t.year, t.hours, t.minutes, t.seconds);
+   window_term_printf("%s %i/%i/%i %i:%i:%i\n", names[(t.weekday+5)%7], t.day, t.month, t.year, t.hours, t.minutes, t.seconds);
 }
 
 void term_cmd_default(char *command) {

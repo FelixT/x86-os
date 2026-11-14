@@ -109,8 +109,10 @@ void _start(int argc, char **args) {
       exit(1);
 
    char *cargs[1] = { "child" };
-   int task = launch_task("/sys/prog8.elf", 1, cargs, false, true);
-   unpause_task(task);
+   handle_t h;
+   int task = launch_task("/sys/prog8.elf", 1, cargs, false, true, &h);
+   unpause_task(task, h);
+   hrelease(h);
 
    handle_t handle;
    msg_recv_t recv_msg = {.buffer_size = 0, .buffer = NULL, .handle_count = 1, .handles = &handle};

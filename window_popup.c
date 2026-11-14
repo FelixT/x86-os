@@ -294,7 +294,7 @@ void endtask_callback(void *dialog) {
    }
    int t = task->task_id;
    int w = get_task_window(t);
-   if(end_task(t, NULL)) {
+   if(end_task(t, NULL, END_STATUS_KILLED_CRASHED) == END_DONE) {
       window_close(w, false);
       wm_redrawall();
    }
@@ -309,7 +309,7 @@ void endtask_dismiss(void *dialog, void *regs) {
       return;
    }
    int w = get_task_window(d->task_id);
-   end_task(d->task_id, regs);
+   if(end_task(d->task_id, regs, END_STATUS_KILLED_CRASHED) != END_DONE) return; // deferred task still uses its window
    if(w < 0) return;
    window_close(w, false);
 }

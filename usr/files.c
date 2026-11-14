@@ -362,14 +362,14 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          args[1] = malloc(strlen(fullpath)+1);
          strcpy(args[1], fullpath);
 
-         launch_task(elfpath, 2, args, false, false);
+         launch_task(elfpath, 2, args, false, false, NULL);
          free(args[0]);
          free(args[1]);
          free(args);
       }
 
       if(strequ(extension, "elf")) {
-         launch_task(fullpath, 0, NULL, false, false);
+         launch_task(fullpath, 0, NULL, false, false, NULL);
       }
 
       if(strequ(extension, "txt") || strequ(extension, "c") || strequ(extension, "lnk")) {
@@ -380,7 +380,7 @@ int entry_clicked(wo_t *grid, int window, int row, int col) {
          args[1] = malloc(strlen(fullpath)+1);
          strcpy(args[1], fullpath);
 
-         launch_task(elfpath, 2, args, false, false);
+         launch_task(elfpath, 2, args, false, false, NULL);
          free(args[0]);
          free(args[1]);
          free(args);

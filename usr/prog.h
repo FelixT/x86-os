@@ -35,15 +35,6 @@ static inline void yield() {
    );
 }
 
-static inline void write_uint(uint32_t num) {
-   asm volatile(
-      "int $0x30"
-      :: "a" (API_WRITE_UINT),
-      "b" (num)
-      : "cc", "memory"
-   );
-}
-
 static inline surface_t get_surface_w(int window) {
    surface_t surface;
    asm volatile (
@@ -321,42 +312,45 @@ static inline void queue_event(void *callback, int delta, void *msg) {
    );
 }
 
-static inline int launch_task(char *path, int argc, char **args, bool copy, bool paused) {
-   // copy args to kernel memory
-   int id; 
+static inline int launch_task(char *path, int argc, char **args, bool copy, bool paused, handle_t *h) {
+   api_launch_task_t info = {.path = path, .argc = argc, .args = args, .copy = copy, .paused = paused, .handle = h != NULL};
+   int id;
+   handle_t out_h;
    asm volatile (
       "int $0x30;"
-      : "=b" (id)
+      : "=b" (id), "=c" (out_h)
       : "a" (API_LAUNCH_TASK),
-      "b" ((uint32_t)path),
-      "c" ((uint32_t)argc),
-      "d" ((uint32_t)args),
-      "S" ((uint32_t)copy), // inherit fds and wd from current task
-      "D" ((uint32_t)paused) // start paused
+      "b" ((uint32_t)&info)
       : "cc", "memory"
    );
+   if(h) *h = out_h;
    return id;
 }
 
-static inline bool unpause_task(int id) {
+static inline bool unpause_task(int id, handle_t proc_h) {
    bool success;
    asm volatile (
       "int $0x30;"
       : "=b" (success)
       : "a" (API_UNPAUSE),
-      "b" ((uint32_t)id)
+      "b" (id),
+      "c" (proc_h)
       : "cc", "memory"
    );
    return success;
 }
 
-static inline void end_task(int id) {
+static inline bool end_task(int id, handle_t proc_h) {
+   bool r;
    asm volatile (
       "int $0x30;"
-      :: "a" (API_KILL_TASK),
-      "b" ((uint32_t)id)
+      : "=b" (r)
+      : "a" (API_KILL_TASK),
+      "b" ((uint32_t)id),
+      "c" (proc_h)
       : "cc", "memory"
    );
+   return r;
 }
 
 static inline bool set_setting(api_setting_t setting, uint32_t value) {
@@ -413,16 +407,6 @@ static inline uint32_t get_window_setting(int setting, int window) {
    return value;
 }
 
-static inline void set_window_title(char *title) {
-   asm volatile (
-      "int $0x30;"
-      :: "a" (API_SET_WINDOW_TITLE),
-      "b" ((uint32_t)title),
-      "c" ((uint32_t)-1)
-      : "cc", "memory"
-   );
-}
-
 static inline void set_window_title_w(int window, char *title) {
    asm volatile (
       "int $0x30;"
@@ -431,6 +415,10 @@ static inline void set_window_title_w(int window, char *title) {
       "c" ((uint32_t)window)
       : "cc", "memory"
    );
+}
+
+static inline void set_window_title(char *title) {
+   set_window_title_w(-1, title);
 }
 
 static inline void chdir(char *path) {

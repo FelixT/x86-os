@@ -87,6 +87,18 @@ typedef struct vm_region_t {
    struct vm_region_t *next; // sorted by vaddr
 } vm_region_t;
 
+#define PROCESS_STATE_RUNNING 0
+#define PROCESS_STATE_ENDED 1
+// todo: #define PROCESS_STATE_CRASHED 2
+
+typedef struct process_obj_t {
+   process_t *process; // NULL if ended
+   uint32_t process_uid;
+   int task_id; // main thread taskid
+   int exit_code; // main thread exit code
+   int state;
+} process_obj_t;
+
 // process struct - shared between threads
 typedef struct process_t {
    uint32_t uid;
@@ -100,6 +112,7 @@ typedef struct process_t {
    page_dir_entry_t *page_dir;
    char working_dir[256]; // current working directory
    char exe_path[256]; // location of executable
+   kobj_inst_t *obj_inst; // lazy allocated instance to process_obj_t kobj inst, shared between all process handles
 
    // resources
    kobj_ref_t *kobj[PROCESS_MAX_KOBJ];
@@ -128,6 +141,7 @@ typedef struct task_state_t {
    bool wake_pending;
    bool crashed;
    bool kill_pending;
+   int pending_kill_status;
    int task_id;
    uint32_t task_uid;
    uint32_t stack_base; // phys address of stack allocation (mapped above the guard to v_stack_start+0x1000)
@@ -155,13 +169,28 @@ typedef struct task_state_t {
    process_t *process; // parent process
 } task_state_t;
 
+#define END_STATUS_SUCCESS 0
+#define END_STATUS_KILLED -1 // killed by kernel
+#define END_STATUS_KILLED_CRASHED -2 // killed following program crash (overrides others)
+#define END_STATUS_KILLED_WINDOW -3 // killed by closing the window
+#define END_STATUS_KILLED_SYSCALL -4 // killed by api_kill_task
+#define END_STATUS_EXIT_INVALID -5 // invalid status provided to exit()
+#define END_STATUS_CREATE_FAILED -6
+
+typedef enum {
+   END_FAILED,
+   END_DONE,
+   END_DEFERRED
+} end_result_t;
+
 int create_task_entry(int index, uint32_t entry, uint32_t size, bool privileged, process_t *process);
 bool task_map_stack(task_state_t *task, int thread_no);
 bool setup_task_init(int index, bool focus, bool minimised);
 bool launch_task(int index, registers_t *regs, bool focus);
 void task_discard_entry(int index);
 void free_launch_args(char **args, int argc);
-bool end_task(int index, registers_t *regs);
+
+end_result_t end_task(int index, registers_t *regs, int status);
 void tasks_alloc();
 void tasks_init();
 void switch_task(registers_t *regs, bool resume);
@@ -236,6 +265,10 @@ vm_region_t *process_find_vm(process_t *process, uint32_t vaddr);
 uint32_t process_map_kobj(process_t *process, kobj_ref_t *ref, int index);
 
 void tasks_tick();
+handle_t create_process_handle(process_t *owner, process_t *process);
+void free_process_handle(kobj_inst_t *inst);
+bool check_process_handle_access(process_t *process, process_t *target, handle_t h);
+
 void task_interrupt_save();
 void task_interrupt_complete(registers_t *regs);
 bool task_interrupt_set(int taskid, bool replace);

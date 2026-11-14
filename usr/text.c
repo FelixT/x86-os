@@ -160,7 +160,7 @@ void open_func(wo_t *wo, int window) {
 void new_func(wo_t *wo, int window) {
    (void)wo;
    (void)window;
-   launch_task("/sys/text.elf", 0, NULL, false, false);
+   launch_task("/sys/text.elf", 0, NULL, false, false, NULL);
 }
 
 void scroll(int deltaY, int offsetY, int window) {

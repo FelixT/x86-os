@@ -67,6 +67,15 @@ const kobj_t kobjs[KOBJ_NONE+1] = {
       .connect_func = NULL,
       .map_func = NULL,
       .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_WRITE//|KOBJ_RIGHT_DUPLICATE|KOBJ_RIGHT_TRANSFER
+   },
+   [KOBJ_PROCESS] = {
+      .type = KOBJ_PROCESS,
+      .free_func = &free_process_handle,
+      .close_func = NULL,
+      .stop_func = NULL,
+      .connect_func = NULL,
+      .map_func = NULL,
+      .default_rights = KOBJ_RIGHT_READ|KOBJ_RIGHT_CONTROL
    }
 };
 
